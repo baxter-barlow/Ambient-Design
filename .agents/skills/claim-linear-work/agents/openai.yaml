@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claim Linear Work"
+  short_description: "Reserve shared paths before changing them"
+  default_prompt: "Use $claim-linear-work to reserve the exact AED paths for this task in Linear."

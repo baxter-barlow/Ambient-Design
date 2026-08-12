@@ -1,0 +1,22 @@
+* text=auto eol=lf
+
+*.md text diff=markdown
+*.json text
+*.toml text
+*.yaml text
+*.yml text
+*.py text
+*.sh text eol=lf
+*.kicad_pro text
+*.kicad_sch text
+*.kicad_pcb text
+
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.raw binary
+
+# Preserve the approved planning artifact byte-for-byte during its initial import.
+v1-roadmap.md whitespace=-blank-at-eof

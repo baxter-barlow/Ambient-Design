@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Evidence"
+  short_description: "Assemble and publish AED release evidence"
+  default_prompt: "Use $release-evidence to evaluate this AED release candidate and publish its evidence."
