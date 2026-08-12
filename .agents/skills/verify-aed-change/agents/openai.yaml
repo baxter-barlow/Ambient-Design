@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify AED Change"
+  short_description: "Select and run evidence-based AED checks"
+  default_prompt: "Use $verify-aed-change to verify this AED change and report the evidence."
