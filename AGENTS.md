@@ -9,7 +9,7 @@ At session start, run `git rev-parse --show-toplevel` read-only. If it fails, tr
 ## Sources of truth
 
 - **Git:** implementation and executable configuration after a canonical repository exists.
-- **Linear:** work scope, owner, status, dependencies, acceptance criteria, and exclusive path claims. Use the Ambient Labs team and the Agentic Electronic Design project: https://linear.app/ambient-labs/project/agentic-electronic-design-cc8a03247964
+- **Linear:** work scope, owner, status, dependencies, acceptance criteria, and exclusive path claims. Use the Ambient Labs team; the Agentic Electronic Design project is the v1 roadmap's home, and sibling projects in the same team hold non-v1 workstreams: https://linear.app/ambient-labs/project/agentic-electronic-design-cc8a03247964
 - **Notion:** durable product specifications, architecture, decisions, research, and reports. Start at the Ambient Design project: https://app.notion.com/p/3ba627dbcc428097b5c7ce1b2fc7bd70
 - **Slack:** meaningful milestones and ecosystem-level blockers in the Ambient Labs channel. Do not post routine path claims, intermediate notes, or noisy status updates.
 - **Local Markdown:** `AGENTS.md`, `CLAUDE.md`, and skill packages are operational configuration. Do not create local reports, handoffs, meeting notes, roadmaps, or duplicate product documentation; put them in Notion.
