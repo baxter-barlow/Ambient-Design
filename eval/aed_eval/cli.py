@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import stats
 from .gates import ReplayGate
-from .models import ReplayClient, SamplingParams
+from .models import HarnessIntegrityError, ReplayClient, SamplingParams
 from .protocol import TrialConfig, run_arm
 from .results import build_run_record, summarize, write_run
 from .tokenizer import (
@@ -245,6 +245,18 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
+    except HarnessIntegrityError as exc:
+        # A broken instrument, not a failed measurement. Diagnosed rather
+        # than dumped as a traceback, because the person hitting this needs
+        # to know the recording is stale, not read a stack.
+        print(
+            f"\nHARNESS INTEGRITY FAILURE: {exc}\n\n"
+            "This is not a failed run - it means the recording no longer "
+            "describes the protocol, so any numbers produced would be for a "
+            "run that never happened. Re-record the transcript.",
+            file=sys.stderr,
+        )
+        return 1
     except PinnedTokenizerError as exc:
         print(f"tokenizer error: {exc}", file=sys.stderr)
         return 2

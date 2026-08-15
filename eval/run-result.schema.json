@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ambient.science/aed/schemas/eval-run-result/0.schema.json",
   "title": "AED evaluation run record v0",
-  "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence — which matters because the repository ships exactly such a fixture for offline testing.",
+  "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence \u2014 which matters because the repository ships exactly such a fixture for offline testing.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -23,8 +23,14 @@
       "const": 0,
       "description": "Consumers must refuse records whose version they do not know."
     },
-    "run_id": { "type": "string", "minLength": 1 },
-    "purpose": { "type": "string", "minLength": 1 },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
     "recorded_at": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
@@ -32,57 +38,128 @@
     },
     "authoritative": {
       "type": "boolean",
-      "description": "Whether this record may be cited as evidence for a gate decision. Computed by the harness from the tokenizer and model identities, never asserted by the caller."
+      "description": "Whether this record may be cited as evidence for a gate decision. Computed by the harness from the live tokenizer, model and gate identities, never asserted by the caller. Note the limit: in a record received from elsewhere this is a self-declared field like any other, and schema validation can only catch inconsistent forgeries, not consistent ones."
     },
     "non_authoritative_reasons": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "Why the record is not authoritative. Required to be non-empty whenever `authoritative` is false, so a record can never be non-authoritative for unstated reasons."
     },
     "harness": {
       "type": "object",
-      "required": ["version"],
+      "required": [
+        "version"
+      ],
       "properties": {
-        "version": { "type": "string", "minLength": 1 },
-        "python": { "type": "string" },
-        "platform": { "type": "string" }
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        }
       }
     },
     "tokenizer": {
       "type": "object",
-      "required": ["name", "kind", "fingerprint", "gating"],
+      "required": [
+        "name",
+        "kind",
+        "fingerprint",
+        "gating"
+      ],
       "description": "Identity of the tokenizer that produced every budget-token count in this record. The fingerprint is behavioural: two records are comparable only if their fingerprints match.",
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "kind": { "type": "string", "enum": ["tiktoken", "stub"] },
-        "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "n_vocab": { "type": ["integer", "null"] },
-        "gating": { "type": "boolean" }
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tiktoken",
+            "stub"
+          ]
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "n_vocab": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "gating": {
+          "type": "boolean"
+        }
       }
     },
     "model": {
       "type": "object",
-      "required": ["kind", "model", "sampling"],
+      "required": [
+        "kind",
+        "model",
+        "sampling"
+      ],
       "description": "AC5 requires a pinned model with stated sampling parameters. Both are required here so a run without them cannot be recorded at all.",
       "properties": {
-        "kind": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
         "sampling": {
           "type": "object",
-          "required": ["temperature", "max_tokens"],
+          "required": [
+            "temperature",
+            "max_tokens"
+          ],
           "properties": {
-            "temperature": { "type": "number" },
-            "max_tokens": { "type": "integer", "minimum": 1 },
-            "top_p": { "type": ["number", "null"] },
-            "top_k": { "type": ["integer", "null"] }
+            "temperature": {
+              "type": "number"
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "top_p": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "top_k": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
           }
         }
       }
     },
     "gate": {
       "type": "object",
-      "required": ["kind"],
-      "properties": { "kind": { "type": "string", "minLength": 1 } }
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "arms": {
       "type": "object",
@@ -90,57 +167,145 @@
       "description": "One entry per measured arm. Per-trial detail below the required counters is deliberately open.",
       "additionalProperties": {
         "type": "object",
-        "required": ["config", "seeds", "successes", "trial_count", "total_tokens"],
+        "required": [
+          "config",
+          "seeds",
+          "successes",
+          "trial_count",
+          "total_tokens"
+        ],
         "properties": {
           "config": {
             "type": "object",
-            "required": ["benchmark_id", "iteration_semantics", "max_write_check_cycles", "token_budget"],
+            "required": [
+              "benchmark_id",
+              "iteration_semantics",
+              "max_write_check_cycles",
+              "token_budget"
+            ],
             "properties": {
-              "benchmark_id": { "type": "string", "minLength": 1 },
+              "benchmark_id": {
+                "type": "string",
+                "minLength": 1
+              },
               "iteration_semantics": {
                 "type": "string",
-                "enum": ["total_write_check_cycles", "initial_plus_repairs"],
+                "enum": [
+                  "total_write_check_cycles",
+                  "initial_plus_repairs"
+                ],
                 "description": "Which reading of AC5's '<=3 repair iterations' this arm used. Recorded because the two readings differ by roughly 33% in generosity, so numbers taken under different readings are not comparable."
               },
-              "max_write_check_cycles": { "type": "integer", "minimum": 1 },
-              "token_budget": { "type": "integer", "minimum": 1 }
+              "max_write_check_cycles": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "token_budget": {
+                "type": "integer",
+                "minimum": 1
+              }
             }
           },
-          "seeds": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
-          "successes": { "type": "integer", "minimum": 0 },
-          "trial_count": { "type": "integer", "minimum": 1 },
-          "total_tokens": { "type": "integer", "minimum": 0 }
+          "seeds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1
+          },
+          "successes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "trial_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "total_tokens": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     },
     "a4_context_budget": {
       "type": "object",
-      "required": ["limit", "total", "breakdown", "passed"],
+      "required": [
+        "limit",
+        "total",
+        "breakdown",
+        "passed"
+      ],
       "description": "The A4 model-facing context measured against its ceiling. The per-part breakdown is required alongside the total precisely because A4 exists to stop the teaching payload migrating from the card into the skill and out of sight.",
       "properties": {
-        "limit": { "type": "integer", "minimum": 1 },
-        "total": { "type": "integer", "minimum": 0 },
-        "breakdown": { "type": "object", "additionalProperties": { "type": "integer" } },
-        "headroom": { "type": "integer" },
-        "passed": { "type": "boolean" }
+        "limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "breakdown": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "headroom": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "boolean"
+        }
       }
     },
     "ac5_gate": {
       "type": "object",
-      "required": ["arm", "successes", "trials", "passed", "wilson_95"],
+      "required": [
+        "arm",
+        "successes",
+        "trials",
+        "passed",
+        "wilson_95"
+      ],
       "description": "The AC5a threshold rule. The Wilson interval is REQUIRED alongside the verdict: a bare pass at 7/10 invites reading a threshold rule as a demonstration that the true rate exceeds the threshold, which it is not.",
       "properties": {
-        "arm": { "type": "string", "minLength": 1 },
-        "successes": { "type": "integer", "minimum": 0 },
-        "trials": { "type": "integer", "minimum": 1 },
-        "passed": { "type": "boolean" },
+        "arm": {
+          "type": "string",
+          "minLength": 1
+        },
+        "successes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
         "wilson_95": {
           "type": "object",
-          "required": ["low", "high"],
+          "required": [
+            "low",
+            "high"
+          ],
           "properties": {
-            "point": { "type": "number" },
-            "low": { "type": "number", "minimum": 0, "maximum": 1 },
-            "high": { "type": "number", "minimum": 0, "maximum": 1 }
+            "point": {
+              "type": "number"
+            },
+            "low": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "high": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
           }
         }
       }
@@ -155,26 +320,57 @@
         "minimum_effect_of_interest",
         "power_against_declared_effect"
       ],
-      "description": "The §4 standalone-DSL flip criterion. The power fields are required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.\n\n`minimum_effect_of_interest` and `power_against_declared_effect` are required but NULLABLE. Null means no effect size was declared before the run, and in that case the verdict must be 'inconclusive' — see the constraint below. Making them required-but-nullable rather than optional forces the record to state the absence explicitly instead of leaving a reader unable to tell 'not declared' from 'not recorded'.",
+      "description": "The \u00a74 standalone-DSL flip criterion. The power fields are required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.\n\n`minimum_effect_of_interest` and `power_against_declared_effect` are required but NULLABLE. Null means no effect size was declared before the run, and in that case the verdict must be 'inconclusive' \u2014 see the constraint below. Making them required-but-nullable rather than optional forces the record to state the absence explicitly instead of leaving a reader unable to tell 'not declared' from 'not recorded'.",
       "properties": {
         "test": {
           "type": "string",
-          "enum": ["mcnemar_exact_one_sided", "fisher_exact_one_sided"]
+          "enum": [
+            "mcnemar_exact_one_sided",
+            "fisher_exact_one_sided"
+          ]
         },
-        "paired": { "type": "boolean" },
-        "p_value": { "type": "number", "minimum": 0, "maximum": 1 },
-        "alpha": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "aed_rate": { "type": "number", "minimum": 0, "maximum": 1 },
-        "baseline_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "paired": {
+          "type": "boolean"
+        },
+        "p_value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "alpha": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "aed_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "baseline_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "minimum_effect_of_interest": {
-          "type": ["array", "null"],
+          "type": [
+            "array",
+            "null"
+          ],
           "minItems": 2,
           "maxItems": 2,
-          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
           "description": "The (aed_rate, baseline_rate) difference declared worth detecting, chosen BEFORE the run. Choosing it afterwards is choosing the standard that gives the answer you already saw."
         },
         "power_against_declared_effect": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "minimum": 0,
           "maximum": 1,
           "description": "Power against the declared effect. Null when none was declared."
@@ -185,54 +381,105 @@
           "maximum": 1,
           "description": "Informational only. Observed power is a monotone function of the p-value and adds no information beyond it, so it can never justify an adequacy claim; it is recorded because seeing it beside the declared figure is what makes an underpowered run obvious."
         },
-        "adequate_power_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "adequate_power_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
         "verdict": {
           "type": "string",
-          "enum": ["flip_criterion_met", "flip_criterion_not_met", "inconclusive"],
+          "enum": [
+            "flip_criterion_met",
+            "flip_criterion_not_met",
+            "inconclusive"
+          ],
           "description": "Three-valued on purpose. 'inconclusive' means the run lacked the power to answer, which is a real outcome and must not be collapsed into 'not met'."
         }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "minimum_effect_of_interest": { "type": "null" } },
-            "required": ["minimum_effect_of_interest"]
+            "properties": {
+              "minimum_effect_of_interest": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "minimum_effect_of_interest"
+            ]
           },
           "then": {
             "properties": {
-              "verdict": { "enum": ["flip_criterion_met", "inconclusive"] }
+              "verdict": {
+                "enum": [
+                  "flip_criterion_met",
+                  "inconclusive"
+                ]
+              }
             },
             "$comment": "Without a pre-declared effect size there is no basis for calling a run adequately powered, so 'flip_criterion_not_met' is unrecordable. A significant result stands on its own and remains recordable."
           }
         }
       ]
     },
-    "notes": { "type": "string" }
+    "notes": {
+      "type": "string"
+    }
   },
   "allOf": [
     {
       "if": {
-        "properties": { "authoritative": { "const": false } },
-        "required": ["authoritative"]
+        "properties": {
+          "authoritative": {
+            "const": false
+          }
+        },
+        "required": [
+          "authoritative"
+        ]
       },
       "then": {
-        "required": ["non_authoritative_reasons"],
+        "required": [
+          "non_authoritative_reasons"
+        ],
         "properties": {
-          "non_authoritative_reasons": { "type": "array", "minItems": 1 }
+          "non_authoritative_reasons": {
+            "type": "array",
+            "minItems": 1
+          }
         },
         "$comment": "A record that disclaims authority must say why. Silence would leave a reader unable to tell a deliberate fixture from a broken run."
       }
     },
     {
       "if": {
-        "properties": { "tokenizer": { "properties": { "kind": { "const": "stub" } }, "required": ["kind"] } },
-        "required": ["tokenizer"]
+        "properties": {
+          "tokenizer": {
+            "properties": {
+              "kind": {
+                "const": "stub"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        },
+        "required": [
+          "tokenizer"
+        ]
       },
       "then": {
         "properties": {
           "tokenizer": {
-            "properties": { "gating": { "const": false } },
-            "required": ["gating"]
+            "properties": {
+              "gating": {
+                "const": false
+              }
+            },
+            "required": [
+              "gating"
+            ]
           }
         },
         "$comment": "A stub tokenizer is non-gating by construction. Without this, `gating` was just a boolean a forger could flip: review demonstrated a hand-edited record with kind=stub, gating=true and authoritative=true validating with zero errors. Tying gating to kind removes the free variable."
@@ -240,36 +487,95 @@
     },
     {
       "if": {
-        "properties": { "authoritative": { "const": true } },
-        "required": ["authoritative"]
+        "properties": {
+          "authoritative": {
+            "const": true
+          }
+        },
+        "required": [
+          "authoritative"
+        ]
       },
       "then": {
         "properties": {
           "tokenizer": {
-            "properties": { "gating": { "const": true } },
-            "required": ["gating"]
+            "properties": {
+              "gating": {
+                "const": true
+              }
+            },
+            "required": [
+              "gating"
+            ]
           },
           "model": {
             "properties": {
-              "kind": { "not": { "enum": ["replay", "scripted", "stub"] } }
+              "kind": {
+                "not": {
+                  "enum": [
+                    "replay",
+                    "scripted",
+                    "stub"
+                  ]
+                }
+              }
             },
-            "required": ["kind"]
+            "required": [
+              "kind"
+            ]
+          },
+          "gate": {
+            "properties": {
+              "kind": {
+                "not": {
+                  "enum": [
+                    "replay",
+                    "scripted",
+                    "stub"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "kind"
+            ]
           }
         },
-        "$comment": "An authoritative record cannot rest on a non-gating tokenizer OR on a replayed, scripted or stub model. results.py computes `authoritative` from both identities for records the harness builds, but the SCHEMA is what a third party checks a submitted record against — so the rule has to live in both places. It previously constrained only `tokenizer.gating`, which is exactly the boolean a forger would flip."
+        "$comment": "An authoritative record cannot rest on a non-gating tokenizer, a replayed/scripted/stub model, or a replayed gate. WHAT THIS CANNOT DO, stated plainly rather than overclaimed: every one of these fields is SELF-DECLARED, so a forger who relabels all of them consistently produces a record no schema can distinguish from a real one. Schema validation catches the careless forgery and the honest mistake, which is what it is for; making a record tamper-EVIDENT needs a signature over the identities, which v0 does not have. The harness itself computes `authoritative` from the live identities and cannot be talked out of it, so records this project produces are trustworthy by construction; records submitted by a third party are trustworthy only to the extent you trust the submitter."
       }
     },
     {
       "if": {
-        "properties": { "a4_context_budget": { "required": ["passed"] } },
-        "required": ["a4_context_budget"]
+        "properties": {
+          "a4_context_budget": {
+            "required": [
+              "passed"
+            ]
+          }
+        },
+        "required": [
+          "a4_context_budget"
+        ]
       },
       "then": {
         "properties": {
           "a4_context_budget": {
-            "if": { "properties": { "passed": { "const": true } }, "required": ["passed"] },
+            "if": {
+              "properties": {
+                "passed": {
+                  "const": true
+                }
+              },
+              "required": [
+                "passed"
+              ]
+            },
             "then": {
-              "properties": { "total": { "type": "integer" } }
+              "properties": {
+                "total": {
+                  "type": "integer"
+                }
+              }
             }
           }
         }

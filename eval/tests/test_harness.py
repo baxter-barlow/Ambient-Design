@@ -357,6 +357,34 @@ class TestTruncatedEmission(unittest.TestCase):
         text = "The bug was:\n```aed\nBROKEN\n```\nFixed:\n```aed\nGOOD but cut off"
         self.assertIsNone(extract_source(text))
 
+    def test_max_tokens_stop_is_a_failed_emission_even_with_balanced_fences(self):
+        """The case `extract_source` alone cannot see.
+
+        Truncation can land AFTER a complete block, leaving the fences
+        balanced. The last complete block is then the model quoting the
+        broken file back, and grading it scores a truncation as a PASS.
+        Review found this path had no coverage: mutating the stop_reason
+        check away left every test green."""
+
+        class Truncated:
+            def complete(self, system, messages):
+                return ModelResponse(
+                    text="Here is the file I am fixing:\n```aed\nBROKEN\n```\nNow the corrected",
+                    usage=Usage(100, 50),
+                    stop_reason="max_tokens",
+                    model="scripted",
+                )
+
+            def identity(self):
+                return {}
+
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        # The gate would PASS anything it is handed; the trial must still
+        # fail, because nothing should reach the gate at all.
+        result = run_trial(cfg, Truncated(), _gate([True, True, True]), 1)
+        self.assertFalse(result.passed)
+        self.assertFalse(any(i.source_extracted for i in result.iterations))
+
 
 class TestPairing(unittest.TestCase):
     def _arm(self, seeds, passes):

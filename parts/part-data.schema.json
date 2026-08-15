@@ -7,7 +7,14 @@
   "additionalProperties": false,
   "patternProperties": {
     "^x_": {
-      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members."
+      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+      "not": {
+        "type": [
+          "object",
+          "array"
+        ]
+      },
+      "maxLength": 1024
     }
   },
   "required": [
@@ -193,7 +200,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved measure extension point."
+          "description": "Reserved measure extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
@@ -275,7 +289,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved package extension point."
+          "description": "Reserved package extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
@@ -326,7 +347,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved pin extension point."
+          "description": "Reserved pin extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
@@ -427,7 +455,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved unit extension point."
+          "description": "Reserved unit extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
@@ -499,7 +534,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved mode extension point."
+          "description": "Reserved mode extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
@@ -677,7 +719,14 @@
       "additionalProperties": false,
       "patternProperties": {
         "^x_": {
-          "description": "Reserved provenance extension point."
+          "description": "Reserved provenance extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
+          "not": {
+            "type": [
+              "object",
+              "array"
+            ]
+          },
+          "maxLength": 1024
         }
       },
       "required": [
