@@ -635,6 +635,26 @@
         ],
         "$comment": "AC5a is gated on the model seeing ONLY the <=12K A4 context, so an authoritative record must carry the measurement. Omitting it was the other half of the same exploit: no measurement, nothing to contradict."
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "authoritative": {
+            "const": true
+          }
+        },
+        "required": [
+          "authoritative"
+        ]
+      },
+      "then": {
+        "properties": {
+          "non_authoritative_reasons": {
+            "maxItems": 0
+          }
+        },
+        "$comment": "A record cannot simultaneously claim authority and list reasons it lacks authority. Caught by the final review gate as an internal inconsistency that validated cleanly."
+      }
     }
   ]
 }

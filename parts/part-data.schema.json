@@ -8,13 +8,24 @@
   "patternProperties": {
     "^x_": {
       "description": "Reserved top-level extension point. Tools must ignore unknown x_* members. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-      "not": {
-        "type": [
-          "object",
-          "array"
-        ]
-      },
-      "maxLength": 1024
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 1024
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -48,17 +59,20 @@
     "manufacturer": {
       "type": "string",
       "minLength": 1,
-      "description": "Manufacturer name as the manufacturer writes it, e.g. \"Espressif Systems\", \"Diodes Incorporated\"."
+      "description": "Manufacturer name as the manufacturer writes it, e.g. \"Espressif Systems\", \"Diodes Incorporated\".",
+      "maxLength": 200
     },
     "mpn": {
       "type": "string",
       "minLength": 1,
-      "description": "Exact manufacturer part number as printed by the vendor, verbatim including suffixes and punctuation. Orderable variants (tape-and-reel codes and similar) belong here when they are what the BOM must state."
+      "description": "Exact manufacturer part number as printed by the vendor, verbatim including suffixes and punctuation. Orderable variants (tape-and-reel codes and similar) belong here when they are what the BOM must state.",
+      "maxLength": 200
     },
     "description": {
       "type": "string",
       "minLength": 1,
-      "description": "One-line human description of the part's function."
+      "description": "One-line human description of the part's function.",
+      "maxLength": 500
     },
     "lifecycle": {
       "type": "string",
@@ -144,7 +158,8 @@
     "notes": {
       "type": "string",
       "minLength": 1,
-      "description": "Free-text engineering notes: datasheet ambiguities, internal inconsistencies, values deliberately not recorded. Never load-bearing for a check \u2014 anything a checker consumes must be a typed field."
+      "description": "Free-text engineering notes: datasheet ambiguities, internal inconsistencies, values deliberately not recorded. Never load-bearing for a check \u2014 anything a checker consumes must be a typed field.",
+      "maxLength": 20000
     }
   },
   "$defs": {
@@ -201,13 +216,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved measure extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -290,13 +316,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved package extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -348,13 +385,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved pin extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -386,7 +434,8 @@
         "description": {
           "type": "string",
           "minLength": 1,
-          "description": "Datasheet description of the pin's function."
+          "description": "Datasheet description of the pin's function.",
+          "maxLength": 500
         },
         "unit": {
           "type": "string",
@@ -456,13 +505,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved unit extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -535,13 +595,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved mode extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -613,7 +684,7 @@
         "origin",
         "license_class"
       ],
-      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES \u2014 only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by AED (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what actually makes embedding a document unrepresentable.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump \u2014 which is the review a redistribution-adjacent field should get.",
+      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES \u2014 only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by AED (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what removes the SANCTIONED payload slot - the x_ namespace every tool is told to preserve. It does not, and no schema over free text can, stop someone base64-ing a PDF into a typed string field; every free-text field here carries a maxLength so the obvious attempts fail, but a determined producer can always abuse `mpn`. The guarantee this makes is narrow and worth stating exactly: there is no field here whose PURPOSE is to carry opaque data.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump \u2014 which is the review a redistribution-adjacent field should get.",
       "properties": {
         "source_id": {
           "type": "string",
@@ -623,22 +694,26 @@
         "vendor": {
           "type": "string",
           "minLength": 1,
-          "description": "Vendor slug that published the document, matching the datasheet-pipeline vendor registry where one exists."
+          "description": "Vendor slug that published the document, matching the datasheet-pipeline vendor registry where one exists.",
+          "maxLength": 100
         },
         "url": {
           "type": "string",
           "pattern": "^https://[^\\s]+(?![\\s\\S])",
-          "description": "Canonical retrieval URL. HTTPS is required: an http:// citation cannot establish that the bytes hashed below are the bytes the vendor served.\n\nConstrained by `pattern` rather than `format: \"uri\"` deliberately. In JSON Schema 2020-12 `format` is an ANNOTATION by default: Python jsonschema does not enforce it without an explicit format checker, and ajv rejects the schema outright in strict mode unless ajv-formats is loaded. A `format` here would therefore have looked like a constraint while enforcing nothing in either gate. Every keyword in this schema is one that both validators actually apply."
+          "description": "Canonical retrieval URL. HTTPS is required: an http:// citation cannot establish that the bytes hashed below are the bytes the vendor served.\n\nConstrained by `pattern` rather than `format: \"uri\"` deliberately. In JSON Schema 2020-12 `format` is an ANNOTATION by default: Python jsonschema does not enforce it without an explicit format checker, and ajv rejects the schema outright in strict mode unless ajv-formats is loaded. A `format` here would therefore have looked like a constraint while enforcing nothing in either gate. Every keyword in this schema is one that both validators actually apply.",
+          "maxLength": 2048
         },
         "doc_title": {
           "type": "string",
           "minLength": 1,
-          "description": "Document title as printed on it."
+          "description": "Document title as printed on it.",
+          "maxLength": 300
         },
         "document_version": {
           "type": "string",
           "minLength": 1,
-          "description": "Vendor's own version/revision designation, e.g. \"v1.8\", \"DS37274 Rev. 5-2\", \"SLFS022K\". This is the human-meaningful revision; `content_hash` is the machine-comparable one."
+          "description": "Vendor's own version/revision designation, e.g. \"v1.8\", \"DS37274 Rev. 5-2\", \"SLFS022K\". This is the human-meaningful revision; `content_hash` is the machine-comparable one.",
+          "maxLength": 120
         },
         "byte_sha256": {
           "$ref": "#/$defs/Sha256",
@@ -720,13 +795,24 @@
       "patternProperties": {
         "^x_": {
           "description": "Reserved provenance extension point. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array. Closing only Source was not enough - review showed a datasheet could simply be embedded one level up, at the record root or on a pin, and the no-redistribution guarantee would have been just as false.",
-          "not": {
-            "type": [
-              "object",
-              "array"
-            ]
-          },
-          "maxLength": 1024
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -744,7 +830,8 @@
         "locator": {
           "type": "string",
           "minLength": 1,
-          "description": "Where inside the source the value is found, in the document's own terms: \"Table 6-3\", \"Section 5.5, Electrical Characteristics\", \"page 4\". Human-checkable by design \u2014 a reviewer must be able to open the cited document and land on the number."
+          "description": "Where inside the source the value is found, in the document's own terms: \"Table 6-3\", \"Section 5.5, Electrical Characteristics\", \"page 4\". Human-checkable by design \u2014 a reviewer must be able to open the cited document and land on the number.",
+          "maxLength": 500
         },
         "target": {
           "type": "string",
@@ -774,7 +861,8 @@
         "note": {
           "type": "string",
           "minLength": 1,
-          "description": "Justification, required in practice for \"datasheet-derived\" (state the rule) and \"estimated\" (state the assumption and why it is conservative)."
+          "description": "Justification, required in practice for \"datasheet-derived\" (state the rule) and \"estimated\" (state the assumption and why it is conservative).",
+          "maxLength": 2000
         }
       }
     }
