@@ -24,14 +24,14 @@ ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd -P)
 
 # Declared allowlists. Extend these through a dedicated Linear issue, not
 # ad hoc: an undeclared top-level directory is a layout violation.
-ALLOWED_DIRS=".agents .claude .git .github benchmarks corpus eval ir parts tests toolchain"
+ALLOWED_DIRS=".agents .claude .git .github benchmarks corpus eval ir lang parts tests toolchain"
 ALLOWED_ROOT_MD="AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSES.md README.md"
 REQUIRED_FILES="AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSE LICENSES.md README.md toolchain/versions.yaml"
 
 # Directories whose JSON must parse. Keep in step with SCHEMA_ROOTS in
 # tests/schemas/validate-schemas.py: this gate proves the bytes are JSON,
 # that one proves the JSON means something.
-JSON_ROOTS="ir parts eval"
+JSON_ROOTS="ir parts eval lang"
 
 json_parser=""
 if command -v python3 >/dev/null 2>&1; then

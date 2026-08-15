@@ -9,6 +9,8 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
         ir/    *.ir.json        -> netlist-ir.schema.json
                *.sourcemap.json -> source-map.schema.json
         parts/ *.part.json      -> part-data.schema.json
+        eval/  *.run.json       -> run-result.schema.json
+        lang/  *.design.json    -> design-model.schema.json
   - files under <root>/examples/negative/ are expected-INVALID controls:
     each must parse as JSON and then FAIL schema validation; a negative
     control that validates is an error;
@@ -54,6 +56,7 @@ SCHEMA_ROOTS = {
     ),
     "parts": ((".part.json", "part-data.schema.json"),),
     "eval": ((".run.json", "run-result.schema.json"),),
+    "lang": ((".design.json", "design-model.schema.json"),),
 }
 
 NEGATIVE_DIR_NAME = "negative"
