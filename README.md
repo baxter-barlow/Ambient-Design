@@ -12,6 +12,8 @@ Start with:
 
 - [DSL design requirements](https://app.notion.com/p/3ba627dbcc42812388cedd16078a691c)
 - [v1 roadmap](https://app.notion.com/p/3ba627dbcc428146a8dcd5f52eb2a2c9)
+- [Ground-architecture semantics](https://app.notion.com/p/3bd627dbcc42818b88d6da7052b999ca)
+- [Package identity and registry rules](https://app.notion.com/p/3bd627dbcc4281ac98f6c28e944991cb)
 - [Flux community feedback analysis](https://app.notion.com/p/3ba627dbcc4281118402e1eedd8064a9)
 - [Flux product case study](https://app.notion.com/p/3ba627dbcc4280cc9d4bfa82c65cf16b)
 - [agent development policy](AGENTS.md)
