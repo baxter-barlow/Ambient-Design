@@ -42,7 +42,7 @@ jobs:
         run: bash tests/structure/check-layout.sh
 
   schemas:
-    name: IR schemas
+    name: Schemas and part data
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -58,8 +58,18 @@ jobs:
         run: |
           python3 --version
           python3 -m pip install jsonschema==4.26.0
-      - name: Validate IR schemas and examples
+      - name: Validate schemas and examples
         run: python3 tests/schemas/validate-schemas.py
+      - name: Verify part-data lint checks still fire
+        # Runs BEFORE the lint itself. A linter whose checks silently
+        # stopped firing would otherwise report a clean sweep over every
+        # record, which is indistinguishable from having no linter at all.
+        run: python3 parts/lint-part-data.py --self-test
+      - name: Lint part-data cross-references
+        # Invariants JSON Schema has no vocabulary for: provenance pointers
+        # resolving, supply draw attributed to real power_in pins, unit
+        # membership, sort order, licence containment. Stdlib only.
+        run: python3 parts/lint-part-data.py
 
   benchmarks-sim:
     name: Benchmark simulation

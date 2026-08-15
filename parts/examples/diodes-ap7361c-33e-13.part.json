@@ -1,0 +1,348 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "diodes/ap7361c-33e-13",
+  "manufacturer": "Diodes Incorporated",
+  "mpn": "AP7361C-33E-13",
+  "description": "1 A ultra-low-dropout fixed 3.3 V linear regulator, SOT-223",
+  "lifecycle": "active",
+  "package": {
+    "name": "SOT223",
+    "pin_count": 3,
+    "footprint_ref": "ael:SOT-223-3"
+  },
+  "pins": [
+    {
+      "name": "GND",
+      "numbers": [
+        "2"
+      ],
+      "role": "power_in",
+      "description": "Ground",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    {
+      "name": "IN",
+      "numbers": [
+        "1"
+      ],
+      "role": "power_in",
+      "description": "Regulator input. Bypass to ground through at least 1 uF ceramic.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": 6.5
+        }
+      },
+      "recommended": {
+        "voltage": {
+          "unit": "V",
+          "min": 2.2,
+          "max": 6.0
+        }
+      }
+    },
+    {
+      "name": "OUT",
+      "numbers": [
+        "3"
+      ],
+      "role": "power_out",
+      "description": "Regulator output. Bypass to ground through at least 2.2 uF ceramic.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "IN",
+            "offset": 0.3
+          }
+        }
+      },
+      "recommended": {
+        "voltage": {
+          "unit": "V",
+          "min": 3.267,
+          "typ": 3.3,
+          "max": 3.333,
+          "conditions": {
+            "iout": {
+              "unit": "mA",
+              "typ": 100
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "current": {
+          "unit": "A",
+          "min": 0,
+          "max": 1.0
+        }
+      },
+      "capability": {
+        "source_current": {
+          "unit": "A",
+          "min": 1.0,
+          "conditions": {
+            "vin": "VOUT + 1 V"
+          }
+        }
+      },
+      "characteristics": {
+        "dropout_voltage_at_1a": {
+          "unit": "mV",
+          "typ": 340,
+          "conditions": {
+            "iout": {
+              "unit": "A",
+              "typ": 1.0
+            },
+            "vout_range": "2.6 V <= VOUT <= 3.3 V"
+          }
+        },
+        "dropout_voltage_at_300ma": {
+          "unit": "mV",
+          "typ": 90,
+          "max": 140,
+          "conditions": {
+            "iout": {
+              "unit": "mA",
+              "typ": 300
+            },
+            "vout_range": "2.6 V <= VOUT <= 3.3 V"
+          }
+        },
+        "current_limit": {
+          "unit": "A",
+          "min": 1.1,
+          "typ": 1.5,
+          "conditions": {
+            "vin": "VOUT + 1 V, VIN(min) = 2.2 V"
+          }
+        },
+        "short_circuit_current": {
+          "unit": "mA",
+          "typ": 400,
+          "conditions": {
+            "vin": "VOUT + 1 V",
+            "vout": "< 15% of nominal VOUT"
+          }
+        },
+        "output_discharge_resistance": {
+          "unit": "ohm",
+          "typ": 100,
+          "conditions": {
+            "vol": {
+              "unit": "V",
+              "typ": 1
+            }
+          }
+        },
+        "psrr": {
+          "unit": "dB",
+          "typ": 75,
+          "conditions": {
+            "frequency": {
+              "unit": "kHz",
+              "typ": 1
+            },
+            "iout": {
+              "unit": "mA",
+              "typ": 100
+            }
+          }
+        },
+        "start_up_time": {
+          "unit": "us",
+          "typ": 150,
+          "conditions": {
+            "vout": {
+              "unit": "V",
+              "typ": 3
+            },
+            "cout": {
+              "unit": "uF",
+              "typ": 2.2
+            },
+            "rload": {
+              "unit": "ohm",
+              "typ": 30
+            }
+          }
+        }
+      }
+    }
+  ],
+  "ratings": {
+    "abs_max": {
+      "junction_temperature": {
+        "unit": "degC",
+        "min": -40,
+        "max": 150
+      },
+      "storage_temperature": {
+        "unit": "degC",
+        "min": -65,
+        "max": 150
+      },
+      "power_dissipation": {
+        "unit": "mW",
+        "max": 1100,
+        "conditions": {
+          "package": "SOT223"
+        }
+      },
+      "esd_hbm": {
+        "unit": "V",
+        "min": 2000
+      },
+      "esd_mm": {
+        "unit": "V",
+        "min": 200
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "unit": "degC",
+        "min": -40,
+        "max": 85
+      }
+    },
+    "thermal": {
+      "theta_ja": {
+        "unit": "degC/W",
+        "typ": 110,
+        "conditions": {
+          "package": "SOT223",
+          "board": "FR-4 substrate PCB with minimum recommended pad layout"
+        }
+      }
+    }
+  },
+  "modes": [
+    {
+      "id": "enabled_no_load",
+      "description": "Regulating, no load current. This is the regulator's own overhead draw on its input rail.",
+      "kind": "active",
+      "conditions": {
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        },
+        "iout": {
+          "unit": "A",
+          "typ": 0
+        },
+        "vin": "VOUT + 1 V"
+      },
+      "draw": [
+        {
+          "pin": "IN",
+          "current": {
+            "unit": "uA",
+            "typ": 60,
+            "max": 80
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "vendor": "diodes",
+      "url": "https://www.diodes.com/assets/Datasheets/AP7361C.pdf",
+      "doc_title": "AP7361C - 1A Low Dropout Adjustable and Fixed-Mode Regulator with Enable",
+      "document_version": "DS37274 Rev. 5-2, October 2020",
+      "byte_sha256": "sha256:9b64f49c5975b2baf2360248a75212599bde8bf083d315d936e4f1c93b2e1f92",
+      "content_hash": "sha256:55eebda874a2ed2e93d14776b8b40f71d7ffbf8443201a29765904ecbdf8a916",
+      "identity_version": "chv1+reg2026.08.0",
+      "retrieved_at": "2026-08-15T05:41:00Z",
+      "state": "available",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override."
+    },
+    "/modes/0": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Electrical Characteristics, IQ Input Quiescent Current row (Enabled, IOUT = 0 A)",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "target": "enabled_no_load"
+    },
+    "/pins": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Pin Descriptions table, page 2 (SOT223 column); Electrical Characteristics, pages 5-6",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "/pins/0/abs_max": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Pin Descriptions, page 2",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "note": "GND is the part's voltage reference, so its permitted window relative to itself is identically zero. Recorded so the domain checker has an explicit anchor rather than inferring one from the pin name.",
+      "target": "GND"
+    },
+    "/pins/2/capability/source_current": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Electrical Characteristics, IOUT Maximum Output Current row",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Recorded as a guaranteed MINIMUM (min 1.0 A), which is what the datasheet specifies and what a current-budget check may rely on. Contrast the ESP32-S3 record, whose GPIO drive is published as a typical only and therefore supports no such guarantee.",
+      "target": "OUT"
+    },
+    "/pins/2/characteristics/dropout_voltage_at_1a": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Electrical Characteristics, VDROPOUT, IOUT = 1 A block, 2.6 V <= VOUT <= 3.3 V row",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "The 1 A dropout block publishes a typical and NO maximum, so no max is recorded. The features summary on page 1 quotes 360 mV at 1 A while this EC-table row says 340 mV; the EC table is taken as authoritative and the discrepancy is recorded in notes rather than averaged away. A dropout-margin check against a typ-only figure is not a guaranteed result and must be reported as such.",
+      "target": "OUT"
+    },
+    "/pins/2/recommended/voltage": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Electrical Characteristics, VOUT Output Voltage Accuracy row, 1.5 V <= VOUT <= 3.3 V",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "note": "Datasheet states accuracy as VOUT(s) x 0.99 to VOUT(s) x 1.01 at IOUT = 100 mA, TA = 25 C. Evaluated for the fixed 3.3 V option: 3.267 to 3.333 V. NOTE this is the +/-1% accuracy at ONE bias point, NOT an all-conditions output window; benchmark (c)'s power tree budgets +/-2% to cover line, load, and temperature, which is a separate derived figure and deliberately not recorded here as if the vendor stated it.",
+      "target": "OUT"
+    },
+    "/ratings/abs_max": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Absolute Maximum Ratings table, page 4",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "ESD ratings are published as '> 2 KV' (HBM) and '> 200 V' (MM), i.e. lower bounds, so both are recorded as min."
+    },
+    "/ratings/recommended": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Recommended Operating Conditions table, page 4",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "/ratings/thermal/theta_ja": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Electrical Characteristics (Cont.), Thermal Resistance table, page 6, SOT223 row, and Note 9 for the test board",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "notes": "Orderable part AP7361C-33E-13 is the fixed 3.3 V option in SOT-223. The datasheet's Pin Descriptions table gives the SOT223 column as IN = 1, GND = 2, OUT = 3 and lists NO EN or ADJ pin for that package, so the SOT-223 part is the fixed version without enable; the EN and ADJ electrical characteristics in the datasheet apply to other packages and are deliberately not recorded here.\n\nThe SOT-223 package has a heat-spreading tab, but the vendor pin table does not enumerate it as a terminal or state its net. pin_count is therefore 3, matching the enumerated table, and thermal_pad is left unset rather than asserted. Resolving the tab's connection is a footprint-authoring question for the D5 CAD work, not a fact this datasheet supplies.\n\nDatasheet internal inconsistency, recorded rather than silently resolved: page 1 features list says 'Very Low Dropout Voltage (3.3V): 360mV at 1A Typical'; the Electrical Characteristics table says 340 mV typ for the same condition. This record uses 340 mV (the EC table) and flags the conflict. Benchmark (c) independently applies a 0.50 V/A in-house guardband instead of relying on either figure, which is the correct treatment of a typ-only dropout.\n\nThis datasheet carries an 'ADVANCE INFORMATION / NEW PRODUCT' watermark on every page despite an October 2020 date - a data-quality signal worth surfacing to a reviewer, not a defect in this record."
+}

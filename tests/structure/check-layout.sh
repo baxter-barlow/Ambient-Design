@@ -24,9 +24,14 @@ ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd -P)
 
 # Declared allowlists. Extend these through a dedicated Linear issue, not
 # ad hoc: an undeclared top-level directory is a layout violation.
-ALLOWED_DIRS=".agents .claude .git .github benchmarks corpus ir tests toolchain"
+ALLOWED_DIRS=".agents .claude .git .github benchmarks corpus eval ir parts tests toolchain"
 ALLOWED_ROOT_MD="AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSES.md README.md"
 REQUIRED_FILES="AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSE LICENSES.md README.md toolchain/versions.yaml"
+
+# Directories whose JSON must parse. Keep in step with SCHEMA_ROOTS in
+# tests/schemas/validate-schemas.py: this gate proves the bytes are JSON,
+# that one proves the JSON means something.
+JSON_ROOTS="ir parts eval"
 
 json_parser=""
 if command -v python3 >/dev/null 2>&1; then
@@ -73,15 +78,17 @@ for rel in $REQUIRED_FILES; do
   [ -f "$ROOT/$rel" ] || fail "required file is missing: $rel"
 done
 
-# Every JSON file under ir/ must parse. Schema semantics are checked by
-# the schemas gate; a file that does not even parse fails here first.
+# Every JSON file under a declared JSON root must parse. Schema semantics
+# are checked by the schemas gate; a file that does not even parse fails
+# here first. Roots that do not exist yet are skipped.
 json_count=0
-if [ -d "$ROOT/ir" ]; then
+for json_root in $JSON_ROOTS; do
+  [ -d "$ROOT/$json_root" ] || continue
   while IFS= read -r file; do
     json_count=$((json_count + 1))
     parse_json "$file" || fail "does not parse as JSON: ${file#"$ROOT"/}"
-  done < <(find "$ROOT/ir" -type f -name '*.json' | LC_ALL=C sort)
-fi
+  done < <(find "$ROOT/$json_root" -type f -name '*.json' | LC_ALL=C sort)
+done
 
 # The toolchain manifest must parse as YAML when PyYAML is available.
 # Without PyYAML the deep parse is deferred to CI, where it always runs.
@@ -93,5 +100,5 @@ if [ "$json_parser" = "python3" ] && python3 -c 'import yaml' 2>/dev/null; then
   yaml_check="parsed"
 fi
 
-printf 'PASS: AED layout is structurally valid (%s root Markdown files, %s ir JSON files, versions.yaml %s).\n' \
-  "$md_count" "$json_count" "$yaml_check"
+printf 'PASS: AED layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s).\n' \
+  "$md_count" "$json_count" "$JSON_ROOTS" "$yaml_check"
