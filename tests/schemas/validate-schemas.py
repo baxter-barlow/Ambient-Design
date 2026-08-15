@@ -77,6 +77,19 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
         p for p in root_dir.rglob("*.schema.json") if examples_dir not in p.parents
     )
     if not schema_paths:
+        # A root that has examples but no schema is a DELETED or RENAMED
+        # schema, not an empty root. Reporting "nothing to validate" and
+        # exiting 0 would mean removing a schema file silently disables its
+        # entire root — every example and every negative control with it.
+        stray = sorted(examples_dir.rglob("*.json")) if examples_dir.is_dir() else []
+        if stray:
+            failures.append(
+                f"{root_name}/: {len(stray)} example file(s) exist under "
+                f"{root_name}/examples/ but the root declares NO *.schema.json. "
+                "A schema was deleted or renamed, which would otherwise switch "
+                "off this root's validation silently."
+            )
+            return 0, 0, 0
         print(f"schemas: {root_name}/: no *.schema.json files; nothing to validate.")
         return 0, 0, 0
 
@@ -188,6 +201,30 @@ def main() -> int:
 
     failures = []
     totals = [0, 0, 0]
+
+    # A file carrying a mapped example suffix but living outside any
+    # declared examples/ directory is validated by nothing. `make check`
+    # would pass over a whole part library sitting one directory to the
+    # left, which is the failure mode most likely to happen in practice as
+    # the seed library grows.
+    mapped_suffixes = sorted(
+        {suffix for suffixes in SCHEMA_ROOTS.values() for suffix, _ in suffixes}
+    )
+    known_example_dirs = [root / name / "examples" for name in SCHEMA_ROOTS]
+    skip_dirs = {".git", "node_modules", "__pycache__", ".venv"}
+    for path in sorted(root.rglob("*.json")):
+        if skip_dirs & set(path.parts):
+            continue
+        if not any(path.name.endswith(suffix) for suffix in mapped_suffixes):
+            continue
+        if any(d in path.parents for d in known_example_dirs):
+            continue
+        failures.append(
+            f"{path.relative_to(root)}: carries a mapped example suffix but sits "
+            "outside every declared <root>/examples/ directory, so no gate "
+            "validates it. Move it under the right examples/ directory or "
+            "rename it."
+        )
 
     for root_name in present:
         counts = check_root(

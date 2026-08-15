@@ -30,6 +30,8 @@ import subprocess
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
+from .models import ReplayExhaustedError
+
 
 @dataclass
 class Diagnostic:
@@ -39,6 +41,11 @@ class Diagnostic:
     message: str
     span: dict | None = None
     params: dict = field(default_factory=dict)
+    # Severity as emitted at the TOP level of the diagnostic object, which
+    # is where several tools put it, rather than inside params. Kept
+    # separate so a gate that reports severity either way is read
+    # correctly; reading only params let a tool exit 0 with unseen errors.
+    top_level_severity: str | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -160,12 +167,25 @@ class CommandGate:
                     message=str(obj.get("message", "")),
                     span=obj.get("span"),
                     params=obj.get("params", {}) or {},
+                    top_level_severity=obj.get("severity"),
                 )
             )
 
-        has_errors = any(
-            str(d.params.get("severity", "error")).lower() == "error" for d in diagnostics
-        )
+        # Severity may sit at the top level of a diagnostic or inside its
+        # structured params; A1 does not pin down which, and reading only
+        # one of the two let a gate exit 0 while emitting error-severity
+        # diagnostics that this check never saw. Absent severity is treated
+        # as an error: a diagnostic a tool bothered to emit is not assumed
+        # benign.
+        def severity_of(diag: Diagnostic) -> str:
+            raw = diag.params.get("severity")
+            if raw is None:
+                raw = (diag.span or {}).get("severity") if isinstance(diag.span, dict) else None
+            if raw is None:
+                raw = diag.top_level_severity
+            return str(raw if raw is not None else "error").lower()
+
+        has_errors = any(severity_of(d) == "error" for d in diagnostics)
         passed = proc.returncode == 0 and not has_errors
 
         return GateResult(
@@ -255,7 +275,7 @@ class ReplayGate:
 
     def check(self, source: str, workdir: Path | None = None) -> GateResult:
         if self._cursor >= len(self._recorded):
-            raise IndexError(
+            raise ReplayExhaustedError(
                 "replay transcript exhausted: the protocol asked for more gate "
                 "invocations than were recorded. The recording and the protocol "
                 "have diverged; re-record rather than padding the transcript."
@@ -270,6 +290,7 @@ class ReplayGate:
                     message=d.get("message", ""),
                     span=d.get("span"),
                     params=d.get("params", {}) or {},
+                    top_level_severity=d.get("severity"),
                 )
                 for d in entry.get("diagnostics", [])
             ],

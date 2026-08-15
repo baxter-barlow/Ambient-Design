@@ -25,7 +25,16 @@ from aed_eval.gates import (  # noqa: E402
     GateResult,
     ReplayGate,
 )
-from aed_eval.models import ReplayClient, SamplingParams, Usage, ModelResponse, request_digest  # noqa: E402
+from aed_eval.models import (  # noqa: E402
+    HarnessIntegrityError,
+    ModelResponse,
+    ReplayClient,
+    ReplayDivergenceError,
+    ReplayExhaustedError,
+    SamplingParams,
+    Usage,
+    request_digest,
+)
 from aed_eval.protocol import (  # noqa: E402
     TrialConfig,
     build_repair_message,
@@ -315,6 +324,40 @@ class TestTrialProtocol(unittest.TestCase):
         self.assertIn("api down", r.error)
 
 
+class TestBrokenInstrumentPropagates(unittest.TestCase):
+    """A broken recording must fail the run, not fail a trial.
+
+    Swallowing replay divergence into `model_error` made the CI replay job
+    incapable of failing: every drifted transcript looked like ten failed
+    trials and exited 0."""
+
+    def test_replay_divergence_escapes_the_trial_loop(self):
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        turns = [{"text": "x", "request_digest": request_digest("OTHER", []), "usage": {}}]
+        client = ReplayClient(turns, "m", SamplingParams(0.0, 10))
+        with self.assertRaises(ReplayDivergenceError):
+            run_trial(cfg, client, _gate([True]), 1)
+
+    def test_ordinary_model_failure_is_still_recorded_not_raised(self):
+        class Boom:
+            def complete(self, system, messages):
+                raise RuntimeError("api down")
+
+            def identity(self):
+                return {}
+
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        result = run_trial(cfg, Boom(), _gate([True]), 1)
+        self.assertEqual(result.outcome, "model_error")
+
+
+class TestTruncatedEmission(unittest.TestCase):
+    def test_unterminated_fence_is_not_graded_as_the_earlier_block(self):
+        """A truncated reply usually still quotes the broken snippet."""
+        text = "The bug was:\n```aed\nBROKEN\n```\nFixed:\n```aed\nGOOD but cut off"
+        self.assertIsNone(extract_source(text))
+
+
 class TestPairing(unittest.TestCase):
     def _arm(self, seeds, passes):
         return {"trials": [{"seed": s, "passed": p} for s, p in zip(seeds, passes)]}
@@ -403,7 +446,7 @@ class TestGates(unittest.TestCase):
     def test_replay_gate_refuses_to_invent_results(self):
         gate = ReplayGate([{"passed": True}])
         gate.check("x")
-        with self.assertRaises(IndexError):
+        with self.assertRaises(ReplayExhaustedError):
             gate.check("x")
 
 
@@ -412,9 +455,12 @@ class TestReplayDivergence(unittest.TestCase):
         """A stale transcript must fail loudly, never replay quietly."""
         turns = [{"text": "hi", "request_digest": request_digest("OLD", []), "usage": {}}]
         client = ReplayClient(turns, "m", SamplingParams(0.0, 10))
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(ReplayDivergenceError) as ctx:
             client.complete("NEW SYSTEM PROMPT", [])
         self.assertIn("replay divergence", str(ctx.exception))
+        # Must be a harness-integrity error, so the trial loop re-raises it
+        # instead of recording it as an ordinary failed trial.
+        self.assertIsInstance(ctx.exception, HarnessIntegrityError)
 
     def test_matching_request_replays(self):
         system, messages = "S", [{"role": "user", "content": "u"}]

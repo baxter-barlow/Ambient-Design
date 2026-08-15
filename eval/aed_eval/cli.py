@@ -55,6 +55,21 @@ def cmd_tokens(args) -> int:
         tokenizer, parts, limit=args.limit, enforce_gating=not args.allow_stub
     )
     print(json.dumps(report, indent=2, sort_keys=True))
+
+    if not report["tokenizer"].get("gating", False):
+        # Exit 3, never 0 or 1. A stub measurement is neither a pass nor a
+        # failure — it is not a measurement of the A4 budget at all. Exiting
+        # 0 would let a CI job treat it as green; exiting 1 would let
+        # someone "fix" it by nudging the content. A distinct code means no
+        # pipeline can mistake it for either verdict.
+        print(
+            "\nNON-GATING TOKENIZER: this number cannot satisfy the A4 budget. "
+            "Exit code 3 is neither pass nor fail. Re-run with the pinned "
+            "tokenizer from toolchain/versions.yaml for a verdict.",
+            file=sys.stderr,
+        )
+        return 3
+
     if not report["passed"]:
         print(
             f"\nA4 budget exceeded by {-report['headroom']:,} tokens.",
@@ -93,6 +108,20 @@ def cmd_replay(args) -> int:
         arms[arm_name] = run_arm(config, model, lambda: shared, seeds)
         arms[arm_name]["model_identity"] = model.identity()
 
+    # Measure the A4 model-facing context that the run actually used, so
+    # the "<=12K tokens" clause AC5a is gated on is checkable from the
+    # record rather than merely asserted. Non-gating tokenizers still
+    # produce a number; the record's `authoritative` flag is what says
+    # whether it counts.
+    context_budget = a4_context_budget(
+        tokenizer,
+        {
+            "system_context": transcript["system_context"],
+            "task_prompt": transcript["task_prompt"],
+        },
+        enforce_gating=False,
+    )
+
     record = build_run_record(
         run_id=transcript.get("run_id", Path(args.transcript).stem),
         purpose=transcript.get("purpose", "replay"),
@@ -101,8 +130,10 @@ def cmd_replay(args) -> int:
         model_identity={"kind": "replay", "model": transcript["model"],
                         "sampling": sampling.as_dict()},
         gate_identity={"kind": "replay"},
+        context_budget=context_budget,
         primary_arm=transcript.get("primary_arm"),
         baseline_arm=transcript.get("baseline_arm"),
+        paired_by=transcript.get("paired_by"),
         notes=transcript.get("notes"),
     )
 

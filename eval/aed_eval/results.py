@@ -46,6 +46,7 @@ def build_run_record(
     baseline_arm: str | None = None,
     alpha: float = 0.05,
     minimum_effect_of_interest: tuple[float, float] | None = None,
+    paired_by: str | None = None,
     notes: str | None = None,
 ) -> dict:
     """Assemble a complete run record, including the statistical verdicts.
@@ -113,11 +114,17 @@ def build_run_record(
 
         if baseline_arm and baseline_arm in arms:
             base = arms[baseline_arm]
-            try:
+            # Pair ONLY when a blocking factor was named. Matching seed
+            # numbers are not one: in the AC5 protocol every trial runs the
+            # same prompt on the same benchmark, so trial i of two arms
+            # shares nothing but an index and a paired test would claim
+            # precision the design does not earn. Inferring pairing from
+            # seed lists lining up is exactly that mistake, and it was in
+            # here until review found it.
+            paired = (None, None)
+            if paired_by:
                 a_only, b_only = pair_discordance(arm, base)
                 paired = (a_only, b_only)
-            except ValueError:
-                paired = (None, None)
             record["flip_criterion"] = stats.flip_verdict(
                 aed_successes=arm["successes"],
                 aed_trials=arm["trial_count"],
@@ -130,6 +137,7 @@ def build_run_record(
             )
             record["flip_criterion"]["primary_arm"] = primary_arm
             record["flip_criterion"]["baseline_arm"] = baseline_arm
+            record["flip_criterion"]["paired_by"] = paired_by
 
     if notes:
         record["notes"] = notes

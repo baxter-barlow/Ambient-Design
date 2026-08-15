@@ -75,6 +75,26 @@ def request_digest(system: str, messages: list[dict]) -> str:
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+class HarnessIntegrityError(Exception):
+    """The harness itself is inconsistent, as opposed to a trial failing.
+
+    These MUST propagate out of the trial loop. A trial failure is a
+    measurement; a replay transcript that no longer matches the protocol, or
+    a gate recording that ran out, is a broken instrument. Catching the
+    second as if it were the first is how a CI job that can never fail gets
+    mistaken for a CI job that always passes — which is exactly what
+    happened here before review caught it.
+    """
+
+
+class ReplayDivergenceError(HarnessIntegrityError):
+    """A recorded request no longer matches what the protocol sends."""
+
+
+class ReplayExhaustedError(HarnessIntegrityError):
+    """The protocol asked for more turns than were recorded."""
+
+
 class ModelUnavailableError(RuntimeError):
     """The pinned model could not be reached. Never silently substituted."""
 
@@ -160,7 +180,7 @@ class ReplayClient:
 
     def complete(self, system: str, messages: list[dict]) -> ModelResponse:
         if self._cursor >= len(self._turns):
-            raise IndexError(
+            raise ReplayExhaustedError(
                 "replay transcript exhausted: the protocol requested more model "
                 "turns than were recorded. Re-record rather than padding."
             )
@@ -171,7 +191,7 @@ class ReplayClient:
         if self.strict and recorded_digest:
             actual = request_digest(system, messages)
             if actual != recorded_digest:
-                raise ValueError(
+                raise ReplayDivergenceError(
                     "replay divergence at turn "
                     f"{self._cursor - 1}: the request no longer matches the "
                     f"recording.\n  recorded {recorded_digest}\n  actual   {actual}\n"
