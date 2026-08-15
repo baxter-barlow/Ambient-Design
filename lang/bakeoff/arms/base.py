@@ -59,6 +59,19 @@ VARIANTS = ("explicit", "inferred", "inferred+columnar")
 # quietly lowering it.
 COLUMNAR_MIN_ROWS = 3
 
+# L5 makes the surface keyword-based, so these words cannot also be names.
+# Held in one place and shared by both candidates: a reserved-word list that
+# differed between them would be a second axis nobody is choosing between.
+# The list is a superset of each candidate's own keywords, so a design that
+# parses under one candidate parses under the other, which the cross-arm
+# agreement check depends on.
+RESERVED = frozenset({
+    "module", "port", "pin", "signal", "net", "table", "assert", "new",
+    "part", "abstract", "hardware", "dnp", "exclude_from_bom", "board_only",
+    "within", "at", "least", "most", "to", "static", "dynamic",
+    "true", "false",
+})
+
 
 def variant_flags(variant: str) -> tuple[bool, bool]:
     """(apply_inference, use_columnar) for a variant name."""
@@ -93,6 +106,36 @@ class Cursor:
 
     def at_keyword(self, *words: str) -> bool:
         return self.current.kind == "NAME" and self.current.text in words
+
+    def peek(self, offset: int = 1) -> Token:
+        return self.tokens[min(self.index + offset, len(self.tokens) - 1)]
+
+    def reject_reserved_name(self) -> None:
+        """Catch a keyword used as a name, and say so.
+
+        Without this the keyword dispatch wins and the author gets
+        "expected a signal name, found '='" for a line that plainly declares
+        an instance called `signal`. A diagnostic that blames the wrong token
+        is precisely the repair-loop failure P2 is about.
+        """
+        token = self.current
+        if token.kind != "NAME" or token.text not in RESERVED:
+            return
+        if self.peek().kind == "OP" and self.peek().text in ("=", ".", "~"):
+            self.diagnostics.append(
+                Diag(
+                    code=f"{self.prefix}0212",
+                    message=(
+                        f"{token.text!r} is a reserved word and cannot be used "
+                        "as a name"
+                    ),
+                    span=token.span(),
+                    params={"word": token.text},
+                    fixit="rename it; the reserved words are: "
+                    + ", ".join(sorted(RESERVED)),
+                )
+            )
+            self.fail()
 
     def advance(self) -> Token:
         token = self.current

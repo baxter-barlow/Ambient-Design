@@ -12,7 +12,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 77 tests, stdlib only
+python3 -m unittest discover -s tests -t .  # 81 tests, stdlib only
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
@@ -111,7 +111,7 @@ over each arm's canonical rendering.
 | esp32s3-devboard | candidate_b | 6622 | **4994** | **4151** |
 | esp32s3-devboard | starlark | 7265 | 5056 | — |
 
-Language cards: candidate_a 786, candidate_b 809, starlark 711 tokens — all
+Language cards: candidate_a 835, candidate_b 858, starlark 746 tokens — all
 comfortably inside §4's ~3K flip-criterion budget.
 
 **T9 annotation tax: 24-30%**, and it is a LOWER BOUND. The rules in

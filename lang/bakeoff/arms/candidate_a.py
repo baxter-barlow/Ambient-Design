@@ -207,6 +207,7 @@ def _require_instance(cursor: Cursor, builder: _ModuleBuilder, name: str) -> dic
 
 
 def _parse_statement(cursor: Cursor, builder: _ModuleBuilder, assertions: list) -> None:
+    cursor.reject_reserved_name()
     if cursor.at_keyword("port"):
         builder.ports.append(parse_port_decl(cursor))
         return
@@ -550,6 +551,13 @@ A mA uA nA, W mW uW, Hz kHz MHz, s ms us ns, m mm um, degC.
 
 `<name> <tier> <measurement>(<net>)` then `within <lo> to <hi>`,
 `at least <bound>` or `at most <bound>`. Tier is `static` or `dynamic`.
+
+## Reserved words
+
+module port pin signal net table assert new part abstract hardware dnp
+exclude_from_bom board_only within at least most to static dynamic true false
+
+None of these may be used as an instance, net or module name.
 
 ## Tables
 

@@ -169,6 +169,27 @@ def flatten(model: DesignModel) -> dict:
         for a in model.assertions
     ]
 
+    # Two DISTINCT nets that flatten to the same name is the silent-wrong-answer
+    # case this whole design treats as the cardinal sin: a module instantiated
+    # twice gives each copy its own internal net, both carrying the label the
+    # module wrote, and any backend keying on name would fuse them into one.
+    # Deriving a unique name for them is I2's identity rule, which the bake-off
+    # deliberately does not implement - so this refuses rather than guesses.
+    seen: dict[str, int] = {}
+    for net in nets:
+        seen[net["name"]] = seen.get(net["name"], 0) + 1
+    collisions = sorted(name for name, count in seen.items() if count > 1)
+    if collisions:
+        raise AnchorError(
+            "flattening produced two distinct nets with the same name: "
+            + ", ".join(collisions)
+            + ". A module instantiated more than once gives each copy its own "
+            "internal nets, and disambiguating their labels is I2's derived-"
+            "identity rule (AMB-62/R27), which this prototype does not "
+            "implement. Label the nets uniquely, or keep the module to one "
+            "instantiation in a bake-off fixture."
+        )
+
     return {
         "instances": sorted(instances, key=lambda i: i["path"]),
         "nets": sorted(nets, key=lambda n: n["name"]),

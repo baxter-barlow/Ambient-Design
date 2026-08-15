@@ -879,4 +879,9 @@ unnamed net. An endpoint is "instance.pin" or one of this module's ports.
 Pin roles: power_in, power_out, passive, bidirectional, open_drain,
 open_collector, tri_state, input, output, nc. Hardware kinds: mounting_hole,
 fiducial, artwork, test_point, grounded_mounting_hole.
+
+## Reserved words
+
+Python's own keywords, plus `design` and `DESIGN`. Names bound in a module
+function are ordinary Python locals and may be anything else.
 '''
