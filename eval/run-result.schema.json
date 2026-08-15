@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/aed/schemas/eval-run-result/0.schema.json",
+  "title": "AED evaluation run record v0",
+  "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence — which matters because the repository ships exactly such a fixture for offline testing.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "record_schema_version",
+    "run_id",
+    "purpose",
+    "recorded_at",
+    "authoritative",
+    "harness",
+    "tokenizer",
+    "model",
+    "gate",
+    "arms"
+  ],
+  "properties": {
+    "record_schema_version": {
+      "type": "integer",
+      "const": 0,
+      "description": "Consumers must refuse records whose version they do not know."
+    },
+    "run_id": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "recorded_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "UTC, literal trailing Z. A run record is an observation of an external system, so unlike the netlist IR it may and must carry a timestamp."
+    },
+    "authoritative": {
+      "type": "boolean",
+      "description": "Whether this record may be cited as evidence for a gate decision. Computed by the harness from the tokenizer and model identities, never asserted by the caller."
+    },
+    "non_authoritative_reasons": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Why the record is not authoritative. Required to be non-empty whenever `authoritative` is false, so a record can never be non-authoritative for unstated reasons."
+    },
+    "harness": {
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "python": { "type": "string" },
+        "platform": { "type": "string" }
+      }
+    },
+    "tokenizer": {
+      "type": "object",
+      "required": ["name", "kind", "fingerprint", "gating"],
+      "description": "Identity of the tokenizer that produced every budget-token count in this record. The fingerprint is behavioural: two records are comparable only if their fingerprints match.",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["tiktoken", "stub"] },
+        "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "n_vocab": { "type": ["integer", "null"] },
+        "gating": { "type": "boolean" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["kind", "model", "sampling"],
+      "description": "AC5 requires a pinned model with stated sampling parameters. Both are required here so a run without them cannot be recorded at all.",
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "sampling": {
+          "type": "object",
+          "required": ["temperature", "max_tokens"],
+          "properties": {
+            "temperature": { "type": "number" },
+            "max_tokens": { "type": "integer", "minimum": 1 },
+            "top_p": { "type": ["number", "null"] },
+            "top_k": { "type": ["integer", "null"] }
+          }
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "type": "string", "minLength": 1 } }
+    },
+    "arms": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "One entry per measured arm. Per-trial detail below the required counters is deliberately open.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["config", "seeds", "successes", "trial_count", "total_tokens"],
+        "properties": {
+          "config": {
+            "type": "object",
+            "required": ["benchmark_id", "iteration_semantics", "max_write_check_cycles", "token_budget"],
+            "properties": {
+              "benchmark_id": { "type": "string", "minLength": 1 },
+              "iteration_semantics": {
+                "type": "string",
+                "enum": ["total_write_check_cycles", "initial_plus_repairs"],
+                "description": "Which reading of AC5's '<=3 repair iterations' this arm used. Recorded because the two readings differ by roughly 33% in generosity, so numbers taken under different readings are not comparable."
+              },
+              "max_write_check_cycles": { "type": "integer", "minimum": 1 },
+              "token_budget": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "seeds": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+          "successes": { "type": "integer", "minimum": 0 },
+          "trial_count": { "type": "integer", "minimum": 1 },
+          "total_tokens": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "a4_context_budget": {
+      "type": "object",
+      "required": ["limit", "total", "breakdown", "passed"],
+      "description": "The A4 model-facing context measured against its ceiling. The per-part breakdown is required alongside the total precisely because A4 exists to stop the teaching payload migrating from the card into the skill and out of sight.",
+      "properties": {
+        "limit": { "type": "integer", "minimum": 1 },
+        "total": { "type": "integer", "minimum": 0 },
+        "breakdown": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "headroom": { "type": "integer" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "ac5_gate": {
+      "type": "object",
+      "required": ["arm", "successes", "trials", "passed", "wilson_95"],
+      "description": "The AC5a threshold rule. The Wilson interval is REQUIRED alongside the verdict: a bare pass at 7/10 invites reading a threshold rule as a demonstration that the true rate exceeds the threshold, which it is not.",
+      "properties": {
+        "arm": { "type": "string", "minLength": 1 },
+        "successes": { "type": "integer", "minimum": 0 },
+        "trials": { "type": "integer", "minimum": 1 },
+        "passed": { "type": "boolean" },
+        "wilson_95": {
+          "type": "object",
+          "required": ["low", "high"],
+          "properties": {
+            "point": { "type": "number" },
+            "low": { "type": "number", "minimum": 0, "maximum": 1 },
+            "high": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "flip_criterion": {
+      "type": "object",
+      "required": ["test", "p_value", "verdict", "power_against_reference_effect"],
+      "description": "The §4 standalone-DSL flip criterion. `power_against_reference_effect` is required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.",
+      "properties": {
+        "test": {
+          "type": "string",
+          "enum": ["mcnemar_exact_one_sided", "fisher_exact_one_sided"]
+        },
+        "paired": { "type": "boolean" },
+        "p_value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "alpha": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "power_against_reference_effect": { "type": "number", "minimum": 0, "maximum": 1 },
+        "verdict": {
+          "type": "string",
+          "enum": ["flip_criterion_met", "flip_criterion_not_met", "inconclusive"],
+          "description": "Three-valued on purpose. 'inconclusive' means the run lacked the power to answer, which is a real outcome and must not be collapsed into 'not met'."
+        }
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "authoritative": { "const": false } },
+        "required": ["authoritative"]
+      },
+      "then": {
+        "required": ["non_authoritative_reasons"],
+        "properties": {
+          "non_authoritative_reasons": { "type": "array", "minItems": 1 }
+        },
+        "$comment": "A record that disclaims authority must say why. Silence would leave a reader unable to tell a deliberate fixture from a broken run."
+      }
+    },
+    {
+      "if": {
+        "properties": { "authoritative": { "const": true } },
+        "required": ["authoritative"]
+      },
+      "then": {
+        "properties": {
+          "tokenizer": {
+            "properties": { "gating": { "const": true } },
+            "required": ["gating"]
+          }
+        },
+        "$comment": "An authoritative record cannot rest on a non-gating tokenizer. This is the schema-level backstop for the same rule the tokenizer module enforces in code."
+      }
+    },
+    {
+      "if": {
+        "properties": { "a4_context_budget": { "required": ["passed"] } },
+        "required": ["a4_context_budget"]
+      },
+      "then": {
+        "properties": {
+          "a4_context_budget": {
+            "if": { "properties": { "passed": { "const": true } }, "required": ["passed"] },
+            "then": {
+              "properties": { "total": { "type": "integer" } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

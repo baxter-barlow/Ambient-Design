@@ -1,0 +1,1383 @@
+{
+  "arms": {
+    "grammar_a": {
+      "gate_results": [
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        }
+      ],
+      "turns": [
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "Here is the design, described in prose only.",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:83575962b0603ed449693c9ac97d381c49ba00e1f103939fc052020ba0a37093",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:e19886f53917fede2985326ffb59cf64d1c9eb9a5637679d697d9fd11faa478d",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        }
+      ]
+    },
+    "starlark_baseline": {
+      "gate_results": [
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 0,
+          "diagnostics": [],
+          "exit_code": 0,
+          "passed": true,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        },
+        {
+          "diagnostic_count": 2,
+          "diagnostics": [
+            {
+              "code": "AED0201",
+              "message": "positional argument to component constructor; parameters are named",
+              "params": {
+                "parameter": "resistance",
+                "severity": "error"
+              },
+              "span": {
+                "column": 22,
+                "line": 3
+              }
+            },
+            {
+              "code": "AED0410",
+              "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+              "params": {
+                "severity": "error",
+                "suggested": "within ... to ..."
+              },
+              "span": {
+                "column": 5,
+                "line": 4
+              }
+            }
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "stage": "check",
+          "stderr_excerpt": null
+        }
+      ],
+      "turns": [
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(resistance=100kohm)\n    rb = new Resistor(resistance=680kohm)\n    ct = new Capacitor(capacitance=1uF)\n    assert frequency(u1.OUT) within 0.93Hz to 1.05Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:348fb5f5dc504bff3511444def3367c875c2da5d7cd3a705082c9e477aed9518",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 1800,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:7b2e54c0c2a3f2bce5bd57a888fddc3a276e9f393d13d6be5cb68c9e653b1793",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2200,
+            "output_tokens": 320
+          }
+        },
+        {
+          "request_digest": "sha256:44b20a2d6da170aad7feab3c9dcbe2058a5183389068883d99b5215000ef6ed7",
+          "stop_reason": "end_turn",
+          "text": "```aed\nmodule Blinker:\n    u1 = new NE555\n    ra = new Resistor(100kohm)\n    assert frequency(u1.OUT) == 1Hz\n```",
+          "usage": {
+            "input_tokens": 2600,
+            "output_tokens": 320
+          }
+        }
+      ]
+    }
+  },
+  "baseline_arm": "starlark_baseline",
+  "benchmark_id": "blinker-555",
+  "iteration_semantics": "total_write_check_cycles",
+  "max_iterations": 3,
+  "model": "scripted-demo-model",
+  "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
+  "primary_arm": "grammar_a",
+  "purpose": "harness demonstration and offline regression fixture",
+  "run_id": "demo-replay-0",
+  "sampling": {
+    "max_tokens": 4096,
+    "temperature": 0.0
+  },
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "system_context": "You are emitting a circuit description in a small declarative DSL. Nouns: module, interface, component. Instantiate with `new`. Connect with `~`. Blocks are newline and indentation delimited.",
+  "task_prompt": "Emit a 9 V 555 astable blinker: a 555 timer, timing resistors and capacitor, an LED with a ballast resistor. Assert the oscillation frequency is between 0.93 Hz and 1.05 Hz.",
+  "token_budget": 150000
+}

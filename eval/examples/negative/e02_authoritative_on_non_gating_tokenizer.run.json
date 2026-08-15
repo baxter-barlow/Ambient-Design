@@ -1,0 +1,1982 @@
+{
+  "ac5_gate": {
+    "arm": "grammar_a",
+    "caveat": "The Wilson interval is the honest width of this estimate. A pass at 7/10 is consistent with a true rate anywhere from 0.49 to 0.94; the gate is a threshold rule, not a demonstration that the true rate exceeds the threshold.",
+    "observed_rate": 0.8,
+    "passed": true,
+    "required_rate": 0.7,
+    "required_successes": 7,
+    "rule": "pass iff successes/trials >= 7/10",
+    "successes": 8,
+    "trials": 10,
+    "wilson_95": {
+      "high": 0.9433178485456248,
+      "low": 0.4901624715366418,
+      "point": 0.8,
+      "z": 1.959963984540054
+    }
+  },
+  "arms": {
+    "grammar_a": {
+      "config": {
+        "benchmark_id": "blinker-555",
+        "iteration_semantics": "total_write_check_cycles",
+        "max_iterations": 3,
+        "max_write_check_cycles": 3,
+        "token_budget": 150000
+      },
+      "model_identity": {
+        "kind": "replay",
+        "model": "scripted-demo-model",
+        "sampling": {
+          "extra": {},
+          "max_tokens": 4096,
+          "temperature": 0.0,
+          "top_k": null,
+          "top_p": null
+        },
+        "turns": 19
+      },
+      "outcomes": {
+        "iteration_budget_exhausted": 2,
+        "passed": 8
+      },
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "successes": 8,
+      "total_tokens": 45080,
+      "trial_count": 10,
+      "trials": [
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 1,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 2,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 3,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 4,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": null,
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 44,
+                "text_sha256": "sha256:cccdbd0ff4c6f08e7be359fc85dee5598dad6f1a57a27f7853fc43aff1842a1c",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": false
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 5,
+          "total_tokens": 7560
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 6,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 7,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 8,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 9,
+          "total_tokens": 7560
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 10,
+          "total_tokens": 7560
+        }
+      ]
+    },
+    "starlark_baseline": {
+      "config": {
+        "benchmark_id": "blinker-555",
+        "iteration_semantics": "total_write_check_cycles",
+        "max_iterations": 3,
+        "max_write_check_cycles": 3,
+        "token_budget": 150000
+      },
+      "model_identity": {
+        "kind": "replay",
+        "model": "scripted-demo-model",
+        "sampling": {
+          "extra": {},
+          "max_tokens": 4096,
+          "temperature": 0.0,
+          "top_k": null,
+          "top_p": null
+        },
+        "turns": 22
+      },
+      "outcomes": {
+        "iteration_budget_exhausted": 4,
+        "passed": 6
+      },
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "successes": 6,
+      "total_tokens": 53040,
+      "trial_count": 10,
+      "trials": [
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 1,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 1,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 2,
+          "total_tokens": 2120
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 3,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 4,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 5,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 2,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 0,
+                "diagnostics": [],
+                "exit_code": 0,
+                "passed": true,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 222,
+                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "passed",
+          "passed": true,
+          "seed": 6,
+          "total_tokens": 4640
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 7,
+          "total_tokens": 7560
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 8,
+          "total_tokens": 7560
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 9,
+          "total_tokens": 7560
+        },
+        {
+          "cycles_used": 3,
+          "error": null,
+          "iterations": [
+            {
+              "cumulative_tokens": 2120,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 0,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 1800,
+                  "output_tokens": 320,
+                  "total": 2120
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 4640,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 1,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2200,
+                  "output_tokens": 320,
+                  "total": 2520
+                }
+              },
+              "source_extracted": true
+            },
+            {
+              "cumulative_tokens": 7560,
+              "gate": {
+                "diagnostic_count": 2,
+                "diagnostics": [
+                  {
+                    "code": "AED0201",
+                    "message": "positional argument to component constructor; parameters are named",
+                    "params": {
+                      "parameter": "resistance",
+                      "severity": "error"
+                    },
+                    "span": {
+                      "column": 22,
+                      "line": 3
+                    }
+                  },
+                  {
+                    "code": "AED0410",
+                    "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
+                    "params": {
+                      "severity": "error",
+                      "suggested": "within ... to ..."
+                    },
+                    "span": {
+                      "column": 5,
+                      "line": 4
+                    }
+                  }
+                ],
+                "exit_code": 1,
+                "passed": false,
+                "stage": "check",
+                "stderr_excerpt": null
+              },
+              "index": 2,
+              "response": {
+                "model": "scripted-demo-model",
+                "stop_reason": "end_turn",
+                "text_chars": 112,
+                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "usage": {
+                  "input_tokens": 2600,
+                  "output_tokens": 320,
+                  "total": 2920
+                }
+              },
+              "source_extracted": true
+            }
+          ],
+          "outcome": "iteration_budget_exhausted",
+          "passed": false,
+          "seed": 10,
+          "total_tokens": 7560
+        }
+      ]
+    }
+  },
+  "authoritative": true,
+  "flip_criterion": {
+    "aed_rate": 0.8,
+    "alpha": 0.05,
+    "baseline_arm": "starlark_baseline",
+    "baseline_rate": 0.6,
+    "interpretation": "The run lacked power to distinguish the arms. This is NOT evidence of equivalence; add trials or record the question as unanswered.",
+    "p_value": 1.0,
+    "paired": true,
+    "power_against_reference_effect": 0.007383637700683594,
+    "primary_arm": "grammar_a",
+    "test": "mcnemar_exact_one_sided",
+    "verdict": "inconclusive"
+  },
+  "gate": {
+    "kind": "replay"
+  },
+  "harness": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "version": "0.1.0"
+  },
+  "model": {
+    "kind": "replay",
+    "model": "scripted-demo-model",
+    "sampling": {
+      "extra": {},
+      "max_tokens": 4096,
+      "temperature": 0.0,
+      "top_k": null,
+      "top_p": null
+    }
+  },
+  "non_authoritative_reasons": [],
+  "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
+  "purpose": "harness demonstration and offline regression fixture",
+  "record_schema_version": 0,
+  "recorded_at": "2026-08-15T06:17:33Z",
+  "run_id": "demo-replay-0",
+  "tokenizer": {
+    "fingerprint": "sha256:d2391615e95588b2b6e5e447c5d2989aad086c77607a453890b4731345fbb48d",
+    "gating": false,
+    "kind": "stub",
+    "n_vocab": null,
+    "name": "stub-whitespace"
+  },
+  "x_negative_control": {
+    "expects": "REJECTED",
+    "guarantee_under_test": "A record cannot claim gate authority while resting on a non-gating tokenizer. This is the schema-level backstop for the rule the tokenizer module enforces in code, so a stub can never satisfy the A4 budget by way of a hand-edited record."
+  }
+}

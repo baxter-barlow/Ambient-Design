@@ -65,6 +65,43 @@ python:
     # (tests/structure/check-layout.sh); installed explicitly in the CI
     # structure job so that gate never silently defers.
     pyyaml: "6.0.2"                # verified locally: yaml.__version__ == 6.0.2
+  optional_packages:
+    # Needed only to run the measurement harness (eval/) against a live
+    # model or to take gating token counts. The harness's own test suite is
+    # stdlib-only and runs in CI without either of these, so neither is a
+    # repository-wide dependency.
+    tiktoken: "0.13.0"             # verified locally: tiktoken 0.13.0
+    anthropic: "unpinned"          # pin when the first live AC5 run is scheduled
+
+evaluation:
+  # Measurement harness (eval/). Two different token counters, deliberately.
+  tokenizer:
+    # The BUDGET yardstick: compares candidate grammars against each other
+    # and enforces the A4 12K model-facing-context ceiling. It is a common
+    # ruler, NOT a claim to reproduce any model's tokenization — which is
+    # unverifiable for a closed tokenizer, so AED does not assert it.
+    encoding: "o200k_base"
+    provider: tiktoken
+    # Pinned BEHAVIOURALLY: sha256 over the encoding's token counts on the
+    # fixed probe corpus in eval/aed_eval/tokenizer.py, not over a
+    # downloaded vocabulary file. Behaviour is what changes a count, a
+    # re-packaged artifact with identical behaviour should not fail the pin,
+    # and a same-named artifact that tokenizes differently must. Verified
+    # locally 2026-08-15 with tiktoken 0.13.0, n_vocab 200019.
+    fingerprint: "sha256:a18d50b14d2be105d104d8284ea8d09bc40f6e42b7767eec313346eb42db29b9"
+    # NEVER edit the probe corpus: changing it changes every fingerprint and
+    # silently invalidates every recorded pin.
+    probe_corpus: "eval/aed_eval/tokenizer.py:PROBE_CORPUS"
+  # The COST counter is deliberately absent from this manifest: the AC5
+  # 150K-tokens-per-trial budget is measured from the provider's own
+  # reported usage, never from a local estimate. There is nothing to pin.
+  model:
+    # Pin the exact model id and sampling parameters here before the first
+    # AC5a gate run (AMB-73). Left unset rather than guessed: an AC5 result
+    # against an unstated model is not an AC5 result, and the harness
+    # refuses to record one.
+    id: null
+    sampling: null
 
 ci:
   # GitHub Actions are pinned by full commit SHA, never by mutable tag:
