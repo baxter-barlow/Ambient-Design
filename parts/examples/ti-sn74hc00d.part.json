@@ -19,7 +19,29 @@
       ],
       "role": "input",
       "description": "Channel 1, input A",
-      "unit": "1"
+      "unit": "1",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "1B",
@@ -28,7 +50,29 @@
       ],
       "role": "input",
       "description": "Channel 1, input B",
-      "unit": "1"
+      "unit": "1",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "1Y",
@@ -82,6 +126,46 @@
             }
           }
         }
+      },
+      "characteristics": {
+        "voh": {
+          "unit": "V",
+          "min": 3.98,
+          "typ": 4.3,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            },
+            "ioh": {
+              "unit": "mA",
+              "typ": -4
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "vol": {
+          "unit": "V",
+          "typ": 0.17,
+          "max": 0.26,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            },
+            "iol": {
+              "unit": "mA",
+              "typ": 4
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        }
       }
     },
     {
@@ -91,7 +175,29 @@
       ],
       "role": "input",
       "description": "Channel 2, input A",
-      "unit": "2"
+      "unit": "2",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "2B",
@@ -100,7 +206,29 @@
       ],
       "role": "input",
       "description": "Channel 2, input B",
-      "unit": "2"
+      "unit": "2",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "2Y",
@@ -125,7 +253,29 @@
       ],
       "role": "input",
       "description": "Channel 3, input A",
-      "unit": "3"
+      "unit": "3",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "3B",
@@ -134,7 +284,29 @@
       ],
       "role": "input",
       "description": "Channel 3, input B",
-      "unit": "3"
+      "unit": "3",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "3Y",
@@ -159,7 +331,29 @@
       ],
       "role": "input",
       "description": "Channel 4, input A",
-      "unit": "4"
+      "unit": "4",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "4B",
@@ -168,7 +362,29 @@
       ],
       "role": "input",
       "description": "Channel 4, input B",
-      "unit": "4"
+      "unit": "4",
+      "characteristics": {
+        "vih": {
+          "unit": "V",
+          "min": 3.15,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        },
+        "vil": {
+          "unit": "V",
+          "max": 1.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            }
+          }
+        }
+      }
     },
     {
       "name": "4Y",
@@ -332,6 +548,20 @@
             "typ": 4.5
           }
         }
+      },
+      "input_voltage": {
+        "unit": "V",
+        "min": 0,
+        "max": {
+          "reference": "VCC"
+        }
+      },
+      "output_voltage": {
+        "unit": "V",
+        "min": 0,
+        "max": {
+          "reference": "VCC"
+        }
       }
     },
     "thermal": {
@@ -349,7 +579,7 @@
       "source_id": "ti-sn74hc00-scls181h",
       "vendor": "ti",
       "url": "https://www.ti.com/lit/ds/symlink/sn74hc00.pdf",
-      "doc_title": "SN74HC00, SN54HC00 Quadruple 2-Input Positive-NAND Gates",
+      "doc_title": "SNx4HC00 Quadruple 2-Input NAND Gates",
       "document_version": "SCLS181H, December 1982, revised August 2021",
       "byte_sha256": "sha256:706cc4f5fd012f080ccd4a50f5fcc4136ef09dbc6e76e87ba85ae2d4cbb24efe",
       "content_hash": "sha256:b833a4005cb6f2c21aa8fd21a9a319f94f88bdc965d241eb80de30964ab327c1",
@@ -409,5 +639,5 @@
     }
   },
   "license_class": "vendor-public",
-  "notes": "This record exists to exercise the RESERVED multi-unit field set (units, pin membership, shared power pins, swappability class) against a real multi-unit part. Reserving these fields at schema_version 0 rather than adding them at 1.x is what makes the eventual multi-unit rollout a non-breaking change; a reservation that was never tried against real data would be worth very little, so it is tried here.\n\nThe part is not used by any of the three v1 benchmarks - none of them contains a multi-unit component. That is precisely why it is included: without it, the reserved fields would ship unexercised.\n\nSupply current (ICC) and input leakage (II) are deliberately NOT recorded. In Section 6.5 those two rows span the 25 C and -40-to-85 C column groups in a way whose MIN/TYP/MAX alignment could not be read unambiguously from the PDF text layer, and both are small enough that a wrong transcription would be easy to miss and hard to notice downstream. No v1 check consumes either value for this part. Recording a confidently-wrong number is worse than recording none, so none is recorded and the reason is stated here.\n\nPin membership is declared explicitly rather than derived from pin numbering because the physical layout is not monotonic: gate 3's output (3Y) is pin 8 while its inputs are pins 9 and 10. Any scheme that inferred units from adjacency would get this part wrong."
+  "notes": "This record exists to exercise the RESERVED multi-unit field set (units, pin membership, shared power pins, swappability class) against a real multi-unit part. Reserving these fields at schema_version 0 rather than adding them at 1.x is what makes the eventual multi-unit rollout a non-breaking change; a reservation that was never tried against real data would be worth very little, so it is tried here.\n\nThe part is not used by any of the three v1 benchmarks - none of them contains a multi-unit component. That is precisely why it is included: without it, the reserved fields would ship unexercised.\n\nLogic thresholds (VIH, VIL, VOH, VOL) and the VI/VO operating windows ARE recorded, from Sections 6.3 and 6.5 at VCC = 4.5 V, which is the bias point the datasheet specifies drive current at.\n\nSupply current (ICC) and input leakage (II) are deliberately NOT recorded. In Section 6.5 those two rows span the 25 C and -40-to-85 C column groups in a way whose MIN/TYP/MAX alignment could not be read unambiguously from the PDF text layer, and both are small enough that a wrong transcription would be easy to miss and hard to notice downstream. No v1 check consumes either value for this part. Recording a confidently-wrong number is worse than recording none, so none is recorded and the reason is stated here.\n\nPin membership is declared explicitly rather than derived from pin numbering because the physical layout is not monotonic: gate 3's output (3Y) is pin 8 while its inputs are pins 9 and 10. Any scheme that inferred units from adjacency would get this part wrong."
 }

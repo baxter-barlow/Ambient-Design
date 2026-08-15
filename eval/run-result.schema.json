@@ -147,8 +147,15 @@
     },
     "flip_criterion": {
       "type": "object",
-      "required": ["test", "p_value", "verdict", "power_against_reference_effect"],
-      "description": "The §4 standalone-DSL flip criterion. `power_against_reference_effect` is required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.",
+      "required": [
+        "test",
+        "p_value",
+        "verdict",
+        "power_against_observed_effect",
+        "minimum_effect_of_interest",
+        "power_against_declared_effect"
+      ],
+      "description": "The §4 standalone-DSL flip criterion. The power fields are required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.\n\n`minimum_effect_of_interest` and `power_against_declared_effect` are required but NULLABLE. Null means no effect size was declared before the run, and in that case the verdict must be 'inconclusive' — see the constraint below. Making them required-but-nullable rather than optional forces the record to state the absence explicitly instead of leaving a reader unable to tell 'not declared' from 'not recorded'.",
       "properties": {
         "test": {
           "type": "string",
@@ -157,13 +164,48 @@
         "paired": { "type": "boolean" },
         "p_value": { "type": "number", "minimum": 0, "maximum": 1 },
         "alpha": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "power_against_reference_effect": { "type": "number", "minimum": 0, "maximum": 1 },
+        "aed_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baseline_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minimum_effect_of_interest": {
+          "type": ["array", "null"],
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "description": "The (aed_rate, baseline_rate) difference declared worth detecting, chosen BEFORE the run. Choosing it afterwards is choosing the standard that gives the answer you already saw."
+        },
+        "power_against_declared_effect": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Power against the declared effect. Null when none was declared."
+        },
+        "power_against_observed_effect": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Informational only. Observed power is a monotone function of the p-value and adds no information beyond it, so it can never justify an adequacy claim; it is recorded because seeing it beside the declared figure is what makes an underpowered run obvious."
+        },
+        "adequate_power_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
         "verdict": {
           "type": "string",
           "enum": ["flip_criterion_met", "flip_criterion_not_met", "inconclusive"],
           "description": "Three-valued on purpose. 'inconclusive' means the run lacked the power to answer, which is a real outcome and must not be collapsed into 'not met'."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "minimum_effect_of_interest": { "type": "null" } },
+            "required": ["minimum_effect_of_interest"]
+          },
+          "then": {
+            "properties": {
+              "verdict": { "enum": ["flip_criterion_met", "inconclusive"] }
+            },
+            "$comment": "Without a pre-declared effect size there is no basis for calling a run adequately powered, so 'flip_criterion_not_met' is unrecordable. A significant result stands on its own and remains recordable."
+          }
+        }
+      ]
     },
     "notes": { "type": "string" }
   },

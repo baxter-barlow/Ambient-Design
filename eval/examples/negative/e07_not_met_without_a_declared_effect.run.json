@@ -1941,9 +1941,10 @@
     "p_value": 1.0,
     "paired": true,
     "power_against_declared_effect": null,
+    "power_against_observed_effect": 0.001110000311551918,
     "primary_arm": "grammar_a",
     "test": "mcnemar_exact_one_sided",
-    "verdict": "inconclusive"
+    "verdict": "flip_criterion_not_met"
   },
   "gate": {
     "kind": "replay"
@@ -1982,6 +1983,6 @@
   },
   "x_negative_control": {
     "expects": "REJECTED",
-    "guarantee_under_test": "The flip criterion must report the power it had. Without it a non-significant p-value is indistinguishable from 'the run could not have detected a difference', which is exactly the misreading the three-valued verdict exists to prevent."
+    "guarantee_under_test": "'flip_criterion_not_met' asserts the run was adequately powered, which is only meaningful relative to an effect size declared BEFORE the run. With none declared the verdict must be 'inconclusive'; certifying adequacy on an undeclared standard is choosing the bar after seeing the data."
   }
 }

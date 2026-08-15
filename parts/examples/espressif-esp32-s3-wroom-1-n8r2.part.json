@@ -91,13 +91,6 @@
       ],
       "role": "bidirectional",
       "description": "RTC_GPIO0, GPIO0. Strapping pin: boot mode select.",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      },
       "capability": {
         "source_current": {
           "unit": "mA",
@@ -273,13 +266,6 @@
       ],
       "role": "bidirectional",
       "description": "RTC_GPIO19, GPIO19, U1RTS, ADC2_CH8, CLK_OUT2, USB_D-",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      },
       "capability": {
         "source_current": {
           "unit": "mA",
@@ -328,13 +314,6 @@
       ],
       "role": "bidirectional",
       "description": "RTC_GPIO20, GPIO20, U1CTS, ADC2_CH9, CLK_OUT1, USB_D+",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      },
       "capability": {
         "source_current": {
           "unit": "mA",
@@ -382,14 +361,7 @@
         "15"
       ],
       "role": "bidirectional",
-      "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select.",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      }
+      "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select."
     },
     {
       "name": "IO35",
@@ -469,14 +441,7 @@
         "26"
       ],
       "role": "bidirectional",
-      "description": "GPIO45. Strapping pin: VDD_SPI voltage select.",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      }
+      "description": "GPIO45. Strapping pin: VDD_SPI voltage select."
     },
     {
       "name": "IO46",
@@ -484,14 +449,7 @@
         "16"
       ],
       "role": "bidirectional",
-      "description": "GPIO46. Strapping pin: ROM message printing control.",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      }
+      "description": "GPIO46. Strapping pin: ROM message printing control."
     },
     {
       "name": "IO47",
@@ -508,13 +466,6 @@
       ],
       "role": "bidirectional",
       "description": "SPICLK_N_DIFF, GPIO48, SUBSPICLK_N_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      },
       "capability": {
         "source_current": {
           "unit": "mA",
@@ -594,14 +545,7 @@
         "36"
       ],
       "role": "bidirectional",
-      "description": "U0RXD, GPIO44, CLK_OUT2",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      }
+      "description": "U0RXD, GPIO44, CLK_OUT2"
     },
     {
       "name": "TXD0",
@@ -610,13 +554,6 @@
       ],
       "role": "bidirectional",
       "description": "U0TXD, GPIO43, CLK_OUT1",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
-        }
-      },
       "capability": {
         "source_current": {
           "unit": "mA",
@@ -663,9 +600,9 @@
       "ambient_temperature": {
         "unit": "degC",
         "min": -40,
-        "max": 65,
+        "max": 85,
         "conditions": {
-          "temperature_grade": "65 C version; 85 C and 105 C versions are separate orderable parts"
+          "part_number": "ESP32-S3-WROOM-1-N8R2 (quad-PSRAM); Octal SPI PSRAM variants R8/R16V are -40 to 65 C, and H4 is -40 to 105 C"
         }
       }
     }
@@ -952,11 +889,12 @@
     },
     "/ratings/recommended": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-2 Recommended Operating Conditions",
+      "locator": "Table 1-1 ESP32-S3-WROOM-1 Series Comparison, ESP32-S3-WROOM-1-N8R2 row (Ambient Temp. column), and the prose above it",
       "confidence": "datasheet-stated",
-      "method": "manual"
+      "method": "manual",
+      "note": "Taken from the PART-NUMBER table, not from Table 6-2. Table 6-2 lists the 65/85/105 C grades generically without saying which orderable part is which; reading a grade from there instead of Table 1-1 is how this record previously carried 65 C, which is the Octal-PSRAM band and wrong for N8R2."
     }
   },
   "license_class": "vendor-public",
-  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nKNOWN v0 SCHEMA LIMITATION exercised by this record: the datasheet states GPIO DC characteristics (VIH/VIL/VOH/VOL, IOH 40 mA typ, IOL 28 mA typ, leakage, pull resistors) once, for the GPIO pins as a CLASS. This schema has no pin-class or inheritance mechanism, so those values must be repeated on every pin. Rather than duplicate a 12-line block 36 times, this record populates capability and characteristics on the pins that benchmark (c) actually drives or loads (IO0, IO19, IO20, IO48, TXD0) and on the strapping pins it uses, and leaves the remainder with identity and role only. A consumer must therefore NOT read the absence of a capability block as 'this pin has no drive capability'. Adding a pin-class mechanism is the leading candidate for the first schema_version bump; see the freeze memo.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it."
+  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nKNOWN v0 SCHEMA LIMITATION exercised by this record: the datasheet states GPIO DC characteristics (VIH/VIL/VOH/VOL, IOH 40 mA typ, IOL 28 mA typ, leakage, pull resistors) once, for the GPIO pins as a CLASS. This schema has no pin-class or inheritance mechanism, so those values must be repeated on every pin. Rather than duplicate a 12-line block 36 times, this record populates capability and characteristics on the pins that benchmark (c) actually drives or loads (IO0, IO19, IO20, IO48, TXD0) and on the strapping pins it uses, and leaves the remainder with identity and role only. A consumer must therefore NOT read the absence of a capability block as 'this pin has no drive capability'. Adding a pin-class mechanism is the leading candidate for the first schema_version bump; see the freeze memo.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead. The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in each pin's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it."
 }
