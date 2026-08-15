@@ -45,6 +45,7 @@ def build_run_record(
     primary_arm: str | None = None,
     baseline_arm: str | None = None,
     alpha: float = 0.05,
+    minimum_effect_of_interest: tuple[float, float] | None = None,
     notes: str | None = None,
 ) -> dict:
     """Assemble a complete run record, including the statistical verdicts.
@@ -125,6 +126,7 @@ def build_run_record(
                 discordant_aed_only=paired[0],
                 discordant_baseline_only=paired[1],
                 alpha=alpha,
+                minimum_effect_of_interest=minimum_effect_of_interest,
             )
             record["flip_criterion"]["primary_arm"] = primary_arm
             record["flip_criterion"]["baseline_arm"] = baseline_arm
@@ -176,9 +178,15 @@ def summarize(record: dict) -> str:
         )
     if "flip_criterion" in record:
         f = record["flip_criterion"]
+        declared = f.get("power_against_declared_effect")
+        power_note = (
+            f"power(declared)={declared:.2f}"
+            if declared is not None
+            else "no declared effect"
+        )
         lines.append(
             f"  §4 flip:   {f['verdict']} (p={f['p_value']:.4f}, "
-            f"power={f['power_against_reference_effect']:.2f}, {f['test']})"
+            f"{power_note}, {f['test']})"
         )
         lines.append(f"             {f['interpretation']}")
     return "\n".join(lines)

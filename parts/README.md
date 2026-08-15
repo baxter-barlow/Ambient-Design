@@ -106,12 +106,33 @@ instead, and negative controls n13 and n14 prove those constraints fire.
 ## Verification performed at freeze
 
 Both validators agree on every fixture — Python `jsonschema` 4.26.0 and
-`ajv-cli --spec=draft2020`, 19 of 19 parts cases. The five example records are
-transcribed from datasheets fetched and hashed at authoring time; the recorded
-`byte_sha256` and `content_hash` values were computed from those exact bytes,
-the content hashes using the pipeline's own `compute_identity` at
-`chv1+reg2026.08.0`. Datasheet revisions were confirmed to match the citations
-already in `benchmarks/` (ESP32-S3-WROOM-1 v1.8, AP7361C DS37274 Rev. 5-2).
+`ajv-cli --spec=draft2020`, 19 of 19 parts cases. Datasheet revisions were
+confirmed to match the citations already in `benchmarks/` (ESP32-S3-WROOM-1
+v1.8, AP7361C DS37274 Rev. 5-2).
+
+**Reproducing the hashes.** `byte_sha256` is checkable with nothing but curl:
+fetch the recorded `url` and `shasum -a 256` the bytes. Every one of the five
+reproduces.
+
+`content_hash` is **not reproducible from this repository**, and that
+asymmetry is worth stating plainly rather than letting the two hashes sit
+side by side looking equally verifiable. It is computed by
+`compute_identity` in the *separate* `aed-part-data` pipeline repository,
+which owns the text-normalization algorithm (`CONTENT_HASH_VERSION`) and the
+vendor stamp-strip registry — both of which the `identity_version`
+`chv1+reg2026.08.0` names. To reproduce:
+
+```bash
+PYTHONPATH=<path-to>/aed-part-data/src python3 -c "
+from aed_part_data.identity import compute_identity
+print(compute_identity(open('datasheet.pdf','rb').read(), [], '2026.08.0'))"
+```
+
+The empty stamp-strip list is correct for these five vendors: Espressif,
+Diodes, TI and Vishay have no entry in that registry yet, so no patterns are
+applied. A reviewer without that repository can verify the byte hashes and
+must treat the content hashes as unverified — which is exactly why the schema
+makes `content_hash` optional rather than required.
 
 No datasheet PDF is stored in this repository. Records carry the retrieval URL
 and the hashes; the documents themselves are fetched on demand.

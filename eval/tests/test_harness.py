@@ -109,6 +109,86 @@ class TestPowerHonesty(unittest.TestCase):
         self.assertEqual(verdict["verdict"], "inconclusive")
         self.assertIn("NOT evidence of equivalence", verdict["interpretation"])
 
+    def test_not_met_requires_a_pre_declared_effect_size(self):
+        """Without a declared effect there is no basis for claiming adequacy.
+
+        The dangerous failure mode: a large-n non-significant run reporting
+        'no difference' when it was never powered for the difference that
+        actually occurred."""
+        v = stats.flip_verdict(24, 30, 27, 30)
+        self.assertEqual(v["verdict"], "inconclusive")
+        self.assertIsNone(v["power_against_declared_effect"])
+
+    def test_not_met_is_reachable_with_an_adequately_powered_declared_effect(self):
+        v = stats.flip_verdict(24, 30, 27, 30, minimum_effect_of_interest=(0.6, 0.9))
+        self.assertEqual(v["verdict"], "flip_criterion_not_met")
+        self.assertGreaterEqual(v["power_against_declared_effect"], 0.8)
+
+    def test_declared_but_underpowered_effect_stays_inconclusive(self):
+        v = stats.flip_verdict(24, 30, 27, 30, minimum_effect_of_interest=(0.8, 0.9))
+        self.assertEqual(v["verdict"], "inconclusive")
+        self.assertLess(v["power_against_declared_effect"], 0.8)
+
+    def test_significant_result_stands_without_a_declared_effect(self):
+        v = stats.flip_verdict(0, 20, 20, 20)
+        self.assertEqual(v["verdict"], "flip_criterion_met")
+
+
+class TestInputValidation(unittest.TestCase):
+    """Out-of-range inputs must raise, not return a plausible number.
+
+    The binomial formula is a polynomial: p = 1.5 yields a finite negative
+    'probability', which the power functions sum into values like 40.9 and
+    required_n_unpaired turns into a sample-size budget. Reachable from the
+    shipped `plan` command, whose entire job is telling you what to spend."""
+
+    def test_binom_pmf_rejects_impossible_probability(self):
+        with self.assertRaises(ValueError):
+            stats.binom_pmf(3, 10, Fraction(3, 2))
+
+    def test_power_unpaired_rejects_out_of_range_rates(self):
+        for bad in ((1.5, 0.9), (-0.2, 0.9), (0.6, 1.4)):
+            with self.assertRaises(ValueError):
+                stats.power_unpaired(10, 10, *bad)
+
+    def test_power_functions_reject_bad_alpha(self):
+        with self.assertRaises(ValueError):
+            stats.power_unpaired(10, 10, 0.6, 0.9, alpha=2.0)
+        with self.assertRaises(ValueError):
+            stats.power_paired(10, 0.4, 0.25, alpha=0.0)
+
+    def test_power_paired_rejects_out_of_range_probabilities(self):
+        with self.assertRaises(ValueError):
+            stats.power_paired(10, 2.0, 0.25)
+
+    def test_flip_verdict_rejects_impossible_counts(self):
+        with self.assertRaises(ValueError):
+            stats.flip_verdict(11, 10, 5, 10)
+        with self.assertRaises(ValueError):
+            stats.flip_verdict(5, 0, 5, 10)
+
+    def test_flip_verdict_rejects_more_discordant_pairs_than_trials(self):
+        with self.assertRaises(ValueError):
+            stats.flip_verdict(
+                5, 10, 5, 10, discordant_aed_only=8, discordant_baseline_only=7
+            )
+
+    def test_wilson_rejects_out_of_range_successes(self):
+        with self.assertRaises(ValueError):
+            stats.wilson_interval(11, 10)
+
+    def test_required_n_finds_the_exact_smallest_n(self):
+        """The docstring promises the smallest n, so a grid of 5 will not do.
+
+        At roughly 150K tokens a trial, over-budgeting by four trials per
+        arm is real money in the one function whose job is budgeting."""
+        result = stats.required_n_unpaired(0.4, 0.9, target_power=0.8)
+        n = result["n_per_arm"]
+        self.assertIsNotNone(n)
+        self.assertGreaterEqual(stats.power_unpaired(n, n, 0.4, 0.9), 0.8)
+        # n-1 must fall short, or n was not the smallest.
+        self.assertLess(stats.power_unpaired(n - 1, n - 1, 0.4, 0.9), 0.8)
+
 
 class TestSourceExtraction(unittest.TestCase):
     def test_takes_the_last_fenced_block(self):

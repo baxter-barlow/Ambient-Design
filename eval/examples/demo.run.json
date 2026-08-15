@@ -1931,14 +1931,17 @@
   },
   "authoritative": false,
   "flip_criterion": {
+    "adequate_power_threshold": 0.8,
     "aed_rate": 0.8,
     "alpha": 0.05,
     "baseline_arm": "starlark_baseline",
     "baseline_rate": 0.6,
-    "interpretation": "The run lacked power to distinguish the arms. This is NOT evidence of equivalence; add trials or record the question as unanswered.",
+    "interpretation": "Not significant, and no minimum effect of interest was declared, so there is no basis on which to call the run adequately powered. Declare the effect size worth detecting and re-evaluate, or record the question as unanswered. This is NOT evidence of equivalence.",
+    "minimum_effect_of_interest": null,
     "p_value": 1.0,
     "paired": true,
-    "power_against_reference_effect": 0.007383637700683594,
+    "power_against_declared_effect": null,
+    "power_against_observed_effect": 0.001110000311551918,
     "primary_arm": "grammar_a",
     "test": "mcnemar_exact_one_sided",
     "verdict": "inconclusive"
@@ -1969,7 +1972,7 @@
   "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
   "purpose": "harness demonstration and offline regression fixture",
   "record_schema_version": 0,
-  "recorded_at": "2026-08-15T06:17:33Z",
+  "recorded_at": "2026-08-15T06:42:28Z",
   "run_id": "demo-replay-0",
   "tokenizer": {
     "fingerprint": "sha256:d2391615e95588b2b6e5e447c5d2989aad086c77607a453890b4731345fbb48d",

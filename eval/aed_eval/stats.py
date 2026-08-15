@@ -36,8 +36,37 @@ from math import comb
 # ---------------------------------------------------------------- binomial
 
 
+def _check_probability(value, name: str) -> None:
+    """Reject a probability outside [0, 1].
+
+    Not defensive programming for its own sake. The binomial formula is a
+    polynomial: hand it p = 1.5 and it returns a perfectly finite negative
+    "probability", the power functions sum those into values like 40.9 or
+    -1.4e13, and `required_n_unpaired` turns that into a sample-size budget.
+    Nothing raises, nothing looks obviously wrong, and the number is
+    reachable from the shipped `plan` command whose whole job is telling you
+    how many trials to buy. Failing loudly here is the difference between a
+    typo and a wrong budget nobody questions.
+    """
+    if not 0 <= value <= 1:
+        raise ValueError(f"{name} must be a probability in [0, 1], got {value!r}")
+
+
+def _check_alpha(alpha: float) -> None:
+    if not 0 < alpha <= 1:
+        raise ValueError(f"alpha must lie in (0, 1], got {alpha!r}")
+
+
+def _check_trials(n: int, name: str = "trials") -> None:
+    if n <= 0:
+        raise ValueError(f"{name} must be positive, got {n!r}")
+
+
 def binom_pmf(k: int, n: int, p: Fraction) -> Fraction:
     """Exact P(X = k) for X ~ Binomial(n, p)."""
+    _check_probability(p, "p")
+    if n < 0:
+        raise ValueError(f"n must be non-negative, got {n!r}")
     if k < 0 or k > n:
         return Fraction(0)
     return comb(n, k) * (p**k) * ((1 - p) ** (n - k))
@@ -104,8 +133,11 @@ def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -
     Wilson rather than Wald because Wald is badly behaved at small n and
     near 0 or 1, which is exactly where these runs live.
     """
-    if trials <= 0:
-        raise ValueError("trials must be positive")
+    _check_trials(trials)
+    if not 0 <= successes <= trials:
+        raise ValueError(
+            f"successes must lie in [0, {trials}], got {successes!r}"
+        )
     n = trials
     phat = successes / n
     denom = 1 + z * z / n
@@ -167,6 +199,11 @@ def power_unpaired(n_a: int, n_b: int, p_a: float, p_b: float, alpha: float = 0.
     weight of outcomes the test would reject. Cost is (n_a+1)*(n_b+1)
     p-value evaluations, which is trivial at the sample sizes involved.
     """
+    _check_trials(n_a, "n_a")
+    _check_trials(n_b, "n_b")
+    _check_probability(p_a, "p_a")
+    _check_probability(p_b, "p_b")
+    _check_alpha(alpha)
     fa, fb = Fraction(p_a).limit_denominator(10**6), Fraction(p_b).limit_denominator(10**6)
     total = Fraction(0)
     for ka in range(n_a + 1):
@@ -194,10 +231,32 @@ def required_n_unpaired(
     decision is worth, that is a finding to record, not to discover halfway
     through a run.
     """
-    for n in range(5, cap + 1, 5):
-        power = power_unpaired(n, n, p_a, p_b, alpha)
-        if power >= target_power:
-            return {"n_per_arm": n, "power": power, "alpha": alpha}
+    _check_probability(p_a, "p_a")
+    _check_probability(p_b, "p_b")
+    _check_probability(target_power, "target_power")
+    _check_alpha(alpha)
+
+    # Coarse scan on a grid of 5, then step back one trial at a time to the
+    # true smallest n. The grid alone can over-budget by up to four trials
+    # per arm, which at roughly 150K tokens a trial is real money in a
+    # function whose entire purpose is telling you what to spend. Power is
+    # not perfectly monotonic in n for exact tests (the discreteness of the
+    # rejection region makes it saw-tooth slightly), so the refinement walks
+    # down while the target still holds rather than assuming a clean
+    # crossing point.
+    for coarse in range(5, cap + 1, 5):
+        if power_unpaired(coarse, coarse, p_a, p_b, alpha) >= target_power:
+            best = coarse
+            for n in range(coarse - 1, 0, -1):
+                if power_unpaired(n, n, p_a, p_b, alpha) >= target_power:
+                    best = n
+                else:
+                    break
+            return {
+                "n_per_arm": best,
+                "power": power_unpaired(best, best, p_a, p_b, alpha),
+                "alpha": alpha,
+            }
     return {
         "n_per_arm": None,
         "power": power_unpaired(cap, cap, p_a, p_b, alpha),
@@ -240,6 +299,10 @@ def power_paired(n_pairs: int, p_discordant: float, p_a_given_discordant: float,
     `p_a_given_discordant` is the probability that, given discordance, it is
     arm A that succeeded. A is worse than B when that is below 0.5.
     """
+    _check_trials(n_pairs, "n_pairs")
+    _check_probability(p_discordant, "p_discordant")
+    _check_probability(p_a_given_discordant, "p_a_given_discordant")
+    _check_alpha(alpha)
     pd = Fraction(p_discordant).limit_denominator(10**6)
     pa = Fraction(p_a_given_discordant).limit_denominator(10**6)
     total = Fraction(0)
@@ -267,27 +330,53 @@ def flip_verdict(
     discordant_aed_only: int | None = None,
     discordant_baseline_only: int | None = None,
     alpha: float = 0.05,
+    minimum_effect_of_interest: tuple[float, float] | None = None,
+    adequate_power: float = 0.8,
 ) -> dict:
     """Evaluate the §4 flip criterion and report what the answer is worth.
 
     Uses the paired test when discordant counts are supplied (both arms ran
-    the same seeds), otherwise the unpaired one. Returns the p-value, the
-    verdict, and — crucially — the power the test had against a plausible
-    effect, so a non-significant result is not read as equivalence.
+    the same seeds), otherwise the unpaired one.
 
-    The verdict is deliberately three-valued. "inconclusive" is a real
-    outcome: it means the run did not have the power to answer the question,
-    and the correct response is more trials or an explicit decision to stop
-    asking, never a quiet "no difference found".
+    THE POWER ARGUMENT MUST BE DECLARED, NOT ASSUMED. "This run had adequate
+    power" is only meaningful relative to an effect size someone committed
+    to caring about, and it must be chosen BEFORE seeing the data — picking
+    it afterwards is choosing the standard that gives the answer you already
+    saw. So `minimum_effect_of_interest` is an explicit (aed_rate,
+    baseline_rate) pair with NO default.
+
+    An earlier version computed power against a hardcoded 0.60-vs-0.90
+    reference regardless of the data. At n=30 that always clears 0.8, so any
+    non-significant run at that size came back "flip_criterion_not_met"
+    claiming adequate power — including runs whose observed difference was
+    small enough that real power was around 0.16. That is precisely the
+    dangerous failure mode the three-valued verdict exists to prevent, and
+    it is why declaring the effect is now mandatory for a "not met" verdict.
+
+    With no declared effect, a non-significant result returns
+    "inconclusive". Refusing to certify adequacy you were never given the
+    means to assess is the correct behaviour, not a limitation.
     """
+    _check_trials(aed_trials, "aed_trials")
+    _check_trials(baseline_trials, "baseline_trials")
+    if not 0 <= aed_successes <= aed_trials:
+        raise ValueError(f"aed_successes must lie in [0, {aed_trials}]")
+    if not 0 <= baseline_successes <= baseline_trials:
+        raise ValueError(f"baseline_successes must lie in [0, {baseline_trials}]")
+    _check_alpha(alpha)
+
     paired = discordant_aed_only is not None and discordant_baseline_only is not None
     if paired:
+        if discordant_aed_only < 0 or discordant_baseline_only < 0:
+            raise ValueError("discordant counts must be non-negative")
+        n_disc = discordant_aed_only + discordant_baseline_only
+        if n_disc > aed_trials:
+            raise ValueError(
+                f"discordant pairs ({n_disc}) cannot exceed the number of paired "
+                f"trials ({aed_trials})"
+            )
         p_value = mcnemar_exact(discordant_aed_only, discordant_baseline_only)
         test = "mcnemar_exact_one_sided"
-        n_disc = discordant_aed_only + discordant_baseline_only
-        observed_power = power_paired(
-            aed_trials, n_disc / aed_trials if aed_trials else 0.0, 0.25, alpha
-        )
     else:
         p_value = fisher_exact_one_sided(
             aed_successes,
@@ -296,30 +385,72 @@ def flip_verdict(
             baseline_trials - baseline_successes,
         )
         test = "fisher_exact_one_sided"
-        observed_power = power_unpaired(aed_trials, baseline_trials, 0.6, 0.9, alpha)
 
-    significant = p_value <= alpha
-    if significant:
+    aed_rate = aed_successes / aed_trials
+    baseline_rate = baseline_successes / baseline_trials
+
+    # Power against the DECLARED effect, when one was declared.
+    declared_power = None
+    if minimum_effect_of_interest is not None:
+        ma, mb = minimum_effect_of_interest
+        _check_probability(ma, "minimum_effect_of_interest[0]")
+        _check_probability(mb, "minimum_effect_of_interest[1]")
+        declared_power = power_unpaired(aed_trials, baseline_trials, ma, mb, alpha)
+
+    # Power against the effect actually observed. Informational only: it is
+    # computed from the data, so it cannot justify an adequacy claim
+    # (observed power is a monotone function of the p-value and adds no
+    # information beyond it). Reported because seeing it next to the
+    # declared figure is what makes an underpowered run obvious.
+    observed_power = power_unpaired(
+        aed_trials, baseline_trials, aed_rate, baseline_rate, alpha
+    )
+
+    if p_value <= alpha:
         verdict = "flip_criterion_met"
-    elif observed_power >= 0.8:
+        interpretation = (
+            "AED is statistically below the Starlark baseline; §4 says re-evaluate "
+            "the standalone-DSL decision."
+        )
+    elif declared_power is not None and declared_power >= adequate_power:
         verdict = "flip_criterion_not_met"
+        interpretation = (
+            f"No evidence AED is below the baseline, and the run had "
+            f"{declared_power:.2f} power against the declared minimum effect of "
+            f"interest ({minimum_effect_of_interest[0]:.2f} vs "
+            f"{minimum_effect_of_interest[1]:.2f}), so a difference that large "
+            "would probably have been detected."
+        )
+    elif declared_power is not None:
+        verdict = "inconclusive"
+        interpretation = (
+            f"Not significant, but power against the declared minimum effect was "
+            f"only {declared_power:.2f} (below {adequate_power:.2f}). This is NOT "
+            "evidence of equivalence; add trials or record the question as "
+            "unanswered."
+        )
     else:
         verdict = "inconclusive"
+        interpretation = (
+            "Not significant, and no minimum effect of interest was declared, so "
+            "there is no basis on which to call the run adequately powered. "
+            "Declare the effect size worth detecting and re-evaluate, or record "
+            "the question as unanswered. This is NOT evidence of equivalence."
+        )
 
     return {
         "test": test,
         "paired": paired,
         "p_value": p_value,
         "alpha": alpha,
-        "aed_rate": aed_successes / aed_trials if aed_trials else None,
-        "baseline_rate": (
-            baseline_successes / baseline_trials if baseline_trials else None
+        "aed_rate": aed_rate,
+        "baseline_rate": baseline_rate,
+        "minimum_effect_of_interest": (
+            list(minimum_effect_of_interest) if minimum_effect_of_interest else None
         ),
-        "power_against_reference_effect": observed_power,
+        "power_against_declared_effect": declared_power,
+        "power_against_observed_effect": observed_power,
+        "adequate_power_threshold": adequate_power,
         "verdict": verdict,
-        "interpretation": {
-            "flip_criterion_met": "AED is statistically below the Starlark baseline; §4 says re-evaluate the standalone-DSL decision.",
-            "flip_criterion_not_met": "No evidence AED is below the baseline, and the run had adequate power to have found it.",
-            "inconclusive": "The run lacked power to distinguish the arms. This is NOT evidence of equivalence; add trials or record the question as unanswered.",
-        }[verdict],
+        "interpretation": interpretation,
     }

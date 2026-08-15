@@ -109,10 +109,25 @@ be wrong. Two consequences:
    shared seed set for exactly this reason.
 
 `flip_verdict` is three-valued — `flip_criterion_met`,
-`flip_criterion_not_met`, `inconclusive` — and returns `inconclusive`
-whenever the run lacked power. That is a real outcome, not a rounding of
-"not met", and collapsing the two is how an underpowered run gets read as
-evidence of equivalence.
+`flip_criterion_not_met`, `inconclusive`. That is a real outcome, not a
+rounding of "not met", and collapsing the two is how an underpowered run gets
+read as evidence of equivalence.
+
+**"Adequately powered" requires a pre-declared effect size.** The claim is
+only meaningful relative to a difference someone committed to caring about,
+and it has to be chosen *before* the data — choosing afterwards is choosing
+the standard that gives the answer you already saw. So
+`minimum_effect_of_interest` has no default: without it, a non-significant
+run returns `inconclusive`, and the result schema makes
+`flip_criterion_not_met` literally unrecordable in that case.
+
+This was a real defect caught in review. An earlier version computed power
+against a hardcoded 0.60-vs-0.90 reference regardless of the data, so at
+n = 30 *any* non-significant run came back "not met" claiming adequate power
+— including runs whose actual observed difference left real power near 0.16.
+Power against the observed effect is still reported, but only as
+information: observed power is a monotone function of the p-value and can
+never justify an adequacy claim.
 
 ## Fixtures
 
