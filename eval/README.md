@@ -29,12 +29,21 @@ cd eval && python3 -m aed_eval plan --rate-a 0.6 --rate-b 0.9
 | `stats.py` | Exact small-sample statistics: AC5a threshold rule, Wilson intervals, Fisher and McNemar exact tests, exact power by enumeration |
 | `tokenizer.py` | The pinned budget tokenizer, pinned behaviourally; the A4 12K context budget |
 | `protocol.py` | The AC5 trial loop: emit, extract, check, repair |
-| `gates.py` | `CallableGate`, `CommandGate`, `ReplayGate` |
+| `gates.py` | `CallableGate`, `CommandGate`, `CompositeGate`, `ReplayGate` |
 | `models.py` | `AnthropicClient`, `ReplayClient` with divergence detection |
 | `results.py` | Run-record assembly and canonical serialization |
 | `run-result.schema.json` | The result contract, validated by `make check` |
 
 ## Things worth knowing before you trust a number from this
+
+**A gate can be a pipeline.** AC5a's bar is "compile/type-check/export
+gates" — plural — so `CompositeGate` chains stages and each `CommandGate`
+carries its own stage name. It short-circuits on the first failure: running
+export over a design that failed type-checking produces cascade noise, and
+P2 makes diagnostic quality the thing the repair loop converges on. The
+failing stage travels out on `GateResult.stage` with the stages that already
+passed, so a grammar that fails to parse stays distinguishable from one that
+parses and then fails to export.
 
 **Two token counters, on purpose.** *Budget tokens* come from the pinned
 local tokenizer and answer "is grammar A cheaper than grammar B?" and "does
