@@ -1,0 +1,419 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "ti/ne555p",
+  "manufacturer": "Texas Instruments",
+  "mpn": "NE555P",
+  "description": "Precision timer, astable or monostable, PDIP-8",
+  "lifecycle": "active",
+  "package": {
+    "name": "P (PDIP)",
+    "pin_count": 8,
+    "footprint_ref": "ael:DIP-8_W7.62mm"
+  },
+  "pins": [
+    {
+      "name": "CONT",
+      "numbers": [
+        "5"
+      ],
+      "role": "bidirectional",
+      "description": "Controls comparator thresholds; outputs 2/3 x VCC; allows bypass capacitor connection. Datasheet pin type: input/output.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "VCC"
+          }
+        }
+      },
+      "characteristics": {
+        "open_circuit_voltage": {
+          "unit": "V",
+          "min": 2.6,
+          "typ": 3.3,
+          "max": 4.0,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 5
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "DISCH",
+      "numbers": [
+        "7"
+      ],
+      "role": "open_collector",
+      "description": "Open collector output that discharges the timing capacitor."
+    },
+    {
+      "name": "GND",
+      "numbers": [
+        "1"
+      ],
+      "role": "power_in",
+      "description": "Ground. All voltages are referenced to this pin."
+    },
+    {
+      "name": "OUT",
+      "numbers": [
+        "3"
+      ],
+      "role": "output",
+      "description": "High-current timer output.",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -225,
+          "max": 225
+        }
+      },
+      "recommended": {
+        "current": {
+          "unit": "mA",
+          "min": -200,
+          "max": 200
+        }
+      },
+      "capability": {
+        "source_current": {
+          "unit": "mA",
+          "max": 200
+        },
+        "sink_current": {
+          "unit": "mA",
+          "max": 200
+        }
+      },
+      "characteristics": {
+        "voh": {
+          "unit": "V",
+          "min": 2.75,
+          "typ": 3.3,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 5
+            },
+            "ioh": {
+              "unit": "mA",
+              "typ": -100
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "vol": {
+          "unit": "V",
+          "typ": 0.1,
+          "max": 0.35,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 5
+            },
+            "iol": {
+              "unit": "mA",
+              "typ": 5
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "RESET",
+      "numbers": [
+        "4"
+      ],
+      "role": "input",
+      "description": "Active-low reset; forces output and discharge low.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "VCC"
+          }
+        }
+      },
+      "characteristics": {
+        "reset_voltage_level": {
+          "unit": "V",
+          "min": 0.3,
+          "typ": 0.7,
+          "max": 1.0
+        }
+      }
+    },
+    {
+      "name": "THRES",
+      "numbers": [
+        "6"
+      ],
+      "role": "input",
+      "description": "Threshold comparator input; trips at 2/3 x VCC.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "VCC"
+          }
+        }
+      },
+      "characteristics": {
+        "threshold_voltage_level": {
+          "unit": "V",
+          "min": 2.4,
+          "typ": 3.3,
+          "max": 4.2,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 5
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "input_current": {
+          "unit": "nA",
+          "typ": 30,
+          "max": 250
+        }
+      }
+    },
+    {
+      "name": "TRIG",
+      "numbers": [
+        "2"
+      ],
+      "role": "input",
+      "description": "Trigger comparator input; trips at 1/3 x VCC.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "VCC"
+          }
+        }
+      },
+      "characteristics": {
+        "trigger_voltage_level": {
+          "unit": "V",
+          "min": 1.1,
+          "typ": 1.67,
+          "max": 2.2,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 5
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "input_current": {
+          "unit": "uA",
+          "typ": 0.5,
+          "max": 2,
+          "conditions": {
+            "vtrig": {
+              "unit": "V",
+              "typ": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "VCC",
+      "numbers": [
+        "8"
+      ],
+      "role": "power_in",
+      "description": "Positive supply.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": 18
+        }
+      },
+      "recommended": {
+        "voltage": {
+          "unit": "V",
+          "min": 4.5,
+          "max": 16
+        }
+      }
+    }
+  ],
+  "ratings": {
+    "abs_max": {
+      "junction_temperature": {
+        "unit": "degC",
+        "max": 150
+      },
+      "storage_temperature": {
+        "unit": "degC",
+        "min": -65,
+        "max": 150
+      },
+      "esd_hbm": {
+        "unit": "V",
+        "min": -500,
+        "max": 500
+      },
+      "esd_cdm": {
+        "unit": "V",
+        "min": -1500,
+        "max": 1500
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "unit": "degC",
+        "min": 0,
+        "max": 70,
+        "conditions": {
+          "device": "NE555; NA555/SA555/SE555 have wider ranges"
+        }
+      }
+    }
+  },
+  "modes": [
+    {
+      "id": "output_low_no_load_vcc15",
+      "description": "Output low, no load, at 15 V supply",
+      "kind": "active",
+      "conditions": {
+        "vcc": {
+          "unit": "V",
+          "typ": 15
+        },
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        },
+        "output_state": "low",
+        "load": "none"
+      },
+      "draw": [
+        {
+          "pin": "VCC",
+          "current": {
+            "unit": "mA",
+            "typ": 10,
+            "max": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "output_low_no_load_vcc5",
+      "description": "Output low, no load, at 5 V supply",
+      "kind": "active",
+      "conditions": {
+        "vcc": {
+          "unit": "V",
+          "typ": 5
+        },
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        },
+        "output_state": "low",
+        "load": "none"
+      },
+      "draw": [
+        {
+          "pin": "VCC",
+          "current": {
+            "unit": "mA",
+            "typ": 3,
+            "max": 6
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "ti-xx555-slfs022k",
+      "vendor": "ti",
+      "url": "https://www.ti.com/lit/ds/symlink/ne555.pdf",
+      "doc_title": "NA555, NE555, SA555, SE555 Precision Timers",
+      "document_version": "SLFS022K, September 1973, revised March 2026",
+      "byte_sha256": "sha256:dae2be1a919b0cfe2d34e120cbbda2d638204e3000b1555004c4c76cf5c1f30f",
+      "content_hash": "sha256:ef32f157353b598c36d33363546247bea3ea8afa50a5016394a0b5c060e6e2ac",
+      "identity_version": "chv1+reg2026.08.0",
+      "retrieved_at": "2026-08-15T05:40:30Z",
+      "state": "available",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "ti-xx555-slfs022k",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. This datasheet covers four devices (NA555, NE555, SA555, SE555); every value recorded here is the NE555 column, and device-specific limits are noted where the columns differ."
+    },
+    "/modes": {
+      "source_id": "ti-xx555-slfs022k",
+      "locator": "Section 5.5 Electrical Characteristics, Supply current rows (output low, no load)",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "IMPORTANT for benchmark (a), which runs this part at 9 V: the datasheet characterises supply current only at 5 V and 15 V. There is no 9 V row, and neither recorded mode describes the benchmark's operating point. A current budget at 9 V must bound the draw between these two points or declare an interpolation; it must not silently pick one. Recording only the two measured points, rather than an interpolated 9 V figure, is what forces that choice to be explicit."
+    },
+    "/pins": {
+      "source_id": "ti-xx555-slfs022k",
+      "locator": "Table 4-1 Pin Functions; Section 5.5 Electrical Characteristics",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "DISCH is recorded with role open_collector because Table 4-1 describes it verbatim as an 'Open collector output'. That role is load-bearing: it tells the ERC lattice this pin drives low only and requires an external pull-up, which is exactly how benchmark (a) uses it."
+    },
+    "/pins/3/capability": {
+      "source_id": "ti-xx555-slfs022k",
+      "locator": "Section 5.3 Recommended Operating Conditions, IO row; Features list, page 1",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "note": "The datasheet publishes no field named 'drive capability'. It states a recommended operating output current of +/-200 mA and an absolute-maximum of +/-225 mA, and the features list says the output 'can sink or source up to 200mA'. Capability is therefore recorded as max 200 mA - the recommended-operation limit - with the 225 mA stress limit kept separately in abs_max. Reading the 225 mA absolute maximum as drive capability would be a design error.",
+      "target": "OUT"
+    },
+    "/pins/7/abs_max": {
+      "source_id": "ti-xx555-slfs022k",
+      "locator": "Section 5.1 Absolute Maximum Ratings, VCC row",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "The absolute maximum table gives 18 V as a MAX with no MIN, so no lower bound is recorded. The 4.5 V lower figure belongs to Recommended Operating Conditions and is recorded there instead - conflating the two would let a checker accept 4.5 V as a damage threshold.",
+      "target": "VCC"
+    },
+    "/ratings/abs_max/esd_hbm": {
+      "source_id": "ti-xx555-slfs022k",
+      "locator": "Section 5.2 ESD Ratings",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Published as +/-500 V, recorded as a symmetric interval."
+    }
+  },
+  "license_class": "vendor-public",
+  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nThermal resistance is deliberately not recorded. The datasheet's Section 5.4 thermal table spans six packages across four devices with merged header cells, and the package-to-column mapping could not be read unambiguously from the PDF text layer. No v1 check consumes RthetaJA for this part, so an uncertain transcription would add risk with no benefit. Recording nothing is correct here; recording a plausible-looking 98.5 degC/W without being certain which column it belongs to would not be.\n\nElectrical characteristics are quoted at VCC = 5 V where the datasheet gives both 5 V and 15 V columns, since that is the lower-voltage bound; the 15 V figures differ and are available in the same table.\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently."
+}

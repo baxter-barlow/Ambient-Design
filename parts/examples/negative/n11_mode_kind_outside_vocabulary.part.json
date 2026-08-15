@@ -1,0 +1,64 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "power_in"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "modes": [
+    {
+      "id": "running",
+      "kind": "burst",
+      "draw": [
+        {
+          "pin": "1",
+          "current": {
+            "unit": "mA",
+            "typ": 5
+          }
+        }
+      ]
+    }
+  ],
+  "x_negative_control": {
+    "expects": "REJECTED",
+    "guarantee_under_test": "Mode.kind is a closed vocabulary (active/idle/sleep/shutdown/inrush). It exists so a budget checker can tell a steady state from a startup surge; an unrecognised kind would let inrush be summed into a steady-state budget."
+  }
+}

@@ -1,0 +1,594 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/aed/schemas/part-data/0.schema.json",
+  "title": "AED Part Data (D3) v0",
+  "description": "One part record: the typed, provenance-carrying description of a single physical component that AED's static tier checks against (requirement D3). A record is INPUT DATA, not a generated artifact — unlike the netlist IR it may carry retrieval timestamps, because provenance requires them; determinism is preserved by hashing the record into the design lockfile, not by forbidding wall-clock fields here. The record carries facts EXTRACTED FROM a datasheet plus a citation to it; it never embeds or redistributes the datasheet itself (D3: PDFs are fetch-on-demand absent a vendor redistribution agreement). SCHEMA STABILITY: version 0 is versioned but explicitly UNSTABLE — `stability` is pinned to \"unstable\" by this schema so no consumer can claim a stability guarantee that v1.0 does not make. Promotion to a third-party contract happens at 1.x against the criteria in open question 8-Q3. Extension points are restricted to properties matching ^x_ where explicitly allowed; every other object is closed so that a typo is an error rather than silently discarded data.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x_": {
+      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members."
+    }
+  },
+  "required": [
+    "schema_version",
+    "stability",
+    "part_id",
+    "manufacturer",
+    "mpn",
+    "package",
+    "pins",
+    "sources",
+    "provenance",
+    "license_class"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 0,
+      "description": "Integer part-data schema version. This schema describes version 0. Any change to the record shape bumps this integer; consumers must refuse records whose schema_version they do not know."
+    },
+    "stability": {
+      "type": "string",
+      "const": "unstable",
+      "description": "Machine-visible stability marker, pinned to \"unstable\" for schema_version 0 (requirement D3: \"versioned but explicitly unstable in v1.0\"). This is a const rather than an enum on purpose: a record asserting \"stable\" at version 0 FAILS validation, so the v1.0 instability promise cannot be quietly overridden by a downstream producer. The value becomes settable when the 8-Q3 promotion criteria are met at 1.x."
+    },
+    "part_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$",
+      "description": "Stable two-segment identity `<vendor-slug>/<part-slug>`, deliberately matching the two-segment DNS-label shape used by the AED package-identity rules so part and package namespaces read alike. This is a SLUG, not the manufacturer part number: `mpn` carries the exact vendor string including characters (slash, comma, spaces) that are not permitted here. Unique within a part library; the design lockfile keys resolved picks by this value."
+    },
+    "manufacturer": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Manufacturer name as the manufacturer writes it, e.g. \"Espressif Systems\", \"Diodes Incorporated\"."
+    },
+    "mpn": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact manufacturer part number as printed by the vendor, verbatim including suffixes and punctuation. Orderable variants (tape-and-reel codes and similar) belong here when they are what the BOM must state."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-line human description of the part's function."
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": ["preview", "active", "nrnd", "obsolete", "unknown"],
+      "description": "Vendor lifecycle status. \"nrnd\" is not-recommended-for-new-designs. \"unknown\" is an honest default and is distinct from omitting the field, which asserts nothing. Lifecycle is advisory: it informs sourcing lints, never the electrical checks."
+    },
+    "package": {
+      "$ref": "#/$defs/Package",
+      "description": "Physical package and the CAD footprint it binds to."
+    },
+    "pins": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every logical pin of the part, sorted bytewise-ascending by `name` (determinism: a part library must diff cleanly). A logical pin may map to several physical designators when they are internally common.",
+      "items": { "$ref": "#/$defs/Pin" }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "description": "RESERVED multi-unit field set (requirement D3: \"Reserved before freeze: multi-unit/shared-package fields\"). Present only for parts whose package holds several independent functional units — a quad NAND, a dual op-amp. Each unit declares its pin membership; power pins shared by all units are listed in `shared_pins` instead. Reserving these fields at v0 rather than adding them at 1.x is what keeps the eventual multi-unit rollout a non-breaking change.",
+      "items": { "$ref": "#/$defs/Unit" }
+    },
+    "shared_pins": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "RESERVED (multi-unit). Names of pins shared by every unit — typically the supply and ground pins that a schematic tool assigns to a separate power unit. Each entry must match a `pins[].name`; a pin listed here must NOT also be claimed by an individual unit's `pins` membership.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "parameters": {
+      "$ref": "#/$defs/NamedMeasures",
+      "description": "The part's own defining characteristic values — the quantities that make it THIS part rather than another in the same family: \"resistance\", \"capacitance\", \"inductance\", \"forward_voltage\", \"temperature_coefficient\". For a jellybean passive this is the substantive content of the record; for an integrated circuit it is usually absent, because an IC's behaviour lives in its pins and modes rather than in a single value.\n\nDistinct from `ratings`, which bounds how the part may be USED, and from `pins[].characteristics`, which describes one terminal. The part resolver matches abstract constraints (\"a 10k 1% 0402 resistor\") against these values."
+    },
+    "ratings": {
+      "$ref": "#/$defs/Ratings",
+      "description": "Part-level (not per-pin) absolute-maximum, recommended-operating, and thermal data."
+    },
+    "modes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Supply-current-per-mode (requirement D3, consumed by the T10 current/power budget checker and by D2 load-equivalent simulation stubs). Each entry is one named operating mode with the current it draws on each supply pin under stated conditions. Sorted bytewise-ascending by `id`.",
+      "items": { "$ref": "#/$defs/Mode" }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The documents this record's facts were extracted from. Deliberately shaped to match the SourceRecord emitted by the AED datasheet-knowledge pipeline, which is the upstream producer of these records: same two-level identity (byte hash locates, content hash means), same closed license vocabulary, same origin restriction. Sorted bytewise-ascending by `source_id`.",
+      "items": { "$ref": "#/$defs/Source" }
+    },
+    "provenance": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Per-field provenance (requirement D3), expressed as a map from RFC 6901 JSON Pointer into THIS document to the provenance of the value at that location. Keying by pointer rather than wrapping every value in a {value, provenance} pair keeps the data readable and lets one entry cover a whole subtree.\n\nRESOLUTION RULE (normative): the provenance applicable to a value is the entry whose pointer is the LONGEST prefix of that value's pointer. The empty pointer \"\" therefore covers the whole document and is the natural place for a record-wide default; a more specific pointer overrides it. A record SHOULD carry \"\" so that every field resolves to something; a consumer that finds no covering entry for a field it depends on must treat that field as unsourced rather than assuming the record default.\n\nA pointer that does not resolve to an existing location in this document is a defect. JSON Schema cannot check that cross-reference, so the part-library linter does.",
+      "propertyNames": {
+        "pattern": "^(/([^/~]|~[01])*)*$",
+        "description": "RFC 6901 JSON Pointer. \"\" is the whole document; \"/pins/0/capability\" is one subtree."
+      },
+      "additionalProperties": { "$ref": "#/$defs/Provenance" }
+    },
+    "license_class": {
+      "$ref": "#/$defs/LicenseClass",
+      "description": "License basis under which this record's facts may be published. Record-level; a source whose license class is more restrictive than the record's is a defect the linter rejects."
+    },
+    "notes": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free-text engineering notes: datasheet ambiguities, internal inconsistencies, values deliberately not recorded. Never load-bearing for a check — anything a checker consumes must be a typed field."
+    }
+  },
+  "$defs": {
+    "LicenseClass": {
+      "type": "string",
+      "enum": ["vendor-public", "vendor-agreement", "open-cc"],
+      "description": "Closed license vocabulary, adopted verbatim from the AED datasheet-knowledge pipeline so records cross the two systems without translation. \"vendor-public\": published by the vendor without access restriction. \"vendor-agreement\": obtained under an agreement permitting this use. \"open-cc\": openly licensed under a Creative Commons or equivalent grant.\n\nThe pipeline's vocabulary has a FOURTH member, \"restricted-nda\", which is deliberately absent here: that material is never ingested, and the pipeline raises rather than constructing a record for it. Omitting it from this enum makes the same red line unrepresentable in a part record instead of merely discouraged.",
+      "$comment": "Mirrors LicenseClass in the aed-part-data pipeline (sources.py) minus RESTRICTED_NDA, which is rejected at construction there."
+    },
+    "Bound": {
+      "description": "One end of a measured range. Either an absolute number in the enclosing Measure's unit, or a bound expressed RELATIVE to another quantity — real datasheets specify logic thresholds that way (\"VIH min = 0.75 x VDD\", \"VIH max = VDD + 0.3 V\"), and flattening those to absolutes would silently pick a supply voltage the vendor did not.",
+      "oneOf": [
+        {
+          "type": "number",
+          "description": "Absolute value, in the enclosing Measure's `unit`."
+        },
+        { "$ref": "#/$defs/RelativeBound" }
+      ]
+    },
+    "RelativeBound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference"],
+      "description": "A bound of the form `factor * reference + offset`, where `reference` names another quantity in the design (a supply pin or rail). Evaluated by the checker once the referenced quantity is known; until then it is a symbolic interval, which is exactly what interval-arithmetic checking needs.",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the referenced quantity — normally a supply pin name on this part, e.g. \"VDD33\", or a rail name the design binds it to."
+        },
+        "factor": {
+          "type": "number",
+          "default": 1,
+          "description": "Multiplier applied to the reference. Defaults to 1 when absent."
+        },
+        "offset": {
+          "type": "number",
+          "default": 0,
+          "description": "Additive offset in the enclosing Measure's `unit`, applied after `factor`. Defaults to 0 when absent."
+        }
+      }
+    },
+    "Measure": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved measure extension point." }
+      },
+      "required": ["unit"],
+      "anyOf": [
+        { "required": ["min"] },
+        { "required": ["typ"] },
+        { "required": ["max"] },
+        { "required": ["peak"] }
+      ],
+      "description": "A datasheet quantity, carrying the statistics the vendor actually published and no others. At least one of min/typ/max/peak must be present: an empty measure is a defect, not an unconstrained value.\n\nWHY `peak` IS SEPARATE FROM `max`: datasheets report these as different kinds of claim. `max` is a guaranteed limit the vendor stands behind; `peak` is an observed or characteristic maximum under stated conditions with no guarantee attached (Espressif's Wi-Fi current tables are 'Peak (mA)' columns; Diodes' 1 A dropout row has a typ and NO max at all). Recording a peak in the `max` slot would manufacture a guarantee the vendor never gave, and the T10 budget checker would then under-guardband. A checker that needs a hard bound and finds only `typ`/`peak` must either apply a declared guardband or report the budget as unverified.",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unit symbol, UCUM-style with common SI prefixes (\"V\", \"mA\", \"uA\", \"mV\", \"ohm\", \"Mohm\", \"degC\", \"mW\", \"pF\", \"ppm/K\", \"degC/W\"). Dimensionless quantities use \"1\". Matches the unit vocabulary of the netlist IR's Quantity so values move between the two without reinterpretation."
+        },
+        "min": { "$ref": "#/$defs/Bound", "description": "Guaranteed lower limit." },
+        "typ": { "$ref": "#/$defs/Bound", "description": "Typical value. NOT a guarantee." },
+        "max": { "$ref": "#/$defs/Bound", "description": "Guaranteed upper limit." },
+        "peak": {
+          "$ref": "#/$defs/Bound",
+          "description": "Observed or characteristic peak under `conditions`, explicitly NOT a guaranteed limit. See the note on this $def."
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions",
+          "description": "The test conditions under which these numbers hold. A measure without conditions asserts the enclosing context's conditions apply; a rating quoted outside its conditions is not usable, so conditions are recorded wherever the datasheet states them."
+        }
+      }
+    },
+    "Conditions": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Test/operating conditions, as a map from condition name to its value. Values are either a Measure (a numeric condition such as an ambient temperature or a load current) or a string (a categorical condition such as a drive-strength setting or a modulation mode). Deliberately an OPEN map: the condition vocabulary is part-family specific and is still being learned, and forcing it closed at v0 would push real conditions into free text where no checker can see them.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$",
+        "description": "lower_snake_case condition name, e.g. \"ta\", \"vin\", \"iout\", \"pad_driver\", \"duty_cycle\"."
+      },
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/$defs/Measure" },
+          { "type": "string", "minLength": 1 }
+        ]
+      }
+    },
+    "Package": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved package extension point." }
+      },
+      "required": ["name", "pin_count"],
+      "description": "Physical package identity and its CAD binding.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Package name as the vendor names it, e.g. \"SOT223\", \"U-DFN3030-8\", \"0402\", \"ESP32-S3-WROOM-1\"."
+        },
+        "pin_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total physical terminal count of the package, including thermal pads and shield terminals that are electrically connected. This is a property of the PACKAGE and may exceed the number of logical `pins` entries when several terminals are internally common."
+        },
+        "footprint_ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+$",
+          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. AED's own originally-authored library is `ael:`. Absent means the part has no footprint bound yet — legitimate for a D2 stub part, which can still be netlisted and type-checked."
+        },
+        "thermal_pad": {
+          "type": "boolean",
+          "description": "Whether the package has an exposed thermal pad. Affects the thermal path and therefore the junction-temperature check; recorded explicitly because its absence from a pin table does not mean the pad is absent."
+        }
+      }
+    },
+    "PinRole": {
+      "type": "string",
+      "enum": [
+        "power_in",
+        "power_out",
+        "passive",
+        "bidirectional",
+        "open_drain",
+        "open_collector",
+        "tri_state",
+        "input",
+        "output",
+        "nc"
+      ],
+      "description": "Electrical role, from the T2 pin-role lattice. This enum is IDENTICAL, member for member, to PinRole in the AED netlist IR schema: part data supplies the roles that the IR carries and the ERC checks, so any divergence between the two lists would be a defect that only shows up at check time. Extending the lattice is a coordinated change to both schemas."
+    },
+    "Pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved pin extension point." }
+      },
+      "required": ["name", "numbers", "role"],
+      "description": "One logical pin. FIELD-CLOSURE RATIONALE: the sub-objects a checker depends on (`abs_max`, `recommended`, `capability`) are closed and named, so a misspelling fails validation instead of silently disarming a check. Secondary electrical detail lives in the open `characteristics` map, where the vocabulary is still being learned and a closed list at v0 would push real data into free text.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Logical pin name as the datasheet names it, e.g. \"VDD33\", \"OUT\", \"DISCH\", \"1A\". Unique within the part."
+        },
+        "numbers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Physical terminal designators bound to this logical pin, e.g. [\"1\"], [\"A3\"], [\"7\", \"EP\"]. More than one entry means the terminals are internally common and the exporter may tie them. Sorted ascending.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "role": {
+          "$ref": "#/$defs/PinRole",
+          "description": "T2 lattice role driving ERC."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Datasheet description of the pin's function."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RESERVED (multi-unit): id of the `units[]` entry this pin belongs to. Absent on a multi-unit part means the pin is not part of any single unit — it must then appear in `shared_pins`."
+        },
+        "abs_max": {
+          "$ref": "#/$defs/PinLimits",
+          "description": "Absolute-maximum window for this pin: the stress limits beyond which damage is possible. Checked by interval containment (requirement T5); exceeding it is an error, never a warning."
+        },
+        "recommended": {
+          "$ref": "#/$defs/PinLimits",
+          "description": "Recommended operating window. Functional operation is only specified inside it; a design outside recommended-but-inside-abs-max is a warning, not damage."
+        },
+        "capability": {
+          "$ref": "#/$defs/PinCapability",
+          "description": "Per-pin current capability (requirement T10). This is the field D3 was required to reserve before freeze so the current/power budget checker has a source-side input."
+        },
+        "characteristics": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Open map of secondary electrical characteristics keyed by datasheet symbol, e.g. \"vih\", \"vil\", \"voh\", \"vol\", \"leakage\", \"pull_up_resistance\", \"capacitance\". Values are Measures, so conditions and relative bounds are preserved.",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": { "$ref": "#/$defs/Measure" }
+        }
+      }
+    },
+    "PinLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "A voltage and/or current window for one pin. At least one of the two must be present.",
+      "properties": {
+        "voltage": {
+          "$ref": "#/$defs/Measure",
+          "description": "Permitted voltage window at this pin, referenced to the part's ground unless `conditions` says otherwise."
+        },
+        "current": {
+          "$ref": "#/$defs/Measure",
+          "description": "Permitted current window at this pin. Sign convention: positive is current INTO the pin. A symmetric rating such as the 555's +/-225 mA is recorded as min = -225, max = 225."
+        }
+      }
+    },
+    "PinCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "What this pin can DELIVER, as opposed to what it may be subjected to (`abs_max`) or what the part draws (`modes`). Requirement T10: sources declare capability, loads declare draw, and the budget checker sums draw per domain and checks containment against capability.\n\nHONESTY REQUIREMENT: record the statistic the vendor published. A regulator whose datasheet guarantees `IOUT min 1.0 A` yields `source_current: {min: 1.0}` — a floor a checker may rely on. A microcontroller whose datasheet gives only `IOH typ 40 mA` yields `source_current: {typ: 40}` — no guaranteed floor at all, and a checker must treat it as such rather than promoting a typical to a limit.",
+      "properties": {
+        "source_current": {
+          "$ref": "#/$defs/Measure",
+          "description": "Current this pin can source (deliver out of the pin)."
+        },
+        "sink_current": {
+          "$ref": "#/$defs/Measure",
+          "description": "Current this pin can sink (accept into the pin)."
+        }
+      }
+    },
+    "Unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved unit extension point." }
+      },
+      "required": ["id", "pins"],
+      "description": "RESERVED (multi-unit): one independent functional unit inside a shared package.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]+$",
+          "description": "Unit identifier, unique within the part, e.g. \"1\", \"A\", \"gate1\"."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human label for the unit, e.g. \"NAND gate 1\"."
+        },
+        "pins": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Pin membership: names of the `pins[]` entries belonging to this unit. Must not include any pin listed in `shared_pins`.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "swappability_class": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Units carrying the SAME swappability class are functionally interchangeable, so a downstream pin/unit assignment step may permute them freely without changing the design's meaning. Units with no class, or with differing classes, must not be swapped. Named as a class rather than a boolean because packages exist whose units are only partly interchangeable."
+        }
+      }
+    },
+    "Ratings": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Part-level limits that are not attributable to a single pin.",
+      "properties": {
+        "abs_max": {
+          "$ref": "#/$defs/NamedMeasures",
+          "description": "Absolute-maximum stress ratings, e.g. \"junction_temperature\", \"storage_temperature\", \"power_dissipation\", \"esd_hbm\", \"esd_cdm\"."
+        },
+        "recommended": {
+          "$ref": "#/$defs/NamedMeasures",
+          "description": "Recommended operating conditions, e.g. \"ambient_temperature\", \"supply_voltage\", \"output_current\"."
+        },
+        "thermal": {
+          "$ref": "#/$defs/NamedMeasures",
+          "description": "Thermal resistances and characterization parameters, e.g. \"theta_ja\", \"theta_jc_top\", \"psi_jt\". Package-dependent: record the value for THIS record's package, and put the mounting/test conditions in the Measure's `conditions` — a theta_ja quoted without its board construction is not a usable number."
+        }
+      }
+    },
+    "NamedMeasures": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Open map from lower_snake_case parameter name to its Measure. Open for the same reason as `characteristics`: the parameter vocabulary is part-family specific and freezing it at v0 would lose real data.",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": { "$ref": "#/$defs/Measure" }
+    },
+    "Mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved mode extension point." }
+      },
+      "required": ["id", "kind", "draw"],
+      "description": "One named operating mode and the supply current it draws. The T10 checker sums `draw` per voltage domain; the D2 simulation stub turns each mode into a load-equivalent current sink.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_]*$",
+          "description": "Mode identifier, unique within the part, e.g. \"wifi_tx_802_11b_1mbps\", \"deep_sleep_rtc_on\"."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the part is doing in this mode, in the datasheet's own terms."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["active", "idle", "sleep", "shutdown", "inrush"],
+          "description": "Coarse classification, so a checker can select modes without parsing ids. \"active\": doing work. \"idle\": powered and clocked but not working. \"sleep\": reduced-power retention state. \"shutdown\": disabled. \"inrush\": transient startup surge, NOT a steady state — a checker that sums inrush into a steady-state budget is wrong, and this member exists so it can tell the difference.\n\nNote that peak-versus-typical is a property of the MEASURE (see Measure.peak), not of the mode: one mode can carry both a typical and a peak current."
+        },
+        "conditions": {
+          "$ref": "#/$defs/Conditions",
+          "description": "Conditions under which this mode's currents were measured, e.g. supply voltage, ambient temperature, CPU frequency, duty cycle. Two datasheet rows differing only in a condition (clocks enabled vs disabled) are two entries here, not one averaged entry."
+        },
+        "draw": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Current drawn on each supply pin in this mode. Sorted bytewise-ascending by `pin`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pin", "current"],
+            "properties": {
+              "pin": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the supply pin this current flows into; must match a `pins[].name` whose role is power_in. JSON Schema cannot enforce that cross-reference, so the part-library linter does."
+              },
+              "current": {
+                "$ref": "#/$defs/Measure",
+                "description": "Current drawn on that pin. Use `peak` for an unguaranteed observed maximum and `max` only for a guaranteed limit."
+              }
+            }
+          }
+        }
+      }
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved source extension point." }
+      },
+      "required": ["source_id", "vendor", "url", "state", "origin", "license_class"],
+      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES — only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by AED (requirement D3). The closed property set enforces that: there is no member a well-meaning producer could stuff a PDF into.",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "description": "Identifier for this source, unique within the record and referenced by `provenance` entries."
+        },
+        "vendor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Vendor slug that published the document, matching the datasheet-pipeline vendor registry where one exists."
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "description": "Canonical retrieval URL. HTTPS is required: an http:// citation cannot establish that the bytes hashed below are the bytes the vendor served.\n\nConstrained by `pattern` rather than `format: \"uri\"` deliberately. In JSON Schema 2020-12 `format` is an ANNOTATION by default: Python jsonschema does not enforce it without an explicit format checker, and ajv rejects the schema outright in strict mode unless ajv-formats is loaded. A `format` here would therefore have looked like a constraint while enforcing nothing in either gate. Every keyword in this schema is one that both validators actually apply."
+        },
+        "doc_title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Document title as printed on it."
+        },
+        "document_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Vendor's own version/revision designation, e.g. \"v1.8\", \"DS37274 Rev. 5-2\", \"SLFS022K\". This is the human-meaningful revision; `content_hash` is the machine-comparable one."
+        },
+        "byte_sha256": {
+          "$ref": "#/$defs/Sha256",
+          "description": "SHA-256 of the exact retrieved bytes. A LOCATOR and cache key only: vendors re-serve the same document with new watermarks and timestamps, so this changes without the content changing. Required when `state` is \"available\"."
+        },
+        "content_hash": {
+          "$ref": "#/$defs/Sha256",
+          "description": "Versioned hash of the normalized extracted text — stamp-stripped, whitespace-collapsed, casefolded. This is the revision detector: byte_sha256 differing while content_hash matches is a harmless re-stamp, not a new revision. Only comparable between hashes minted under the same `identity_version`. Required when `state` is \"available\"."
+        },
+        "identity_version": {
+          "type": "string",
+          "pattern": "^chv[0-9]+\\+reg[0-9A-Za-z._-]+$",
+          "description": "Versions everything `content_hash` depends on: the normalization algorithm version and the vendor stamp-strip registry version, e.g. \"chv1+reg2026.08.14\". Hashes minted under different identity versions are NOT comparable. Format matches the datasheet pipeline's IdentityVersion string form."
+        },
+        "retrieved_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$",
+          "description": "UTC timestamp of retrieval, RFC 3339 with a literal trailing Z. Timezone-aware and UTC-normalized so records from different machines compare directly. Enforced by `pattern` rather than `format: \"date-time\"` for the reason given on `url`, and deliberately narrower than RFC 3339: a non-UTC offset is rejected rather than silently normalized."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["available", "source-unreachable"],
+          "description": "\"available\": the document was retrieved and hashed. \"source-unreachable\": every known URL pattern failed after a re-location pass. An unreachable source keeps its citation and its facts — vendors move PDFs constantly — but carries no hashes, which is why the hash fields are conditionally required rather than always required."
+        },
+        "origin": {
+          "type": "string",
+          "enum": ["vendor-direct", "bootstrap-list"],
+          "description": "How the document was located. \"vendor-direct\": from the vendor's own site. \"bootstrap-list\": from a curated internal seed list.\n\nDistributor-derived provenance is deliberately NOT a member. Distributor API results (MPN-to-URL lookups) are confined to a short-lived ephemeral cache upstream and must never reach a persistent record; omitting the value from this enum makes that red line unrepresentable here rather than merely forbidden by policy."
+        },
+        "license_class": {
+          "$ref": "#/$defs/LicenseClass",
+          "description": "License basis for this specific document."
+        }
+      },
+      "dependentRequired": {
+        "content_hash": ["identity_version"],
+        "identity_version": ["content_hash"]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "state": { "const": "available" } },
+            "required": ["state"]
+          },
+          "then": {
+            "required": ["byte_sha256", "retrieved_at"],
+            "$comment": "An available source must be byte-identifiable and dated; anything less is an uncheckable citation. content_hash is deliberately NOT required here: computing it means running the pipeline's text-normalization algorithm, and a hand-authored seed-library record legitimately has the bytes it downloaded without having run that pipeline. Requiring it would either block hand-authoring or invite producers to paste the byte hash into the content_hash slot, which would silently destroy the re-stamp-versus-revision distinction the two-level identity exists for. When content_hash IS present it must be accompanied by the identity_version it was minted under, since hashes from different versions are not comparable — that pairing is enforced by dependentRequired above."
+          }
+        }
+      ]
+    },
+    "Sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Algorithm-prefixed lowercase hex SHA-256, matching the hash spelling used by the AED netlist IR (design_hash, source_hash) so hashes are recognizable across AED artifacts. NOTE for pipeline integration: the datasheet pipeline emits bare hexdigests; the writer that turns pipeline SourceRecords into part records adds the `sha256:` prefix."
+    },
+    "Provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved provenance extension point." }
+      },
+      "required": ["source_id", "confidence", "method"],
+      "description": "Where one value (or subtree) came from and how much weight it carries.",
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "description": "Must match a `sources[].source_id` in this record."
+        },
+        "locator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where inside the source the value is found, in the document's own terms: \"Table 6-3\", \"Section 5.5, Electrical Characteristics\", \"page 4\". Human-checkable by design — a reviewer must be able to open the cited document and land on the number."
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Echo of the identity (`id`, `name`, or `source_id`) of the array element this entry's pointer resolves to. Required in practice whenever the pointer addresses an element of `pins`, `modes`, or `sources`.\n\nWHY THIS EXISTS: provenance keys are JSON Pointers, which address array elements BY INDEX, while this schema requires those same arrays to be sorted by their identity field. Those two requirements interact badly — renaming one mode re-sorts the array and silently re-points every index-based provenance entry at a DIFFERENT element. The pointer still resolves, so an unresolvable-pointer check cannot catch it, and the record ends up confidently citing the wrong datasheet table. Echoing the intended identity here makes that failure detectable: the part-library linter compares this value against the element the pointer actually resolves to and rejects a mismatch."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "datasheet-stated",
+            "datasheet-derived",
+            "vendor-confirmed",
+            "estimated",
+            "unverified"
+          ],
+          "description": "How the value relates to its source, ordered from strongest to weakest.\n\n\"datasheet-stated\": appears verbatim in the cited document.\n\"datasheet-derived\": computed from stated values by a documented rule (record the rule in `note`).\n\"vendor-confirmed\": obtained from vendor support or errata rather than the datasheet body.\n\"estimated\": an engineering estimate that is NOT in the source — guardbands and assumptions live here, and marking one \"datasheet-stated\" would launder an assumption into a vendor guarantee.\n\"unverified\": imported without checking.\n\nThis field is ordinal on purpose and there is no numeric score: a 0-to-1 confidence invites false precision that nobody can calibrate."
+        },
+        "method": {
+          "type": "string",
+          "enum": ["manual", "automated-extraction", "automated-extraction-reviewed"],
+          "description": "How the value was captured. Separate from `confidence` because they are independent: an automated extraction of a stated table value is high-confidence, and a hand-entered guess is not."
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Justification, required in practice for \"datasheet-derived\" (state the rule) and \"estimated\" (state the assumption and why it is conservative)."
+        }
+      }
+    }
+  }
+}

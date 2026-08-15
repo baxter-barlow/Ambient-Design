@@ -1,0 +1,413 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "ti/sn74hc00d",
+  "manufacturer": "Texas Instruments",
+  "mpn": "SN74HC00D",
+  "description": "Quad 2-input NAND gate, CMOS, SOIC-14",
+  "lifecycle": "active",
+  "package": {
+    "name": "D (SOIC)",
+    "pin_count": 14,
+    "footprint_ref": "ael:SOIC-14_3.9x8.7mm_P1.27mm"
+  },
+  "pins": [
+    {
+      "name": "1A",
+      "numbers": [
+        "1"
+      ],
+      "role": "input",
+      "description": "Channel 1, input A",
+      "unit": "1"
+    },
+    {
+      "name": "1B",
+      "numbers": [
+        "2"
+      ],
+      "role": "input",
+      "description": "Channel 1, input B",
+      "unit": "1"
+    },
+    {
+      "name": "1Y",
+      "numbers": [
+        "3"
+      ],
+      "role": "output",
+      "description": "Channel 1, output Y. Balanced CMOS push-pull.",
+      "unit": "1",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -25,
+          "max": 25
+        }
+      },
+      "capability": {
+        "source_current": {
+          "unit": "mA",
+          "max": 4,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            },
+            "voh": {
+              "unit": "V",
+              "min": 3.98
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        },
+        "sink_current": {
+          "unit": "mA",
+          "max": 4,
+          "conditions": {
+            "vcc": {
+              "unit": "V",
+              "typ": 4.5
+            },
+            "vol": {
+              "unit": "V",
+              "max": 0.26
+            },
+            "ta": {
+              "unit": "degC",
+              "typ": 25
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "2A",
+      "numbers": [
+        "4"
+      ],
+      "role": "input",
+      "description": "Channel 2, input A",
+      "unit": "2"
+    },
+    {
+      "name": "2B",
+      "numbers": [
+        "5"
+      ],
+      "role": "input",
+      "description": "Channel 2, input B",
+      "unit": "2"
+    },
+    {
+      "name": "2Y",
+      "numbers": [
+        "6"
+      ],
+      "role": "output",
+      "description": "Channel 2, output Y. Balanced CMOS push-pull.",
+      "unit": "2",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -25,
+          "max": 25
+        }
+      }
+    },
+    {
+      "name": "3A",
+      "numbers": [
+        "9"
+      ],
+      "role": "input",
+      "description": "Channel 3, input A",
+      "unit": "3"
+    },
+    {
+      "name": "3B",
+      "numbers": [
+        "10"
+      ],
+      "role": "input",
+      "description": "Channel 3, input B",
+      "unit": "3"
+    },
+    {
+      "name": "3Y",
+      "numbers": [
+        "8"
+      ],
+      "role": "output",
+      "description": "Channel 3, output Y. Balanced CMOS push-pull.",
+      "unit": "3",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -25,
+          "max": 25
+        }
+      }
+    },
+    {
+      "name": "4A",
+      "numbers": [
+        "12"
+      ],
+      "role": "input",
+      "description": "Channel 4, input A",
+      "unit": "4"
+    },
+    {
+      "name": "4B",
+      "numbers": [
+        "13"
+      ],
+      "role": "input",
+      "description": "Channel 4, input B",
+      "unit": "4"
+    },
+    {
+      "name": "4Y",
+      "numbers": [
+        "11"
+      ],
+      "role": "output",
+      "description": "Channel 4, output Y. Balanced CMOS push-pull.",
+      "unit": "4",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -25,
+          "max": 25
+        }
+      }
+    },
+    {
+      "name": "GND",
+      "numbers": [
+        "7"
+      ],
+      "role": "power_in",
+      "description": "Ground, shared by all four units.",
+      "abs_max": {
+        "current": {
+          "unit": "mA",
+          "min": -50,
+          "max": 50
+        }
+      }
+    },
+    {
+      "name": "VCC",
+      "numbers": [
+        "14"
+      ],
+      "role": "power_in",
+      "description": "Positive supply, shared by all four units.",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "min": -0.5,
+          "max": 7
+        },
+        "current": {
+          "unit": "mA",
+          "min": -50,
+          "max": 50
+        }
+      },
+      "recommended": {
+        "voltage": {
+          "unit": "V",
+          "min": 2,
+          "typ": 5,
+          "max": 6
+        }
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "1",
+      "name": "NAND gate 1",
+      "pins": [
+        "1A",
+        "1B",
+        "1Y"
+      ],
+      "swappability_class": "hc00-nand2"
+    },
+    {
+      "id": "2",
+      "name": "NAND gate 2",
+      "pins": [
+        "2A",
+        "2B",
+        "2Y"
+      ],
+      "swappability_class": "hc00-nand2"
+    },
+    {
+      "id": "3",
+      "name": "NAND gate 3",
+      "pins": [
+        "3A",
+        "3B",
+        "3Y"
+      ],
+      "swappability_class": "hc00-nand2"
+    },
+    {
+      "id": "4",
+      "name": "NAND gate 4",
+      "pins": [
+        "4A",
+        "4B",
+        "4Y"
+      ],
+      "swappability_class": "hc00-nand2"
+    }
+  ],
+  "shared_pins": [
+    "GND",
+    "VCC"
+  ],
+  "ratings": {
+    "abs_max": {
+      "junction_temperature": {
+        "unit": "degC",
+        "max": 150
+      },
+      "storage_temperature": {
+        "unit": "degC",
+        "min": -65,
+        "max": 150
+      },
+      "input_clamp_current": {
+        "unit": "mA",
+        "min": -20,
+        "max": 20,
+        "conditions": {
+          "vi": "VI < -0.5 V or VI > VCC + 0.5 V"
+        }
+      },
+      "output_clamp_current": {
+        "unit": "mA",
+        "min": -20,
+        "max": 20,
+        "conditions": {
+          "vo": "VO < -0.5 V or VO > VCC + 0.5 V"
+        }
+      },
+      "esd_hbm": {
+        "unit": "V",
+        "min": -2000,
+        "max": 2000
+      },
+      "esd_cdm": {
+        "unit": "V",
+        "min": -1000,
+        "max": 1000
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "unit": "degC",
+        "min": -40,
+        "max": 85,
+        "conditions": {
+          "device": "SN74HC00; SN54HC00 is -55 to 125 C"
+        }
+      },
+      "input_transition_time": {
+        "unit": "ns",
+        "max": 500,
+        "conditions": {
+          "vcc": {
+            "unit": "V",
+            "typ": 4.5
+          }
+        }
+      }
+    },
+    "thermal": {
+      "theta_ja": {
+        "unit": "degC/W",
+        "typ": 133.6,
+        "conditions": {
+          "package": "D (SOIC), 14 pins"
+        }
+      }
+    }
+  },
+  "sources": [
+    {
+      "source_id": "ti-sn74hc00-scls181h",
+      "vendor": "ti",
+      "url": "https://www.ti.com/lit/ds/symlink/sn74hc00.pdf",
+      "doc_title": "SN74HC00, SN54HC00 Quadruple 2-Input Positive-NAND Gates",
+      "document_version": "SCLS181H, December 1982, revised August 2021",
+      "byte_sha256": "sha256:706cc4f5fd012f080ccd4a50f5fcc4136ef09dbc6e76e87ba85ae2d4cbb24efe",
+      "content_hash": "sha256:b833a4005cb6f2c21aa8fd21a9a319f94f88bdc965d241eb80de30964ab327c1",
+      "identity_version": "chv1+reg2026.08.0",
+      "retrieved_at": "2026-08-15T05:44:00Z",
+      "state": "available",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. Values are the SN74HC00 (commercial) columns; SN54HC00 military limits differ and are not recorded."
+    },
+    "/pins": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Table 5-1 Pin Functions (D, DB, N, NS, PW, J, or W package column)",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Pin numbering is the 14-pin column, not the 20-pin FK (LCCC) column in the same table. Note the non-monotonic physical layout: 3Y is pin 8 while 3A and 3B are pins 9 and 10, which is why unit membership must be declared explicitly rather than inferred from pin order."
+    },
+    "/pins/2/capability": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Section 6.5 Electrical Characteristics - Commercial (74xx), VOH and VOL rows at VCC = 4.5 V",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "note": "The datasheet states no drive-capability figure directly. It guarantees VOH >= 3.98 V at IOH = -4 mA and VOL <= 0.26 V at IOL = 4 mA (VCC = 4.5 V, 25 C). The 4 mA test condition is therefore the rated drive at which output levels are guaranteed, and is recorded as capability with those conditions attached. The +/-25 mA continuous output current from Absolute Maximum Ratings is a stress limit, not drive capability, and is kept in abs_max.",
+      "target": "1Y"
+    },
+    "/ratings/abs_max": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Section 6.1 Absolute Maximum Ratings; Section 6.2 ESD Ratings",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "/ratings/recommended": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Section 6.3 Recommended Operating Conditions",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "/ratings/thermal/theta_ja": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Section 6.4 Thermal Information, D (SOIC) column",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "/units": {
+      "source_id": "ti-sn74hc00-scls181h",
+      "locator": "Table 5-1 Pin Functions (channel assignments); Section 8.1 Overview ('four independent 2-input NAND gates')",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "All four gates share one swappability class because the datasheet describes them as independent and identical, with a single set of electrical characteristics covering all channels. A downstream unit-assignment step may therefore permute gates freely."
+    }
+  },
+  "license_class": "vendor-public",
+  "notes": "This record exists to exercise the RESERVED multi-unit field set (units, pin membership, shared power pins, swappability class) against a real multi-unit part. Reserving these fields at schema_version 0 rather than adding them at 1.x is what makes the eventual multi-unit rollout a non-breaking change; a reservation that was never tried against real data would be worth very little, so it is tried here.\n\nThe part is not used by any of the three v1 benchmarks - none of them contains a multi-unit component. That is precisely why it is included: without it, the reserved fields would ship unexercised.\n\nSupply current (ICC) and input leakage (II) are deliberately NOT recorded. In Section 6.5 those two rows span the 25 C and -40-to-85 C column groups in a way whose MIN/TYP/MAX alignment could not be read unambiguously from the PDF text layer, and both are small enough that a wrong transcription would be easy to miss and hard to notice downstream. No v1 check consumes either value for this part. Recording a confidently-wrong number is worse than recording none, so none is recorded and the reason is stated here.\n\nPin membership is declared explicitly rather than derived from pin numbering because the physical layout is not monotonic: gate 3's output (3Y) is pin 8 while its inputs are pins 9 and 10. Any scheme that inferred units from adjacency would get this part wrong."
+}

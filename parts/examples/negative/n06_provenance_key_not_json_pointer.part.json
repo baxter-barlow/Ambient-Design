@@ -1,0 +1,54 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    },
+    "pins.0.role": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "x_negative_control": {
+    "expects": "REJECTED",
+    "guarantee_under_test": "provenance keys are RFC 6901 JSON Pointers. A dotted path does not resolve, so the nearest-ancestor resolution rule could never find it and the field would silently appear unsourced."
+  }
+}
