@@ -101,12 +101,18 @@ class CommandGate:
         version: str = "unknown",
         source_filename: str = "design.aed",
         timeout_s: int = 120,
+        stage: str = "check",
     ):
         self.argv = argv
         self.name = name
         self.version = version
         self.source_filename = source_filename
         self.timeout_s = timeout_s
+        # Which pipeline stage this command represents. Load-bearing: a
+        # parse failure and an export failure say very different things
+        # about a grammar, and a harness that labelled both "check" would
+        # make the bake-off unable to tell them apart.
+        self.stage = stage
 
     def check(self, source: str, workdir: Path | None = None) -> GateResult:
         if workdir is None:
@@ -128,13 +134,15 @@ class CommandGate:
         except subprocess.TimeoutExpired:
             return GateResult(
                 passed=False,
-                stage="timeout",
+                stage=f"{self.stage}:timeout",
                 exit_code=None,
                 stderr_excerpt=f"gate exceeded {self.timeout_s}s",
             )
         except FileNotFoundError as exc:
             return GateResult(
-                passed=False, stage="gate-unavailable", stderr_excerpt=str(exc)
+                passed=False,
+                stage=f"{self.stage}:gate-unavailable",
+                stderr_excerpt=str(exc),
             )
 
         diagnostics = []
@@ -163,7 +171,7 @@ class CommandGate:
         return GateResult(
             passed=passed,
             diagnostics=diagnostics,
-            stage="check",
+            stage=self.stage,
             exit_code=proc.returncode,
             stderr_excerpt=(proc.stderr or "")[:2000] or None,
         )
@@ -173,7 +181,60 @@ class CommandGate:
             "kind": "command",
             "name": self.name,
             "version": self.version,
+            "stage": self.stage,
             "argv": self.argv,
+        }
+
+
+class CompositeGate:
+    """Run several gates in order as one pipeline stage-set.
+
+    AC5a's bar is passing "compile/type-check/export gates" — plural. If
+    `aed` ends up exposing those as separate invocations rather than one
+    command, a single-command gate cannot express the bar at all, and the
+    "reused verbatim by the AC5a gate run" promise would quietly fail at
+    exactly the moment it was supposed to pay off. This composes them.
+
+    SHORT-CIRCUITS ON FIRST FAILURE, deliberately. Running export against a
+    design that failed type-checking produces cascade noise, and P2 makes
+    diagnostic quality the thing the repair loop converges on — feeding the
+    model a pile of downstream errors caused by one upstream mistake makes
+    the loop worse, not better. The failing stage's name travels out on
+    GateResult.stage, so a bake-off can still distinguish a grammar that
+    fails to parse from one that parses and fails to export.
+    """
+
+    def __init__(self, stages: list, name: str = "pipeline"):
+        if not stages:
+            raise ValueError("a composite gate needs at least one stage")
+        self.stages = stages
+        self.name = name
+
+    def check(self, source: str, workdir: Path | None = None) -> GateResult:
+        passed_stages = []
+        for gate in self.stages:
+            result = gate.check(source, workdir)
+            if not result.passed:
+                # Record what already succeeded, so a failure late in the
+                # pipeline is distinguishable from one at the first hurdle.
+                result.stage = (
+                    f"{result.stage} (after {', '.join(passed_stages)})"
+                    if passed_stages
+                    else result.stage
+                )
+                return result
+            passed_stages.append(result.stage)
+        return GateResult(
+            passed=True,
+            stage=" -> ".join(passed_stages),
+            exit_code=0,
+        )
+
+    def identity(self) -> dict:
+        return {
+            "kind": "composite",
+            "name": self.name,
+            "stages": [g.identity() for g in self.stages],
         }
 
 

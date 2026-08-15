@@ -17,7 +17,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from aed_eval import stats  # noqa: E402
-from aed_eval.gates import CallableGate, CommandGate, Diagnostic, GateResult, ReplayGate  # noqa: E402
+from aed_eval.gates import (  # noqa: E402
+    CallableGate,
+    CommandGate,
+    CompositeGate,
+    Diagnostic,
+    GateResult,
+    ReplayGate,
+)
 from aed_eval.models import ReplayClient, SamplingParams, Usage, ModelResponse, request_digest  # noqa: E402
 from aed_eval.protocol import (  # noqa: E402
     TrialConfig,
@@ -261,11 +268,57 @@ class TestGates(unittest.TestCase):
         self.assertTrue(result.passed)
 
     def test_missing_executable_is_reported_not_silently_passed(self):
-        gate = CommandGate(["definitely-not-a-real-binary-xyz"], "missing")
+        gate = CommandGate(["definitely-not-a-real-binary-xyz"], "missing", stage="export")
         with tempfile.TemporaryDirectory() as tmp:
             result = gate.check("source", Path(tmp))
         self.assertFalse(result.passed)
-        self.assertEqual(result.stage, "gate-unavailable")
+        # The stage is carried through, so "the export tool is missing" is
+        # distinguishable from "the compiler is missing" in a run record.
+        self.assertEqual(result.stage, "export:gate-unavailable")
+
+    def test_command_gate_reports_its_own_stage(self):
+        """A parse failure and an export failure must be distinguishable."""
+        gate = CommandGate(["python3", "-c", "pass"], "fake", stage="export")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = gate.check("source", Path(tmp))
+        self.assertEqual(result.stage, "export")
+
+    def test_composite_gate_expresses_the_ac5a_pipeline(self):
+        """AC5a's bar is compile/type-check/EXPORT - plural stages."""
+        ok = ["python3", "-c", "pass"]
+        gate = CompositeGate(
+            [
+                CommandGate(ok, "c", stage="compile"),
+                CommandGate(ok, "t", stage="type-check"),
+                CommandGate(ok, "e", stage="export"),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            result = gate.check("source", Path(tmp))
+        self.assertTrue(result.passed)
+        self.assertEqual(result.stage, "compile -> type-check -> export")
+
+    def test_composite_gate_short_circuits_and_names_the_failing_stage(self):
+        fail = ["python3", "-c", "import sys; sys.exit(1)"]
+        ok = ["python3", "-c", "pass"]
+        gate = CompositeGate(
+            [
+                CommandGate(ok, "c", stage="compile"),
+                CommandGate(fail, "t", stage="type-check"),
+                CommandGate(fail, "e", stage="export"),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            result = gate.check("source", Path(tmp))
+        self.assertFalse(result.passed)
+        self.assertIn("type-check", result.stage)
+        # export must NOT have run: cascade noise from an upstream failure
+        # makes the repair loop worse, not better.
+        self.assertNotIn("export", result.stage)
+
+    def test_composite_gate_rejects_an_empty_pipeline(self):
+        with self.assertRaises(ValueError):
+            CompositeGate([])
 
     def test_replay_gate_refuses_to_invent_results(self):
         gate = ReplayGate([{"passed": True}])
