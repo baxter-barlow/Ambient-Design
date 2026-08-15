@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure schemas lint eval-tests sim golden
+.PHONY: all check structure schemas lint bakeoff eval-tests sim golden
 
 # Everything CI runs.
 all: check sim golden
@@ -11,7 +11,7 @@ all: check sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure schemas lint eval-tests
+check: structure schemas lint bakeoff eval-tests
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -32,6 +32,15 @@ schemas:
 lint:
 	python3 parts/lint-part-data.py --self-test
 	python3 parts/lint-part-data.py
+
+# Syntax bake-off (lang/): the candidate grammars must round-trip their own
+# output, agree with each other on the same design, and agree with the
+# artifacts AMB-38 and AMB-39 committed. Deliberately stdlib-only and
+# tokenizer-free — token counting is `cd lang && python3 -m bakeoff measure`,
+# which needs the optional tiktoken pin and is not a gate.
+bakeoff:
+	cd lang && python3 -m bakeoff check
+	python3 -m unittest discover -s lang/tests -t lang
 
 # Measurement-harness tests (eval/). stdlib unittest only, so this needs no
 # dependency beyond the pinned interpreter; the harness's optional tiktoken

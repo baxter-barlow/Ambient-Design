@@ -71,6 +71,27 @@ jobs:
         # membership, sort order, licence containment. Stdlib only.
         run: python3 parts/lint-part-data.py
 
+  bakeoff:
+    name: Syntax bake-off
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # Keep in sync with toolchain/versions.yaml (python.version).
+          python-version: "3.12"
+      - name: Round trip, cross-arm agreement, external anchors
+        # No install step: the gate is stdlib-only on purpose, so it cannot be
+        # weakened by a dependency-resolution problem. Token counting needs
+        # the optional tiktoken pin and is NOT gated here — a number nobody
+        # can reproduce offline should not decide a merge.
+        run: cd lang && python3 -m bakeoff check
+      - name: Prototype tests
+        run: python3 -m unittest discover -s lang/tests -t lang
+
   eval-harness:
     name: Measurement harness
     runs-on: ubuntu-24.04
