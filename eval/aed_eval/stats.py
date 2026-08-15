@@ -246,17 +246,18 @@ def required_n_unpaired(
     # crossing point.
     for coarse in range(5, cap + 1, 5):
         if power_unpaired(coarse, coarse, p_a, p_b, alpha) >= target_power:
-            best = coarse
-            for n in range(coarse - 1, 0, -1):
+            # Exhaustive scan below the coarse hit. Power is NOT monotonic
+            # in n for exact tests - the rejection region is discrete, so it
+            # saw-tooths - which means walking down until the first failure
+            # can stop above the true minimum. Only a full scan is correct,
+            # and at these sample sizes it costs milliseconds.
+            for n in range(1, coarse + 1):
                 if power_unpaired(n, n, p_a, p_b, alpha) >= target_power:
-                    best = n
-                else:
-                    break
-            return {
-                "n_per_arm": best,
-                "power": power_unpaired(best, best, p_a, p_b, alpha),
-                "alpha": alpha,
-            }
+                    return {
+                        "n_per_arm": n,
+                        "power": power_unpaired(n, n, p_a, p_b, alpha),
+                        "alpha": alpha,
+                    }
     return {
         "n_per_arm": None,
         "power": power_unpaired(cap, cap, p_a, p_b, alpha),
@@ -395,7 +396,20 @@ def flip_verdict(
         ma, mb = minimum_effect_of_interest
         _check_probability(ma, "minimum_effect_of_interest[0]")
         _check_probability(mb, "minimum_effect_of_interest[1]")
-        declared_power = power_unpaired(aed_trials, baseline_trials, ma, mb, alpha)
+        if paired:
+            # The power must come from the SAME test that produced the
+            # p-value. Certifying a McNemar result adequately powered using
+            # Fisher's power is incoherent, and not harmlessly so: the two
+            # differ substantially at these sample sizes, so the verdict
+            # could be justified by a test that was never run.
+            n_disc_expected = abs(ma - mb) + 2 * min(ma, mb) * (1 - max(ma, mb))
+            n_disc_expected = min(1.0, max(0.0, n_disc_expected))
+            share = 0.5 if n_disc_expected == 0 else max(
+                0.0, min(1.0, (n_disc_expected - abs(ma - mb)) / (2 * n_disc_expected))
+            )
+            declared_power = power_paired(aed_trials, n_disc_expected, share, alpha)
+        else:
+            declared_power = power_unpaired(aed_trials, baseline_trials, ma, mb, alpha)
 
     # Power against the effect actually observed. Informational only: it is
     # computed from the data, so it cannot justify an adequacy claim

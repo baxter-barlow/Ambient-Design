@@ -39,6 +39,7 @@ from aed_eval.protocol import (  # noqa: E402
     TrialConfig,
     build_repair_message,
     extract_source,
+    unterminated_fence,
     pair_discordance,
     run_arm,
     run_trial,
@@ -185,6 +186,17 @@ class TestInputValidation(unittest.TestCase):
     def test_wilson_rejects_out_of_range_successes(self):
         with self.assertRaises(ValueError):
             stats.wilson_interval(11, 10)
+
+    def test_required_n_is_exact_across_several_effects(self):
+        """Power saw-tooths in n for exact tests, so only a full scan is right."""
+        for pa, pb in ((0.4, 0.9), (0.5, 0.9), (0.6, 0.9), (0.3, 0.8)):
+            n = stats.required_n_unpaired(pa, pb, target_power=0.8)["n_per_arm"]
+            self.assertIsNotNone(n)
+            brute = next(
+                m for m in range(1, 201)
+                if stats.power_unpaired(m, m, pa, pb) >= 0.8
+            )
+            self.assertEqual(n, brute, f"{pa} vs {pb}: got {n}, true smallest {brute}")
 
     def test_required_n_finds_the_exact_smallest_n(self):
         """The docstring promises the smallest n, so a grid of 5 will not do.
@@ -352,10 +364,13 @@ class TestBrokenInstrumentPropagates(unittest.TestCase):
 
 
 class TestTruncatedEmission(unittest.TestCase):
-    def test_unterminated_fence_is_not_graded_as_the_earlier_block(self):
+    def test_unterminated_fence_is_detected(self):
         """A truncated reply usually still quotes the broken snippet."""
         text = "The bug was:\n```aed\nBROKEN\n```\nFixed:\n```aed\nGOOD but cut off"
-        self.assertIsNone(extract_source(text))
+        self.assertTrue(unterminated_fence(text))
+        # extract_source itself does NOT judge truncation: it would have
+        # discarded legitimate designs containing a fence marker.
+        self.assertEqual(extract_source(text), "BROKEN")
 
     def test_max_tokens_stop_is_a_failed_emission_even_with_balanced_fences(self):
         """The case `extract_source` alone cannot see.
@@ -384,6 +399,78 @@ class TestTruncatedEmission(unittest.TestCase):
         result = run_trial(cfg, Truncated(), _gate([True, True, True]), 1)
         self.assertFalse(result.passed)
         self.assertFalse(any(i.source_extracted for i in result.iterations))
+
+
+class TestTruncationDoesNotEatGoodEmissions(unittest.TestCase):
+    """The fix for truncation must not become a bug of its own.
+
+    An odd triple-backtick count also occurs when a design legitimately
+    contains a fence marker. Discarding those would score complete,
+    gate-passing emissions as failures - biasing the measured rate in the
+    opposite direction from the bug the guard was added to fix."""
+
+    def test_clean_stop_is_trusted_over_the_fence_heuristic(self):
+        class Weird:
+            def complete(self, system, messages):
+                return ModelResponse(
+                    text="```aed\nmodule M:\n    note = \"```\"\n```",
+                    usage=Usage(10, 10),
+                    stop_reason="end_turn",
+                    model="scripted",
+                )
+
+            def identity(self):
+                return {}
+
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        result = run_trial(cfg, Weird(), _gate([True]), 1)
+        self.assertTrue(result.passed)
+
+    def test_fence_heuristic_still_applies_when_no_stop_reason_is_given(self):
+        class NoStop:
+            def complete(self, system, messages):
+                return ModelResponse(
+                    text="Fixing:\n```aed\nBROKEN\n```\nNow:\n```aed\ncut off",
+                    usage=Usage(10, 10), stop_reason=None, model="scripted",
+                )
+
+            def identity(self):
+                return {}
+
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        result = run_trial(cfg, NoStop(), _gate([True, True, True]), 1)
+        self.assertFalse(result.passed)
+
+    def test_a_wholly_truncated_trial_is_labelled_as_such(self):
+        """A budget failure and a comprehension failure are different."""
+
+        class Truncated:
+            def complete(self, system, messages):
+                return ModelResponse(text="```aed\nX\n```", usage=Usage(10, 10),
+                                     stop_reason="max_tokens", model="s")
+
+            def identity(self):
+                return {}
+
+        cfg = TrialConfig(benchmark_id="b", task_prompt="p", system_context="c")
+        result = run_trial(cfg, Truncated(), _gate([True] * 3), 1)
+        self.assertEqual(result.outcome, "truncated")
+
+
+class TestPairedPowerMatchesPairedTest(unittest.TestCase):
+    def test_paired_verdict_does_not_borrow_unpaired_power(self):
+        """Certifying a McNemar result with Fisher's power is incoherent."""
+        paired = stats.flip_verdict(
+            6, 20, 12, 20, discordant_aed_only=2, discordant_baseline_only=8,
+            minimum_effect_of_interest=(0.6, 0.9),
+        )
+        unpaired = stats.flip_verdict(6, 20, 12, 20, minimum_effect_of_interest=(0.6, 0.9))
+        self.assertEqual(paired["test"], "mcnemar_exact_one_sided")
+        self.assertEqual(unpaired["test"], "fisher_exact_one_sided")
+        self.assertNotEqual(
+            paired["power_against_declared_effect"],
+            unpaired["power_against_declared_effect"],
+        )
 
 
 class TestPairing(unittest.TestCase):

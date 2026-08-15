@@ -373,7 +373,7 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Physical terminal designators bound to this logical pin, e.g. [\"1\"], [\"A3\"], [\"7\", \"EP\"]. More than one entry means the terminals are internally common and the exporter may tie them. Sorted ascending.",
+          "description": "Physical terminal designators bound to this logical pin, e.g. [\"1\"], [\"A3\"], [\"7\", \"EP\"]. More than one entry means the terminals are internally common and the exporter may tie them.\n\nORDERING: natural sort - shorter designators first, then bytewise within a length. So [\"2\", \"10\"] and [\"1\", \"40\", \"41\"] are ordered, and plain bytewise would wrongly put \"10\" before \"2\". Stated precisely because the linter (L13) enforces exactly this rule, and a documented ordering that the checker interprets differently is worse than none.",
           "items": {
             "type": "string",
             "minLength": 1

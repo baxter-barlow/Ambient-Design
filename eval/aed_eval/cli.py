@@ -134,6 +134,16 @@ def cmd_replay(args) -> int:
         primary_arm=transcript.get("primary_arm"),
         baseline_arm=transcript.get("baseline_arm"),
         paired_by=transcript.get("paired_by"),
+        # Carried from the transcript, which is where a PRE-REGISTERED
+        # effect size belongs: recorded with the run design, before any
+        # result exists. Dropping it here made flip_criterion_not_met
+        # unreachable through the only shipped entry point.
+        minimum_effect_of_interest=(
+            tuple(transcript["minimum_effect_of_interest"])
+            if transcript.get("minimum_effect_of_interest")
+            else None
+        ),
+        alpha=transcript.get("alpha", 0.05),
         notes=transcript.get("notes"),
     )
 
