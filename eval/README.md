@@ -103,10 +103,22 @@ be wrong. Two consequences:
 
 1. **Budget the §4 comparison from `plan`, before spending tokens.** At
    roughly 150K tokens per trial, sample size *is* cost.
-2. **Pair the arms.** Running both arms over the same seed set makes the
-   comparison paired, and the exact McNemar test detects a difference at a
-   materially smaller n than the unpaired Fisher test. `run_arm` takes a
-   shared seed set for exactly this reason.
+2. **Pairing would halve the cost, but only with a real blocking factor —
+   and matching seed numbers are not one.** A paired test assumes trial *i*
+   of each arm shares something that correlates their outcomes. In the AC5
+   protocol as specified, every trial of an arm runs the *same* prompt on the
+   *same* benchmark and differs only by provider sampling; the seed labels a
+   trial, it does not seed the model. So trial 3 of two arms share nothing
+   but an index, and McNemar would report precision the design has not
+   earned.
+
+   This was a real defect: `build_run_record` used to infer pairing from the
+   seed lists lining up. It now pairs only when a blocking factor is
+   explicitly named via `paired_by`, and the default is the unpaired Fisher
+   test. Pairing becomes legitimate the moment a genuine factor exists —
+   several distinct benchmark designs with both arms run over each — because
+   then trial *i* really does mean "the same design, both arms". If the
+   bake-off wants the cheaper comparison, that is the design change to make.
 
 `flip_verdict` is three-valued — `flip_criterion_met`,
 `flip_criterion_not_met`, `inconclusive`. That is a real outcome, not a

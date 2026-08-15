@@ -47,7 +47,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -59,7 +60,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -88,7 +90,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -100,7 +103,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -129,7 +133,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -141,7 +146,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -170,7 +176,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -182,7 +189,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -211,7 +219,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -223,7 +232,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -244,7 +254,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -256,7 +267,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -277,7 +289,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -289,7 +302,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -310,7 +324,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -322,7 +337,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -343,7 +359,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -355,7 +372,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -376,7 +394,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -388,7 +407,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -602,7 +622,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -614,7 +635,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -643,7 +665,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -655,7 +678,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -684,7 +708,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -696,7 +721,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -725,7 +751,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -737,7 +764,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -766,7 +794,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -778,7 +807,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -799,7 +829,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -811,7 +842,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -832,7 +864,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -844,7 +877,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -865,7 +899,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -877,7 +912,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -898,7 +934,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -910,7 +947,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -931,7 +969,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -943,7 +982,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -964,7 +1004,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -976,7 +1017,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -997,7 +1039,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -1009,7 +1052,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -1030,7 +1074,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -1042,7 +1087,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -1063,7 +1109,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -1075,7 +1122,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -1096,7 +1144,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -1108,7 +1157,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,
@@ -1129,7 +1179,8 @@
               "span": {
                 "column": 22,
                 "line": 3
-              }
+              },
+              "top_level_severity": null
             },
             {
               "code": "AED0410",
@@ -1141,7 +1192,8 @@
               "span": {
                 "column": 5,
                 "line": 4
-              }
+              },
+              "top_level_severity": null
             }
           ],
           "exit_code": 1,

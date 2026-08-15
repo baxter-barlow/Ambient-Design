@@ -2010,7 +2010,7 @@
       ]
     }
   },
-  "authoritative": false,
+  "authoritative": true,
   "flip_criterion": {
     "adequate_power_threshold": 0.8,
     "aed_rate": 0.8,
@@ -2026,7 +2026,7 @@
     "power_against_observed_effect": 0.001110000311551918,
     "primary_arm": "grammar_a",
     "test": "fisher_exact_one_sided",
-    "verdict": "flip_criterion_not_met"
+    "verdict": "inconclusive"
   },
   "gate": {
     "kind": "replay"
@@ -2047,10 +2047,7 @@
       "top_p": null
     }
   },
-  "non_authoritative_reasons": [
-    "tokenizer 'stub-whitespace' is non-gating",
-    "model source is 'replay', not a live pinned model"
-  ],
+  "non_authoritative_reasons": [],
   "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
   "purpose": "harness demonstration and offline regression fixture",
   "record_schema_version": 0,
@@ -2058,13 +2055,13 @@
   "run_id": "demo-replay-0",
   "tokenizer": {
     "fingerprint": "sha256:d2391615e95588b2b6e5e447c5d2989aad086c77607a453890b4731345fbb48d",
-    "gating": false,
+    "gating": true,
     "kind": "stub",
     "n_vocab": null,
     "name": "stub-whitespace"
   },
   "x_negative_control": {
     "expects": "REJECTED",
-    "guarantee_under_test": "'flip_criterion_not_met' asserts adequate power, meaningful only against an effect size declared BEFORE the run."
+    "guarantee_under_test": "A stub tokenizer is non-gating by construction, and an authoritative record cannot rest on a replayed model. Review forged exactly this record - kind=stub with gating flipped true - and it validated with zero errors, so the advertised schema-enforced safety property was enforced by nobody. Tying gating to kind and constraining model.kind removes the free variable a forger was flipping."
   }
 }

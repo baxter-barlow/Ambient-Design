@@ -225,6 +225,21 @@
     },
     {
       "if": {
+        "properties": { "tokenizer": { "properties": { "kind": { "const": "stub" } }, "required": ["kind"] } },
+        "required": ["tokenizer"]
+      },
+      "then": {
+        "properties": {
+          "tokenizer": {
+            "properties": { "gating": { "const": false } },
+            "required": ["gating"]
+          }
+        },
+        "$comment": "A stub tokenizer is non-gating by construction. Without this, `gating` was just a boolean a forger could flip: review demonstrated a hand-edited record with kind=stub, gating=true and authoritative=true validating with zero errors. Tying gating to kind removes the free variable."
+      }
+    },
+    {
+      "if": {
         "properties": { "authoritative": { "const": true } },
         "required": ["authoritative"]
       },
@@ -233,9 +248,15 @@
           "tokenizer": {
             "properties": { "gating": { "const": true } },
             "required": ["gating"]
+          },
+          "model": {
+            "properties": {
+              "kind": { "not": { "enum": ["replay", "scripted", "stub"] } }
+            },
+            "required": ["kind"]
           }
         },
-        "$comment": "An authoritative record cannot rest on a non-gating tokenizer. This is the schema-level backstop for the same rule the tokenizer module enforces in code."
+        "$comment": "An authoritative record cannot rest on a non-gating tokenizer OR on a replayed, scripted or stub model. results.py computes `authoritative` from both identities for records the harness builds, but the SCHEMA is what a third party checks a submitted record against — so the rule has to live in both places. It previously constrained only `tokenizer.gating`, which is exactly the boolean a forger would flip."
       }
     },
     {

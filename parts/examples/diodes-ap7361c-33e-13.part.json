@@ -83,8 +83,8 @@
         },
         "current": {
           "unit": "A",
-          "min": 0,
-          "max": 1.0
+          "min": -1.0,
+          "max": 0
         }
       },
       "capability": {
@@ -314,6 +314,14 @@
       "method": "manual",
       "note": "The 1 A dropout block publishes a typical and NO maximum, so no max is recorded. The features summary on page 1 quotes 360 mV at 1 A while this EC-table row says 340 mV; the EC table is taken as authoritative and the discrepancy is recorded in notes rather than averaged away. A dropout-margin check against a typ-only figure is not a guaranteed result and must be reported as such.",
       "target": "OUT"
+    },
+    "/pins/2/recommended/current": {
+      "source_id": "ap7361c-ds37274-rev5-2",
+      "locator": "Recommended Operating Conditions, IOUT row (0 to 1.0 A)",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "target": "OUT",
+      "note": "The datasheet states IOUT as a magnitude, 0 to 1.0 A. PinLimits uses the schema's signed convention where positive current flows INTO the pin, so delivering 1 A out of OUT is -1.0 A. Recorded signed here for consistency with every other PinLimits current in the corpus; the unsigned sourcing figure lives in capability.source_current, which is defined as a magnitude."
     },
     "/pins/2/recommended/voltage": {
       "source_id": "ap7361c-ds37274-rev5-2",

@@ -1,0 +1,54 @@
+{
+  "schema_version": 0,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "available",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public",
+      "byte_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "identity_version": "chv1+reg2026.08.0",
+      "retrieved_at": "2026-08-15T00:00:00Z",
+      "x_pdf": "JVBERi0xLjQKJcfsj6IKNSAwIG9iago8PC9MZW5ndGg..."
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "x_negative_control": {
+    "expects": "REJECTED",
+    "guarantee_under_test": "Source has NO ^x_ extension point, unlike every other object in the schema. With one, x_pdf could carry a base64 datasheet and still validate, so the no-redistribution guarantee would be enforced by nobody. Review found exactly this hole; this fixture is what keeps it shut."
+  }
+}

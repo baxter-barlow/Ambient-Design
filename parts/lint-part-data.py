@@ -28,6 +28,16 @@ Checks (each is a real defect that shape validation would let through):
   L10 the record's license_class is at least as restrictive as every
       source it cites, so republishing the record cannot leak a fact out
       of the licence it arrived under.
+  L11 a provenance pointer addressing an element of a SORTED array echoes
+      that element's identity. Without it, renaming one mode re-sorts the
+      array and silently re-points every index-based citation at a
+      different element - the pointer still resolves, so L1 cannot see it.
+  L12 a pin's recommended window sits inside its absolute-maximum window.
+      This containment is what makes abs_max mean anything; JSON Schema
+      cannot compare two sibling objects.
+  L13 physical designators are in ascending order, matching the ordering
+      the schema documents. Documented and unchecked is how an ordering
+      rule quietly stops being true.
 
 Usage:
     lint-part-data.py [path ...]      lint records (default: parts/examples)
@@ -265,6 +275,47 @@ def lint(doc, label):
         for (ka, va), (kb, vb) in zip(ordered, ordered[1:]):
             if va > vb:
                 bad("L9", f"{path}: {ka}={va} exceeds {kb}={vb}")
+        # `peak` sits outside the min/typ/max ordering because it is not a
+        # guaranteed bound, but it still cannot fall below a guaranteed
+        # minimum: an observed peak under the floor the vendor promises is
+        # a transcription error, not a fact about the part.
+        peak, lo = measure.get("peak"), measure.get("min")
+        if isinstance(peak, (int, float)) and isinstance(lo, (int, float)) and peak < lo:
+            bad("L9", f"{path}: peak={peak} is below the guaranteed min={lo}")
+
+    # L12: a recommended window must sit inside its absolute-maximum window.
+    # This is the containment that makes abs_max meaningful at all - a part
+    # recommended to operate outside its own damage threshold is a defect in
+    # the record, and no schema keyword can compare two sibling objects.
+    for pin in pins:
+        limits_abs, limits_rec = pin.get("abs_max") or {}, pin.get("recommended") or {}
+        for quantity in ("voltage", "current"):
+            a, r = limits_abs.get(quantity), limits_rec.get(quantity)
+            if not (isinstance(a, dict) and isinstance(r, dict)):
+                continue
+            a_lo, a_hi = a.get("min"), a.get("max")
+            for key in ("min", "typ", "max"):
+                value = r.get(key)
+                if not isinstance(value, (int, float)):
+                    continue
+                if isinstance(a_lo, (int, float)) and value < a_lo:
+                    bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} "
+                               f"{key}={value} is below abs_max min={a_lo}")
+                if isinstance(a_hi, (int, float)) and value > a_hi:
+                    bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} "
+                               f"{key}={value} exceeds abs_max max={a_hi}")
+
+    # L13: physical designators are documented as sorted ascending, for the
+    # same determinism reason as every other ordering here. Documented and
+    # unchecked is how an ordering rule quietly stops being true.
+    for pin in pins:
+        numbers = pin.get("numbers", [])
+        if numbers != sorted(numbers, key=lambda n: (len(str(n)), str(n))):
+            bad(
+                "L13",
+                f"pin {pin.get('name')!r}: numbers {numbers} are not in ascending "
+                "order (natural sort: shorter designators first, then bytewise)",
+            )
 
     # L10
     record_rank = LICENSE_RANK.get(doc.get("license_class"))
@@ -371,6 +422,11 @@ def self_test():
         ("L10", "source stricter than record", mutate(lambda d: d["sources"][0].__setitem__("license_class", "vendor-agreement"))),
         ("L11", "indexed citation with no target echo", mutate(lambda d: set_provenance_key(d, "/modes/0"))),
         ("L11", "indexed citation whose target no longer matches", mutate(lambda d: d["provenance"].__setitem__("/modes/0", {"source_id": "acme-ds", "confidence": "datasheet-stated", "method": "manual", "target": "some_other_mode"}))),
+        ("L11", "nested citation into a pin subtree with no target", mutate(lambda d: set_provenance_key(d, "/pins/0/role"))),
+        ("L9", "peak below the guaranteed minimum", mutate(lambda d: d["modes"][0]["draw"][0]["current"].update({"peak": 0.5}))),
+        ("L12", "recommended voltage above the absolute maximum", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "V", "min": -0.5, "max": 7}}, "recommended": {"voltage": {"unit": "V", "min": 2, "typ": 5, "max": 9}}}))),
+        ("L12", "recommended voltage below the absolute minimum", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "V", "min": 0, "max": 7}}, "recommended": {"voltage": {"unit": "V", "min": -3, "max": 5}}}))),
+        ("L13", "physical designators out of ascending order", mutate(lambda d: d["pins"][0].__setitem__("numbers", ["9", "3"]))),
     ]
 
     failures = 0
