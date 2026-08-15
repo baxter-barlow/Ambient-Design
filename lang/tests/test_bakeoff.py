@@ -525,6 +525,45 @@ class DefectCorpus(unittest.TestCase):
                 )
 
 
+class ReservedWords(unittest.TestCase):
+    """A keyword used as a name must say so, not blame the next token."""
+
+    SOURCES = {
+        "candidate_a": '#pragma language "0.1.0"\n\nmodule M:\n'
+        "    signal = new aed.lib.passive.Resistor\n",
+        "candidate_b": '#pragma language "0.1.0"\n\nmodule M:\n'
+        "    net = new aed.lib.passive.Resistor(resistance = 1kohm)\n",
+    }
+
+    def test_reserved_word_as_an_instance_name_is_named_as_such(self):
+        for key, source in self.SOURCES.items():
+            with self.subTest(arm=key):
+                with self.assertRaises(ParseFailure) as caught:
+                    ARMS[key].parse(source, "inferred")
+                diagnostic = caught.exception.diagnostics[0]
+                self.assertTrue(diagnostic.code.endswith("0212"))
+                self.assertIn("reserved word", diagnostic.message)
+                self.assertEqual(diagnostic.span.line, 4)
+
+    def test_both_candidates_reserve_the_same_words(self):
+        """A word reserved by one and not the other would break agreement."""
+        from bakeoff.arms.base import RESERVED
+
+        for word in ("module", "net", "signal", "table", "part", "abstract"):
+            with self.subTest(word=word):
+                self.assertIn(word, RESERVED)
+
+    def test_the_cards_list_the_reserved_words(self):
+        from bakeoff.arms.base import RESERVED
+
+        for arm in CANDIDATES:
+            card = arm.language_card()
+            with self.subTest(arm=arm.key):
+                self.assertIn("Reserved words", card)
+                for word in sorted(RESERVED):
+                    self.assertIn(word, card)
+
+
 class Gates(unittest.TestCase):
     """The adapters AMB-33 drives through the AC5 protocol."""
 
@@ -641,6 +680,32 @@ class Elaboration(unittest.TestCase):
         # must land on OUT along with the resistor inside the module.
         self.assertIn(("/indicator", "ctl"), members)
         self.assertIn(("/indicator/r_lim", "a"), members)
+
+    def test_two_instantiations_colliding_on_a_net_name_are_rejected(self):
+        """The silent-wrong-answer case, caught rather than guessed at.
+
+        A module instantiated twice gives each copy its own internal net, both
+        carrying the label the module wrote. Emitting two nets with one name
+        would let any backend that keys on name fuse them into a single node —
+        a wrong netlist that nothing downstream could detect. Deriving unique
+        names is I2's rule (AMB-62/R27), so this refuses instead.
+        """
+        import copy
+
+        document = json.loads(json.dumps(model_to_json(CORPUS["blinker-555"])))
+        root = next(m for m in document["modules"] if m["name"] == "Blinker555")
+        second = copy.deepcopy(
+            next(i for i in root["instances"] if i["name"] == "indicator")
+        )
+        second["name"] = "indicator2"
+        root["instances"].append(second)
+        root["nets"].append({"name": "OUT2", "members": ["indicator2.ctl"]})
+        next(n for n in root["nets"] if n["name"] == "GND")["members"].append(
+            "indicator2.gnd"
+        )
+        with self.assertRaises(AnchorError) as caught:
+            flatten(model_from_json(document))
+        self.assertIn("same name", str(caught.exception))
 
     def test_an_unlabelled_flattened_net_is_an_error(self):
         document = json.loads(json.dumps(model_to_json(CORPUS["blinker-555"])))
