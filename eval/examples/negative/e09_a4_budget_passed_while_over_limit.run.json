@@ -4,7 +4,7 @@
       "system_context": 27,
       "task_prompt": 31
     },
-    "headroom": 11942,
+    "headroom": -52000,
     "limit": 12000,
     "passed": true,
     "tokenizer": {
@@ -14,7 +14,7 @@
       "n_vocab": null,
       "name": "stub-whitespace"
     },
-    "total": 58
+    "total": 64000
   },
   "ac5_gate": {
     "arm": "grammar_a",
@@ -2064,6 +2064,7 @@
     "paired": false,
     "paired_by": null,
     "power_against_declared_effect": null,
+    "power_against_observed_effect": 0.001110000311551918,
     "primary_arm": "grammar_a",
     "test": "fisher_exact_one_sided",
     "verdict": "inconclusive"
@@ -2105,6 +2106,6 @@
   },
   "x_negative_control": {
     "expects": "REJECTED",
-    "guarantee_under_test": "The flip criterion must report the power it had."
+    "guarantee_under_test": "A budget block claiming to have passed must show non-negative headroom. It was previously stored verbatim from the caller and never checked, so a record could assert a 64K context passed a 12K limit and validate cleanly."
   }
 }

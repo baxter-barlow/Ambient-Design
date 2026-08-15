@@ -293,6 +293,14 @@ def lint(doc, label):
             a, r = limits_abs.get(quantity), limits_rec.get(quantity)
             if not (isinstance(a, dict) and isinstance(r, dict)):
                 continue
+            # Never compare across units. Millivolts against volts would
+            # both false-positive on a legitimate record and, worse, miss
+            # real over-stress by a factor of a thousand.
+            if a.get("unit") != r.get("unit"):
+                bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} is in "
+                           f"{r.get('unit')!r} but abs_max is in {a.get('unit')!r}; "
+                           "containment cannot be checked across units")
+                continue
             a_lo, a_hi = a.get("min"), a.get("max")
             for key in ("min", "typ", "max"):
                 value = r.get(key)

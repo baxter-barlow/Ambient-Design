@@ -53,28 +53,34 @@ def extract_source(text: str) -> str | None:
     failing snippet before presenting the corrected file, so taking the
     first block would grade the wrong artifact.
 
-    Returns None when there is no usable block. Two cases:
+    Returns None when there is no fenced block at all — the model answered
+    in prose. That is a real emission failure, recorded as one, never
+    silently treated as the whole response body.
 
-    1. No fenced block at all — the model answered in prose. A real
-       emission failure, recorded as one, never silently treated as the
-       whole response body.
-
-    2. An UNTERMINATED trailing fence, which means the response hit the
-       token limit mid-block. This case is the subtle one: the truncated
-       reply typically still contains an earlier, complete, deliberately-
-       quoted BROKEN snippet, so "last complete block" would happily grade
-       the model's quotation of its own bug and score a truncation as a
-       content failure. Since a truncated emission is a budget problem
-       rather than a language problem, conflating them would quietly bias
-       the bake-off against whichever grammar is more verbose — precisely
-       the thing being measured.
+    TRUNCATION IS DELIBERATELY NOT DECIDED HERE. It is a separate question
+    with a better answer (`stop_reason`), and folding it in cost real
+    accuracy: a design that legitimately contains a fence marker inside a
+    comment or string makes the backtick count odd, and this function would
+    have discarded a complete, gate-passing emission as truncated. See
+    `unterminated_fence`, which run_trial consults only as a fallback.
     """
-    if text.count("```") % 2 == 1:
-        return None
     blocks = _FENCE.findall(text)
     if not blocks:
         return None
     return blocks[-1].strip("\n")
+
+
+def unterminated_fence(text: str) -> bool:
+    """Heuristic: does the text end inside an unclosed fenced block?
+
+    Only a FALLBACK. Where the provider reports `stop_reason`, that is
+    authoritative and this is not consulted, because the heuristic has a
+    real false positive: a design that legitimately contains a fence marker
+    inside a comment or string makes the count odd, and treating that as a
+    truncation would discard a complete, gate-passing emission and score it
+    as a failed trial - biasing the very rate being measured, in the
+    opposite direction from the bug it was added to fix."""
+    return text.count("```") % 2 == 1
 
 
 @dataclass
@@ -120,12 +126,17 @@ class Iteration:
     source_extracted: bool
     gate: GateResult | None
     cumulative_tokens: int
+    # A truncated reply and a prose-only answer are different failures: one
+    # is a token-budget problem, the other a comprehension problem, and a
+    # bake-off that conflated them would misattribute the cause.
+    truncated: bool = False
 
     def as_dict(self) -> dict:
         return {
             "index": self.index,
             "response": self.response.as_dict(),
             "source_extracted": self.source_extracted,
+            "truncated": self.truncated,
             "gate": self.gate.as_dict() if self.gate else None,
             "cumulative_tokens": self.cumulative_tokens,
         }
@@ -240,12 +251,18 @@ def run_trial(config: TrialConfig, model, gate, seed: int, workdir=None) -> Tria
         # block grades a file the model did not propose. `stop_reason` was
         # recorded but never read, which let a truncation be scored as a
         # PASS and biased the headline rate upward.
-        truncated = str(response.stop_reason or "").lower() == "max_tokens"
+        stop = str(response.stop_reason or "").lower()
+        if stop == "max_tokens":
+            truncated = True          # provider-reported: authoritative
+        elif stop:
+            truncated = False         # a clean stop is a complete response
+        else:
+            truncated = unterminated_fence(response.text)  # fallback only
         source = None if truncated else extract_source(response.text)
 
         if source is None:
             iterations.append(
-                Iteration(cycle, response, False, None, cumulative)
+                Iteration(cycle, response, False, None, cumulative, truncated=truncated)
             )
             # An unparseable response still consumed budget and still counts
             # as a cycle; the model is told what went wrong and may retry
@@ -267,7 +284,9 @@ def run_trial(config: TrialConfig, model, gate, seed: int, workdir=None) -> Tria
             continue
 
         gate_result = gate.check(source, workdir)
-        iterations.append(Iteration(cycle, response, True, gate_result, cumulative))
+        iterations.append(
+            Iteration(cycle, response, True, gate_result, cumulative, truncated=False)
+        )
 
         # Conjunctive budget: passing the gate is necessary, not sufficient.
         if cumulative > config.token_budget:
@@ -281,6 +300,9 @@ def run_trial(config: TrialConfig, model, gate, seed: int, workdir=None) -> Tria
         messages.append({"role": "assistant", "content": response.text})
         messages.append({"role": "user", "content": build_repair_message(gate_result)})
 
+    if iterations and all(i.truncated for i in iterations):
+        # Every cycle was cut off: a budget failure, not a language failure.
+        return TrialResult(seed, False, "truncated", iterations, cumulative)
     return TrialResult(
         seed, False, "iteration_budget_exhausted", iterations, cumulative
     )

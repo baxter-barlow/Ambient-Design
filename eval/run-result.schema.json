@@ -580,6 +580,61 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "a4_context_budget": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            },
+            "required": [
+              "passed"
+            ]
+          }
+        },
+        "required": [
+          "a4_context_budget"
+        ]
+      },
+      "then": {
+        "properties": {
+          "a4_context_budget": {
+            "properties": {
+              "headroom": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "headroom",
+              "total",
+              "limit"
+            ]
+          }
+        },
+        "$comment": "A budget block claiming to have passed must show non-negative headroom. The block was previously stored verbatim from the caller and never checked, so a record could assert that a 64K-token context passed a 12K limit and validate cleanly - the exact exploit the A4 fix was written to close."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "authoritative": {
+            "const": true
+          }
+        },
+        "required": [
+          "authoritative"
+        ]
+      },
+      "then": {
+        "required": [
+          "a4_context_budget"
+        ],
+        "$comment": "AC5a is gated on the model seeing ONLY the <=12K A4 context, so an authoritative record must carry the measurement. Omitting it was the other half of the same exploit: no measurement, nothing to contradict."
+      }
     }
   ]
 }
