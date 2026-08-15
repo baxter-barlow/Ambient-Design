@@ -113,7 +113,7 @@
     },
     "license_class": {
       "$ref": "#/$defs/LicenseClass",
-      "description": "License basis under which this record's facts may be published. Record-level; a source whose license class is more restrictive than the record's is a defect the linter rejects."
+      "description": "License basis under which this record's facts as a whole may be published.\n\nPER-FIELD LICENSE CLASS IS DERIVED, NOT DUPLICATED. D3 asks for a license class per field. Every field already resolves to a source through `provenance` (longest-prefix pointer match), and every source carries its own `license_class`, so the class applying to any individual value is exactly:\n\n    field pointer -> provenance entry -> source_id -> sources[].license_class\n\nStoring it a second time on each field would let the two copies disagree, and a record whose per-field licence contradicts its cited source is worse than one that has to be looked up. The record-level value here is the CEILING for the whole record; linter check L10 rejects any record citing a source more restrictive than that ceiling, which is what makes the derivation safe to rely on."
     },
     "notes": {
       "type": "string",

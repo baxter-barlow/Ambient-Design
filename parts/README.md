@@ -60,6 +60,15 @@ prefix — so `""` is a record-wide default and a deeper pointer overrides it.
 Wrapping every value in a `{value, provenance}` pair was the alternative; it
 doubles the depth of the document and makes the data unreadable.
 
+**Per-field license class is derived rather than stored.** D3 asks for a
+license class per field. Each field resolves to a source through
+`provenance`, and each source carries its own `license_class`, so the class
+for any value is `field pointer → provenance → source_id → license_class`.
+Storing it again on every field would let the two copies disagree. The
+record-level `license_class` is the ceiling, and linter check L10 rejects a
+record that cites a source more restrictive than its ceiling — which is what
+makes the derivation safe to rely on.
+
 **Confidence is ordinal, not numeric.** `datasheet-stated` /
 `datasheet-derived` / `vendor-confirmed` / `estimated` / `unverified`. A
 0-to-1 score would be false precision nobody can calibrate. The distinction
