@@ -1,0 +1,56 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "n",
+  "root_module": "M",
+  "modules": [
+    {
+      "name": "M",
+      "qualified_name": "n.M",
+      "ports": [],
+      "instances": [
+        {
+          "name": "r1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": {
+              "q": "10kohm +/- 1%"
+            }
+          },
+          "ports": [
+            {
+              "name": "a",
+              "role": "passive"
+            },
+            {
+              "name": "b",
+              "role": "passive"
+            }
+          ]
+        },
+        {
+          "name": "sub",
+          "kind": "module",
+          "definition": "M2",
+          "ports": [
+            {
+              "name": "p",
+              "role": "passive"
+            }
+          ]
+        }
+      ],
+      "nets": [
+        {
+          "name": "N",
+          "members": [
+            "r1.a",
+            "r1.b"
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": "EXPECTED-INVALID control: a module instance's interface is its definition's, and repeating it lets the two disagree."
+}

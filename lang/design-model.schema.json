@@ -1,0 +1,459 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/aed/schemas/design-model/0.schema.json",
+  "title": "AED Bake-off Design Model v0",
+  "description": "ARM-NEUTRAL description of one design, used only by the §8-Q1 syntax bake-off (issue AMB-32 / roadmap R5b). It is the thing every candidate grammar and the Starlark baseline must express, so that a token-cost comparison between them is a comparison of GRAMMARS rather than of designs. Each arm renders a model to source and parses source back to a model; the round trip and the cross-arm agreement are what make the numbers comparable.\n\nTHIS IS NOT THE IR. ir/netlist-ir.schema.json describes a fully ELABORATED design: flattened nets, resolved parameters, content hashes, generator metadata. This describes SOURCE-LEVEL facts before elaboration: module definitions, their instances, their local nets. The vocabularies that both share — pin roles, hardware kinds, measurement kinds, path-safe identifiers — are deliberately identical, and lang/tests/test_bakeoff.py fails if they ever drift apart.\n\nTHIS IS A THROWAWAY FIXTURE FORMAT. R5b's prototypes are explicitly disposable; the frozen grammar's real source of truth lands in AMB-33/R6 and the living benchmark sources in AMB-50/R53. Nothing outside lang/ may depend on this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "model_version",
+    "stability",
+    "design_id",
+    "root_module",
+    "modules"
+  ],
+  "properties": {
+    "model_version": {
+      "type": "integer",
+      "const": 0,
+      "description": "Integer schema version. Any shape change bumps it. Held at 0 for the whole of M0."
+    },
+    "stability": {
+      "type": "string",
+      "const": "unstable",
+      "description": "Constant, and deliberately not a free field: a bake-off fixture format can never be a contract. A model claiming stability is rejected here rather than in review."
+    },
+    "design_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*(?![\\s\\S])",
+      "description": "Stable kebab-case identifier for this design, used as the corpus key and in report output, e.g. \"blinker-555\"."
+    },
+    "root_module": {
+      "$ref": "#/$defs/Identifier",
+      "description": "Name of the module definition in `modules` that is the top of this design. Every other module must be reachable from it by instantiation; an unreachable definition is dead weight in a token-cost measurement and is rejected by the loader."
+    },
+    "source_benchmark": {
+      "type": "string",
+      "pattern": "^benchmarks/[a-z0-9-]+(?![\\s\\S])",
+      "description": "Repository-relative directory of the benchmark reference design this model transcribes (authored under AMB-39). Present when the model is a transcription rather than an invention; the loader cross-checks the transcription against that directory's committed artifacts, so a fixture cannot quietly drift from the design it claims to represent."
+    },
+    "anchor": {
+      "$ref": "#/$defs/Anchor",
+      "description": "Optional external artifact this model is checked against. An anchor authored by a DIFFERENT issue is the only defence against a bake-off whose reference was tailored to its own parsers."
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ModuleDef" },
+      "description": "All module definitions, sorted bytewise-ascending by `name` (the loader enforces the order, so two models describing the same design serialize identically)."
+    },
+    "assertions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Assertion" },
+      "description": "Design assertions declared on the root module, sorted bytewise-ascending by `name`. Assertion syntax is part of the surface under test, so the corpus carries real ones."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-text provenance: where the connectivity came from, what was inferred, what was deliberately left out."
+    }
+  },
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?![\\s\\S])",
+      "description": "A DSL identifier. Same production in every arm: identifier spelling is not one of the axes under test, so holding it constant keeps the token comparison honest."
+    },
+    "QualifiedName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*(?![\\s\\S])",
+      "description": "Dotted definition name, matching the IR's `Instance.definition` production exactly, e.g. \"aed.lib.passive.Resistor\"."
+    },
+    "NetName": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?![\\s\\S])",
+      "description": "Explicit net label. The IR permits '.' and '/' in derived net names; a model only ever carries labels a human wrote, which are plain identifiers."
+    },
+    "Quantity": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?[A-Za-z][A-Za-z0-9/]*( \\+/- (0|[1-9][0-9]*)(\\.[0-9]+)?([A-Za-z][A-Za-z0-9/]*|%)| \\(-?(0|[1-9][0-9]*)(\\.[0-9]+)?[A-Za-z][A-Za-z0-9/]* to -?(0|[1-9][0-9]*)(\\.[0-9]+)?[A-Za-z][A-Za-z0-9/]*\\)| to -?(0|[1-9][0-9]*)(\\.[0-9]+)?[A-Za-z][A-Za-z0-9/]*)?(?![\\s\\S])",
+      "description": "A dimensioned literal in the SHARED quantity mini-language. Five forms, all of them T4 value kinds:\n  `100kohm`                        exact\n  `100kohm +/- 1%`                 symmetric relative tolerance\n  `2.0V +/- 0.2V`                  symmetric absolute tolerance\n  `9.5mA (8.0mA to 10.5mA)`        nominal with an asymmetric interval\n  `3.0V to 3.6V`                   interval with no nominal\nHeld IDENTICAL across all arms on purpose — T3 fixes literals as value-exact with a canonical SI normal form, so literal spelling is settled by requirement and is not an A/B axis; letting it vary would charge one candidate for a decision that is not its to make. ASCII only (L5): the tolerance sign is `+/-`, never U+00B1. There is no exponent form, so every literal has exactly one spelling. The decimal text is preserved exactly and compared as an exact decimal, never as a float, so 0.1 means 0.1."
+    },
+    "Value": {
+      "description": "A parameter or constraint value. Exactly one form, tagged by key: `q` dimensioned quantity, `s` symbolic string, `i` exact integer, `b` flag. Mirrors the IR's ParameterValue oneOf, but tagged rather than inferred from the JSON type — an untagged \"0805\" and an untagged 805 are one typo apart, and the tag makes that unrepresentable.",
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["q"] },
+        { "required": ["s"] },
+        { "required": ["i"] },
+        { "required": ["b"] }
+      ],
+      "properties": {
+        "q": { "$ref": "#/$defs/Quantity" },
+        "s": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[\\x20-\\x7e]*(?![\\s\\S])",
+          "description": "Symbolic value, e.g. a package code. Printable ASCII only (L5)."
+        },
+        "i": {
+          "type": "integer",
+          "description": "Exact dimensionless count."
+        },
+        "b": {
+          "type": "boolean",
+          "description": "Flag value."
+        }
+      }
+    },
+    "ValueMap": {
+      "type": "object",
+      "description": "Map from parameter name to value. Key order in the file is irrelevant; the loader sorts.",
+      "propertyNames": { "$ref": "#/$defs/Identifier" },
+      "additionalProperties": { "$ref": "#/$defs/Value" }
+    },
+    "PinRole": {
+      "type": "string",
+      "enum": [
+        "power_in",
+        "power_out",
+        "passive",
+        "bidirectional",
+        "open_drain",
+        "open_collector",
+        "tri_state",
+        "input",
+        "output",
+        "nc"
+      ],
+      "description": "T2 pin-role lattice. MUST stay identical member-for-member to ir/netlist-ir.schema.json#/$defs/PinRole — lang/tests/test_bakeoff.py reads both files and fails on any divergence, so the two cannot drift silently the way two hand-maintained enums otherwise do."
+    },
+    "HardwareKind": {
+      "type": "string",
+      "enum": [
+        "mounting_hole",
+        "fiducial",
+        "artwork",
+        "test_point",
+        "grounded_mounting_hole"
+      ],
+      "description": "L9 fabrication-reality classification. Identical member-for-member to the IR's Instance.hardware_kind enum, checked by the same conformance test as PinRole."
+    },
+    "Port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role"],
+      "properties": {
+        "name": { "$ref": "#/$defs/Identifier" },
+        "role": { "$ref": "#/$defs/PinRole" },
+        "pin_numbers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_]+(?![\\s\\S])",
+            "description": "Physical pin designator on the footprint, e.g. \"1\", \"A3\", \"EP\"."
+          },
+          "description": "Footprint pins bound to this logical port; several means they are internally common (paired GND pins). Components only — a module port has no physical pin. Sorted by the loader."
+        }
+      }
+    },
+    "PartBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reference-only part binding (D1), matching the IR's discriminated shape. The model never inlines part data.\n\nA RESOLVED part may carry constraints as well as a key — the IR keeps them as the provenance record of what the pick was required to satisfy, so that re-resolution has to be explicit rather than silent. An earlier draft used `oneOf` here and rejected exactly that, which the 555's resolved-with-constraints binding caught.",
+      "required": ["binding"],
+      "properties": {
+        "binding": {
+          "type": "string",
+          "enum": ["abstract", "resolved"],
+          "description": "\"abstract\": only the constraint set is known. \"resolved\": pinned in the parts lockfile."
+        },
+        "constraints": {
+          "allOf": [{ "$ref": "#/$defs/ValueMap" }],
+          "minProperties": 1,
+          "description": "Constraint set the part must satisfy."
+        },
+        "lockfile_key": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[\\x20-\\x7e]+(?![\\s\\S])",
+          "description": "Opaque stable key into the design's parts lockfile."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "binding": { "const": "abstract" } },
+            "required": ["binding"]
+          },
+          "then": {
+            "required": ["constraints"],
+            "properties": { "lockfile_key": false }
+          }
+        },
+        {
+          "if": {
+            "properties": { "binding": { "const": "resolved" } },
+            "required": ["binding"]
+          },
+          "then": { "required": ["lockfile_key"] }
+        }
+      ]
+    },
+    "InstanceDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "definition"],
+      "description": "One member of a module: either a component leaf or a nested module instantiation.",
+      "properties": {
+        "name": { "$ref": "#/$defs/Identifier" },
+        "kind": {
+          "type": "string",
+          "enum": ["component", "module"],
+          "description": "Matches the IR's Instance.kind."
+        },
+        "definition": {
+          "$ref": "#/$defs/QualifiedName",
+          "description": "For kind=module, the `name` of another entry in `modules`. For kind=component, the library-qualified component name."
+        },
+        "parameters": { "$ref": "#/$defs/ValueMap" },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Port" },
+          "description": "Component ports with their T2 roles and footprint pins. Omitted for kind=module: a module instance's interface is its definition's `ports`, and repeating it would let the two disagree."
+        },
+        "part": { "$ref": "#/$defs/PartBinding" },
+        "hardware_kind": { "$ref": "#/$defs/HardwareKind" },
+        "dnp": {
+          "type": "boolean",
+          "description": "L9 do-not-populate. Absent means false; the renderer emits the attribute only when true, so the token cost of a flag is the cost of the ones that are actually set."
+        },
+        "exclude_from_bom": { "type": "boolean" },
+        "board_only": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "module" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "part": false,
+              "hardware_kind": false,
+              "ports": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "hardware_kind": {
+                "enum": ["mounting_hole", "fiducial", "artwork"]
+              }
+            },
+            "required": ["hardware_kind"]
+          },
+          "then": {
+            "properties": { "ports": { "type": "array", "maxItems": 0 } }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "hardware_kind": {
+                "enum": ["test_point", "grounded_mounting_hole"]
+              }
+            },
+            "required": ["hardware_kind"]
+          },
+          "then": {
+            "properties": {
+              "ports": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["role"],
+                  "properties": { "role": { "const": "passive" } }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PortRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?(?![\\s\\S])",
+      "description": "A connection endpoint inside a module. `instance.port` names a child's port; a bare identifier names one of THIS module's own declared ports, which is how an internal net reaches the enclosing scope."
+    },
+    "NetDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members"],
+      "description": "A net local to one module definition.\n\nA net is an equivalence class of ports, so an UNLABELLED net's identity is exactly its member set — which is why `name` is optional. Modelling every net as labelled would have been simpler and would have quietly rigged the measurement: a two-member link like `ctl ~ r_lim.a` costs one line in a pin-to-pin grammar and three in a label-then-attach grammar, so forcing a label on it charges one candidate for a modelling artifact rather than for its own syntax. Labels appear where a human would write one (rails, named signals) and nowhere else.\n\nWhat is NOT modelled here is DERIVED naming — the rule that invents a name for an unlabelled net. That is I2's stable-identity problem, and letting each arm apply its own rule would make cross-arm comparison depend on the rule rather than on the syntax.",
+      "properties": {
+        "name": {
+          "allOf": [{ "$ref": "#/$defs/NetName" }],
+          "description": "Explicit label, when the design gives the net one. Absent means an unlabelled net identified by its members."
+        },
+        "members": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/PortRef" },
+          "description": "Endpoints joined by this net, sorted by the loader. A single-member net is legal and intentional (L9b): H2-H4 in benchmark (c) exist to exercise exactly that rule."
+        },
+        "ground_domain": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Optional T5 ground-domain label, carried through to the IR's Net.ground_domain."
+        },
+        "voltage_domain": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Optional T5 voltage-domain label, carried through to the IR's Net.voltage_domain."
+        }
+      }
+    },
+    "ModuleDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "qualified_name"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Name the DSL source declares and instantiates, unique across `modules`."
+        },
+        "qualified_name": {
+          "$ref": "#/$defs/QualifiedName",
+          "description": "Fully qualified definition name this module elaborates to in the IR (e.g. \"aed.lib.display.LedIndicator\"). Recorded so a model can be checked against an IR anchor whose `definition` fields are qualified, without putting import syntax — L4's business, not L5's — into the bake-off."
+        },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Port" },
+          "description": "This module's own interface. A port here has no `pin_numbers`."
+        },
+        "instances": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InstanceDef" },
+          "description": "Members, sorted bytewise-ascending by `name` by the loader."
+        },
+        "nets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NetDef" },
+          "description": "Local nets, sorted bytewise-ascending by `name` by the loader."
+        }
+      }
+    },
+    "MeasurementKind": {
+      "type": "string",
+      "enum": [
+        "operating_point",
+        "ripple",
+        "frequency",
+        "period",
+        "duty_cycle",
+        "gain",
+        "bandwidth",
+        "rise_time",
+        "fall_time",
+        "prop_delay",
+        "settling_time",
+        "overshoot",
+        "power_avg",
+        "power_rms",
+        "efficiency"
+      ],
+      "description": "V2 measurement vocabulary, v1 — CLOSED. Identical member-for-member to the IR's MeasurementKind, checked by the same conformance test as PinRole."
+    },
+    "Assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "tier", "measurement", "subject", "bounds"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/Identifier",
+          "description": "Assertion name as written in source; becomes the IR assertion's path segment."
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["static", "dynamic"],
+          "description": "Matches the IR's Assertion.tier."
+        },
+        "measurement": { "$ref": "#/$defs/MeasurementKind" },
+        "subject": {
+          "$ref": "#/$defs/NetName",
+          "description": "Net probed by this assertion. The IR's Probe also admits port and instance forms; the bake-off corpus only needs the net form, and admitting forms the corpus never exercises would put untested syntax into every arm's grammar."
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unit"],
+          "anyOf": [{ "required": ["min"] }, { "required": ["max"] }],
+          "description": "Acceptance bounds; at least one of min/max, both means a closed interval. Matches the IR's AssertionBounds.",
+          "properties": {
+            "unit": {
+              "type": "string",
+              "pattern": "^([A-Za-z][A-Za-z0-9/]*|1)(?![\\s\\S])",
+              "description": "Unit of both bounds; \"1\" for dimensionless."
+            },
+            "min": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?(?![\\s\\S])",
+              "description": "Inclusive lower bound as EXACT DECIMAL TEXT, not a JSON number. A bound of 0.932 Hz that round-trips through an IEEE double is no longer 0.932, and an assertion window is precisely where that must not happen (T3 value-exactness)."
+            },
+            "max": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?(?![\\s\\S])",
+              "description": "Inclusive upper bound as exact decimal text."
+            }
+          }
+        }
+      }
+    },
+    "Anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "description": "An external artifact this model is verified against, so the bake-off's reference cannot be quietly reshaped to suit its own parsers.",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["netlist-ir", "parts-yaml"],
+          "description": "\"netlist-ir\": the model, elaborated and flattened, must reproduce that IR document's instances, nets, connections and assertions. \"parts-yaml\": the model's component set must match that BOM's refdes/dnp population exactly."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._/-]*(?![\\s\\S])",
+          "description": "Repository-relative path of the anchor artifact."
+        },
+        "refdes_map": {
+          "type": "object",
+          "description": "For a parts-yaml anchor: map from BOM refdes (e.g. \"C12\") to this model's instance path (e.g. \"/c12\"). Explicit rather than derived by lowercasing, so a BOM entry that no instance covers is a hard error instead of a silent near-miss.",
+          "propertyNames": { "pattern": "^[A-Za-z]+[0-9]+(?![\\s\\S])" },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(/[A-Za-z_][A-Za-z0-9_]*)+(?![\\s\\S])"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "parts-yaml" } },
+            "required": ["kind"]
+          },
+          "then": { "required": ["refdes_map"] }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "netlist-ir" } },
+            "required": ["kind"]
+          },
+          "then": { "properties": { "refdes_map": false } }
+        }
+      ]
+    }
+  }
+}
