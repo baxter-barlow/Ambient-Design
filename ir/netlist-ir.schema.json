@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/aed/schemas/netlist-ir/0.schema.json",
+  "title": "AED Netlist IR v0",
+  "description": "Versioned JSON intermediate representation of a fully elaborated AED design. This is the single artifact consumed by ALL backends (KiCad export, SPICE emission, rendering, BOM, diagnostics). It is inspectable and versioned, but carries NO external stability promise in v1.0 (requirement P7): only AED's own toolchain may depend on its shape. The document is a canonical serialization: object keys in the fixed order given by this schema, arrays sorted as described on each field, UTF-8, no wall-clock timestamps or host-specific data anywhere (determinism contract). Extension points are restricted to properties matching ^x_ where explicitly allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x_": {
+      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members."
+    }
+  },
+  "required": ["header", "instances", "nets", "connections", "assertions"],
+  "properties": {
+    "header": {
+      "$ref": "#/$defs/Header",
+      "description": "Version, identity, and deterministic-generation metadata for this IR document."
+    },
+    "instances": {
+      "type": "array",
+      "description": "Every elaborated instance (modules and components) in the design, as a FLAT list. Hierarchy is encoded purely in the `path` field: an instance's parent is the longest strict path prefix that is itself an instance path. Sorted bytewise-ascending by `path` (determinism contract).",
+      "items": { "$ref": "#/$defs/Instance" }
+    },
+    "nets": {
+      "type": "array",
+      "description": "All electrical nets of the elaborated design. Net names are stable derived identities (see `Net.name`). Sorted bytewise-ascending by `name`.",
+      "items": { "$ref": "#/$defs/Net" }
+    },
+    "connections": {
+      "type": "array",
+      "description": "Port-to-net membership. Each entry binds one instance port to exactly one net. Module (non-leaf) ports appear here too: nets are fully flattened through the hierarchy, and module-port memberships are retained as non-physical members for traceability and diagnostics. Sorted by (net name, instance path, port name), each key bytewise-ascending.",
+      "items": { "$ref": "#/$defs/Connection" }
+    },
+    "assertions": {
+      "type": "array",
+      "description": "All declared design assertions. Static-tier assertions gate on interval-arithmetic / domain analysis of this IR; dynamic-tier assertions compile to ngspice .meas checks. A declared assertion that cannot be measured is gating unless explicitly waived (see `waiver`). Sorted bytewise-ascending by `path`.",
+      "items": { "$ref": "#/$defs/Assertion" }
+    }
+  },
+  "$defs": {
+    "Header": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved header extension point." }
+      },
+      "required": ["ir_version", "language_version", "design_name", "design_hash", "source_hash", "generator", "canonical_form"],
+      "properties": {
+        "ir_version": {
+          "type": "integer",
+          "const": 0,
+          "description": "Integer IR schema version. This schema describes version 0. Any change to the IR shape bumps this integer (see README versioning policy). Backends must refuse documents whose ir_version they do not know."
+        },
+        "language_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$",
+          "description": "Semantic version of the AED DSL language definition that the source was compiled under."
+        },
+        "design_name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Name of the root design as declared in the DSL. Also the human label for the root instance (path \"/\")."
+        },
+        "design_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Content hash of this IR document's canonical serialization with this field's value replaced by the empty string. Identical DSL input under identical toolchain versions must produce an identical design_hash (determinism contract)."
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Hash of the DSL source set: sha256 over the sorted list of (repo-relative path, file sha256) pairs. Binds this IR to the exact sources it was elaborated from; the source map's file table must be consistent with it."
+        },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "description": "Deterministic-generation metadata: the tool that produced this document. Deliberately excludes timestamps, hostnames, usernames, and paths — those would violate the determinism contract.",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Compiler/elaborator executable name, e.g. \"aedc\"."
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Exact released version of the generator."
+            }
+          }
+        },
+        "canonical_form": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the canonical-serialization profile used to write and hash this document, e.g. \"aed-canonical-json/1\" (key order per schema, sorted arrays, LF line endings, UTF-8, no insignificant whitespace variance)."
+        }
+      }
+    },
+    "PathId": {
+      "type": "string",
+      "pattern": "^/$|^(/[A-Za-z_][A-Za-z0-9_]*(\\[[0-9]+\\])?)+$",
+      "description": "Stable hierarchical path identity (requirement L7). \"/\" is the root design instance; each further segment is a DSL-scope member name, optionally with an elaboration index for replicated members (e.g. \"/leds/led[3]\"). The path is the PRIMARY identity of every entity: refdes, schematic symbols, layout footprint links, lockfile entries, and diagnostics all key off it. Paths survive recompilation unchanged for unchanged source. Renames go through the rename ledger (requirement I2): a ledgered rename preserves the original identity under the new path; an unledgered identity change is an error."
+    },
+    "Quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "description": "A dimensioned quantity. All physical parameters and bounds use this representation; bare numbers are not permitted for dimensioned values.",
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Nominal numeric value, expressed in `unit`."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unit symbol, UCUM-style with common SI prefixes (e.g. \"ohm\", \"kohm\", \"uF\", \"V\", \"mA\", \"Hz\"). Dimensionless quantities use \"1\". The compiler normalizes units; backends must not guess."
+        },
+        "tolerance": {
+          "$ref": "#/$defs/Interval",
+          "description": "Optional tolerance interval: absolute [min, max] bounds in the same `unit`, enclosing `value`. This is the interval consumed by static interval-arithmetic checks; when absent the value is treated as exact."
+        }
+      }
+    },
+    "Interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "description": "A closed numeric interval [min, max]. Units are inherited from the enclosing context (Quantity.unit or AssertionBounds unit).",
+      "properties": {
+        "min": {
+          "type": "number",
+          "description": "Inclusive lower bound."
+        },
+        "max": {
+          "type": "number",
+          "description": "Inclusive upper bound. Must be >= min (enforced by the compiler; JSON Schema cannot express the cross-field comparison)."
+        }
+      }
+    },
+    "ParameterValue": {
+      "description": "Value of an elaborated instance parameter. Dimensioned values must be Quantity objects; strings and booleans cover symbolic parameters (e.g. package codes, polarity flags); integers cover exact counts.",
+      "oneOf": [
+        { "$ref": "#/$defs/Quantity" },
+        {
+          "type": "string",
+          "description": "Symbolic parameter value."
+        },
+        {
+          "type": "boolean",
+          "description": "Flag parameter value."
+        },
+        {
+          "type": "integer",
+          "description": "Exact count parameter value (dimensionless by construction)."
+        }
+      ]
+    },
+    "PinRole": {
+      "type": "string",
+      "enum": [
+        "power_in",
+        "power_out",
+        "passive",
+        "bidirectional",
+        "open_drain",
+        "open_collector",
+        "tri_state",
+        "input",
+        "output",
+        "nc"
+      ],
+      "description": "Electrical role of a port, drawn from the full T2 pin-role lattice used by static connectivity checking (ERC): power_in (consumes a supply rail), power_out (drives a supply rail), passive (two-terminal passive or don't-care), bidirectional (digital I/O), open_drain / open_collector (drives low only, needs pull-up), tri_state (drives or floats), input (digital/analog input only), output (push-pull output only), nc (declared no-connect; must not appear in any connection)."
+    },
+    "Port": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved port extension point." }
+      },
+      "required": ["name", "role"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Port name, unique within its instance. The pair (instance path, port name) is the port's stable identity."
+        },
+        "role": {
+          "$ref": "#/$defs/PinRole",
+          "description": "T2 lattice role of this port, as declared or inferred by the type system."
+        },
+        "pin_numbers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Physical pin designator on the bound footprint, e.g. \"1\", \"A3\", \"EP\"."
+          },
+          "description": "Physical footprint pin designators bound to this logical port. Present only on component ports after part resolution; a multi-pin entry means the pins are internally common (e.g. paired GND pins). Sorted ascending."
+        }
+      }
+    },
+    "PartBinding": {
+      "description": "Reference-only part binding (requirement D1). The IR never inlines part data: it carries either the abstract constraint set the part must satisfy, or the key of a resolved entry in the external parts lockfile. Backends needing concrete part data (footprint, symbol, SPICE model) dereference the lockfile.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x_": { "description": "Reserved part-binding extension point." }
+          },
+          "required": ["binding", "constraints"],
+          "properties": {
+            "binding": {
+              "const": "abstract",
+              "description": "Discriminator: the part is not yet resolved; only its constraint set is known."
+            },
+            "constraints": {
+              "$ref": "#/$defs/PartConstraints",
+              "description": "The abstract constraint set the eventual part must satisfy."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x_": { "description": "Reserved part-binding extension point." }
+          },
+          "required": ["binding", "lockfile_key"],
+          "properties": {
+            "binding": {
+              "const": "resolved",
+              "description": "Discriminator: the part has been resolved and pinned in the parts lockfile."
+            },
+            "lockfile_key": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque stable key into the design's parts lockfile (which records MPN, distributor data, checksums, and license basis). The IR carries only this reference, never inline part data."
+            },
+            "constraints": {
+              "$ref": "#/$defs/PartConstraints",
+              "description": "Optional provenance copy of the constraint set the resolved part was required to satisfy; re-resolution must be explicit and never silent."
+            }
+          }
+        }
+      ]
+    },
+    "PartConstraints": {
+      "type": "object",
+      "description": "Map from part attribute name (e.g. \"resistance\", \"voltage_rating\", \"package\", \"mount\") to the required value or acceptable interval. This is a deliberately open map: attribute vocabulary belongs to the parts database, not the IR schema.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/ParameterValue",
+        "description": "Required value (Quantity with optional tolerance interval, string, boolean, or integer) for this attribute."
+      }
+    },
+    "Instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved instance extension point." }
+      },
+      "required": ["path", "kind", "definition", "parameters", "ports", "dnp", "exclude_from_bom", "board_only"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/PathId",
+          "description": "PRIMARY identity of this instance (requirement L7). Unique across the document."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["module", "component"],
+          "description": "\"module\": a hierarchical DSL block whose children appear as further instances under this path; carries no part binding. \"component\": a leaf that maps to physical hardware (or deliberately non-electrical hardware, see hardware_kind) and may carry a part binding."
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+          "description": "Fully qualified name of the DSL module/component definition this instance elaborates, e.g. \"aed.lib.passive.Resistor\"."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Fully evaluated parameter environment of this instance after elaboration (no unresolved expressions remain). Map from parameter name to value. May be empty.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": { "$ref": "#/$defs/ParameterValue" }
+        },
+        "ports": {
+          "type": "array",
+          "description": "Interface ports of this instance, sorted bytewise-ascending by name. Modules expose their declared interface; components expose their pin-mapped logical ports. Pinless hardware kinds have an empty array.",
+          "items": { "$ref": "#/$defs/Port" }
+        },
+        "hardware_kind": {
+          "type": "string",
+          "enum": ["mounting_hole", "fiducial", "artwork", "test_point", "grounded_mounting_hole"],
+          "description": "Special hardware classification (requirement L9), present only on components that are not ordinary electrical parts. Pinless kinds (mounting_hole, fiducial, artwork) carry zero ports and never join nets. Net-attachable single-pin kinds (test_point, grounded_mounting_hole) carry exactly one passive port and may join one net. Absent for ordinary components and all modules."
+        },
+        "dnp": {
+          "type": "boolean",
+          "description": "Do-not-populate flag (requirement L9). Flows unchanged into KiCad export and BOM generation; a dnp component is still present in the netlist and schematic."
+        },
+        "exclude_from_bom": {
+          "type": "boolean",
+          "description": "Exclude this item from the bill of materials (requirement L9). Typical for test points, fiducials, and mounting holes. Flows unchanged into KiCad export."
+        },
+        "board_only": {
+          "type": "boolean",
+          "description": "Item exists only on the board side (layout/fabrication), with no schematic symbol — e.g. fiducials and artwork (requirement L9). Flows unchanged into KiCad export."
+        },
+        "part": {
+          "$ref": "#/$defs/PartBinding",
+          "description": "Part binding reference (requirement D1). Only permitted on kind=component instances. Optional even there: virtual components (e.g. artwork) may have none."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "module" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "properties": {
+              "part": false,
+              "hardware_kind": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "hardware_kind": { "enum": ["mounting_hole", "fiducial", "artwork"] }
+            },
+            "required": ["hardware_kind"]
+          },
+          "then": {
+            "properties": {
+              "ports": { "type": "array", "maxItems": 0 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "hardware_kind": { "enum": ["test_point", "grounded_mounting_hole"] }
+            },
+            "required": ["hardware_kind"]
+          },
+          "then": {
+            "properties": {
+              "ports": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": { "role": { "const": "passive" } },
+                  "required": ["role"]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Net": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved net extension point." }
+      },
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_./]*(\\[[0-9]+\\])?$",
+          "description": "Stable derived net name and identity. Derived deterministically: an explicit DSL net label wins; otherwise the name is synthesized from the highest-scope driving port's path. Identical source yields identical names; net renames follow the rename ledger like instance paths (requirement I2)."
+        },
+        "ground_domain": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RESERVED optional attribute (requirement T5): identifier of the ground domain this net belongs to (e.g. \"gnd\", \"agnd\", \"pe\"). Populated by static domain analysis or explicit DSL annotation; backends must treat distinct ground domains as non-interchangeable."
+        },
+        "voltage_domain": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RESERVED optional attribute (requirement T5): identifier of the voltage domain (supply rail context) of this net, per the component-mediated transfer model — domains propagate through components, not through nets alone. Populated by static domain analysis."
+        }
+      }
+    },
+    "PortRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instance", "port"],
+      "description": "Reference to one port of one instance.",
+      "properties": {
+        "instance": {
+          "$ref": "#/$defs/PathId",
+          "description": "Path identity of the instance that owns the port."
+        },
+        "port": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Port name within that instance."
+        }
+      }
+    },
+    "Connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved connection extension point." }
+      },
+      "required": ["net", "port"],
+      "properties": {
+        "net": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the net (must match a `nets[].name` in this document)."
+        },
+        "port": {
+          "$ref": "#/$defs/PortRef",
+          "description": "The connected port. A port appears in at most one connection; ports with role \"nc\" appear in none."
+        }
+      }
+    },
+    "MeasurementKind": {
+      "type": "string",
+      "enum": [
+        "operating_point",
+        "ripple",
+        "frequency",
+        "period",
+        "duty_cycle",
+        "gain",
+        "bandwidth",
+        "rise_time",
+        "fall_time",
+        "prop_delay",
+        "settling_time",
+        "overshoot",
+        "power_avg",
+        "power_rms",
+        "efficiency"
+      ],
+      "description": "Measurement vocabulary (V2), v1 — CLOSED. Each kind maps to a defined static evaluation rule (interval arithmetic over this IR) and/or a defined ngspice .meas template. A kind with no defined measurement procedure for the assertion's tier makes the assertion unmeasurable and therefore gating unless waived. Statically evaluable subset (no simulation required): operating_point, power_avg, power_rms, efficiency; every other kind is dynamic-only and is rejected on a static-tier assertion (see the Assertion tier/measurement rule). EXTENSION RULE: kinds outside this list — e.g. slew_rate, phase_margin, temperature, which appeared in earlier drafts of this schema and are NOT part of V2 v1 — must never be added by widening this enum. A tool that needs one carries it as a reserved `x_`-prefixed member on the Assertion object (e.g. \"x_measurement_ext\"), which by the x_ contract every other tool must ignore; such an assertion has no V2 measurement procedure and is therefore gating unless waived. Widening the vocabulary is an IR version bump."
+    },
+    "Probe": {
+      "description": "What an assertion measures: a net, a specific port, or a whole instance (e.g. power dissipated in an instance). Exactly one form.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["net"],
+          "properties": {
+            "net": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name of the probed net (must exist in `nets`)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port"],
+          "properties": {
+            "port": {
+              "$ref": "#/$defs/PortRef",
+              "description": "The probed port (e.g. current into this port)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["instance"],
+          "properties": {
+            "instance": {
+              "$ref": "#/$defs/PathId",
+              "description": "The probed instance (e.g. total power in this instance)."
+            }
+          }
+        }
+      ]
+    },
+    "AssertionBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit"],
+      "anyOf": [
+        { "required": ["min"] },
+        { "required": ["max"] }
+      ],
+      "description": "Acceptance bounds for the measured quantity. At least one of min/max must be present; both present means a closed interval.",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unit of both bounds (UCUM-style; \"1\" for dimensionless, e.g. duty cycle)."
+        },
+        "min": {
+          "type": "number",
+          "description": "Inclusive lower acceptance bound, in `unit`."
+        },
+        "max": {
+          "type": "number",
+          "description": "Inclusive upper acceptance bound, in `unit`."
+        }
+      }
+    },
+    "Assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved assertion extension point." }
+      },
+      "required": ["path", "tier", "measurement", "subject", "bounds"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/PathId",
+          "description": "Stable path identity of the assertion itself (assertions are first-class entities; diagnostics and waivers key off this path)."
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["static", "dynamic"],
+          "description": "\"static\": checked by interval arithmetic / domain analysis over this IR without simulation. \"dynamic\": compiled to an ngspice batch .meas check under the quit-code protocol."
+        },
+        "measurement": {
+          "$ref": "#/$defs/MeasurementKind",
+          "description": "What is measured, from the V2 measurement vocabulary."
+        },
+        "subject": {
+          "$ref": "#/$defs/Probe",
+          "description": "Primary probe: the entity whose quantity is measured."
+        },
+        "reference": {
+          "$ref": "#/$defs/Probe",
+          "description": "Optional reference probe for differential measurements (e.g. voltage between subject net and reference net). Absent means the measurement's default reference (ground of the subject's ground domain)."
+        },
+        "bounds": {
+          "$ref": "#/$defs/AssertionBounds",
+          "description": "Acceptance bounds; the assertion passes iff the measured value (its full interval, for static tier) lies within them."
+        },
+        "waiver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reason"],
+          "description": "Explicit waiver for an unmeasurable assertion. Without a waiver, an assertion that cannot be measured in its tier is a gating failure — never silently skipped.",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Human-recorded justification for waiving this assertion."
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "tier": { "const": "static" } },
+            "required": ["tier"]
+          },
+          "then": {
+            "properties": {
+              "measurement": {
+                "enum": ["operating_point", "power_avg", "power_rms", "efficiency"],
+                "description": "Static-tier assertions may only use the statically evaluable subset of the V2 v1 vocabulary — the kinds with a defined interval-arithmetic rule over this IR. Time- and frequency-domain kinds (frequency, period, duty_cycle, rise_time, fall_time, prop_delay, settling_time, overshoot, ripple, gain, bandwidth) require simulation and are rejected here rather than being silently skipped or silently promoted to the dynamic tier."
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

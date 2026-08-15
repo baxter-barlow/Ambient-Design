@@ -1,0 +1,328 @@
+# AED benchmark (c) ESP32-S3 devboard — full BOM
+# Count: 60 total placements = 57 fitted + 3 DNP (J4, R6, R10).
+# dnp is only stated where true; absence means fitted.
+meta:
+  board: esp32s3-devboard-bench-c
+  total_components: 60
+  fitted: 57
+  dnp: 3
+
+components:
+  # --- Module / regulator ---
+  - ref: U1
+    value: ESP32-S3-WROOM-1-N8R2
+    package: XCVR_ESP32-S3-WROOM-1
+    mpn: ESP32-S3-WROOM-1-N8R2
+    role: mcu-module (Wi-Fi/BLE, 8MB flash, 2MB quad PSRAM; NOT simulated — per-mode current stub)
+  - ref: U2
+    value: AP7361C-33
+    package: SOT-223
+    mpn: AP7361C-33E-13
+    role: 3.3V 1A LDO, VBUS->P3V3
+
+  # --- Connectors / jumpers ---
+  - ref: J1
+    value: USB-C 2.0 receptacle 16P
+    package: USB-C-16P-HYBRID
+    mpn: GCT USB4105-GF-A
+    role: power + native USB (D+/D-)
+  - ref: J2
+    value: header 1x20 2.54mm
+    package: PinHeader_1x20_P2.54
+    mpn: Sullins PRPC020SAAN-RC
+    role: GPIO breakout left (incl. 5V, 3V3, GND, EN)
+  - ref: J3
+    value: header 1x20 2.54mm
+    package: PinHeader_1x20_P2.54
+    mpn: Sullins PRPC020SAAN-RC
+    role: GPIO breakout right (incl. UART0, USB pins, GND)
+  - ref: J4
+    value: header 1x6 2.54mm
+    package: PinHeader_1x6_P2.54
+    mpn: Sullins PRPC006SAAN-RC
+    role: UART debug header (3V3, GND, U0TXD, U0RXD, EN, GPIO0)
+    dnp: true
+  - ref: J5
+    value: header 1x2 2.54mm
+    package: PinHeader_1x2_P2.54
+    mpn: Sullins PRPC002SAAN-RC
+    role: 3V3 rail break for IDD measurement (stub boundary)
+  - ref: JP1
+    value: shunt 2.54mm
+    package: Shunt_2.54
+    mpn: Sullins SPC02SYAN
+    role: closes J5 in normal operation
+
+  # --- Protection / filtering / diodes / LEDs ---
+  - ref: F1
+    value: PTC 0.75A hold / 1.5A trip
+    package: "1206"
+    mpn: Littelfuse 1206L075YR
+    role: VBUS resettable fuse
+  - ref: FB1
+    value: 600R @100MHz, DCR<=0.11R
+    package: "1206"
+    mpn: Murata BLM31PG601SN1L
+    role: VBUS EMI bead
+  - ref: D1
+    value: SS34 schottky 40V 3A
+    package: SMA (DO-214AC)
+    mpn: SS34-E3/57T
+    role: VBUS->P5V0 backfeed blocking
+  - ref: D2
+    value: USBLC6-2SC6
+    package: SOT-23-6
+    mpn: STMicro USBLC6-2SC6
+    role: USB ESD array (D+, D-, VBUS)
+  - ref: D3
+    value: SMF5.0A TVS 5V standoff
+    package: SOD-123FL
+    mpn: Littelfuse SMF5.0A
+    role: VBUS surge clamp
+  - ref: D4
+    value: LED red
+    package: "0603"
+    mpn: Kingbright KP-1608SURCK
+    role: power LED on P5V0 (~3.0 mA, always on)
+  - ref: D5
+    value: LED green
+    package: "0603"
+    mpn: Kingbright APT1608SGC
+    role: status LED, GPIO48 (~1.1 mA when on)
+
+  # --- Buttons ---
+  - ref: SW1
+    value: tactile 6mm
+    package: SW_SMD_6x6
+    mpn: C&K PTS645SM43SMTR92
+    role: EN (reset) button
+  - ref: SW2
+    value: tactile 6mm
+    package: SW_SMD_6x6
+    mpn: C&K PTS645SM43SMTR92
+    role: BOOT button (GPIO0)
+
+  # --- Mounting holes (H1 grounded; H2-H4 exercise L9b single-pin-net rule) ---
+  - ref: H1
+    value: M3 plated
+    package: MountingHole_3.2mm_M3_Pad_Via
+    mpn: n/a (mechanical)
+    role: mounting hole, pad tied to GND
+  - ref: H2
+    value: M3 plain
+    package: MountingHole_3.2mm_M3
+    mpn: n/a (mechanical)
+    role: mounting hole, no net (declared mechanical — L9b)
+  - ref: H3
+    value: M3 plain
+    package: MountingHole_3.2mm_M3
+    mpn: n/a (mechanical)
+    role: mounting hole, no net (declared mechanical — L9b)
+  - ref: H4
+    value: M3 plain
+    package: MountingHole_3.2mm_M3
+    mpn: n/a (mechanical)
+    role: mounting hole, no net (declared mechanical — L9b)
+
+  # --- Test points ---
+  - ref: TP1
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: VBUS
+  - ref: TP2
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: P3V3
+  - ref: TP3
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: GND
+  - ref: TP4
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: GND
+  - ref: TP5
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: EN
+  - ref: TP6
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: GPIO0
+  - ref: TP7
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: U0TXD (GPIO43)
+  - ref: TP8
+    value: testpoint SMD
+    package: TestPoint_Keystone_5015
+    mpn: Keystone 5015
+    role: U0RXD (GPIO44)
+
+  # --- Resistors ---
+  - ref: R1
+    value: 5.1k 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-075K1L
+    role: CC1 Rd pulldown (dedicated)
+  - ref: R2
+    value: 5.1k 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-075K1L
+    role: CC2 Rd pulldown (dedicated)
+  - ref: R3
+    value: 10k
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    role: EN pull-up to 3V3
+  - ref: R4
+    value: 10k
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    role: GPIO0 pull-up (reinforces internal 45k)
+  - ref: R5
+    value: 10k
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    role: GPIO45 pull-down (VDD_SPI=3.3V strap, fitted)
+  - ref: R6
+    value: 10k
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    role: GPIO46 pull-down (strap reinforcement pad)
+    dnp: true
+  - ref: R7
+    value: 1k
+    package: "0402"
+    mpn: Yageo RC0402FR-071KL
+    role: power LED series (P5V0)
+  - ref: R8
+    value: 1k
+    package: "0402"
+    mpn: Yageo RC0402FR-071KL
+    role: status LED series (GPIO48)
+  - ref: R9
+    value: 1M
+    package: "0402"
+    mpn: Yageo RC0402FR-071ML
+    role: USB shield to GND bleed
+  - ref: R10
+    value: 10k
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    role: GPIO3 pull-down (JTAG-source strap, provisioned units)
+    dnp: true
+  - ref: R11
+    value: 0R
+    package: "0402"
+    mpn: Yageo RC0402JR-070RL
+    role: USB D+ series link
+  - ref: R12
+    value: 0R
+    package: "0402"
+    mpn: Yageo RC0402JR-070RL
+    role: USB D- series link
+
+  # --- Capacitors ---
+  - ref: C1
+    value: 4.7uF 25V X5R
+    package: "0603"
+    mpn: TDK C1608X5R1E475K080AC
+    role: VBUS bulk at connector
+  - ref: C2
+    value: 100nF 50V X7R
+    package: "0402"
+    mpn: Murata GRM155R71H104KE14
+    role: VBUS HF
+  - ref: C3
+    value: 4.7uF 25V X5R
+    package: "0603"
+    mpn: TDK C1608X5R1E475K080AC
+    role: LDO input (VBUS-visible total 9.4uF <= 10uF USB limit)
+  - ref: C4
+    value: 22uF 10V X5R
+    package: "0805"
+    mpn: Murata GRM21BR61A226ME44
+    role: LDO output bulk
+  - ref: C5
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: LDO output HF
+  - ref: C6
+    value: 22uF 10V X5R
+    package: "0805"
+    mpn: Murata GRM21BR61A226ME44
+    role: 3V3 bulk near module
+  - ref: C7
+    value: 10uF 10V X5R
+    package: "0603"
+    mpn: Murata GRM188R61A106KE69
+    role: module 3V3 pin decoupling
+  - ref: C8
+    value: 1uF 16V X5R
+    package: "0402"
+    mpn: Murata GRM155R61C105KE01
+    role: module 3V3 pin decoupling
+  - ref: C9
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: module 3V3 pin decoupling (closest)
+  - ref: C10
+    value: 1uF 16V X5R
+    package: "0402"
+    mpn: Murata GRM155R61C105KE01
+    role: EN RC delay + debounce (with R3, tau 10ms)
+  - ref: C11
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: GPIO0 button debounce
+  - ref: C12
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: 3V3 distributed decoupling (J2 end)
+  - ref: C13
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: 3V3 distributed decoupling (J2 far end)
+  - ref: C14
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: 3V3 distributed decoupling (J3 end)
+  - ref: C15
+    value: 100nF 16V X7R
+    package: "0402"
+    mpn: Murata GRM155R71C104KA88
+    role: 3V3 distributed decoupling (J3 far end)
+  - ref: C16
+    value: 10uF 10V X5R
+    package: "0603"
+    mpn: Murata GRM188R61A106KE69
+    role: 3V3 corner bulk (near J2)
+  - ref: C17
+    value: 10uF 10V X5R
+    package: "0603"
+    mpn: Murata GRM188R61A106KE69
+    role: 3V3 corner bulk (near J3)
+  - ref: C18
+    value: 4.7nF 100V X7R
+    package: "0603"
+    mpn: Murata GRM188R72A472KA01
+    role: USB shield AC-couple to GND (with R9)
+  - ref: C19
+    value: 22uF 10V X5R
+    package: "0805"
+    mpn: Murata GRM21BR61A226ME44
+    role: 3V3 far-corner bulk

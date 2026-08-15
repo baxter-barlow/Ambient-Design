@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/aed/schemas/source-map/0.schema.json",
+  "title": "AED IR Source Map v0",
+  "description": "Sidecar artifact mapping every IR entity back to DSL source (requirement I9: DSL line <-> IR node <-> diagnostic). DIAGNOSTIC-ANCHOR RULE: every diagnostic emitted by any AED tool references an IR entity identity (instance/assertion path or net name) — never a raw file position. Renderers and editors resolve that identity to source spans through this map. This keeps diagnostics stable under reformatting and lets one diagnostic point at both the declaration and the instantiation chain that produced the offending elaborated entity.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x_": {
+      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members."
+    }
+  },
+  "required": ["sourcemap_version", "ir_version", "design_hash", "files", "nodes"],
+  "properties": {
+    "sourcemap_version": {
+      "type": "integer",
+      "const": 0,
+      "description": "Integer version of the source-map format. This schema describes version 0."
+    },
+    "ir_version": {
+      "type": "integer",
+      "const": 0,
+      "description": "ir_version of the IR document this map describes. Must equal the IR header's ir_version."
+    },
+    "design_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "design_hash of the exact IR document this map belongs to (copied from the IR header). A consumer must reject a (IR, source map) pair whose hashes disagree."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "description": "File table. Spans reference files by zero-based index into this array. Sorted bytewise-ascending by path; consistent with the IR header's source_hash.",
+      "items": { "$ref": "#/$defs/SourceFile" }
+    },
+    "nodes": {
+      "type": "object",
+      "description": "Map from IR entity identity to its source locations. Keys are exactly the identities used by diagnostics: instance paths (e.g. \"/indicator/r_lim\"), assertion paths (e.g. \"/assert_freq\"), and net names (e.g. \"OUT\"). Every instance, assertion, and net of the referenced IR document must have an entry.",
+      "minProperties": 1,
+      "propertyNames": {
+        "minLength": 1,
+        "description": "IR entity identity: a hierarchical path (leading \"/\") or a net name."
+      },
+      "additionalProperties": { "$ref": "#/$defs/NodeLocation" }
+    }
+  },
+  "$defs": {
+    "SourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative POSIX path of the DSL source file. Never absolute, never host-specific (determinism contract)."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "sha256 of the file's exact bytes at elaboration time. Lets a renderer detect that the source drifted since the map was generated."
+        }
+      }
+    },
+    "Span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "byte_start", "byte_end", "line_start", "col_start", "line_end", "col_end"],
+      "description": "A contiguous region of one source file. Byte offsets are 0-based and end-exclusive over the file's raw bytes; lines and columns are 1-based, columns counted in Unicode scalar values, end position inclusive of the last character's line/col. Byte offsets are authoritative; line/col are denormalized for renderers.",
+      "properties": {
+        "file": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based index into the top-level `files` table."
+        },
+        "byte_start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based byte offset of the first byte of the span."
+        },
+        "byte_end": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based byte offset one past the last byte of the span (end-exclusive). Must be >= byte_start."
+        },
+        "line_start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line of the span's first character."
+        },
+        "col_start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based column of the span's first character."
+        },
+        "line_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line of the span's last character."
+        },
+        "col_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based column just past the span's last character."
+        }
+      }
+    },
+    "NodeLocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x_": { "description": "Reserved node-location extension point." }
+      },
+      "required": ["declaration", "instantiation_trace"],
+      "properties": {
+        "declaration": {
+          "$ref": "#/$defs/Span",
+          "description": "Span of the statement that declares this entity in its enclosing scope: the member instantiation statement for an instance (the design header for the root instance), the net label or first connecting statement for a net, the assert statement for an assertion. The entity's library definition site is recovered separately via the IR `definition` name, not through this map."
+        },
+        "instantiation_trace": {
+          "type": "array",
+          "description": "The elaboration chain that produced this concrete entity, INNERMOST FIRST: element 0 is the statement that directly created it (for non-root entities this equals `declaration`), each following element is the instantiation statement of the next enclosing module instance, ending at the root design body. Empty for the root instance. Elaboration means one source line can yield many IR entities — replicated entities share a declaration span but get distinct traces differing in the outer elements.",
+          "items": { "$ref": "#/$defs/Span" }
+        }
+      }
+    }
+  }
+}

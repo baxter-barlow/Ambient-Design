@@ -1,0 +1,121 @@
+# AED benchmark (c) — D2-style power tree. Hand-computed T10 current budget;
+# this file is also the future load-equivalent-stub input (each load below
+# becomes a per-mode current sink; digital ICs are NOT otherwise simulated).
+# Module currents: ESP32-S3-WROOM-1 & WROOM-1U Datasheet v1.8, Tables 6-2,
+# 6-4, 6-6, 6-7 (3.3 V, 25 C; TX at 100% duty).
+
+meta:
+  guardband_policy: "radio peak current x1.10; all other loads at datasheet typ"
+  worst_case_policy: "interval arithmetic: series drops at R_max/Vf_max with worst current; capability at spec minimum"
+
+sources:
+  usb_host:
+    node: VBUS_IN
+    voltage_v: {min: 4.40, nom: 5.00, max: 5.25}   # USB 2.0 device-side worst min; USB-C nominal-min 4.75 shown in assertions
+    current_capability_a: 0.500                     # default USB power; Rd-only sink (R1/R2 5.1k), source Rp not read
+    note: "board budgets to 500 mA regardless of possible 1.5/3.0 A Rp advertisement"
+    budget_assumption: >-
+      500 mA assumes a Type-C default-power source (USB Type-C spec: a source
+      presenting default-Rp supplies at least Default USB Power, 500 mA for a
+      USB 2.0 device, without enumeration). The USB 2.0 100 mA pre-enumeration
+      / unconfigured limit (and legacy A-to-C hosts that enforce it) is OUT OF
+      SCOPE for this reference design: the board has no PD/BC1.2 sensing and
+      no load-throttling path, and as a bench devboard it targets Type-C
+      sources/chargers. Wi-Fi TX peak (~395 mA worst) would exceed a 100 mA
+      allocation; firmware on a strictly compliant legacy host must keep the
+      radio off until configured at 500 mA.
+
+edges:  # series elements between nodes; drop = I x R (or Vf)
+  - id: F1_ptc
+    from: VBUS_IN
+    to: VBUS_PROT
+    r_ohm: {min: 0.07, typ: 0.13, max: 0.35}       # Littelfuse 1206L075, initial resistance range (verify against datasheet)
+    hold_a_25c: 0.75
+    trip_a: 1.50
+    hold_derated_50c_a: 0.60                       # ~0.80 derating factor at 50 C
+  - id: FB1_bead
+    from: VBUS_PROT
+    to: VBUS_FILT
+    r_ohm: {min: 0.05, typ: 0.05, max: 0.11}       # DCR; 600R@100MHz is AC impedance, not in DC budget
+  - id: D1_schottky
+    from: VBUS_FILT
+    to: P5V0
+    vf_v_at_0p4a: {min: 0.30, typ: 0.35, max: 0.40}  # SS34 at ~0.4 A (assumption; datasheet max 0.50 V @ 3 A)
+  - id: U2_ldo
+    from: P5V0
+    to: P3V3
+    vout_v: {min: 3.234, nom: 3.300, max: 3.366}   # 3.3 V +/-2%
+    i_rating_a: 1.000
+    dropout_v:
+      typ_at_1a: 0.34            # datasheet DS37274 Rev. 5-2 EC table, IOUT=1A, 2.6V<=VOUT<=3.3V row (features page quotes 360 mV); NO max specified
+      guardband_v_per_a: 0.50    # in-house conservative guardband ASSUMPTION, not a datasheet figure; both bases scaled linearly with load in A4
+    iq_a: 0.000060
+  - id: J5_idd_break
+    from: P3V3
+    to: P3V3_LOAD
+    r_ohm: {typ: 0.010}                            # shunt JP1; stub/measurement boundary
+
+loads:
+  esp32s3_module:            # U1 — the load-equivalent stub. Source: datasheet tables cited per mode.
+    node: P3V3_LOAD
+    modes:
+      deep_sleep:      {i_a: 0.000008, source: "Table 6-7, RTC mem + RTC periph powered, 8 uA typ"}
+      light_sleep:     {i_a: 0.000280, source: "Table 6-7, 240 uA + 40 uA quad-PSRAM footnote 1"}
+      idle_modem_sleep:
+        i_a: {min: 0.0329, typ: 0.0476, max: 0.1079}
+        source: "Table 6-6: 240 MHz WAITI clocks-off 32.9 mA .. dual-core 128-bit clocks-on 107.9 mA; typ = WAITI clocks-on 47.6 mA. Flash access can add ~10 mA (footnote 3), inside max bound"
+      wifi_rx:         {i_a: 0.095, source: "Table 6-4, RX 802.11b/g/n HT20, 95 mA"}
+      wifi_tx_peak:
+        i_a: {typ: 0.355, worst: 0.3905}
+        source: "Table 6-4, TX 802.11b 1 Mbps @20.5 dBm, 355 mA peak, 100% duty; worst = 355 x 1.10 guardband"
+  status_led_d5:
+    node: P3V3_LOAD
+    modes:
+      deep_sleep:  {i_a: 0.0}          # firmware: off in sleep
+      light_sleep: {i_a: 0.0}
+      idle_modem_sleep: {i_a: 0.0011}  # (3.3-2.2)/1k
+      wifi_rx:     {i_a: 0.0011}
+      wifi_tx_peak: {i_a: 0.0011}
+  pullup_leakage:
+    node: P3V3_LOAD
+    modes: {all: {i_a: 0.000001}}      # R3/R4 draw only while buttons pressed (transient, excluded); pin leakage <=50 nA (Table 6-3)
+  ldo_ground_current:
+    node: P5V0                          # flows Vin->GND, excluded from J5 measurement
+    modes: {all: {i_a: 0.000060}}
+  pwr_led_d4:
+    node: P5V0
+    modes: {all: {i_a: 0.0030}}        # (5.0-2.0)/1k at nom; 3.25 mA at VBUS max — worst rows use 0.00325
+  tvs_esd_leakage:
+    node: VBUS_PROT
+    modes: {all: {i_a: 0.000002}}
+
+# ---- Summation (every number shown; worst rows use guardbanded radio + LED at VBUS max) ----
+summary_per_mode:
+  deep_sleep:
+    p3v3_total_a:  "8e-6 + 0 + 1e-6                     = 9.0e-6   (J5 ammeter predicts ~8-9 uA)"
+    vbus_total_a:  "9.0e-6 + 60e-6 + 3.0e-3 + 2e-6      = 3.071e-3"
+    margin_vs_500mA: "500 - 3.07 = 496.9 mA (99.4%)"
+  light_sleep:
+    p3v3_total_a:  "280e-6 + 0 + 1e-6                   = 281e-6"
+    vbus_total_a:  "281e-6 + 60e-6 + 3.0e-3 + 2e-6      = 3.343e-3"
+    margin_vs_500mA: "496.7 mA (99.3%)"
+  idle_modem_sleep:
+    p3v3_total_a:  "typ: 47.6e-3 + 1.1e-3 + 1e-6        = 48.70e-3 ; max: 107.9e-3 + 1.1e-3 = 109.0e-3"
+    vbus_total_a:  "typ: 48.70e-3 + 60e-6 + 3.0e-3      = 51.76e-3 ; max: 109.0e-3 + 60e-6 + 3.25e-3 = 112.3e-3"
+    margin_vs_500mA: "typ 448.2 mA (89.6%); max-bound 387.7 mA (77.5%)"
+  wifi_rx:
+    p3v3_total_a:  "95.0e-3 + 1.1e-3 + 1e-6             = 96.10e-3"
+    vbus_total_a:  "96.10e-3 + 60e-6 + 3.0e-3           = 99.16e-3"
+    margin_vs_500mA: "400.8 mA (80.2%)"
+  wifi_tx_peak:
+    p3v3_total_a:  "typ: 355.0e-3 + 1.1e-3 + 1e-6       = 356.10e-3 ; worst: 390.5e-3 + 1.1e-3 = 391.60e-3"
+    ldo_input_a:   "typ: 356.10e-3 + 60e-6              = 356.16e-3 ; worst: 391.66e-3"
+    vbus_total_a:  "typ: 356.16e-3 + 3.0e-3 + 2e-6      = 359.16e-3 ; worst: 391.66e-3 + 3.25e-3 + 2e-6 = 394.91e-3"
+    margin_vs_500mA: "typ 140.8 mA (28.2%); worst 105.1 mA (21.0%)  -> T10 PASS"
+
+# ---- Voltage propagation at wifi_tx_peak (feeds assertions A4/A5) ----
+voltage_at_ldo_input:
+  worst_min: "4.40 - (0.39491 x 0.35) - (0.39491 x 0.11) - 0.40 = 4.40 - 0.1382 - 0.0434 - 0.400 = 3.818 V"
+  usbc_min:  "4.75 - (0.35916 x 0.13) - (0.35916 x 0.05) - 0.35 = 4.75 - 0.0467 - 0.0180 - 0.350 = 4.335 V"
+  nominal:   "5.00 - 0.0467 - 0.0180 - 0.350                    = 4.585 V"
+  max:       "5.25 - (0.39491 x 0.07) - (0.39491 x 0.05) - 0.30 = 5.25 - 0.0276 - 0.0197 - 0.300 = 4.903 V"

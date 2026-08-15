@@ -1,0 +1,58 @@
+# AED benchmark (a): 9V 555 LED blinker - bill of materials
+# MPNs are illustrative, not resolver output; the AED part resolver
+# re-resolves against the datasheet DB. Verification status (2026-08-15):
+# CT (B32529C0105J000), RA (MFR-25FBF52-100K), and RB (MFR-25FTE52-680K)
+# were verified against current Digi-Key/TME/TDK listings during the fix
+# round. The remaining MPNs are commonly stocked catalog parts carried
+# over from the first draft and were NOT independently re-verified.
+
+parts:
+  - ref: U1
+    value: NE555
+    package: DIP-8 (SOIC-8 alt)
+    mpn: Texas Instruments NE555P
+    role: astable timer (bipolar 555; Voh ~ Vcc-1.7 V drives the LED directly)
+
+  - ref: RA
+    value: 100k 1% 0.25W
+    package: axial 0207 (0805 alt)
+    mpn: Yageo MFR-25FBF52-100K
+    role: charge-path resistor VCC->DISCH; sets t_high with RB and CT,
+          keeps discharge-pin current at 0.09 mA
+
+  - ref: RB
+    value: 680k 1% 0.25W
+    package: axial 0207 (0805 alt)
+    mpn: Yageo MFR-25FTE52-680K
+    role: charge/discharge resistor DISCH->THRES; dominant timing element
+
+  - ref: CT
+    value: 1uF 5% 63V
+    package: radial 5mm-pitch stacked PET film, 7.3x9.5x4.5 mm
+    mpn: TDK EPCOS B32529C0105J000
+    role: timing capacitor; 5% film chosen over electrolytic (20%) or
+          class-2 MLCC (DC-bias derating) so the 5%-cap tolerance budget holds
+
+  - ref: CB
+    value: 10nF 10% 50V X7R
+    package: "0805"
+    mpn: KEMET C0805C103K5RACTU
+    role: CONT (pin 5) bypass of the internal 2/3 divider tap
+
+  - ref: RL
+    value: 560R 1% 0.25W
+    package: axial 0207 (0805 alt)
+    mpn: Yageo MFR-25FBF52-560R
+    role: LED ballast; (9 - 1.7 - 2.0) V / 560R ~ 9.5 mA
+
+  - ref: D1
+    value: red LED, 2.0V Vf @ 10mA
+    package: 5mm T-1 3/4 radial
+    mpn: Kingbright WP7113ID
+    role: blink indicator, lit during the OUT-high phase
+
+  - ref: BT1
+    value: 9V battery + snap (or bench supply)
+    package: PP3 snap leads
+    mpn: Keystone Electronics 232
+    role: 9 V supply; modeled in simulation as PWL ramped source (V3 rule)

@@ -1,0 +1,37 @@
+{
+  "x_negative_control": "DEFECT: assertion /assert_duty is tier \"static\" but measures duty_cycle, a dynamic-only V2 kind with no interval-arithmetic rule. Without this constraint the assertion would look checked while no static evaluator can produce a value for it. (tier \"static\" + measurement \"power_avg\" is the valid counterpart.)",
+  "header": {
+    "ir_version": 0,
+    "language_version": "0.1.0",
+    "design_name": "neg",
+    "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generator": { "name": "aedc", "version": "0.1.0" },
+    "canonical_form": "aed-canonical-json/1"
+  },
+  "instances": [
+    {
+      "path": "/",
+      "kind": "module",
+      "definition": "neg.Root",
+      "parameters": {},
+      "ports": [],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    }
+  ],
+  "nets": [
+    { "name": "OUT" }
+  ],
+  "connections": [],
+  "assertions": [
+    {
+      "path": "/assert_duty",
+      "tier": "static",
+      "measurement": "duty_cycle",
+      "subject": { "net": "OUT" },
+      "bounds": { "unit": "1", "min": 0.524, "max": 0.544 }
+    }
+  ]
+}

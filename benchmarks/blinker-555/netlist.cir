@@ -1,0 +1,86 @@
+* AED benchmark (a): 9V 555 LED blinker, ~1 Hz astable
+* Deck: complete, self-contained, offline, deterministic (no vendor models).
+* NE555 macromodel below is an ORIGINAL behavioral model authored for AED
+* (comparators as B-sources, B-source SR latch on a state cap, switch-model
+* discharge transistor). Intended license: Apache-2.0 / CC0 (D4 core library seed).
+*
+* Fixture rules honored:
+*   V3: supply is ramped (PWL 0->9V in 2 ms), measurements gated past a
+*       2 s settle window (startup first-high phase is longer than steady state).
+*   V2: period and on-time are each ONE .meas with TRIG/TARG on v(out);
+*       frequency and duty are derived params.
+*   V1: every .meas must yield a real number; a missed crossing is a failure.
+
+*----------------------------------------------------------------------
+* NE555_AED - original behavioral 555 macromodel
+* Pin order matches DIP-8: GND TRIG OUT RST CONT THRES DISCH VCC
+*----------------------------------------------------------------------
+.subckt NE555_AED gnd trig out rst cont thres disch vcc
+
+* Internal 5k/5k/5k divider; CONT pin rides the 2/3 tap (external bypass ok)
+Rdiv1 vcc  cont  5k
+Rdiv2 cont ref13 5k
+Rdiv3 ref13 gnd  5k
+
+* Trigger comparator: S=1 when V(trig) < 1/3 Vcc (tanh-smoothed, ~5 mV band)
+Bset  s 0 V = 0.5*(1+tanh(400*(v(ref13)-v(trig))))
+* Threshold comparator: Rth=1 when V(thres) > 2/3 Vcc
+Bthr  rth 0 V = 0.5*(1+tanh(400*(v(thres)-v(cont))))
+* RESET pin (active low, ~0.7 V threshold); OR'ed with threshold comparator
+Brst  rrs 0 V = 0.5*(1+tanh(20*(0.7-v(rst))))
+Bres  r 0 V = 1-(1-v(rth))*(1-v(rrs))
+
+* SR latch: state cap q in [0,1]; set-dominant (real 555 TRIG overrides THRES);
+* weak tanh positive-feedback term holds state when S=R=0.
+* Node order gnd->q so positive expression current CHARGES the state cap
+* (SPICE convention: current flows node1 -> node2 through the source).
+Cq    q gnd 100p
+Bq    gnd q I = 50u*v(s)*(1-v(q)) - 50u*v(r)*(1-v(s))*v(q)
++             + 10u*(0.5*(1+tanh(40*(v(q)-0.5))) - v(q))
+
+* Totem-pole output: high ~ Vcc-1.7 (bipolar 555 Voh), low ~ 0.15 V sat.
+* Softplus keeps the Voh clamp smooth so the supply ramp cannot strand Newton.
+Bout  oint gnd V = v(q)*0.5*((v(vcc)-1.7)+sqrt((v(vcc)-1.7)^2+0.01)) + (1-v(q))*0.15
+Rout  oint out 12
+Cout  out gnd 10p
+
+* Open-collector discharge transistor: ON when latch is low
+Bqb   qb gnd V = 1-v(q)
+Sdis  disch gnd qb gnd swdis
+.model swdis sw(ron=18 roff=100meg vt=0.5 vh=0.2)
+
+.ends NE555_AED
+
+*----------------------------------------------------------------------
+* Astable blinker: RA=100k, RB=680k, C=1u -> f=1.44/((RA+2RB)C)=0.986 Hz
+* duty=(RA+RB)/(RA+2RB)=53.4% high
+*----------------------------------------------------------------------
+VCC  vcc 0 PWL(0 0 2m 9)                 ; V3: ramped 9 V supply
+XU1  0 nct out vcc cont nct disch vcc NE555_AED
+RA   vcc  disch 100k
+RB   disch nct   680k
+CT   nct  0     1u
+CB   cont 0     10n                       ; CONT bypass
+RL   out  nled  560                       ; LED ballast: (9-1.7-2.0)/560 ~ 9.5 mA
+DLED nled nks   LEDRED
+RLK  nled nks   10Meg                     ; convergence leak across LED
+VSLED nks 0 DC 0                          ; 0 V ammeter for LED current
+.model LEDRED D(IS=1e-16 N=2.4 RS=2)      ; red LED, Vf~2.0 V @ 10 mA
+
+*----------------------------------------------------------------------
+* Analysis and assertions
+*----------------------------------------------------------------------
+.options method=gear itl4=100 reltol=1e-4
+.tran 100u 5
+
+* Steady-state edge schedule (nominal): rises ~1.33,2.34,3.35,4.36 s;
+* falls ~0.86,1.87,2.88,3.89 s. TD=2 lands inside a LOW phase, so after
+* TD=2 the first RISE precedes the first FALL: t_on pairing is well-defined.
+.meas tran t_period TRIG v(out) VAL=3.7 RISE=1 TD=2 TARG v(out) VAL=3.7 RISE=2 TD=2
+.meas tran t_on     TRIG v(out) VAL=3.7 RISE=1 TD=2 TARG v(out) VAL=3.7 FALL=1 TD=2
+.meas tran f_osc      PARAM='1/t_period'
+.meas tran duty_pct   PARAM='100*t_on/t_period'
+.meas tran i_led_on   MAX i(VSLED) FROM=2 TO=5
+.meas tran v_out_high MAX v(out)   FROM=2 TO=5
+
+.end

@@ -1,0 +1,98 @@
+# AED benchmark (c) — power-tree assertions. All inputs traceable to
+# power-tree.yaml; module data from ESP32-S3-WROOM-1 Datasheet v1.8 (tables
+# cited inline). These are the gating checks; no ngspice run is required.
+
+assertions:
+  - id: A1_rail_voltage_containment
+    kind: voltage-domain containment (Polymorphic Blocks component-mediated transfer)
+    expr: "ldo.vout_interval within module.vdd33_recommended"
+    inputs: {ldo_vout_v: [3.234, 3.366], module_vdd33_v: [3.0, 3.6]}   # +/-2%; Table 6-2
+    result: "[3.234, 3.366] subset-of [3.0, 3.6]"
+    margin: "low side +0.234 V, high side +0.234 V"
+    status: PASS
+
+  - id: A2_vbus_budget_t10
+    kind: current-budget containment (T10), VBUS rail
+    expr: "sum(vbus_loads.wifi_tx_peak.worst) <= usb.capability"
+    inputs: {sum_worst_a: 0.39491, capability_a: 0.500}
+    calc: "0.39166 (LDO in, guardbanded) + 0.00325 (PWR LED @5.25V) + 2e-6 = 0.39491 A"
+    margin: "+105.1 mA (21.0%); typ case +140.8 mA (28.2%)"
+    status: PASS
+
+  - id: A3_3v3_source_capability
+    kind: current-budget containment, 3.3 V rail
+    expr: "ldo.i_rating >= max(sum(p3v3_loads)) AND ldo.i_rating >= module.required_source"
+    inputs: {ldo_rating_a: 1.000, worst_rail_a: 0.39166, module_required_a: 0.500}  # Table 6-2 I_VDD min 0.5 A
+    margin: "+608 mA vs worst load; 2.0x the module's required 500 mA source capability"
+    status: PASS
+    note: "AP2112K (600 mA) passes here but fails A5; AMS1117 passes here but fails A4 — intended benchmark traps"
+
+  - id: A4_ldo_dropout_at_min_vbus
+    kind: dropout margin at minimum input, wifi_tx_peak worst
+    expr: "v_ldo_in_min >= vout_max + vdo(i_load)"
+    inputs:
+      v_ldo_in_min_v: 3.818       # 4.40 - 0.1382 (PTC 0.35R) - 0.0434 (bead 0.11R) - 0.400 (Vf max), power-tree.yaml; exact 3.81834
+      vout_max_v: 3.366
+      i_load_a: 0.3916            # LDO OUTPUT current at wifi_tx_peak worst (P3V3 load; excludes the 60 uA Iq, which flows Vin->GND)
+      vdo_typ_v_per_a: 0.34       # datasheet DS37274 Rev. 5-2 EC table, IOUT=1A, 2.6V<=VOUT<=3.3V row; NO datasheet max exists
+      vdo_guardband_v_per_a: 0.50 # in-house conservative guardband ASSUMPTION (not a datasheet figure)
+    calc_rows:
+      datasheet_typ: "vdo = 0.34 x 0.3916 = 0.133 V; required = 3.366 + 0.133 = 3.499 V; margin = 3.818 - 3.499 = +0.319 V"
+      inhouse_guardband: "vdo = 0.50 x 0.3916 = 0.196 V; required = 3.366 + 0.196 = 3.562 V; margin = 3.818 - 3.562 = +0.257 V"
+    secondary_rows:
+      usbc_min_4p75_guardband: "4.335 - 3.562 = +0.774 V"   # mixes usbc-min input (typ current) with worst-current required V_in; conservative
+      nominal_5p00_typ_vdo: "4.585 - (3.300 + 0.34 x 0.356 = 3.421) = +1.164 V"
+    status: PASS   # passes under both the datasheet-typ and the guardband basis
+    caveat: "Datasheet specifies dropout at 1 A as typ-only (340 mV, 2.6-3.3 V row; features page quotes 360 mV) with no max; the 0.50 V/A row is our guardband, not vendor data. SS34 Vf=0.40 V at 0.4 A and PTC R range remain stated assumptions; re-derive from vendor datasheets before freeze"
+
+  - id: A5_ldo_thermal_at_wifi_tx
+    kind: "junction temperature at continuous TX (conservative: peak treated as sustained)"
+    expr: "Tj = Ta + P x theta_ja <= Tj_limit ; P = (Vin - Vout) x Iout + Vin x Iq"
+    inputs:
+      worst: {vin_v: 4.903, vout_v: 3.234, iout_a: 0.3916, ta_c: 50, theta_ja_c_w: 62, tj_limit_c: 125}
+      typ:   {vin_v: 4.585, vout_v: 3.300, iout_a: 0.3561, ta_c: 25}
+      theta_ja_datasheet_c_w: 110   # AP7361C DS37274 Rev. 5-2 thermal table, SOT223, Note 9: "mounted on FR-4 substrate PC board, with minimum recommended pad layout" (note states no airflow condition and no board size for SOT223)
+    calc_worst: "P = 1.669 x 0.3916 + 4.903 x 60e-6 = 0.6534 + 0.0003 = 0.654 W; Tj = 50 + 0.654 x 62 = 90.5 C"
+    calc_typ:   "P = 1.285 x 0.3561 = 0.458 W; Tj = 25 + 0.458 x 62 = 53.4 C"
+    calc_worst_datasheet_theta: "same P = 0.654 W; Tj = 50 + 0.654 x 110 = 121.9 C  -> +3.1 C to the 125 C gate"
+    margin: "worst +34.5 C at 62 C/W (pour assumed); only +3.1 C at the datasheet 110 C/W minimum-pad figure. 125 C is the design gate (datasheet operating Tj range extends to 150 C; thermal shutdown ~150 C)"
+    status: PASS (layout-dependent)
+    caveat: "The PASS depends on layout: theta_ja 62 C/W assumes SOT-223 on ~1 in^2 outer-layer pour (AN1028 range 40-110 C/W) and is an ASSUMPTION, not vendor data. At the datasheet minimum-pad figure of 110 C/W, Tj = 121.9 C at Ta = 50 C — under the 125 C gate at every stated condition, but with only 3.1 C headroom, and Ta > 53.1 C at minimum pad would breach the gate (Ta_max = 125 - 0.654 x 110 = 53.1 C; at 62 C/W Ta_max = 84.5 C). The layout must provide copper pour at or near the 62 C/W assumption; verify against the actual pour before freeze"
+
+  - id: A6_ptc_hold_margin
+    kind: series-element rating vs continuous draw
+    expr: "ptc.hold_derated(50C) >= vbus_worst_continuous"
+    inputs: {hold_derated_a: 0.60, worst_a: 0.39491}
+    margin: "+205 mA; trip (1.5 A) does not intersect any legitimate mode"
+    status: PASS
+
+  - id: A7_deep_sleep_rail_current
+    kind: measurable low-power gate (maps to future stub sim / bench measurement at J5)
+    expr: "i(P3V3_LOAD, deep_sleep) <= 100e-6"
+    inputs: {predicted_a: 9.0e-6}   # 8 uA module (Table 6-7) + <=1 uA leakage; excludes LDO Iq and 5V-side PWR LED by construction
+    margin: "predicted 9 uA vs 100 uA gate (11x)"
+    status: PASS
+
+  - id: A8_usb_inrush_capacitance
+    kind: attach-point bulk capacitance limit
+    expr: "sum(vbus_visible_bulk) <= 10e-6"
+    inputs: {c1_f: 4.7e-6, c3_f: 4.7e-6, sum_f: 9.4e-6}
+    note: "3.3 V bank (>=87 uF) charges behind LDO current limit, not at attach"
+    status: PASS
+
+  - id: A9_strapping_dc_state
+    kind: strapping-node DC solution at EN rising edge (details in pin-plan.md)
+    expr: "straps sample to {GPIO0:1, GPIO45:0, GPIO46:0, GPIO3:float} unless BOOT held"
+    inputs:
+      gpio0: "internal 45k PU (Table 6-3) || external 10k PU -> high"
+      gpio45: "external 10k PD (fitted) + internal weak PD -> low (VDD_SPI = 3.3 V)"
+      gpio46: "internal weak PD -> low"
+    result: "default: SPI boot; BOOT held: GPIO0=0 & GPIO46=0 -> joint download boot; invalid combo (GPIO0=0, GPIO46=1) unreachable"
+    status: PASS
+
+  - id: A10_single_pin_nets_l9b
+    kind: netlist lint expectation (L9b)
+    expr: "every single-pin net is explicitly declared mechanical/intentional"
+    inputs: "H2, H3, H4 pads (no net); H1 is on GND (multi-pin, exempt)"
+    result: "DSL must carry mechanical declarations for H2-H4 or the lint gates"
+    status: PASS-BY-DECLARATION

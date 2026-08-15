@@ -1,0 +1,867 @@
+corpus: AED AC2 seeded-bug corpus
+phase: collection (AMB-35)
+collected: '2026-08-14'
+entry_count: 61
+bugs:
+- id: BUG-0001
+  title: ESP32 brownout at every WiFi start on undersized 500 mA supply
+  source:
+    url: https://github.com/espressif/arduino-esp32/issues/863
+    kind: github_issue
+    additional_urls:
+    - https://www.universal-solder.ca/troubleshooting-esp32-brownout/
+  symptom: Brownout detector resets the ESP32 at every WiFi startup; oscilloscope shows a large dip on the 3.3 V
+    rail. Same firmware runs fine on a breadboard.
+  root_cause: 500 mA 3.3 V supply with insufficient bulk capacitance cannot source the WiFi calibration/TX current
+    surge; adding 470 uF bulk capacitance eliminated the brownouts. Generic write-ups confirm boards with regulators
+    sized near average draw ripple below the brownout threshold at TX peaks.
+  category: brownout-insufficient-bulk-capacitance
+  class: power-supply
+  evidence: '"each time during WiFi startup I get brownout. On scope there is quite big voltage drop" ... "doesn''t
+    happen on a breadboard with larger capacitor attached (470uF)"'
+  collected: '2026-08-14'
+- id: BUG-0002
+  title: 'Yaesu FT-891 control head fried: reverse-polarity diodes marked DNP'
+  source:
+    url: http://www.vk1zdj.net/?p=454
+    kind: blog_postmortem
+  symptom: Control head dead after mobile install; 10-ohm input resistor R7043 burned and charred the PCB before
+    1.25 A fuse F1002 opened.
+  root_cause: Reversed RJ12 supply cable applied -13 V; the schematic's reverse-polarity protection diodes were
+    marked Do-Not-Install to save cost, so nothing blocked the reverse current.
+  category: reverse-polarity-protection-omitted
+  class: protection-esd
+  evidence: '"If Yaesu had simply installed a reverse polarity diode in series" none of this happens, per author.'
+  collected: '2026-08-14'
+- id: BUG-0003
+  title: Raspberry Pi 4 shared USB-C CC pull-down defeats compliant chargers
+  source:
+    url: https://www.scorpia.co.uk/2019/06/28/pi4-not-working-with-some-chargers-or-why-you-need-two-cc-resistors/
+    kind: blog_postmortem
+    additional_urls:
+    - https://medium.com/@leung.benson/how-to-design-a-proper-usb-c-power-sink-hint-not-the-way-raspberry-pi-4-did-it-f470d7a5910
+    - https://hackaday.com/2019/07/16/exploring-the-raspberry-pi-4-usb-c-issue-in-depth/
+  symptom: Pi 4 receives 0 V on VBUS and fails to boot from compliant USB-C chargers when e-marked cables (MacBook-class)
+    are used; the source misidentifies the board as an audio adapter accessory.
+  root_cause: CC1 and CC2 tied together into a single 5.1k pull-down (R79) instead of the spec-required independent
+    Rd per CC pin; with an e-marked cable's Ra in parallel the equivalent ~836 ohms falls in the audio-accessory
+    detection range, so the charger withholds VBUS. Fixed in board rev 1.2.
+  category: usb-c-cc-termination
+  class: usb
+  evidence: '"The root cause of the problem is the shared cc pull down resistor on the USB Type-C connector." (scorpia.co.uk);
+    "...is detected by the source as Ra + Ra, meaning that it is an audio adapter." (Hackaday)'
+  collected: '2026-08-14'
+- id: BUG-0004
+  title: LM7805 thermal overload dropping 13 V to 5 V for relays
+  source:
+    url: https://forum.arduino.cc/t/lm7805-overheating-very-fast/659267
+    kind: forum_postmortem
+  symptom: 7805 feeding three relay modules (~190 mA) from a ~13 V adapter is untouchably hot within 30 seconds;
+    three replacement regulators behave identically.
+  root_cause: 8 V linear drop at ~200 mA is ~2.6 W dissipation with no heatsink — a topology/sizing error, not bad
+    parts; replies prescribed heatsinking or a buck converter.
+  category: regulator-thermal-sizing
+  class: thermal
+  evidence: '"Linear regulators like the 78xx series convert the ''excess'' voltage to heat."'
+  collected: '2026-08-14'
+- id: BUG-0005
+  title: LM317/LM337 oscillate after swapping electrolytics for low-ESR MLCCs
+  source:
+    url: https://groups.google.com/g/sci.electronics.design/c/DIVFxD_YSnA
+    kind: mailing_list
+  symptom: LM317/LM337 supplies built with 10 uF MLCC output caps (chosen to avoid electrolytics in a hot environment)
+    oscillated on every regulator and showed resonant ringing on transient response.
+  root_cause: MLCC ESR is far below the minimum the LM317/LM337 loop needs for its stabilizing zero; the LM337 datasheet
+    states it is unstable with low-ESR output caps. Paralleling a 100 uF tantalum (0.17 ohm measured ESR) or adding
+    50-100 milliohm series resistance restored a damped response.
+  category: ldo-output-cap-esr-instability
+  class: power-supply
+  evidence: '"The ESR is much lower than sqrt(Lstray/C), so you get resonant peaks everywhere." ... "sure enough
+    it says it isn''t stable with low-ESR capacitors"'
+  collected: '2026-08-14'
+- id: BUG-0006
+  title: 'NeuroBytes: servo hot-plug inrush browns out ATtiny88'
+  source:
+    url: https://hackaday.io/project/3339-neurobytes/log/37589-dealing-with-pesky-servo-induced-brownouts
+    kind: blog_postmortem
+  symptom: Hot-swapping servos during classroom trials reset boards and flickered LEDs; rail sagged to roughly 3.5
+    V.
+  root_cause: Servo reservoir-capacitor inrush on an unlimited rail dipped below the MCU brownout threshold; fixed
+    with a series precharge resistor bypassed by a comparator-driven P-FET.
+  category: inrush-brownout
+  class: power-supply
+  evidence: '"The voltage rail typically dips to 3.5 VDC or so, easily sufficient to brownout the ATtiny88."'
+  collected: '2026-08-14'
+- id: BUG-0007
+  title: TL431 discrete linear regulator run 30% over abs-max dissipation
+  source:
+    url: https://hackaday.io/project/19647-low-cost-programmable-power-supply/log/172270-this-linear-regulator-circuit-doesnt-look-quite-right
+    kind: blog_postmortem
+  symptom: 'Design review of a cheap buck module''s TL431+D882 3.3 V housekeeping rail: at the module''s rated 40
+    V input the TL431 exceeds its ratings.'
+  root_cause: Discrete shunt-reference linear regulator has no thermal protection and dissipation scales with Vin;
+    claimed input range violates TL431 absolute maximum power. Safe limit computed as ~25 V.
+  category: abs-max-violation
+  class: thermal
+  evidence: '"the TL431 power dissipation is 30% above Absolute Maximum Ratings!" at 40 V input.'
+  collected: '2026-08-14'
+- id: BUG-0008
+  title: 'MNT Reform: off-state drain deep-discharges unprotected LiFePO4 cells'
+  source:
+    url: https://community.mnt.re/t/mnt-reform-recommended-lpc-and-keyboard-firmware-update-to-fix-battery-drain-in-off-state/559
+    kind: forum_postmortem
+  symptom: Laptops stored "off" drained their packs; community threads report reversed and leaking 18650 cells after
+    storage.
+  root_cause: LPC system controller and keyboard MCU stay powered when off, and original battery boards had no undervoltage
+    disconnect; MNT later sold a MOSFET cutoff board (2.5 V/cell).
+  category: standby-drain-missing-undervoltage-cutoff
+  class: power-supply
+  evidence: Fix "will greatly reduce the battery drain in 'Off' mode" via controller deep-sleep modes.
+  collected: '2026-08-14'
+- id: BUG-0010
+  title: Raspberry Pi F3 polyfuse eats the 5 V headroom
+  source:
+    url: https://forums.raspberrypi.com/viewtopic.php?t=25910
+    kind: forum_postmortem
+  symptom: TP1-TP2 measured 4.3 V from a 4.95 V supply; board resets when power-hungry USB devices are hot-plugged.
+  root_cause: Series 1.1 A polyfuse F3 with high/degraded resistance drops the rail below USB spec; the 5 V distribution
+    budget left no margin for the protection element.
+  category: series-protection-voltage-budget
+  class: power-supply
+  evidence: '"I measured the resistance of F3 and it was over 1 Ohm. That''s bad."'
+  collected: '2026-08-14'
+- id: BUG-0011
+  title: Inverting buck-boost rings from undersized inductor in DCM
+  source:
+    url: https://forum.allaboutcircuits.com/threads/input-and-output-ripple-on-dc-dc-buck-boost-converter.183125/
+    kind: qa_site
+  symptom: Home-built -12 V, 0.5-10 A inverting buck-boost shows persistent input and output ripple that capacitor
+    swaps and ESR reduction never cure.
+  root_cause: 1 uH inductor forces discontinuous conduction at light load, producing undamped LC ringing; 1000 uF
+    output cap oversized; parasitic inductor-capacitance interactions, not capacitor ESR, drive the oscillation.
+  category: converter-instability-component-sizing
+  class: power-supply
+  evidence: '"the undamped interaction of the inductance(s) with ANY capacitance(s)" including MOSFET and layout
+    parasitics.'
+  collected: '2026-08-14'
+- id: BUG-0012
+  title: 'BeagleLogic errata: ESD clamp supplied from wrong power rail'
+  source:
+    url: https://github.com/abhishek-kakkar/beaglelogic-standalone/blob/master/docs/errata.rst
+    kind: vendor_erratum
+  symptom: Official errata entry on shipped boards; wrong supply connection to the ESD protection array, fix deferred
+    to next PCB revision.
+  root_cause: DVIULC6-4SC6 ESD array Vin wired to the TPS73101 3.3 V LDO output instead of the intended 5 V rail
+    — a power-domain connection error that wrongly sets clamp headroom.
+  category: power-domain-crossing
+  class: protection-esd
+  evidence: '"It should have been connected to the 5V rail." (errata, verbatim)'
+  collected: '2026-08-14'
+- id: BUG-0013
+  title: SparkFun MicroMod ESP32 missing EN/RESET capacitor breaks auto-reset
+  source:
+    url: https://github.com/sparkfun/MicroMod_ESP32_Processor/issues/1
+    kind: github_issue
+  symptom: esptool auto-reset programming fails on the shipped commercial board with "Wrong boot mode detected (0x13)!
+    The chip needs to be in download mode."; manual boot-mode entry required.
+  root_cause: Schematic omitted the 1-10 uF capacitor from EN (CHIP_PU) to GND that Espressif requires so reset
+    releases after IO0/strapping pins settle; soldering a ~1 uF cap fixed programming completely.
+  category: missing-reset-rc
+  class: strapping-boot
+  evidence: '"the board is missing a capacitor between the RESET# signal (connected to ESP32 CHIP_PU/EN) and GND";
+    "adding a capacitor between the EN pin and GND (in the 1uF-10uF range) is necessary for the reset circuitry
+    to work reliably"'
+  collected: '2026-08-14'
+- id: BUG-0014
+  title: Catalex microSD module MISO never tri-states
+  source:
+    url: https://forum.arduino.cc/t/microsd-card-hardware-fault-fixed/625442
+    kind: forum_postmortem
+  symptom: SD card works alone, but every other SPI device on the shared bus fails to communicate.
+  root_cause: Level-shifter buffer (LVC125A) output-enable pin 13 soldered to ground, so MISO is driven even when
+    CS is deasserted — permanent SPI bus contention.
+  category: spi-bus-contention
+  class: bus-interface
+  evidence: '"The MISO line never goes into the tri-state mode... any attempt to use the SPI bus for any other communication
+    is doomed to fail."'
+  collected: '2026-08-14'
+- id: BUG-0015
+  title: ESP32 GPIO12 flash-voltage strapping pin bricks boards
+  source:
+    url: https://github.com/micropython/micropython/issues/6149
+    kind: github_issue
+  symptom: Boards stop booting entirely after GPIO12 is used; flash cannot be read or written, perpetual boot errors.
+  root_cause: GPIO12/MTDI is sampled at reset to select the VDD_SDIO flash regulator voltage (3.3V vs 1.8V); external
+    circuitry on the pin flips flash to the wrong supply voltage.
+  category: strapping-pin-conflict
+  class: strapping-boot
+  evidence: '"I''ve tried on a couple of boards here just opening GPIO12, and it has bricked both boards."'
+  collected: '2026-08-14'
+- id: BUG-0016
+  title: CAN bus fails from misplaced 120-ohm termination
+  source:
+    url: https://forum.allaboutcircuits.com/threads/can-bus-termination-issue.79831/
+    kind: forum_postmortem
+  symptom: Could not open CAN communication with an Axiomatic ECU; after splicing in a 120-ohm resistor, the bus
+    errored unless the actuator was unplugged.
+  root_cause: Bus lacked proper end termination; a device with a built-in terminator plus an added mid-bus resistor
+    produced wrong termination topology (not exactly two 120-ohm ends).
+  category: missing-termination
+  class: bus-interface
+  evidence: 'Papabravo''s diagnosis: "Get the terminators out of the products!! They do not belong there!!!!"'
+  collected: '2026-08-14'
+- id: BUG-0017
+  title: 'I2C address 0x68 collision: MPU6050 vs DS1307/DS3231 RTC'
+  source:
+    url: https://forum.arduino.cc/t/rtc-device-by-i2c-but-not-addr-0x68/591071
+    kind: forum_postmortem
+  symptom: Accelerometer and RTC cannot coexist on one I2C bus; designer forced to hunt for an RTC at a different
+    address.
+  root_cause: MPU6050 and common RTCs (DS1307, DS3231) all default to fixed slave address 0x68; two responders at
+    one address make transactions undefined.
+  category: i2c-address-conflict
+  class: bus-interface
+  evidence: '"0x68 conflicts with MPU6050, and for MPU cross-platform compatibility I actually would not like to
+    change the MPU addr"'
+  collected: '2026-08-14'
+- id: BUG-0018
+  title: Internal MCU pull-ups too weak for I2C bus
+  source:
+    url: https://www.joshmcguigan.com/blog/internal-pull-up-resistor-i2c/
+    kind: blog_postmortem
+  symptom: I2C waveform unintelligible at 1 MHz; at 100 kHz the scope showed rise time consuming nearly the whole
+    HIGH clock period — marginal communication.
+  root_cause: Relying on weak internal pull-ups instead of external resistors; RC rise time too slow for bus speed.
+    Fixed with external 1 kOhm pull-ups on SDA/SCL.
+  category: wrong-pullup-value
+  class: bus-interface
+  evidence: '"...don''t be surprised if you need to use stronger external pull-up resistors to get things working,
+    especially if you require higher speeds."'
+  collected: '2026-08-14'
+- id: BUG-0019
+  title: STM32 BOOT0 pin left floating causes random boot failures
+  source:
+    url: https://community.st.com/t5/stm32-mcus-products/is-there-any-problem-when-boot0-pin-is-floating/td-p/133513
+    kind: forum_postmortem
+    additional_urls:
+    - https://stm32world.com/wiki/Boot0
+  symptom: Board ran once after programming, then became unresponsive after restart; intermittent entry into ROM
+    bootloader instead of user flash (PC seen at 0x1FFFxxxx).
+  root_cause: 'BOOT0 has no internal pull and was left unconnected; the floating strap samples random levels at
+    power-up. Fix: external pull-down to ground (10k-1M), described as not optional.'
+  category: floating-strap-pin
+  class: strapping-boot
+  evidence: 'ST moderator: "With a floating BOOT0, the pin would read in unforeseen random states during power-up."'
+  collected: '2026-08-14'
+- id: BUG-0020
+  title: UART TX-TX/RX-RX straight-through on first PCB
+  source:
+    url: https://easyeda.com/forum/topic/RX-and-TX-Swapped-on-PCB-c7c2f119f8e543fab626167177bdef26
+    kind: forum_postmortem
+  symptom: Designer found the board net between a WEMOS D1 Mini and a TTL-485 converter ran TX-to-TX and RX-to-RX
+    instead of crossing over.
+  root_cause: TX/RX label-direction confusion in the schematic produced straight-through UART nets; no crossover
+    means neither receiver ever sees data.
+  category: uart-tx-rx-swap
+  class: bus-interface
+  evidence: '"I always suggest to place zero ohm resistor in series of the TX and RX datalines. Thus you can solder
+    those resistors criss crossed if you have made the mistake"'
+  collected: '2026-08-14'
+- id: BUG-0021
+  title: STM32 internal pull-up on 5V-pulled I2C bus clamps and risks damage
+  source:
+    url: https://github.com/ARMmbed/mbed-os/issues/5102
+    kind: github_issue
+  symptom: I2C lines with external 5V pull-ups only reach 3.7-3.9V after init instead of 5V.
+  root_cause: 'Pins initialized OpenDrainPullup: the 3.3V internal pull-up path lets the die protection diode clamp
+    the 5V bus — a voltage-domain conflict and abs-max risk.'
+  category: bus-voltage-mismatch
+  class: bus-interface
+  evidence: '"Having pull-up activated on a 5V externally pull bus, cause the pin to clamp on the STM32 die diode
+    and could damage the IC"'
+  collected: '2026-08-14'
+- id: BUG-0022
+  title: 'I2C SCL dead: push-pull assumption with no external pull-up'
+  source:
+    url: https://community.st.com/t5/stm32-mcus-products/stm32-f3-i2c-scl-push-pull-issue/td-p/84992
+    kind: forum_postmortem
+  symptom: SCL flat-lined with no external pull-up; with only the weak internal pull-up enabled, rise times were
+    far too slow for communication.
+  root_cause: Designer configured SCL push-pull and omitted external pull-ups; the I2C peripheral silently forces
+    open-drain, so the line has no high driver without a pull-up resistor.
+  category: open-drain-vs-push-pull
+  class: bus-interface
+  evidence: '"When the I2C IP is enabled, I2C SCL+SDA pins are set to be open drain, for some STM32 chips, and STM32F373
+    might be the case."'
+  collected: '2026-08-14'
+- id: BUG-0023
+  title: 'ESP-12F resets: 3.3V supply undersized for WiFi current peaks'
+  source:
+    url: https://github.com/esp8266/Arduino/issues/2111
+    kind: github_issue
+  symptom: Module unstable on a 50mA-class supply, blue LED flickering and resets; runs fine from a bench source.
+  root_cause: Regulator sized to average (~14mA measured) rather than transmit peak current; rail sags below brownout.
+    A 100uF cap alone did not save the undersized supply.
+  category: regulator-undersized-brownout
+  class: power-supply
+  evidence: '"as soon as I connect the ESP to the meant power source, the 3.3V line drops to 1.8V"'
+  collected: '2026-08-14'
+- id: BUG-0024
+  title: ESP32-S3 custom board pulls strapping pins GPIO45/GPIO46 high
+  source:
+    url: https://flashgamer.com/blog/comments/esp32-s3-strapping-pins
+    kind: blog_postmortem
+  symptom: 'Flashing fails: "MD5 of file does not match data in flash!" with GPIO45 pulled up; "Wrong boot mode
+    detected" with GPIO46 pulled up. Neither error names the real cause.'
+  root_cause: Peripheral nets pulled strapping pins GPIO45 (VDD_SPI voltage select) and GPIO46 (boot mode) high
+    at reset. Author cut traces with a scalpel and bodged wires.
+  category: strapping-pin-conflict
+  class: strapping-boot
+  evidence: '"GPIO45 and GPIO46 both have weak pulldowns and should not be pulled up" ... "Both GPIO45 and GPIO46
+    can be used -> but not at startup"'
+  collected: '2026-08-14'
+- id: BUG-0025
+  title: BMOW Yellowstone tester mixes 5V expander with 3.3V MCU
+  source:
+    url: https://www.bigmessowires.com/2021/10/26/5v-logic-level-errors/
+    kind: blog_postmortem
+  symptom: Tester unreliable, dependent on supply voltage; communication fails entirely above 5.05V input.
+  root_cause: MCP23S17 powered at 5V needs VIH 4.0V but receives ~3.3V STM32 signals (0.6V shortfall); STM32 MOSI
+    additionally not 5V tolerant — a logic-level domain-crossing plus abs-max error.
+  category: logic-level-domain-crossing
+  class: bus-interface
+  evidence: '"I''m embarrassed that I made it this far into tester development without noticing such a fundamental
+    design error."'
+  collected: '2026-08-14'
+- id: BUG-0026
+  title: STM32F103 production batch shipped with BOOT0 floating
+  source:
+    url: https://community.st.com/t5/stm32-mcus-embedded-software/handling-boot0-floating-input/td-p/467951
+    kind: forum_postmortem
+  symptom: Manufactured boards with floating BOOT0 usually boot from flash but risk randomly entering the ROM bootloader
+    with temperature/EMI variation.
+  root_cause: BOOT0 left unconnected; the pin is latched by hardware on the 4th rising clock edge after reset, before
+    any code runs, so no software workaround exists.
+  category: floating-strap-pin
+  class: strapping-boot
+  evidence: 'OP: "can the Boot0 pin be disabled or disregarded internally somehow? Via a register setting or something?"
+    — answer: none; pins latched before software executes.'
+  collected: '2026-08-14'
+- id: BUG-0027
+  title: USB 5V tied to STM32 VDD kills the chip
+  source:
+    url: https://community.st.com/t5/stm32-mcus-products/warnings-on-voltages-and-board-design/td-p/558970
+    kind: forum_postmortem
+  symptom: 'STM32 permanently dead: flash program no longer executes and the programmer cannot recognize the chip.'
+  root_cause: USB 5V rail connected directly to the VDD bus, exceeding the STM32 absolute-maximum supply (~4.0V);
+    commenters note USB can reach 5.25V, ~30% over spec.
+  category: abs-max-violation
+  class: power-supply
+  evidence: '"I accidentally tied the USB 5V source to the VDD Bus thinking that it could also Power the Chip...
+    Now the STM32 Chip and Board are USELESS."'
+  collected: '2026-08-14'
+- id: BUG-0028
+  title: ESP8266 won't boot with e-paper CS on strapping pin GPIO15
+  source:
+    url: https://forum.arduino.cc/t/esp8266-not-booting-with-e-paper-spi-display-on-gpio15/639191
+    kind: forum_postmortem
+  symptom: ESP8266 silently fails to boot whenever the Waveshare e-paper display CS line is connected to GPIO15;
+    boots normally with it disconnected.
+  root_cause: 'The display V2''s level converter effectively pulls GPIO15 high at reset, overriding the weak pulldown;
+    GPIO15 must be low to boot from flash. Fixes: 2.4k pulldown or move CS to another GPIO.'
+  category: strapping-pin-conflict
+  class: strapping-boot
+  evidence: '"I changed the PIN definition in the sketch, so that D0 of the Wemos D1 mini is used for CS. That did
+    the trick!"'
+  collected: '2026-08-14'
+- id: BUG-0029
+  title: Arduino Nano FT232RL TEST pin left ungrounded
+  source:
+    url: https://emalliab.wordpress.com/tag/ft232rl/
+    kind: blog_postmortem
+  symptom: '"USB Device Not Recognised" errors when powered over USB, or device enumerates then repeatedly resets;
+    board works when powered externally or via ISP header.'
+  root_cause: FT232RL TEST pin (pin 26) must be tied to GND per datasheet but the Nano schematic leaves it uncommitted;
+    fix is soldering TEST (26) to AGND (25).
+  category: floating-pin
+  class: pin-config
+  evidence: The TEST pin "isn't correctly grounded, which makes the boards unreliable at best, and constantly failing
+    at worst."
+  collected: '2026-08-14'
+- id: BUG-0030
+  title: STM32WB55RG exposed pad left floating on custom board
+  source:
+    url: https://community.st.com/t5/stm32-mcus-wireless/exposed-pad-in-stm32wb55rg-connection-with-gnd-mandatory-or-not/td-p/645607
+    kind: forum_postmortem
+  symptom: 'New VFQFPN68 board cannot be flashed: ST-Link reports "target not found".'
+  root_cause: Designer left the exposed pad (pin 69, a ground connection) unconnected; ST confirmed per datasheet
+    DS11929 it must be tied to the GND plane, forcing a board respin.
+  category: unconnected-exposed-pad
+  class: grounding
+  evidence: 'OP: "I left the epad (69th pin) floating. Does this cause any issue?" ST moderator: "For a working
+    design, you need to connect the exposed pad to the GND plane."'
+  collected: '2026-08-14'
+- id: BUG-0031
+  title: ESP32-WROVER MTDI/GPIO12 not guaranteed low; flash runs at 1.8V
+  source:
+    url: https://www.esp32.com/viewtopic.php?t=36266
+    kind: forum_postmortem
+    additional_urls:
+    - https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/boot-mode-selection.html
+  symptom: Flash reads worked but write operations failed intermittently on ~100 already-shipped units of a custom
+    Wrover-module PCB — classic 1.8V/3.3V VDD_SDIO brownout signature.
+  root_cause: Board design couldn't guarantee GPIO12/MTDI low at power-up, so the strap set the internal VDD_SDIO
+    flash regulator to 1.8V for a 3.3V flash; mitigated by burning the flash-voltage eFuse.
+  category: floating-strap-pin
+  class: strapping-boot
+  evidence: 'Search-snippet confirmed (site bot-walled): OP "made a mistake by not guaranteeing that MTDI was always
+    pulled low during power-up"; Espressif doc: pulling this pin high causes "the flash to brownout" on 3.3V-flash
+    modules.'
+  collected: '2026-08-14'
+  review: needs-source-recheck
+- id: BUG-0032
+  title: 'ESP32-TV: 100K reset pull-down defeated by undocumented internal pull-up'
+  source:
+    url: https://atomic14.substack.com/p/a-potentially-explosive-error
+    kind: blog_postmortem
+  symptom: 'On new PCBs, USB misbehaves: the ESP32 and the USB2244 SD reader are both active and fighting over the
+    shared USB data lines.'
+  root_cause: Schematic relied on a 100K pull-down to hold the USB2244 in reset, but an undocumented internal pull-up
+    on that pin wins; fixed with a bodge resistor.
+  category: pull-resistor-contention
+  class: pin-config
+  evidence: '"there''s a sneaky hidden pull up resistor on the pull up pin that''s not documented anywhere" ...
+    "both the ESP32 and the USB2244 are both active and both trying to use the USB connection"'
+  collected: '2026-08-14'
+- id: BUG-0033
+  title: LM1117 output-cap ESR pushed below stability window
+  source:
+    url: https://forum.allaboutcircuits.com/threads/lm1117-tantalum-esr.52280/
+    kind: qa_site
+  symptom: Paralleling a 0.1uF film cap with the tantalum output cap drops effective ESR to 0.08 ohm at 3MHz — regulator
+    can break into oscillation.
+  root_cause: LM1117 loop compensation requires output capacitor ESR between 0.3 and 22 ohm; low-ESR ceramic/film
+    caps in parallel violate the lower bound and erase phase margin.
+  category: ldo-output-cap-esr-instability
+  class: power-supply
+  evidence: '"When I paralleled it with a .1 uF film cap, the ESR went below .3 Ohm at 1 MHz... this could lead
+    to an oscillating LDO."'
+  collected: '2026-08-14'
+- id: BUG-0034
+  title: MIC5504 enable pin left floating after regulator substitution
+  source:
+    url: https://www.baldengineer.com/5-ldo-regulator-considerations.html
+    kind: blog_postmortem
+  symptom: 'Regulator behaves unreliably after a part swap: enable input floats because the new LDO, unlike the
+    old one, has no internal pull-down.'
+  root_cause: Author checked only the electrical-characteristics table, missing the pin-description note that EN
+    must be driven; manufacturers differ on whether EN may float.
+  category: floating-enable-pin
+  class: pin-config
+  evidence: 'Search-snippet confirmed (direct fetch 403): author admits he "only looked at the electrical characteristics"
+    while "the pin description table told a different story — pin 4 is supposed to float, pin 3 is not."'
+  collected: '2026-08-14'
+  review: needs-source-recheck
+- id: BUG-0035
+  title: 'TUSB2046B hub fails enumeration: 22nF fitted where 22pF intended'
+  source:
+    url: https://e2e.ti.com/support/interface-group/interface/f/interface-forum/1070277/tusb2046b-usb-device-not-recognized
+    kind: qa_site
+  symptom: Custom hub board shows "Device failed enumeration" / Unknown USB Device (Port Reset Failed); downstream
+    devices never attach.
+  root_cause: Schematic specified a 0.022uF (22nF) capacitor where 22pF was intended in the TUSB2046B/TPS2044 network
+    — a 1000x value error swamping the signal; TI diagnosed via VBUS check and DP/DM scope capture.
+  category: wrong-component-value
+  class: component-selection
+  evidence: 'Search-snippet confirmed (direct fetch 403): root cause was "a 0.022uF (22nF) cap where 22pF was intended";
+    log showed "Unknown USB Device (Port Reset Failed)".'
+  collected: '2026-08-14'
+  review: needs-source-recheck
+- id: BUG-0036
+  title: Resistor with both pins on the same net passes SKiDL ERC
+  source:
+    url: https://github.com/devbisme/skidl/issues/97
+    kind: github_issue
+  symptom: User's code-defined circuit had r1 electrically useless; nothing flagged it. Mistake only spotted visually
+    in netlistsvg output.
+  root_cause: Accidental double assignment connected both resistor pins to the same net, shorting the part out;
+    SKiDL ERC has no single-net-part check.
+  category: erc-gap-shorted-part
+  class: other
+  evidence: '"The end result was naturally that r1 was connected to net on both pins. This didn''t raise any ERC
+    warnings." (verified via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0037
+  title: SKiDL part template wired into circuit produces invalid netlist, ERC silent
+  source:
+    url: https://github.com/devbisme/skidl/issues/94
+    kind: github_issue
+  symptom: 'Two test points joined through a TEMPLATE resistor: ERC clean, but the netlist references component
+    ''None'' — the resistor doesn''t exist, leaving an open circuit.'
+  root_cause: SKiDL allowed connecting a part template (not an instantiated part) to nets; no check that nets only
+    touch real parts.
+  category: erc-gap-phantom-part
+  class: other
+  evidence: '"The ERC raises no issues and the generated netlist is unsurprisingly invalid because it references
+    a component called ''None''." (verified via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0038
+  title: atopile adds check requiring pull-ups on in-use I2C buses
+  source:
+    url: https://github.com/atopile/atopile/pull/1173
+    kind: github_issue
+  symptom: I2C buses designed without pull-ups compile fine; the bus is non-functional on hardware (open-drain lines
+    never go high).
+  root_cause: Missing/insufficient pull-up resistance on SDA/SCL; atopile added a requires_pulls design check to
+    catch this common designer error.
+  category: erc-gap-missing-i2c-pullup
+  class: bus-interface
+  evidence: 'PR: "implements check for I2C signals which are in use (connect across a pad boundary) and not pulled
+    up with sufficient resistance" (verified via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0039
+  title: atopile ERC misses net-name collisions when names set via ato
+  source:
+    url: https://github.com/atopile/atopile/issues/984
+    kind: github_issue
+  symptom: Two distinct nets given the same override_net_name silently merge in output; no collision diagnostic
+    at build time.
+  root_cause: attach_net_names runs after the ERC stage, so the net-name collision check never sees ato-assigned
+    names — an ordering gap that shorts unrelated nets.
+  category: erc-gap-net-name-collision
+  class: other
+  evidence: '"since attach_net_names happens after the erc check in buildutil, it does not detect net name collisions."
+    (verified via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0040
+  title: atopile adds ERC voltage-compatibility check for connected power rails
+  source:
+    url: https://github.com/atopile/atopile/pull/1677
+    kind: github_issue
+  symptom: Designs connecting power rails with incompatible declared voltages (e.g. 5V into a 3.3V domain) built
+    without complaint.
+  root_cause: No solver-backed check that connected ElectricPower interfaces have overlapping voltage ranges; PR
+    adds voltage domain-crossing validation.
+  category: erc-gap-voltage-domain
+  class: power-supply
+  evidence: 'PR Motivation: "Otherwise you can connect voltage-incompatible power rails with eachother" (verified
+    via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0041
+  title: 'atopile check gap: unresolved/duplicate I2C addresses not surfaced'
+  source:
+    url: https://github.com/atopile/atopile/issues/1269
+    kind: github_issue
+  symptom: A device whose address strapping (addressor) is never configured passes checks; address conflicts on
+    the bus go undetected until hardware.
+  root_cause: I2C.requires_unique_addresses only validates resolved addresses, so an addressor with no address silently
+    escapes the uniqueness check.
+  category: erc-gap-i2c-address
+  class: bus-interface
+  evidence: '"Need to hint to user if something very likely is wrong, eg addressor not having any address." (verified
+    via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0042
+  title: tscircuit adds warning for chip power pins without decoupling capacitors
+  source:
+    url: https://github.com/tscircuit/checks/pull/175
+    kind: github_issue
+  symptom: Boards with VCC/VDD pins lacking local decoupling passed all checks; classic instability/brownout risk
+    on real hardware.
+  root_cause: No ERC-level rule tying power pins to nearby decoupling caps; merged PR adds should_have_decoupling_capacitor
+    inference (VCC/VDD labels) plus a connectivity check.
+  category: erc-gap-missing-decoupling
+  class: power-supply
+  evidence: 'PR: "a conventional chip power label such as VCC or VDD resolves to true" for should_have_decoupling_capacitor;
+    warning emitted in @tscircuit/checks (verified via GitHub API)'
+  collected: '2026-08-14'
+- id: BUG-0043
+  title: 'RP2040 clone board: adjustable regulator''s FB pin tied straight to VOUT'
+  source:
+    url: https://forum.kicad.info/t/help-needed-my-switching-voltage-regulator-is-not-working/58957
+    kind: forum_postmortem
+  symptom: 'First board from JLCPCB: RT6150 buck-boost never produced 3.3V. Diagnosed in-thread; user confirmed
+    by cutting trace and bodging a divider.'
+  root_cause: Copied Pico reference schematic (fixed-output RT6150B33) but stocked adjustable RT6150BGQW, which
+    needs a feedback voltage divider instead of FB connected to VOUT.
+  category: regulator-feedback-misconfig
+  class: power-supply
+  evidence: 'OP: "the main problem was (as many of you commented) about connecting the FD pin (10) directly to VOUT
+    (1)" (fetched thread JSON directly)'
+  collected: '2026-08-14'
+- id: BUG-0044
+  title: MPPT board op-amps wired with supply rails reversed
+  source:
+    url: https://forum.kicad.info/t/pcb-design-mistakes-feedback/57732
+    kind: forum_postmortem
+  symptom: Fabricated power board didn't regulate; reviewers found the op-amp buffers (U5/U6) miswired — no schematic/PCB
+    netlist parity since schematic lived in Proteus, PCB in KiCad.
+  root_cause: Op-amp V+ and V- supply pins swapped (reversed polarity), likely destroying the parts; no ERC possible
+    across the two disconnected tools.
+  category: reversed-supply-polarity
+  class: power-supply
+  evidence: '"The first problem with the op amp connection is that the supply rails are reversed... That is likely
+    to destroy the op amps" (fetched thread JSON directly)'
+  collected: '2026-08-14'
+- id: BUG-0045
+  title: Pull-up placed on wrong strapping pin (IO15 instead of MTDI/IO12)
+  source:
+    url: https://www.esp32.com/viewtopic.php?t=2387
+    kind: forum_postmortem
+  symptom: VDD_SDIO kept reverting to 3.3V after reboot despite 'bootstrap' pull-up; days lost debugging boot behavior.
+    Thread marked '[own mistake-solved]'.
+  root_cause: 'Designer strapped the wrong pin: pull-up on IO15 instead of MTDI/GPIO12, the pin that actually selects
+    1.8V flash VDD_SDIO.'
+  category: strapping-pin-wrong-pin
+  class: strapping-boot
+  evidence: 'Poster rudi: "so all my waste time was cause we did all time the wrong pull up on wrong bootstrap?"
+    (confirmed via search snippet; site bot-walled)'
+  collected: '2026-08-14'
+  review: needs-source-recheck
+- id: BUG-0046
+  title: 'KiCad 6 ERC false negative: undriven input pin on typo''d net label'
+  source:
+    url: https://gitlab.com/kicad/code/kicad/-/issues/10430
+    kind: other_public
+  symptom: Input pin wired to a net label that exists nowhere else (classic label-typo floating input) produces
+    no ERC error in KiCad 6; KiCad 5 flagged it.
+  root_cause: ERC regression stopped reporting 'Input pin not driven by any Output pins' for single-endpoint labeled
+    nets, letting floating-input schematic bugs through.
+  category: erc-gap-floating-input
+  class: pin-config
+  evidence: '"it does not give me a ''Input pin not driven by any Output pins'' error when it is expected" (verified
+    via WebFetch of GitLab issue)'
+  collected: '2026-08-14'
+- id: BUG-0047
+  title: 'RP2350-E9 erratum: internal pull-down inputs latch at ~2.1V'
+  source:
+    url: https://forums.raspberrypi.com/viewtopic.php?t=375631
+    kind: forum_postmortem
+  symptom: GPIO inputs relying on the internal pull-down latch near 2.1-2.2V after first being driven high; buttons,
+    ADC inputs, and open-collector buses never read low again. Halted Bus Pirate 5XL/6 production.
+  root_cause: Vendor-modified pad circuit behaves as bus-hold; erratum requires wiring for internal pull-ups instead
+    or external pull-downs (~8.2k or less) on every affected input.
+  category: vendor-erratum-external-pull
+  class: pin-config
+  evidence: 'RPi engineer on thread: "the modified layout we got back was a completely different circuit"; external
+    pull-down workaround discussed and confirmed.'
+  collected: '2026-08-14'
+- id: BUG-0048
+  title: STM32 Blue Pill USB D+ pull-up wrong value (10k/4.7k vs 1.5k)
+  source:
+    url: http://amitesh-singh.github.io/stm32/2017/05/27/Overcoming-wrong-pullup-in-blue-pill.html
+    kind: blog_postmortem
+  symptom: USB device enumeration fails or is unreliable on many hosts when the Blue Pill is plugged in.
+  root_cause: Full-speed USB requires a 1.5k pull-up on D+ to 3.3V; boards ship R10 as 10k or 4.7k, so the host
+    cannot detect the device reliably.
+  category: wrong-pullup-value
+  class: usb
+  evidence: 'Verified via WebFetch: "It ships with either a 10K resistor or a 4.7k resistor"; fix is replacing R10
+    with 1.5k.'
+  collected: '2026-08-14'
+- id: BUG-0049
+  title: CH340 V3 pin capacitor-only wiring at 3.3V operation
+  source:
+    url: https://www.digikey.com/en/maker/blogs/2025/non-compliant-use-of-ch340-v3-pin-deep-dive-for-engineers
+    kind: blog_postmortem
+  symptom: CH340 designs run at 3.3V with V3 wired only to a decoupling cap work marginally; V3 rail sags under
+    load, risking unreliable operation.
+  root_cause: WCH datasheet requires V3 tied to VCC when VCC=3.3V (cap-only wiring is the 5V configuration); the
+    internal LDO in dropout cannot source external current.
+  category: pin-role-misconfiguration
+  class: pin-config
+  evidence: 'Bench test in article, verified via WebFetch: "drawing 28mA dropped V3 to 2.90V", which may not run
+    the CH340 reliably.'
+  collected: '2026-08-14'
+- id: BUG-0050
+  title: USB-C CC pulldowns populated as 10k instead of 5.1k
+  source:
+    url: https://github.com/nodestark/mdb-esp32-cashless/issues/30
+    kind: github_issue
+  symptom: Incorrect USB-C role identification, cable/charger detection failures, and unreliable power negotiation
+    on the ESP32-based board.
+  root_cause: UFP requires Rd = 5.1k on CC1 and CC2; the design used 10k, outside the spec's Rd detection window.
+  category: usb-c-cc-termination
+  class: usb
+  evidence: 'Issue, verified via WebFetch: a UFP "must use 5.1 kOhm pull-down resistors on CC1 and CC2"; hardware
+    fix swaps 10k to 5.1k.'
+  collected: '2026-08-14'
+- id: BUG-0051
+  title: KSZ9031RNX strap pull-up on RX_CLK corrupts PHY bootstrap
+  source:
+    url: https://www.xcore.com/viewtopic.php?t=8040
+    kind: forum_postmortem
+  symptom: Ethernet fine at 100Mbit but gigabit loses roughly 40% of pings with corrupted loopback data between
+    PHY and XMOS MAC.
+  root_cause: PHY-address bootstrap pull-up on the shared RX_CLK/PHYAD2 pin violated the MAC-side requirement that
+    RX_CLK be low at reset; removing the pull-up (strap via internal pull-downs) fixed it.
+  category: strapping-pin-conflict
+  class: strapping-boot
+  evidence: 'OP confirmation in thread (search-snippet verified; direct fetch blocked 406): "Issue was caused by
+    bit-strap PU on RXCLK line!"'
+  collected: '2026-08-14'
+  review: needs-source-recheck
+- id: BUG-0052
+  title: 32.768kHz crystal load-capacitance mismatch prevents startup / causes drift
+  source:
+    url: https://www.petermann-technik.com/main-menu/practical-knowledge/why-is-my-32768-khz-crystal-not-resonating.html
+    kind: vendor_erratum
+  symptom: RTC crystal fails to start oscillating, starts intermittently, or runs off-frequency (clock drift).
+  root_cause: External load caps not matched to crystal CL (stray capacitance ignored); manufacturer also cites
+    exceeding the 0.5-1.0uW tuning-fork drive level causing drift and ageing.
+  category: crystal-load-caps
+  class: clock-crystal
+  evidence: 'Crystal maker page, verified via WebFetch: with CL too low "the crystal does not receive sufficient
+    energy feedback" and oscillation can fail.'
+  collected: '2026-08-14'
+- id: BUG-0053
+  title: AMS1117 unstable with low-ESR ceramic-only output capacitor
+  source:
+    url: https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/8122/AMS11173.3SOT223.pdf
+    kind: vendor_erratum
+  symptom: 'Datasheet-caveat entry: stability is only specified with the required tantalum output capacitor, so
+    ceramic-only output-capacitor designs operate outside the datasheet''s stated stability conditions. The cited
+    source documents the requirement, not a specific observed field failure.'
+  root_cause: Output-capacitor selection outside the datasheet's frequency-compensation requirements; the AMS1117
+    datasheet requires a minimum 10uF tantalum output capacitor for stability and states the capacitor's ESR must
+    not exceed 0.5 ohm, and it does not qualify ceramic-only output capacitors.
+  category: ldo-output-cap-esr-instability
+  class: power-supply
+  evidence: 'Datasheet-caveat (requirement stated by datasheet, not an observed failure report), re-verified from
+    downloaded PDF 2026-08-15: "A minimum of 10uF tantalum capacitor is required at the output to improve the transient
+    response and stability" (p.1); output-capacitor section: "Typically, a 10uF tantalum or 50uF aluminum electrolytic
+    is sufficient... It is important that the ESR for this capacitor does not exceed 0.5 Ohm."'
+  collected: '2026-08-14'
+- id: BUG-0054
+  title: CP2102/9 VBUS tied directly to 5V without required divider (abs-max violation)
+  source:
+    url: https://www.silabs.com/documents/public/data-sheets/CP2102-9.pdf
+    kind: vendor_erratum
+  symptom: 'Datasheet-caveat entry: in self-powered designs where VDD/REGIN may be unpowered while USB 5V is present,
+    tying VBUS directly to 5V exceeds the CP2109 absolute-maximum VBUS rating (VDD+3.6V with VDD not powered). The
+    cited source documents the requirement, not a specific observed field failure.'
+  root_cause: CP2109 abs-max on VBUS is VDD+3.6V when VDD is not powered; datasheet section 10 and Note 1 of Figures
+    8/10 require a resistor divider (47k/24k shown) on VBUS for such self-powered systems. The bus-powered reference
+    figure shows no divider, making the omission easy.
+  category: abs-max-violation
+  class: usb
+  evidence: 'Datasheet-caveat (requirement stated by datasheet, not an observed failure report), re-verified from
+    downloaded PDF rev 1.8 on 2026-08-15: "a resistor divider (or functionally-equivalent circuit) on VBUS is required
+    to meet the absolute maximum voltage on VBUS specification" (Note 1, p.20, Figure 8, divider 47k/24k); Table
+    2 CP2109 abs-max on VBUS with "VDD not powered" is VDD+3.6V.'
+  collected: '2026-08-14'
+- id: BUG-0055
+  title: TL072 buffers with floating inputs overheat and back-drive ADC
+  source:
+    url: https://forum.allaboutcircuits.com/threads/tl072-op-amp-voltage-follower-acts-weird.181020/
+    kind: forum_postmortem
+  symptom: TL072 voltage follower on +/-15V overheated severely; ~33 mA flowed from op-amp output into ADS1115 ADC
+    input, only when ADC was connected.
+  root_cause: Floating high-impedance inputs let the output slam to a supply rail; the 15V rail-level output drove
+    the 5V ADC's input protection clamps, sinking destructive current. Fixed with 10 Mohm pull-downs plus feedback
+    resistor and bypass caps.
+  category: floating-input-pins
+  class: pin-config
+  evidence: '"When you let the + input of an opamp that has a +15V and -15V power supply float, it might oscillate
+    or float to +15V or -15V."'
+  collected: '2026-08-14'
+- id: BUG-0056
+  title: NE555 astable locks up from missing supply decoupling capacitor
+  source:
+    url: https://forum.allaboutcircuits.com/threads/troubleshooting-ne555-astable-operation.148618/
+    kind: forum_postmortem
+  symptom: 600 Hz PWM ran for 10-20 seconds, then pin 3 output stuck at a constant 5V with no switching.
+  root_cause: No decoupling/bulk capacitor across pins 1-8; supply noise upset the internal comparators. Adding
+    the datasheet-recommended 1 uF electrolytic across the supply pins fixed it permanently.
+  category: missing-decoupling-cap
+  class: power-supply
+  evidence: 'OP confirmed fix: "after i used 1uF capacitor as described i am running PWM signal without stop for
+    last 2 hours."'
+  collected: '2026-08-14'
+- id: BUG-0057
+  title: Comparator hysteresis returned to wrong input causes relay chatter
+  source:
+    url: https://forum.allaboutcircuits.com/threads/hysteresis-on-buffered-comparator-input-signal.85545/
+    kind: forum_postmortem
+  symptom: RC-timer relay circuit short-cycled audibly ("you should've heard that poor little relay"); comparator
+    node chaotic and wouldn't settle after adding a hysteresis pot.
+  root_cause: Hysteresis divider was wired to the inverting input, creating negative feedback instead of a Schmitt
+    trigger. Swapping signal to inverting input and feedback to non-inverting input gave true positive-feedback
+    hysteresis.
+  category: comparator-hysteresis-miswired
+  class: analog-stability
+  evidence: '"By leading the input signal to the inverted input and the hysteresis arrangement to the non-inverting
+    input, the amplifier stabilized due to positive feedback."'
+  collected: '2026-08-14'
+- id: BUG-0058
+  title: Class AB output stage thermal runaway from uncoupled bias diodes
+  source:
+    url: https://forum.allaboutcircuits.com/threads/class-ab-amplifier-over-heating-puzzle.135982/
+    kind: forum_postmortem
+  symptom: On 2 of 9 identical amplifier circuits, output transistor temperature rose without limit within 60 seconds,
+    despite clean sine output; other 7 stayed cold.
+  root_cause: 'Bias diodes not thermally coupled to output transistors and no emitter degeneration: Vbe drops as
+    devices heat while bias stays fixed, so quiescent current runs away; device tolerance spread explains 2-of-9.
+    Fix: 1-ohm emitter resistors.'
+  category: thermal-runaway-bias
+  class: thermal
+  evidence: '"A 1 ohm emitter resistor give a mV of negative-feedback difference for a mA of current change, providing
+    a strong stabilizing effect to the emitter current."'
+  collected: '2026-08-14'
+- id: BUG-0059
+  title: External source hard-wired to AREF shorts internal ADC reference
+  source:
+    url: https://forum.arduino.cc/t/is-my-aref-damaged/427294
+    kind: forum_postmortem
+  symptom: After wiring the 3.3V rail directly to AREF on a Mega 2560, AREF measures 5V regardless of selected reference
+    mode (1.1V, 2.56V, external) - reference circuit damaged.
+  root_cause: analogRead() before analogReference(EXTERNAL) drives the internal reference onto AREF against the
+    stiff external 3.3V source, shorting them; design needs a series resistor (or never hard-wiring a source to
+    a reference output pin).
+  category: adc-reference-conflict
+  class: pin-config
+  evidence: 'Poster: measured AREF "5v Vcc regardless" of reference setting; docs warning cited in thread: "this
+    can possibly damage the Arduino".'
+  collected: '2026-08-14'
+- id: BUG-0060
+  title: AD8066 buffer oscillates from negative input impedance with inductive source
+  source:
+    url: https://www.electronics-related.com/showthread/sci.electronics.design/641793-1.php
+    kind: mailing_list
+  symptom: Unity-gain AD8066 coax driver oscillated vigorously at ~50 MHz when input was shorted with a clip lead;
+    frequency ranged 6.5-116 MHz tracking source inductance.
+  root_cause: 'The buffer''s input impedance has a negative real part at HF (input capacitance plus feedback phase
+    lag), forming an undamped resonance with any inductive source. Fix: ~400 ohm series R plus 3.3 pF shunt at the
+    non-inverting input.'
+  category: opamp-stability
+  class: analog-stability
+  evidence: '"It seems like the input impedance of this buffer has a negative real part" (diagnosis in thread).'
+  collected: '2026-08-14'
+- id: BUG-0061
+  title: 'LTC6241 buffer oscillates at 405 kHz: 1 Mohm feedback with no CF'
+  source:
+    url: https://electronics.stackexchange.com/questions/413450/this-op-amp-buffer-is-oscillating-and-i-cant-figure-out-why
+    kind: qa_site
+  symptom: Inverting unity buffer (LTC6241HV, 1 Mohm resistors) output showed a ~405 kHz sine superimposed on the
+    1 kHz signal; identical on a second PCB.
+  root_cause: Megohm feedback resistance forms an in-loop pole with the op-amp's input capacitance, destroying phase
+    margin at unity gain; the required feedback capacitor was missing. OP confirmed 15 pF across RF fixed it.
+  category: opamp-stability
+  class: analog-stability
+  evidence: 'Accepted answer quoting LTC datasheet: "this pole can create excess phase shift and possibly oscillation.
+    A small capacitor CF in parallel with RF eliminates this problem."'
+  collected: '2026-08-14'
+- id: BUG-0062
+  title: 'Single-supply inverting amp clips: non-inverting input not biased to mid-rail'
+  source:
+    url: https://electronics.stackexchange.com/questions/90840/op-amp-output-clipped
+    kind: qa_site
+  symptom: uA741 inverting amplifier on a single 5V supply produced a flat-topped, constrained output; clipping
+    persisted even with the feedback resistor removed.
+  root_cause: Non-inverting input referenced to 0V instead of a mid-supply virtual ground, so equilibrium requires
+    output swing below ground; compounded by the 741's non-rail-to-rail swing on 5V.
+  category: opamp-biasing
+  class: analog-stability
+  evidence: 'Answer: "You have to tie noninverting input to a midpoint between the rails. 2.5V in this particular
+    case."'
+  collected: '2026-08-14'

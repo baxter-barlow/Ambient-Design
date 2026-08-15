@@ -1,0 +1,18 @@
+{
+  "x_negative_control": "DEFECT (source-map schema): the declaration span for /r_a omits byte_start. Byte offsets are the authoritative half of a span; line/col are denormalized. A span carrying only line/col cannot be re-resolved after reformatting, which is exactly what the diagnostic-anchor rule exists to prevent.",
+  "sourcemap_version": 0,
+  "ir_version": 0,
+  "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "files": [
+    {
+      "path": "examples/blinker.aed",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "nodes": {
+    "/r_a": {
+      "declaration": { "file": 0, "byte_end": 164, "line_start": 4, "col_start": 5, "line_end": 4, "col_end": 49 },
+      "instantiation_trace": []
+    }
+  }
+}
