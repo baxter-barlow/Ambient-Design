@@ -53,6 +53,7 @@ SCHEMA_ROOTS = {
         (".sourcemap.json", "source-map.schema.json"),
     ),
     "parts": ((".part.json", "part-data.schema.json"),),
+    "eval": ((".run.json", "run-result.schema.json"),),
 }
 
 NEGATIVE_DIR_NAME = "negative"

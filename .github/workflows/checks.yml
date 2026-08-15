@@ -71,6 +71,31 @@ jobs:
         # membership, sort order, licence containment. Stdlib only.
         run: python3 parts/lint-part-data.py
 
+  eval-harness:
+    name: Measurement harness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # Keep in sync with toolchain/versions.yaml (python.version).
+          python-version: "3.12"
+      - name: Run harness tests
+        # stdlib unittest: no install step, so this job cannot be weakened
+        # by a dependency resolution problem.
+        run: python3 -m unittest discover -s eval/tests -t eval
+      - name: Verify statistics against closed-form values
+        run: cd eval && python3 -m aed_eval selftest
+      - name: Replay the recorded transcript end to end
+        # Exercises the whole protocol offline with no API key and no spend.
+        # The transcript carries per-turn request digests, so a change to
+        # the prompt or the protocol fails here instead of silently
+        # producing results for a run that never happened.
+        run: cd eval && python3 -m aed_eval replay --transcript fixtures/demo-replay.json --allow-stub
+
   benchmarks-sim:
     name: Benchmark simulation
     runs-on: ubuntu-24.04
