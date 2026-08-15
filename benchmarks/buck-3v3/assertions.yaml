@@ -1,0 +1,67 @@
+# AED benchmark b: 3.3V/2A buck -- dynamic assertions (rung 0, behavioral)
+# Windows are the task defaults; none were widened. Measured values are from
+# the canonical `ngspice -b netlist.cir` run recorded in validation.log
+# (ngspice-46, 0.38 s wall, 2026-08-15 fix round).
+
+benchmark: bench-buck
+fidelity_class: behavioral
+sim_rung: 0
+deck: netlist.cir
+runtime_budget_s: 60
+measured_runtime_s: 0.38
+
+assertions:
+  - name: vout_mean
+    kind: meas_avg            # .meas tran vout_avg AVG v(out) 2.0m-2.5m, 2 A load
+    meas_id: vout_avg
+    expected:
+      min: 3.201              # 3.3 V - 3%
+      max: 3.399              # 3.3 V + 3%
+      unit: V
+    measured: 3.32796
+    status: pass              # +0.85% (feedback divider 31.6k/10k regulation point)
+
+  - name: vout_ripple_pp
+    kind: meas_pp             # .meas tran vout_pp PP v(out) 2.4m-2.5m
+    meas_id: vout_pp
+    expected:
+      max: 0.050
+      unit: V
+    measured: 0.00709
+    status: pass
+
+  - name: efficiency
+    kind: meas_ratio          # avg(-v(in)*i(V3)) vs avg(v(out)*i(Vsl)), 2.0m-2.5m
+    meas_id: eff
+    expected:
+      min: 0.85
+      unit: ratio
+    measured: 0.92945
+    status: pass              # conduction losses explicit (DCR 20.4 mOhm max);
+                              # 0.40 W fixed-loss budget
+
+  - name: startup_overshoot
+    kind: meas_derived        # (max v(out) 0-1.4m / avg v(out) 1.3m-1.5m - 1)*100
+    meas_id: overshoot_pct
+    expected:
+      max: 5.0
+      unit: percent
+    measured: 0.112
+    status: pass              # 500 us soft-start ramp on the reference
+
+  - name: load_step_settling
+    kind: meas_when           # last re-entry of +/-1% band after 1A->2A step at 1.5 ms
+    meas_id: t_settle_us
+    expected:
+      max: 500.0
+      unit: us
+    measured: 16.02
+    status: pass
+
+cross_checks:                 # informational, not gating
+  - name: inductor_ripple_pp
+    meas_id: il_pp
+    predicted: 0.479          # Vout*(1-D)/(L*fsw) at Vin=12, ideal D=0.275
+    measured: 0.520
+    note: measured duty exceeds ideal D=Vout/Vin to cover modeled IR drops
+      (Ron + DCR ~= 26 mOhm)

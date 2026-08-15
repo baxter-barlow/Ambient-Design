@@ -1,0 +1,39 @@
+{
+  "x_negative_control": "DEFECT: port /timer.vcc declares role \"power\", which is not a member of the T2 pin-role lattice. The ERC lattice is closed (power_in / power_out / passive / bidirectional / open_drain / open_collector / tri_state / input / output / nc); an unknown role would silently disable direction checking on that pin.",
+  "header": {
+    "ir_version": 0,
+    "language_version": "0.1.0",
+    "design_name": "neg",
+    "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generator": { "name": "aedc", "version": "0.1.0" },
+    "canonical_form": "aed-canonical-json/1"
+  },
+  "instances": [
+    {
+      "path": "/",
+      "kind": "module",
+      "definition": "neg.Root",
+      "parameters": {},
+      "ports": [],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    },
+    {
+      "path": "/timer",
+      "kind": "component",
+      "definition": "aed.lib.timer.Ne555",
+      "parameters": {},
+      "ports": [
+        { "name": "vcc", "role": "power", "pin_numbers": ["8"] }
+      ],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    }
+  ],
+  "nets": [],
+  "connections": [],
+  "assertions": []
+}

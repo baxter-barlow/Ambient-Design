@@ -1,0 +1,144 @@
+{
+  "sourcemap_version": 0,
+  "ir_version": 0,
+  "design_hash": "sha256:8c500aaf8dc8a24ebdef92c23f775936f5d4d3685a064f88ff9a727e0a589eb4",
+  "files": [
+    {
+      "path": "examples/blinker.aed",
+      "sha256": "c65fae0174616b55620ba6539c41d29bf8724d5497df981ab29e764ecf202c2a"
+    },
+    {
+      "path": "examples/lib/indicator.aed",
+      "sha256": "7a0af331bb5b0c8ae2d3a8d677f530fad943697963dc375fe02e70deb5bf8960"
+    }
+  ],
+  "nodes": {
+    "/": {
+      "declaration": { "file": 0, "byte_start": 0, "byte_end": 18, "line_start": 1, "col_start": 1, "line_end": 1, "col_end": 19 },
+      "instantiation_trace": []
+    },
+    "/assert_duty": {
+      "declaration": { "file": 0, "byte_start": 920, "byte_end": 958, "line_start": 18, "col_start": 5, "line_end": 18, "col_end": 43 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 920, "byte_end": 958, "line_start": 18, "col_start": 5, "line_end": 18, "col_end": 43 }
+      ]
+    },
+    "/assert_freq": {
+      "declaration": { "file": 0, "byte_start": 860, "byte_end": 901, "line_start": 17, "col_start": 5, "line_end": 17, "col_end": 46 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 860, "byte_end": 901, "line_start": 17, "col_start": 5, "line_end": 17, "col_end": 46 }
+      ]
+    },
+    "/c_ctl": {
+      "declaration": { "file": 0, "byte_start": 496, "byte_end": 519, "line_start": 10, "col_start": 5, "line_end": 10, "col_end": 28 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 496, "byte_end": 519, "line_start": 10, "col_start": 5, "line_end": 10, "col_end": 28 }
+      ]
+    },
+    "/c_t": {
+      "declaration": { "file": 0, "byte_start": 260, "byte_end": 317, "line_start": 6, "col_start": 5, "line_end": 6, "col_end": 62 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 260, "byte_end": 317, "line_start": 6, "col_start": 5, "line_end": 6, "col_end": 62 }
+      ]
+    },
+    "/indicator": {
+      "declaration": { "file": 0, "byte_start": 340, "byte_end": 399, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 64 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 340, "byte_end": 399, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 64 }
+      ]
+    },
+    "/indicator/d1": {
+      "declaration": { "file": 1, "byte_start": 130, "byte_end": 151, "line_start": 5, "col_start": 5, "line_end": 5, "col_end": 26 },
+      "instantiation_trace": [
+        { "file": 1, "byte_start": 130, "byte_end": 151, "line_start": 5, "col_start": 5, "line_end": 5, "col_end": 26 },
+        { "file": 0, "byte_start": 340, "byte_end": 399, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 64 }
+      ]
+    },
+    "/indicator/r_lim": {
+      "declaration": { "file": 1, "byte_start": 85, "byte_end": 124, "line_start": 4, "col_start": 5, "line_end": 4, "col_end": 44 },
+      "instantiation_trace": [
+        { "file": 1, "byte_start": 85, "byte_end": 124, "line_start": 4, "col_start": 5, "line_end": 4, "col_end": 44 },
+        { "file": 0, "byte_start": 340, "byte_end": 399, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 64 }
+      ]
+    },
+    "/j_bat": {
+      "declaration": { "file": 0, "byte_start": 23, "byte_end": 55, "line_start": 2, "col_start": 5, "line_end": 2, "col_end": 37 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 23, "byte_end": 55, "line_start": 2, "col_start": 5, "line_end": 2, "col_end": 37 }
+      ]
+    },
+    "/mh1": {
+      "declaration": { "file": 0, "byte_start": 460, "byte_end": 495, "line_start": 9, "col_start": 5, "line_end": 9, "col_end": 40 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 460, "byte_end": 495, "line_start": 9, "col_start": 5, "line_end": 9, "col_end": 40 }
+      ]
+    },
+    "/r_a": {
+      "declaration": { "file": 0, "byte_start": 120, "byte_end": 164, "line_start": 4, "col_start": 5, "line_end": 4, "col_end": 49 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 120, "byte_end": 164, "line_start": 4, "col_start": 5, "line_end": 4, "col_end": 49 }
+      ]
+    },
+    "/r_b": {
+      "declaration": { "file": 0, "byte_start": 190, "byte_end": 233, "line_start": 5, "col_start": 5, "line_end": 5, "col_end": 48 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 190, "byte_end": 233, "line_start": 5, "col_start": 5, "line_end": 5, "col_end": 48 }
+      ]
+    },
+    "/timer": {
+      "declaration": { "file": 0, "byte_start": 78, "byte_end": 95, "line_start": 3, "col_start": 5, "line_end": 3, "col_end": 22 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 78, "byte_end": 95, "line_start": 3, "col_start": 5, "line_end": 3, "col_end": 22 }
+      ]
+    },
+    "/tp_out": {
+      "declaration": { "file": 0, "byte_start": 420, "byte_end": 440, "line_start": 8, "col_start": 5, "line_end": 8, "col_end": 25 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 420, "byte_end": 440, "line_start": 8, "col_start": 5, "line_end": 8, "col_end": 25 }
+      ]
+    },
+    "GND": {
+      "declaration": { "file": 0, "byte_start": 590, "byte_end": 641, "line_start": 12, "col_start": 5, "line_end": 12, "col_end": 56 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 590, "byte_end": 641, "line_start": 12, "col_start": 5, "line_end": 12, "col_end": 56 }
+      ]
+    },
+    "N_CTL": {
+      "declaration": { "file": 0, "byte_start": 834, "byte_end": 859, "line_start": 16, "col_start": 5, "line_end": 16, "col_end": 30 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 834, "byte_end": 859, "line_start": 16, "col_start": 5, "line_end": 16, "col_end": 30 }
+      ]
+    },
+    "N_DIS": {
+      "declaration": { "file": 0, "byte_start": 660, "byte_end": 695, "line_start": 13, "col_start": 5, "line_end": 13, "col_end": 40 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 660, "byte_end": 695, "line_start": 13, "col_start": 5, "line_end": 13, "col_end": 40 }
+      ]
+    },
+    "N_IND_LED": {
+      "declaration": { "file": 1, "byte_start": 190, "byte_end": 214, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 29 },
+      "instantiation_trace": [
+        { "file": 1, "byte_start": 190, "byte_end": 214, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 29 },
+        { "file": 0, "byte_start": 340, "byte_end": 399, "line_start": 7, "col_start": 5, "line_end": 7, "col_end": 64 }
+      ]
+    },
+    "N_TH": {
+      "declaration": { "file": 0, "byte_start": 720, "byte_end": 765, "line_start": 14, "col_start": 5, "line_end": 14, "col_end": 50 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 720, "byte_end": 765, "line_start": 14, "col_start": 5, "line_end": 14, "col_end": 50 }
+      ]
+    },
+    "OUT": {
+      "declaration": { "file": 0, "byte_start": 790, "byte_end": 833, "line_start": 15, "col_start": 5, "line_end": 15, "col_end": 48 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 790, "byte_end": 833, "line_start": 15, "col_start": 5, "line_end": 15, "col_end": 48 }
+      ]
+    },
+    "VCC": {
+      "declaration": { "file": 0, "byte_start": 520, "byte_end": 567, "line_start": 11, "col_start": 5, "line_end": 11, "col_end": 52 },
+      "instantiation_trace": [
+        { "file": 0, "byte_start": 520, "byte_end": 567, "line_start": 11, "col_start": 5, "line_end": 11, "col_end": 52 }
+      ]
+    }
+  }
+}

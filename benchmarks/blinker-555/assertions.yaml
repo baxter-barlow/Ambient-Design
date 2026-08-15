@@ -1,0 +1,50 @@
+# AED benchmark (a): dynamic assertions for the 9V 555 LED blinker
+# Measurement kinds use the V2 vocabulary; the two headline assertions
+# (frequency, duty) are each backed by ONE .meas TRIG/TARG on v(out).
+# settle window: 2 s (V3 ramped-supply fixture; first high phase ~0.86 s
+# is startup, excluded). Validation run: ngspice-46, see validation.log.
+
+settle_window_s: 2.0
+analysis: tran 100us 5s
+
+assertions:
+  - name: osc_period
+    signal: v(out)
+    kind: trig_targ            # one .meas: RISE=1 -> RISE=2, VAL=3.7 V, TD=2 s
+    expected: 1.012 s
+    window: [0.952 s, 1.073 s]   # 1% resistors, 5% timing cap, worst-case corners
+    measured: 1.01191 s
+    verdict: PASS
+
+  - name: osc_frequency
+    signal: v(out)
+    kind: derived_param        # 1/t_period from the trig_targ period meas
+    expected: 0.988 Hz         # exact ln2 form; 1.44/((RA+2RB)C) = 0.986 Hz
+    window: [0.932 Hz, 1.051 Hz] # +/-6.1%; capacitor tolerance dominates
+    measured: 0.98823 Hz
+    verdict: PASS
+
+  - name: duty_cycle_high
+    signal: v(out)
+    kind: derived_param        # 100*t_on/t_period; t_on is one trig_targ meas
+                               #   (RISE=1 -> FALL=1, VAL=3.7 V, TD=2 s)
+    expected: 53.42 %          # (RA+RB)/(RA+2RB); passives move it <0.1 pt,
+    window: [52.4 %, 54.4 %]   #   window set by 555 threshold/Ron non-idealities
+    measured: 53.45 %
+    verdict: PASS
+
+  - name: led_on_current
+    signal: i(VSLED)
+    kind: envelope_max         # MAX over the settled window 2..5 s
+    expected: 9.5 mA
+    window: [8.0 mA, 10.5 mA]  # Vf 1.8-2.2 V, Voh 7.0-7.5 V, RL +/-1%
+    measured: 9.257 mA
+    verdict: PASS
+
+  - name: out_high_level
+    signal: v(out)
+    kind: envelope_max         # supplementary sanity check, MAX over 2..5 s
+    expected: 7.2 V            # Vcc - 1.7 V minus 12-ohm output-stage drop
+    window: [6.8 V, 7.6 V]
+    measured: 7.19860 V
+    verdict: PASS

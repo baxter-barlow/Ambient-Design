@@ -1,0 +1,41 @@
+{
+  "x_negative_control": "DEFECT: /r_a carries an undeclared \"refdes\" member. Identity is the path (L7); refdes is assigned downstream and is not an IR field. Unprefixed unknown members are rejected (additionalProperties false); only ^x_ members are tolerated.",
+  "header": {
+    "ir_version": 0,
+    "language_version": "0.1.0",
+    "design_name": "neg",
+    "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generator": { "name": "aedc", "version": "0.1.0" },
+    "canonical_form": "aed-canonical-json/1"
+  },
+  "instances": [
+    {
+      "path": "/",
+      "kind": "module",
+      "definition": "neg.Root",
+      "parameters": {},
+      "ports": [],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    },
+    {
+      "path": "/r_a",
+      "kind": "component",
+      "definition": "aed.lib.passive.Resistor",
+      "parameters": {},
+      "ports": [
+        { "name": "a", "role": "passive" },
+        { "name": "b", "role": "passive" }
+      ],
+      "refdes": "R1",
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    }
+  ],
+  "nets": [],
+  "connections": [],
+  "assertions": []
+}

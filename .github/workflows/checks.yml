@@ -1,0 +1,98 @@
+name: Checks
+
+# Repository gates for AED. Every job is a thin wrapper over a versioned
+# script under tests/ so CI and local `make` runs execute identical logic.
+# All pins (actions, containers, packages) are recorded with rationale in
+# toolchain/versions.yaml; keep the two files in sync in the same change.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structure:
+    name: Repository structure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # Keep in sync with toolchain/versions.yaml (python.version).
+          python-version: "3.12"
+      - name: Install pinned PyYAML
+        # check-layout.sh defers the versions.yaml deep parse when PyYAML
+        # is absent; installing it here guarantees the deep-parse gate
+        # actually runs in CI. Keep in sync with toolchain/versions.yaml
+        # (python.packages).
+        run: |
+          python3 --version
+          python3 -m pip install PyYAML==6.0.2
+      - name: Validate monorepo layout invariants
+        run: bash tests/structure/check-layout.sh
+
+  schemas:
+    name: IR schemas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          # Keep in sync with toolchain/versions.yaml (python.version).
+          python-version: "3.12"
+      - name: Install pinned schema validator
+        # Keep in sync with toolchain/versions.yaml (python.packages).
+        run: |
+          python3 --version
+          python3 -m pip install jsonschema==4.26.0
+      - name: Validate IR schemas and examples
+        run: python3 tests/schemas/validate-schemas.py
+
+  benchmarks-sim:
+    name: Benchmark simulation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Pinned by digest; the tag is documentation. Keep in sync with
+    # toolchain/versions.yaml (ci.containers.simulation).
+    container:
+      image: debian:testing-20260803-slim@sha256:90e4367c69a75bb80e2f3b043a4bdaf2f0b97eed9bf9bbc05a29af42d3ffdfc2
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned ngspice
+        # Exact package pin from toolchain/versions.yaml (ngspice). apt
+        # fails loudly if the snapshot no longer resolves this revision;
+        # that failure means the pin must be consciously revisited, never
+        # silently upgraded.
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ngspice=46+ds-1
+          ngspice --version | head -n 5
+      - name: Run benchmark decks
+        run: bash tests/benchmarks/run-sim.sh
+
+  golden:
+    name: Golden files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run golden-file harness
+        # The harness exits 0 with "no cases" while tests/golden is empty;
+        # once cases exist, any byte-level divergence fails this job.
+        continue-on-error: false
+        run: bash tests/golden/run.sh

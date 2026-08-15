@@ -1,0 +1,91 @@
+# AED pinned-toolchain manifest.
+#
+# Single source of truth for every tool version the harness depends on.
+# Determinism contract P5: identical inputs compiled or simulated with the
+# versions declared here must produce byte-identical artifacts, so every
+# entry is an exact pin with the reason it matters. Change a pin only
+# through a dedicated Linear issue, and update every consumer (Makefile,
+# .github/workflows/checks.yml, tests/) in the same change.
+#
+# Digest provenance: Docker Hub tags API and the GitHub releases API,
+# recorded 2026-08-14. A digest marked "pin on first CI run" could not be
+# verified offline and must be replaced with the digest CI actually pulls
+# before the pin is considered frozen.
+
+manifest_schema: 1
+
+ngspice:
+  # ngspice runs the dynamic checks: batch-mode decks with .meas-based
+  # assertions and the quit-code protocol gate agent progress. Simulation
+  # numerics (solver, integration defaults) shift across major versions,
+  # so a version drift silently changes measured values and breaks the
+  # reproducibility of every recorded benchmark result.
+  version: "46"                  # verified locally: "ngspice-46 ... KLU Direct Linear Solver"
+  # Exact Debian package installed in the CI simulation container. apt
+  # fails loudly if the suite moves past this revision, which is the
+  # desired behavior: no silent upgrades of the simulation engine.
+  debian_package: "ngspice=46+ds-1"
+  # ngspice is GPL. It stays at a subprocess boundary (batch invocation,
+  # file and exit-code interface); AED never links against it.
+  boundary: subprocess
+
+kicad:
+  # KiCad is the export boundary. kicad-cli output (netlists, ERC reports,
+  # plotted schematics) must be reproducible for golden-file comparison,
+  # and KiCad's S-expression emission changes between minor releases.
+  # Both currently supported series are pinned so export artifacts can be
+  # regression-tested against each.
+  # KiCad is GPL; kicad-cli stays at a subprocess boundary like ngspice.
+  boundary: subprocess
+  series:
+    - name: "9.0"
+      # Exact image tag plus the multi-arch manifest-list digest. CI must
+      # pull by digest: a mutable tag like 9.0 re-points on every patch
+      # release, which would change export output under our feet.
+      image: "kicad/kicad:9.0.9"
+      digest: "sha256:e638b79b0321f29395a5b783e94bb9f3c73303e8da15da27b8f5cb4b67a37729"
+    - name: "10.0"
+      image: "kicad/kicad:10.0.5"
+      digest: "sha256:182c8005cb775a2c448a4c18681d489f1ff472a761885eba3e08b07e3c0564de"
+
+python:
+  # Interpreter for repository tooling (schema validation, harness
+  # scripts). Pinned as a minor series: the tooling is stdlib plus the
+  # packages below, and CPython patch releases do not change observable
+  # tool output; the exact interpreter version is echoed into every CI
+  # log so any surprise can be traced. Local interpreters may be newer;
+  # the CI series is authoritative for artifact-producing runs.
+  version: "3.12"
+  packages:
+    # Schema-validation gate for the typed netlist IR. jsonschema decides
+    # what counts as a valid IR document, so an unpinned version could
+    # accept a schema or example today that it rejects tomorrow.
+    jsonschema: "4.26.0"
+    # YAML parser for the structure gate's deep parse of this manifest
+    # (tests/structure/check-layout.sh); installed explicitly in the CI
+    # structure job so that gate never silently defers.
+    pyyaml: "6.0.2"                # verified locally: yaml.__version__ == 6.0.2
+
+ci:
+  # GitHub Actions are pinned by full commit SHA, never by mutable tag:
+  # a re-pointed tag is an unaudited code change inside the trust
+  # boundary of every check. The trailing comment records the release
+  # the SHA corresponded to when pinned.
+  actions:
+    checkout:
+      ref: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"   # v7.0.1, matches baseline dco.yml
+    setup_python:
+      ref: "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" # v7.0.0, verified via GitHub API 2026-08-14
+  containers:
+    # Simulation container for the benchmarks-sim job. The digest pins
+    # the image itself, but dated testing-slim images track the live
+    # Debian testing apt archive at build time — they are NOT a frozen
+    # package universe, and `apt-get update` inside the job fetches
+    # current testing. Reproducibility of the simulation engine rests on
+    # the exact ngspice package pin above: apt fails loudly the moment
+    # testing drifts past that revision, forcing a conscious re-pin.
+    # Debian stable (trixie) still carries ngspice 44, which is why the
+    # job uses testing at all.
+    simulation:
+      image: "debian:testing-20260803-slim"
+      digest: "sha256:90e4367c69a75bb80e2f3b043a4bdaf2f0b97eed9bf9bbc05a29af42d3ffdfc2"

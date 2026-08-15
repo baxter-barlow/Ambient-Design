@@ -25,6 +25,18 @@ Start with:
 
 Public contributors can start with a GitHub issue. Before implementation begins, a maintainer creates or links the corresponding Linear issue and assigns a non-overlapping path claim.
 
+## Repository layout
+
+- `benchmarks/` — the three v1 reference designs. Each carries a design rationale, a part list, and its assertion set; the two analog benchmarks also carry an ngspice deck (`benchmarks/<name>/netlist.cir`) whose `.meas` assertions gate simulation behavior in CI.
+- `corpus/` — the seeded-bug corpus: externally documented, diagnosed electronics design failures that the static checks are measured against.
+- `ir/` — JSON Schemas for the typed netlist IR (`*.schema.json`) with validated examples and expected-invalid controls under `ir/examples/`.
+- `toolchain/` — `versions.yaml`, the single pinned-toolchain manifest every local run and CI job resolves versions from.
+- `tests/` — repository gates: layout invariants (`structure/`), schema validation (`schemas/`), the simulation runner (`benchmarks/`), and the golden-file harness (`golden/`).
+
+Run the gates locally with `make check` (layout and schemas), `make sim` (benchmark decks), or `make all`.
+
+Everything in this tree is Apache-2.0 source and operational configuration. Product specifications and research documents are CC-BY-4.0 and live in Notion rather than in the repository; see [LICENSES.md](LICENSES.md) for the exact boundary.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the repository [agent policy](AGENTS.md). Contributions use the Developer Certificate of Origin and must include a `Signed-off-by` trailer.

@@ -1,0 +1,92 @@
+# AED benchmark b: 3.3V/2A synchronous buck -- power stage + control BOM
+# MPNs are examples establishing that the design is buildable with real,
+# in-production parts at the stated margins; the benchmark itself is
+# exercised through the behavioral deck (netlist.cir).
+
+parts:
+  - ref: U1
+    role: buck_controller
+    value: sync buck controller, 6-42 V input, voltage-mode, 0.8 V ref
+    package: VQFN-20 (RGY, 3.5x4.5 mm, wettable flanks)
+    mpn: TI LM25145RGYR
+    notes: fsw programmed to 500 kHz (RT); internal 7.5 V gate driver;
+      Type-III compensation network on COMP maps to the PID in the
+      behavioral deck; soft-start set to ~0.5 ms via SS cap.
+
+  - ref: Q1
+    role: high_side_fet
+    value: NMOS 40 V, 5.9 mOhm max @ Vgs=10V, Qg 9.4 nC typ (0-10 V)
+    package: PG-TDSON-8 (SuperSO8 5x6)
+    mpn: Infineon BSC059N04LS6
+    notes: specs from Infineon datasheet rev 2.1 (2020-07-22) -- Rds(on) max
+      5.9 mOhm @ 10 V, Qg typ 9.4 nC, Qoss typ 10.2 nC @ 20 V, Id 59 A @ Tc.
+      Vds margin 40 V vs 14 V max input + ringing (2.8x);
+      Id rating >> 2.28 A peak.
+
+  - ref: Q2
+    role: low_side_fet
+    value: NMOS 40 V, 5.9 mOhm max @ Vgs=10V
+    package: PG-TDSON-8 (SuperSO8 5x6)
+    mpn: Infineon BSC059N04LS6
+    notes: synchronous rectifier; body diode conducts only during dead time.
+
+  - ref: L1
+    role: power_inductor
+    value: 10 uH +/-20%, Isat 3.6/5.5/7.3 A (10/20/30% drop), Irms 7.3 A
+      (20 C rise), DCR 18.5 mOhm typ / 20.4 mOhm max
+    package: XGL6060 (6.71x6.51x6.1 mm shielded molded)
+    mpn: Coilcraft XGL6060-103MEC
+    notes: specs from Coilcraft Document 1621-2 rev 02/19/26. Ipk = 2.28 A
+      worst case vs 3.6 A Isat (strictest, 10% drop) -> 1.6x margin, 2.4x
+      vs the 20%-drop rating; soft-saturating composite core. Deck models
+      DCR at the 20.4 mOhm max.
+
+  - ref: C1
+    role: input_capacitor
+    value: 10 uF +/-10%, 25 V, X7R
+    package: 1210 (3.2 x 2.5 x 2.0 mm)
+    mpn: Murata GRM32DR71E106KA12L
+    qty: 2
+    notes: 0.89 A rms worst-case input ripple current shared across two parts
+      (~0.45 A each); per-part rms handling to be confirmed against Murata
+      temperature-rise data at 500 kHz. Murata lists this part NRND --
+      in-production alternative GRM31CR71E106KA12L (1206).
+
+  - ref: C2
+    role: output_capacitor
+    value: 22 uF, 16 V, X5R
+    package: 1210
+    mpn: Murata GRM32ER61C226KE20L
+    qty: 2
+    notes: ~36 uF effective at 3.3 Vdc bias (deck uses the derated value);
+      net ESR ~2 mOhm.
+
+  - ref: C3
+    role: input_bypass
+    value: 100 nF, 50 V, X7R
+    package: 0603
+    mpn: Murata GRM188R71H104KA93D
+    notes: high-frequency bypass at U1 VIN pin.
+
+  - ref: R1
+    role: feedback_divider_top
+    value: 31.6 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0731K6L
+    notes: Vout = 0.8*(1 + 31.6k/10k) = 3.328 V (+0.85% of nominal).
+
+  - ref: R2
+    role: feedback_divider_bottom
+    value: 10.0 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0710KL
+    notes: divider current 80 uA -- stiff against FB pin bias current.
+
+  - ref: CN1
+    role: compensation_network
+    value: Type-III RC set on U1 COMP/FB (values per LM25145 design procedure
+      for fc ~= 30 kHz, double zero at the 8.4 kHz LC resonance)
+    package: 0402 x5
+    mpn: (standard E96 R, C0G C -- chosen at layout time)
+    notes: behavioral equivalent in the deck is KP=2.46, KI=6.47e4,
+      KD=2.33e-5 with a 159 kHz derivative-path pole.

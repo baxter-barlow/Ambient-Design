@@ -1,0 +1,41 @@
+{
+  "x_negative_control": "DEFECT: /indicator is kind \"module\" but carries a part binding. Modules are hierarchical scopes, not hardware; only kind=component may bind a part (D1 reference-only binding).",
+  "header": {
+    "ir_version": 0,
+    "language_version": "0.1.0",
+    "design_name": "neg",
+    "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generator": { "name": "aedc", "version": "0.1.0" },
+    "canonical_form": "aed-canonical-json/1"
+  },
+  "instances": [
+    {
+      "path": "/",
+      "kind": "module",
+      "definition": "neg.Root",
+      "parameters": {},
+      "ports": [],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    },
+    {
+      "path": "/indicator",
+      "kind": "module",
+      "definition": "aed.lib.display.LedIndicator",
+      "parameters": {},
+      "ports": [],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false,
+      "part": {
+        "binding": "resolved",
+        "lockfile_key": "timer.555/ti-NE555P@2"
+      }
+    }
+  ],
+  "nets": [],
+  "connections": [],
+  "assertions": []
+}

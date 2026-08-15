@@ -1,0 +1,251 @@
+# AED benchmark b: 3.3 V / 2 A synchronous buck reference design
+
+Requirements: AC1b, AC3. Every dynamic assertion runs green on stock ngspice
+with an original behavioral switching model, rung 0, total runtime well under
+60 s (measured: 0.38 s canonical run; see `validation.log`).
+
+## 1. Specification
+
+| Parameter | Value |
+|---|---|
+| Input voltage | 12 V nominal, 9-14 V window |
+| Output | 3.3 V, 2 A (6.6 W) |
+| Output tolerance | +/-3% (3.201-3.399 V) |
+| Output ripple | <= 50 mVpp |
+| Efficiency at full load | >= 85% |
+| Startup overshoot | <= 5% |
+| Settling after 1 A -> 2 A step | <= 500 us to +/-1% band |
+
+Topology: synchronous buck (a Schottky freewheel at 2 A / 3.3 V would burn
+~0.45 V x 0.7 x 2 A ~= 0.63 W, ~9% of output power, putting the 85% floor at
+risk; a 6 mOhm sync FET burns ~17 mW in the same slot -- see sec. 6).
+
+## 2. Duty cycle and switching frequency
+
+Ideal duty D = Vout/Vin:
+
+- Vin = 9 V:  D = 3.3/9  = 0.367
+- Vin = 12 V: D = 3.3/12 = 0.275
+- Vin = 14 V: D = 3.3/14 = 0.236
+
+With ~92% efficiency the practical duty is D' ~= D/eta, i.e. 0.30 at 12 V and
+0.40 worst case at 9 V -- comfortably inside any controller's duty range; no
+minimum-on-time hazard (on-time at 14 V, 500 kHz: 0.236 x 2 us = 472 ns >>
+the LM25145's 40 ns datasheet minimum on-time).
+
+**fsw = 500 kHz.** Rationale: (a) small enough L and C that all-ceramic
+output filtering is cheap; (b) high enough that 2.5 ms of simulated time is
+1250 switching cycles, so steady state, a full soft-start, and a load step
+all fit in a sub-second rung-0 run; (c) below the range where switching
+losses would threaten the 85% floor (fixed-loss budget scales ~linearly with
+fsw, sec. 6); (d) comfortably above the audio band and below the AM band.
+
+## 3. Inductor
+
+Ripple-current target: DIL = 30% of Iout = 0.6 App (standard 20-40% window:
+lower ripple wastes inductor volume, higher ripple raises core/AC losses and
+output ripple). Worst case is Vin,max = 14 V (D = 0.236):
+
+    L = Vout x (1 - D) / (fsw x DIL)
+      = 3.3 x (1 - 0.236) / (500e3 x 0.6)
+      = 2.521 / 3.0e5
+      = 8.4 uH
+
+Choose the standard value **L = 10 uH**, which gives (ideal duty):
+
+    DIL(14 V) = 3.3 x 0.764 / (500e3 x 10e-6) = 0.504 App  (25% of Iout)
+    DIL(12 V) = 3.3 x 0.725 / 5.0             = 0.479 App
+    DIL(9 V)  = 3.3 x 0.633 / 5.0             = 0.418 App
+
+Measured in the behavioral deck: 0.520 App at 12 V, 0.565 App worst case at
+14 V -- slightly above ideal because the loop regulates duty above D = Vout/Vin
+to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
+
+Peak current and saturation margin (using measured worst-case ripple):
+
+    Ipk = Iout + DIL/2 = 2.0 + 0.565/2 = 2.28 A
+
+Part: **Coilcraft XGL6060-103MEC** (10 uH +/-20%, DCR 18.5 mOhm typ /
+20.4 mOhm max, Isat 3.6 A at 10% inductance drop / 5.5 A at 20% / 7.3 A at
+30%, Irms 7.3 A for 20 C rise / 10.0 A for 40 C rise; Coilcraft datasheet
+Document 1621-2, rev. 02/19/26). Saturation margin against the strictest
+rating point: 3.6/2.28 = **1.6x** at the 10%-drop Isat, 5.5/2.28 = 2.4x at
+the 20%-drop rating. A 100% overload transient (4.28 A) stays below the
+5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
+gracefully rather than collapsing. RMS heating: Irms ~= 2.0 A vs 7.3 A
+(20 C rise) rating.
+
+## 4. Output capacitor
+
+Ripple has a capacitive and an ESR term (ceramic caps: ESL negligible at
+500 kHz):
+
+    DV_C   = DIL / (8 x fsw x C)
+    DV_ESR = DIL x ESR
+
+Part: 2x **Murata GRM32ER61C226KE20L** (22 uF, 16 V, X5R, 1210). At 3.3 Vdc
+bias these derate ~18%, so C_eff ~= **36 uF** (the deck simulates the derated
+value -- deratings are physics, not pessimism). Net ESR of two ~4 mOhm
+ceramics in parallel: ~2 mOhm.
+
+    DV_C   = 0.565 / (8 x 500e3 x 36e-6) = 3.9 mV
+    DV_ESR = 0.565 x 0.002               = 1.1 mV
+    DV_pp  ~= 5 mV  (terms are phase-shifted, not directly additive)
+
+Measured: 7.09 mVpp at 12 V -- **7x margin** against the 50 mV spec. The cap
+size is actually set by the load-step requirement, not ripple: for a 1 A step
+with loop crossover fc, the droop is approximately
+
+    DV_step ~= DI / (2 pi x fc x C) = 1.0 / (2 pi x 30e3 x 36e-6) = 147 mV
+
+which recovers within the band well inside 500 us (measured settling:
+16.0 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
+spec; 2x22 uF satisfies both with margin.
+
+Input capacitor: worst-case input RMS ripple current
+
+    Irms,in = Iout x sqrt(D x (1-D)) = 2 x sqrt(0.275 x 0.725) = 0.89 A
+
+2x **Murata GRM32DR71E106KA12L** (10 uF +/-10%, 25 V, X7R, 1210, 3.2 x 2.5 x
+2.0 mm; Murata product catalog) split this, ~0.45 A rms each; 25 V rating vs
+14 V max input gives 1.8x derating headroom. Per-part rms current handling
+should be confirmed against Murata's temperature-rise curves at 500 kHz for
+the final land pattern -- not claimed here.
+
+## 5. Power semiconductors
+
+Synchronous FETs, both **Infineon BSC059N04LS6** (OptiMOS 6, 40 V, Rds(on)
+5.9 mOhm max at Vgs = 10 V, Qg 9.4 nC typ over 0-10 V, Qoss 10.2 nC typ at
+20 V, Id 59 A at Tc; Infineon datasheet rev. 2.1, 2020-07-22):
+
+- Voltage margin: 40 V rating vs 14 V max input plus switch-node ringing
+  (budget 2x Vin transient) -> 40/14 = **2.8x** static margin.
+- Current: continuous Id rating tens of amps vs 2.28 A peak.
+- Conduction loss at 2 A, 12 V (D' = 0.30):
+  - HS: I^2 x Ron x D'     = 4 x 0.0059 x 0.30 = 7.1 mW
+  - LS: I^2 x Ron x (1-D') = 4 x 0.0059 x 0.70 = 16.5 mW
+
+Controller: **TI LM25145** (6-42 V synchronous buck controller,
+voltage-mode, 0.8 V +/-1% reference, integrated 7.5 V drivers, RT-programmed
+to 500 kHz). Chosen because its control law -- voltage-mode PWM with Type-III
+compensation -- is exactly what the behavioral deck implements, keeping the
+benchmark's model and the buildable hardware in one-to-one correspondence.
+
+## 6. Loss budget and efficiency
+
+At Vin = 12 V, Iout = 2 A (Pout = 3.328 x 2.008 = 6.68 W):
+
+| Mechanism | Formula | Value |
+|---|---|---|
+| HS conduction | 4 x 5.9m x 0.30 | 7 mW |
+| LS conduction | 4 x 5.9m x 0.70 | 17 mW |
+| Inductor DCR | 4 x 20.4m (max) | 82 mW |
+| Cap ESR | ~DIL^2/12 x ESR | ~0 mW |
+| V-I overlap | 0.5 x Vin x Iout x (tr+tf) x fsw = 0.5 x 12 x 2 x 20n x 500k | 120 mW |
+| Gate charge | 2 x Qg,budget x Vdrv x fsw = 2 x 12n x 7.5 x 500k | 90 mW |
+| Coss | 0.5 x Coss,budget x Vin^2 x fsw = 0.5 x 600p x 144 x 500k | 22 mW |
+| Dead-time body diode | 2 x tdt x Vf x Iout x fsw ~= 2 x 40n x 0.8 x 2 x 500k | 64 mW |
+| Controller Iq + housekeeping | -- | ~100 mW |
+
+The gate-charge and Coss rows use budget allowances above the datasheet
+figures on purpose: 12 nC vs the 9.4 nC typ Qg (headroom for driver
+resistive loss and bootstrap recharge) and 600 pF vs the 510 pF
+charge-equivalent Coss implied by Qoss = 10.2 nC at 20 V. Both round the
+loss up, so the budget is conservative rather than optimistic.
+
+Fixed (frequency-dependent + quiescent) subtotal ~= 0.40 W; conduction
+subtotal ~= 0.11 W.
+
+    eta = 6.68 / (6.68 + 0.51) = 92.9% (predicted)
+
+The behavioral deck carries the conduction terms explicitly (Ron in the
+switch-node B-source, DCR and ESR as real elements) and draws the fixed
+0.40 W as a constant-power term on the input node (`PFIX`). Measured
+efficiency: **92.95%** -- matching the budget and leaving 7.95 points of
+margin over the 85% floor to absorb budget error. This margin is the honest
+buffer for what a rung-0 behavioral model cannot measure (actual switching
+waveform losses); the design does not rely on behavioral optimism to pass.
+
+## 7. Feedback and control
+
+Divider from the LM25145's 0.8 V reference:
+
+    Vout = Vref x (1 + R1/R2) = 0.8 x (1 + 31.6k/10k) = 3.328 V  (+0.85%)
+
+E96 values; 80 uA divider current. Worst-case DC error stack: +/-1% ref,
++/-1% resistors x2 -> ~+/-2.2%, inside the +/-3% window with the +0.85%
+centering offset (total worst case +3.0%/-1.4% -- the top of the window is
+grazed only when every tolerance lands worst-case simultaneously; production
+would use 0.5% resistors if this were a shipping design, noted as margin
+commentary, not a spec change).
+
+Control: voltage-mode PWM, Type-III compensation (== PID + parasitic poles).
+Plant: duty-to-Vout gain Vin with the LC double pole at
+
+    f0 = 1 / (2 pi sqrt(L x C_eff)) = 1 / (2 pi sqrt(10u x 36u)) = 8.4 kHz
+
+ESR zero at 1/(2 pi x C x ESR) = 2.2 MHz -- too high to help, hence Type-III.
+Design: place a double zero on the LC resonance, crossover fc = 30 kHz
+(fsw/16). Required compensator gain at fc, with divider gain h = 0.8/3.3 =
+0.242 and |P(fc)| ~= (f0/fc)^2 = 0.078:
+
+    |Gc(fc)| = 1 / (12 x 0.242 x 0.078) = 4.4
+
+PID realization (deck parameters): double zero at w0 = 2 pi f0 = 5.27e4 rad/s
+via Kd(s + w0)^2 = Kd s^2 + Kp s + Ki:
+
+    Kd = |Gc(fc)| / (2 pi fc) = 4.4 / 1.885e5 = 2.33e-5
+    Kp = 2 x Kd x w0          = 2.46
+    Ki = Kd x w0^2            = 6.47e4 s^-1
+
+plus a derivative-path pole at 159 kHz (1k/1n RC) standing in for Type-III's
+high-frequency poles and taming switching-ripple feedthrough. Soft start:
+the reference ramps 0 -> 0.8 V over 500 us (SS pin cap on the LM25145),
+which is why measured startup overshoot is 0.11% against the 5% budget.
+
+## 8. Behavioral model (fidelity class: behavioral, rung 0)
+
+Original construction, no vendor models:
+
+- **Switch node** `Bsw`: B-source that outputs `Vin - IL x Ron_HS` when the
+  PWM is high and `-IL x Ron_LS` when low -- a lossy ideal synchronous pair
+  with no switching-edge dynamics. IL is sensed by a 0 V ammeter in series
+  with L.
+- **PWM**: 500 kHz 0->1 sawtooth (PULSE source) against the compensator
+  output in a B-source comparator; duty is clamped to [0, 0.96].
+- **Compensator**: PID from sec. 7 -- G-source integrator into a 1 F cap
+  (V = Ki x integral(err)), `ddt()` derivative on a filtered error, summed
+  and clamped in a B-source.
+- **Input current** `Gin`: mirrors IL onto the input node during the HS
+  on-time (charge-correct average input current) plus `PFIX/V(in)` for the
+  fixed losses, so input power is measurable at the V3 source.
+- **Fixture**: `V3` ramps 0 -> 12 V over 200 us (exercises the regulator
+  coming up under a rising rail); load is a 3.3 Ohm base (1 A) plus a 1 A
+  PWL current step at t = 1.5 ms; `.tran 100n 2.5m 0 40n` gives 1250 cycles,
+  50 points per cycle.
+- **Settling detector**: a B-source flags |Vout - 3.328| > 33.3 mV; the
+  `.meas ... FALL=LAST` on that flag implements "enters and stays within
+  +/-1%" exactly, immune to multi-crossing ringing.
+
+What this class deliberately does not model: switching edges (so no measured
+overlap/Coss loss -- budgeted instead, sec. 6), dead-time conduction,
+gate-drive dynamics, and large-signal magnetics saturation (guarded by the
+1.6x margin to even the strictest 10%-drop Isat rating instead). Those
+belong to higher rungs.
+
+## 9. Results vs. assertions
+
+| Assertion | Window | Measured | Status |
+|---|---|---|---|
+| Mean Vout (2 A) | 3.3 V +/-3% | 3.3280 V (+0.85%) | pass |
+| Output ripple | <= 50 mVpp | 7.09 mVpp | pass |
+| Efficiency | >= 85% | 92.95% | pass |
+| Startup overshoot | <= 5% | 0.11% | pass |
+| 1A->2A settling | <= 500 us | 16.0 us | pass |
+
+Input corners (9 V / 14 V, supplementary runs in `validation.log`): all five
+stay green; worst deltas are ripple-current 0.565 App at 14 V, settling
+39.4 us at 9 V, and output ripple 24.4 mVpp at 9 V (a slow envelope over
+~100 cycles -- per-cycle ripple there is 6.4 mVpp -- still 2x inside the
+50 mV window). No assertion window was modified from the task defaults;
+every target was met with the components as chosen.

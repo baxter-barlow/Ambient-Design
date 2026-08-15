@@ -1,0 +1,89 @@
+* AED benchmark b: 3.3 V / 2 A synchronous buck, 12 V nominal input (9-14 V)
+* Fidelity class: BEHAVIORAL (rung 0). Original voltage-mode PWM built from
+* B-sources: sawtooth ramp + comparator + PID error amp (Type-III analog),
+* lossy behavioral switch node (Ron_HS/Ron_LS conduction), explicit input
+* current mirror + fixed switching-loss term for honest efficiency.
+* No vendor models. Stock ngspice, batch mode.
+
+.param FSW=500k
+.param TSW={1/FSW}
+.param VREF=0.8
+.param RON_HS=6m      ; BSC059N04LS6 Rds(on) max @ Vgs=10V is 5.9 mOhm;
+*                       deck rounds up to 6 mOhm (conservative, ~1.7% pessimistic)
+.param RON_LS=6m
+.param DCR=20.4m      ; XGL6060-103 DCR max (18.5 mOhm typ)
+.param LVAL=10u
+.param CEFF=36u       ; 2x22uF X5R 1210, derated ~18% at 3.3 Vdc bias
+.param RESR=2m        ; two 4 mOhm ceramics in parallel
+.param PFIX=0.40      ; fixed loss budget: gate drive + sw transitions + Coss + Iq
+.param KP=2.46
+.param KI=6.47e4
+.param KD=2.33e-5
+.param VTGT=3.328     ; regulation point: 0.8*(1+31.6k/10k)
+.param SBAND=33.3m    ; 1% settling band around VTGT
+
+* ---------- input fixture: ramped supply (V3) ----------
+V3 in 0 PWL(0 0 20u 0 220u 12 1 12)
+Cin in 0 20u
+
+* ---------- behavioral synchronous power stage ----------
+* sw node: HS on -> Vin - IL*Ron_HS ; LS on -> -IL*Ron_LS
+Bsw sw 0 V = (V(pwm) > 0.5) ? (V(in) - i(Vsns)*RON_HS) : (-i(Vsns)*RON_LS)
+Rdcr sw n1 {DCR}
+L1  n1 n2 {LVAL}
+Vsns n2 out 0
+Resr out co {RESR}
+Co  co 0 {CEFF}
+
+* input current drawn from supply: IL reflected during HS on-time + fixed loss
+Gin in 0 value={ ((V(pwm) > 0.5) ? i(Vsns) : 0) + PFIX/min(max(V(in),6),20) }
+
+* ---------- load: 1 A resistive base + 1 A step at t=1.5 ms ----------
+Vsl out outl 0
+Rload outl 0 3.3
+Istep outl 0 PWL(0 0 1.5m 0 1.501m 1 1 1)
+
+* ---------- feedback and control (voltage-mode PID ~ Type-III) ----------
+Rfb1 out fb 31.6k
+Rfb2 fb 0 10k
+* soft-started reference (0 -> 0.8 V between 100 us and 600 us)
+Vr vr 0 PWL(0 0 100u 0 600u {VREF} 1 {VREF})
+Berr err 0 V = V(vr) - V(fb)
+* derivative path filter, pole at ~159 kHz
+Rdf err errf 1k
+Cdf errf 0 1n
+* integrator: Gm into 1 F cap -> V(vint) = KI * integral(err)
+Gint 0 vint value={KI*(V(vr)-V(fb))}
+Cint vint 0 1
+Rint vint 0 1G
+* PID sum, clamped to realizable duty
+Bcomp comp 0 V = min(max( KP*V(err) + V(vint) + KD*ddt(V(errf)), 0.0), 0.96)
+* 500 kHz sawtooth 0->1 and PWM comparator
+Vrmp rmp 0 PULSE(0 1 0 {0.98*TSW} {0.01*TSW} {0.001*TSW} {TSW})
+Bpwm pwm 0 V = (V(comp) > V(rmp)) ? 1 : 0
+
+* ---------- settling detector for the 1A->2A step ----------
+Bsett sett 0 V = (abs(V(out) - VTGT) > SBAND) ? 1 : 0
+
+* ---------- analysis ----------
+.tran 100n 2.5m 0 40n
+
+* mean output voltage at full load (2 A), steady window
+.meas tran vout_avg AVG v(out) from=2.0m to=2.5m
+* peak-to-peak output ripple at full load
+.meas tran vout_pp PP v(out) from=2.4m to=2.5m
+* inductor ripple current (documentation cross-check)
+.meas tran il_pp PP i(Vsns) from=2.4m to=2.5m
+* efficiency at full load
+.meas tran pin_avg AVG par('-v(in)*i(V3)') from=2.0m to=2.5m
+.meas tran pout_avg AVG par('v(out)*i(Vsl)') from=2.0m to=2.5m
+.meas tran eff PARAM='pout_avg/pin_avg'
+* startup overshoot vs pre-step steady value
+.meas tran vout_pre AVG v(out) from=1.3m to=1.5m
+.meas tran vout_max_startup MAX v(out) from=0 to=1.4m
+.meas tran overshoot_pct PARAM='(vout_max_startup/vout_pre - 1)*100'
+* settling time after the 1A->2A step: last re-entry into +/-1% band
+.meas tran t_reenter WHEN v(sett)=0.5 FALL=LAST
+.meas tran t_settle_us PARAM='(t_reenter - 1.5m)*1e6'
+
+.end
