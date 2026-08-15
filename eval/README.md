@@ -14,7 +14,7 @@ plugs in later as a `CommandGate` with no change to the protocol, the result
 format, or the statistics.
 
 ```
-python3 -m unittest discover -s eval/tests -t eval   # 42 tests, stdlib only
+python3 -m unittest discover -s eval/tests -t eval   # 67 tests, stdlib only
 cd eval && python3 -m aed_eval selftest              # statistics vs closed form
 cd eval && python3 -m aed_eval replay --transcript fixtures/demo-replay.json --allow-stub
 cd eval && python3 -m aed_eval plan --rate-a 0.6 --rate-b 0.9
@@ -59,11 +59,19 @@ what changes a count: a re-packaged artifact that tokenizes identically
 should not fail the pin, and a same-named artifact that tokenizes differently
 must. Never edit `PROBE_CORPUS` — it would invalidate every recorded pin.
 
-**A stub can never satisfy a gate.** The test tokenizer reports
-`gating: false`, and `authoritative` on a run record is *computed* from the
-tokenizer and model identities rather than passed in. A replayed, scripted or
-stub-tokenizer run is structurally incapable of presenting itself as gate
-evidence, and the run-result schema enforces the same rule independently.
+**A stub can never satisfy a gate — in records this harness produces.**
+The test tokenizer reports `gating: false`, and `authoritative` is *computed*
+from the live tokenizer, model and gate identities rather than passed in, so
+the harness cannot be talked into emitting a authoritative stub run. The
+schema enforces the same rule independently, which catches the careless
+forgery and the honest mistake.
+
+What it does not do, stated plainly: every identity in a record is
+self-declared, so someone editing a record by hand and relabelling all of
+them consistently produces something no validator can distinguish from a real
+run. Tamper-*evidence* needs a signature over the identities, which v0 does
+not have. Trust a third-party record exactly as far as you trust whoever
+sent it.
 
 **AC5's iteration budget is ambiguous, and this records which reading it
 used.** "≤3 repair iterations (1 iteration = one write + one `aed check`)"

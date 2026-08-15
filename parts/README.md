@@ -98,15 +98,26 @@ records adds the prefix.
 
 **No `format` keywords.** In draft 2020-12 `format` is an annotation by
 default: Python `jsonschema` does not enforce it without an explicit format
-checker, and `ajv` rejects the schema outright in strict mode unless
+checker, and `ajv` refuses an unknown format in strict mode unless
 `ajv-formats` is loaded. A `format: "uri"` would have looked like a constraint
 while enforcing nothing. URLs and timestamps are constrained by `pattern`
 instead, and negative controls n13 and n14 prove those constraints fire.
 
+*Precisely:* the schema validates under both validators at their defaults,
+which is what `make check` runs and what the fixtures are checked against. It
+is not clean under `ajv --strict=true`, and neither is the merged IR schema:
+both use `anyOf: [{required: [min]}, {required: [max]}]` to say "at least one
+of these", which `strictRequired` flags because the properties are declared on
+the enclosing object rather than inside each branch. That is a standard idiom
+and the flag is a style opinion, not a defect — but the distinction is worth
+stating rather than implying strict-mode cleanliness the schema does not have.
+The `^x_` extension constraint WAS rewritten to be strict-clean, because that
+one was introduced by a fix and there was no reason to add new friction.
+
 ## Verification performed at freeze
 
 Both validators agree on every fixture — Python `jsonschema` 4.26.0 and
-`ajv-cli --spec=draft2020`, 19 of 19 parts cases. Datasheet revisions were
+`ajv-cli --spec=draft2020`, 21 of 21 parts cases. Datasheet revisions were
 confirmed to match the citations already in `benchmarks/` (ESP32-S3-WROOM-1
 v1.8, AP7361C DS37274 Rev. 5-2).
 
