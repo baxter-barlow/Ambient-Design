@@ -53,12 +53,30 @@ parse_json() {
 
 # Top-level directories must come from the allowlist. Missing directories
 # are fine (the tree grows over time); unexpected ones are not.
+#
+# Git-ignored directories are skipped. The layout invariant is about what
+# the REPOSITORY contains, and a contributor's transient tool cache
+# (.pytest_cache, .ruff_cache, .venv) is not part of it — failing their
+# `make check` because they ran a test runner would be a false positive
+# that teaches people to distrust the gate. An untracked directory that is
+# NOT ignored is still a violation: that is one somebody is about to
+# commit, which is exactly the case this check exists for.
+#
+# When git is unavailable (a tarball export, say) every directory is
+# checked, which is the conservative direction.
+ignored() {
+  command -v git >/dev/null 2>&1 || return 1
+  git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || return 1
+  git -C "$ROOT" check-ignore -q -- "$1" 2>/dev/null
+}
+
 while IFS= read -r dir; do
   name=$(basename "$dir")
   case " $ALLOWED_DIRS " in
-    *" $name "*) ;;
-    *) fail "unexpected top-level directory: $name" ;;
+    *" $name "*) continue ;;
   esac
+  ignored "$dir" && continue
+  fail "unexpected top-level directory: $name"
 done < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort)
 
 # Root-level Markdown is operational configuration only. Product specs
