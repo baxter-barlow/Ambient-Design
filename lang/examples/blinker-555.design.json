@@ -1,0 +1,275 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "blinker-555",
+  "root_module": "Blinker555",
+  "source_benchmark": "benchmarks/blinker-555",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
+  "notes": "Benchmark (a), the 9 V 555 blinker. Transcribed from ir/examples/blinker.ir.json, which was authored under AMB-38 (IR v0) and committed before this issue existed. That is the whole point of the anchor: a bake-off whose reference netlist was written by the same hand as its parsers proves nothing, so this design's ground truth comes from somewhere the bake-off cannot reach. lang/tests/test_bakeoff.py elaborates this model, flattens it, and requires the result to reproduce that IR document's instances, nets, connections and assertions exactly.\n\nAC5a runs its trials on design (a), so this is the design the candidate grammars will actually be judged on by a model in AMB-33/R37. It is small, which is the point: if a grammar cannot express a 555 blinker cheaply and legibly, nothing else about it matters.\n\nWhat the IR document carries and this model deliberately does not: header hashes, generator identity, and the flattened net membership of module-internal ports. Those are elaboration outputs, not source-level facts, and putting them in a source model would be writing the answer down twice.",
+  "modules": [
+    {
+      "name": "Blinker555",
+      "qualified_name": "blinker.Blinker555",
+      "ports": [],
+      "instances": [
+        {
+          "name": "c_ctl",
+          "kind": "component",
+          "definition": "aed.lib.passive.Capacitor",
+          "parameters": {
+            "capacitance": { "q": "10nF +/- 10%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "capacitance": { "q": "10nF +/- 10%" },
+              "dielectric": { "s": "X7R" },
+              "package": { "s": "0805" },
+              "voltage_rating": { "q": "50V" }
+            }
+          }
+        },
+        {
+          "name": "c_t",
+          "kind": "component",
+          "definition": "aed.lib.passive.Capacitor",
+          "parameters": {
+            "capacitance": { "q": "1uF +/- 5%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "capacitance": { "q": "1uF +/- 5%" },
+              "dielectric": { "s": "PET_film" },
+              "package": { "s": "radial_5mm" },
+              "voltage_rating": { "q": "63V" }
+            }
+          }
+        },
+        {
+          "name": "indicator",
+          "kind": "module",
+          "definition": "LedIndicator",
+          "parameters": {
+            "color": { "s": "red" },
+            "current": { "q": "9.5mA (8.0mA to 10.5mA)" }
+          }
+        },
+        {
+          "name": "j_bat",
+          "kind": "component",
+          "definition": "aed.lib.connector.BatteryConnector9V",
+          "ports": [
+            { "name": "neg", "role": "power_out", "pin_numbers": ["2"] },
+            { "name": "pos", "role": "power_out", "pin_numbers": ["1"] }
+          ],
+          "part": {
+            "binding": "resolved",
+            "lockfile_key": "conn.battery_9v/keystone-232@1"
+          }
+        },
+        {
+          "name": "mh1",
+          "kind": "component",
+          "definition": "aed.lib.mech.MountingHole",
+          "parameters": {
+            "diameter": { "q": "3.2mm" }
+          },
+          "ports": [],
+          "hardware_kind": "mounting_hole",
+          "exclude_from_bom": true,
+          "board_only": true
+        },
+        {
+          "name": "r_a",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": { "q": "100kohm +/- 1%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "package": { "s": "axial_0207" },
+              "power_rating": { "q": "0.25W" },
+              "resistance": { "q": "100kohm +/- 1%" }
+            }
+          }
+        },
+        {
+          "name": "r_b",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": { "q": "680kohm +/- 1%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "package": { "s": "axial_0207" },
+              "power_rating": { "q": "0.25W" },
+              "resistance": { "q": "680kohm +/- 1%" }
+            }
+          }
+        },
+        {
+          "name": "timer",
+          "kind": "component",
+          "definition": "aed.lib.timer.Ne555",
+          "ports": [
+            { "name": "ctl", "role": "passive", "pin_numbers": ["5"] },
+            { "name": "dis", "role": "open_collector", "pin_numbers": ["7"] },
+            { "name": "gnd", "role": "power_in", "pin_numbers": ["1"] },
+            { "name": "out", "role": "output", "pin_numbers": ["3"] },
+            { "name": "rst", "role": "input", "pin_numbers": ["4"] },
+            { "name": "thr", "role": "input", "pin_numbers": ["6"] },
+            { "name": "trig", "role": "input", "pin_numbers": ["2"] },
+            { "name": "vcc", "role": "power_in", "pin_numbers": ["8"] }
+          ],
+          "part": {
+            "binding": "resolved",
+            "lockfile_key": "timer.555/ti-NE555P@2",
+            "constraints": {
+              "function": { "s": "timer_555" },
+              "supply_max": { "q": "16V" }
+            }
+          }
+        },
+        {
+          "name": "tp_out",
+          "kind": "component",
+          "definition": "aed.lib.mech.TestPoint",
+          "ports": [{ "name": "p", "role": "passive" }],
+          "hardware_kind": "test_point",
+          "exclude_from_bom": true
+        }
+      ],
+      "nets": [
+        {
+          "name": "GND",
+          "ground_domain": "gnd",
+          "members": ["c_ctl.b", "c_t.b", "indicator.gnd", "j_bat.neg", "timer.gnd"]
+        },
+        {
+          "name": "N_CTL",
+          "voltage_domain": "vbat_9v",
+          "members": ["c_ctl.a", "timer.ctl"]
+        },
+        {
+          "name": "N_DIS",
+          "voltage_domain": "vbat_9v",
+          "members": ["r_a.b", "r_b.a", "timer.dis"]
+        },
+        {
+          "name": "N_TH",
+          "voltage_domain": "vbat_9v",
+          "members": ["c_t.a", "r_b.b", "timer.thr", "timer.trig"]
+        },
+        {
+          "name": "OUT",
+          "voltage_domain": "vbat_9v",
+          "members": ["indicator.ctl", "timer.out", "tp_out.p"]
+        },
+        {
+          "name": "VCC",
+          "voltage_domain": "vbat_9v",
+          "members": ["j_bat.pos", "r_a.a", "timer.rst", "timer.vcc"]
+        }
+      ]
+    },
+    {
+      "name": "LedIndicator",
+      "qualified_name": "aed.lib.display.LedIndicator",
+      "ports": [
+        { "name": "ctl", "role": "input" },
+        { "name": "gnd", "role": "power_in" }
+      ],
+      "instances": [
+        {
+          "name": "d1",
+          "kind": "component",
+          "definition": "aed.lib.semiconductor.Led",
+          "parameters": {
+            "color": { "s": "red" },
+            "forward_voltage": { "q": "2.0V +/- 10%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "k", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "color": { "s": "red" },
+              "package": { "s": "radial_5mm" }
+            }
+          }
+        },
+        {
+          "name": "r_lim",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": { "q": "560ohm +/- 1%" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "package": { "s": "axial_0207" },
+              "power_rating": { "q": "0.25W" },
+              "resistance": { "q": "560ohm +/- 1%" }
+            }
+          }
+        }
+      ],
+      "nets": [
+        {
+          "name": "N_IND_LED",
+          "voltage_domain": "vbat_9v",
+          "members": ["d1.a", "r_lim.b"]
+        },
+        { "members": ["ctl", "r_lim.a"] },
+        { "members": ["d1.k", "gnd"] }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "name": "assert_duty",
+      "tier": "dynamic",
+      "measurement": "duty_cycle",
+      "subject": "OUT",
+      "bounds": { "unit": "1", "min": "0.524", "max": "0.544" }
+    },
+    {
+      "name": "assert_freq",
+      "tier": "dynamic",
+      "measurement": "frequency",
+      "subject": "OUT",
+      "bounds": { "unit": "Hz", "min": "0.932", "max": "1.051" }
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "n",
+  "root_module": "M",
+  "modules": [
+    {
+      "name": "M",
+      "qualified_name": "n.M",
+      "ports": [],
+      "instances": [
+        {
+          "name": "r1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": {
+              "q": "10kohm +/- 1%"
+            }
+          },
+          "ports": [
+            {
+              "name": "a",
+              "role": "power"
+            },
+            {
+              "name": "b",
+              "role": "passive"
+            }
+          ]
+        }
+      ],
+      "nets": [
+        {
+          "name": "N",
+          "members": [
+            "r1.a",
+            "r1.b"
+          ]
+        }
+      ]
+    }
+  ],
+  "notes": "EXPECTED-INVALID control: 'power' is not in the T2 lattice; 'power_in' and 'power_out' are."
+}

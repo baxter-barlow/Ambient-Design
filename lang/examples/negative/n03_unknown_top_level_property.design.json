@@ -1,0 +1,46 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "n",
+  "root_module": "M",
+  "modules": [
+    {
+      "name": "M",
+      "qualified_name": "n.M",
+      "ports": [],
+      "instances": [
+        {
+          "name": "r1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": {
+              "q": "10kohm +/- 1%"
+            }
+          },
+          "ports": [
+            {
+              "name": "a",
+              "role": "passive"
+            },
+            {
+              "name": "b",
+              "role": "passive"
+            }
+          ]
+        }
+      ],
+      "nets": [
+        {
+          "name": "N",
+          "members": [
+            "r1.a",
+            "r1.b"
+          ]
+        }
+      ]
+    }
+  ],
+  "extra": true,
+  "notes": "EXPECTED-INVALID control: an undeclared top-level member is a typo or a private extension."
+}

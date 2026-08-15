@@ -1,0 +1,57 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "n",
+  "root_module": "M",
+  "modules": [
+    {
+      "name": "M",
+      "qualified_name": "n.M",
+      "ports": [],
+      "instances": [
+        {
+          "name": "r1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": {
+            "resistance": {
+              "q": "10kohm +/- 1%"
+            }
+          },
+          "ports": [
+            {
+              "name": "a",
+              "role": "passive"
+            },
+            {
+              "name": "b",
+              "role": "passive"
+            }
+          ]
+        }
+      ],
+      "nets": [
+        {
+          "name": "N",
+          "members": [
+            "r1.a",
+            "r1.b"
+          ]
+        }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "name": "a",
+      "tier": "dynamic",
+      "measurement": "slew_rate",
+      "subject": "N",
+      "bounds": {
+        "unit": "Hz",
+        "min": "1"
+      }
+    }
+  ],
+  "notes": "EXPECTED-INVALID control: the V2 v1 vocabulary is closed; widening it is an IR version bump, not a fixture edit."
+}
