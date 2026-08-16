@@ -94,11 +94,26 @@ def _connection_lines(source):
             yield index, line
 
 
+def _endpoint_match(line: str):
+    """The first `x.y` on a connection line that is really an ENDPOINT.
+
+    In the candidate grammars an endpoint is bare text; in the baseline it is a
+    quoted string and the first bare `\w+\.\w+` on the line is the builder
+    call itself. Mutating that produced `mz.net(...)` and `m.netz(...)` — an
+    undefined-name defect scored as an unknown-instance one, in four of the
+    baseline's sixteen cells. So a quoted match wins whenever the line has one.
+    """
+    quoted = set(range(len(line))) - set(_outside_strings(line))
+    matches = list(_ENDPOINT_RE.finditer(line))
+    inside = [m for m in matches if m.start() in quoted]
+    return (inside or matches or [None])[0]
+
+
 def _unknown_instance(source):
     """Point a connection at an instance that was never declared."""
     lines = source.splitlines()
     for index, line in _connection_lines(source):
-        match = _ENDPOINT_RE.search(line)
+        match = _endpoint_match(line)
         if match is None:
             continue
         lines[index] = (
@@ -112,7 +127,7 @@ def _unknown_port(source):
     """Name a port the component does not have, on a connection line."""
     lines = source.splitlines()
     for index, line in _connection_lines(source):
-        match = _ENDPOINT_RE.search(line)
+        match = _endpoint_match(line)
         if match is None:
             continue
         lines[index] = (
@@ -167,14 +182,33 @@ def _unterminated_string(source):
     return None
 
 
-def _dropped_bracket(source):
-    for index, line in enumerate(source.splitlines(), start=1):
-        position = line.rfind(")")
-        if position == -1:
+def _outside_strings(line: str):
+    """Indices of `line` that are not inside a double-quoted literal."""
+    inside = False
+    for index, char in enumerate(line):
+        if char == '"':
+            inside = not inside
             continue
-        lines = source.splitlines()
-        lines[index - 1] = line[:position] + line[position + 1:]
-        return "\n".join(lines) + "\n", index
+        if not inside:
+            yield index
+
+
+def _dropped_bracket(source):
+    """Delete a closing bracket - a real one, not one inside a string.
+
+    The third operator to need anchoring. Benchmark (c)'s D1 carries the
+    package `"SMA (DO-214AC)"` straight out of parts.yaml, and deleting that
+    `)` leaves a perfectly good string literal: the arm accepted it, correctly,
+    and the table scored it as a candidate accepting a defective design.
+    """
+    lines = source.splitlines()
+    for index, line in enumerate(lines):
+        positions = [i for i in _outside_strings(line) if line[i] == ")"]
+        if not positions:
+            continue
+        position = positions[-1]
+        lines[index] = line[:position] + line[position + 1:]
+        return "\n".join(lines) + "\n", index + 1
     return None
 
 
@@ -213,6 +247,8 @@ DEFECTS = (
 
 def score(arm, variant: str, model, design_id: str) -> list[dict]:
     """Run every defect against one arm's rendering of one design."""
+    from .model import diff
+
     source = arm.render(model, variant)
     results = []
     for defect in DEFECTS:
@@ -254,8 +290,17 @@ def score(arm, variant: str, model, design_id: str) -> list[dict]:
             record.update(status="crashed", localised=False, diagnostics=0)
         else:
             # THE WORST OUTCOME. The arm accepted a design containing a known
-            # defect, so it produced a netlist nobody asked for.
-            record.update(status="accepted", localised=False, diagnostics=0)
+            # defect. Whether the resulting netlist DIFFERS from the intended
+            # one is recorded too: accepting a mutation that changed nothing is
+            # bad, and accepting one that silently changed the circuit is the
+            # failure this whole exercise is built to catch.
+            parsed = arm.parse(mutated, variant)
+            record.update(
+                status="accepted",
+                localised=False,
+                diagnostics=0,
+                changed_the_design=bool(diff(model, parsed)),
+            )
         results.append(record)
     return results
 

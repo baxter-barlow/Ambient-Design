@@ -367,36 +367,60 @@ def check_netlist_ir(model: DesignModel, path: str) -> dict:
     _fail(problems)
     return {
         "anchor": path,
-        "instances": len(flat["instances"]),
-        "nets": len(flat["nets"]),
-        "connections": len(flat["connections"]),
-        "assertions": len(flat["assertions"]),
+        "kind": "netlist-ir",
+        "compared": (
+            f"{len(flat['instances'])} instances, {len(flat['nets'])} nets, "
+            f"{len(flat['connections'])} connections, "
+            f"{len(flat['assertions'])} assertions"
+        ),
     }
 
 
-def check_parts_yaml(model: DesignModel, path: str, refdes_map: dict) -> dict:
-    """Require the model's component set to match a committed BOM exactly.
+def _read_bom(path: str) -> dict[str, dict]:
+    """refdes -> {dnp, package, mpn} from a benchmark parts.yaml.
 
-    Benchmark (c) has no IR document, so its anchor is the parts list AMB-39
-    authored: sixty placements, three of them DNP. The map from refdes to
-    instance path is written out rather than derived by lowercasing, so a BOM
-    line no instance covers fails loudly instead of matching something close.
-
-    Parsed with a deliberately small line reader rather than PyYAML: the BOM
-    is only needed for `ref:` and `dnp:` and the gate must run wherever the
-    rest of `make check` runs, PyYAML installed or not.
+    A deliberately small line reader rather than PyYAML: the gate must run
+    wherever the rest of `make check` runs, PyYAML installed or not, and the
+    four keys it needs are unambiguous one-liners.
     """
-    text = (REPO_ROOT / path).read_text(encoding="utf-8")
-    bom: dict[str, bool] = {}
+    bom: dict[str, dict] = {}
     current = None
-    for line in text.splitlines():
+    for line in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped.startswith("- ref:"):
             current = stripped.split(":", 1)[1].strip()
-            bom[current] = False
-        elif stripped.startswith("dnp:") and current:
-            bom[current] = stripped.split(":", 1)[1].strip().lower() == "true"
+            bom[current] = {"dnp": False, "package": None, "mpn": None}
+        elif current and stripped.startswith(("dnp:", "package:", "mpn:")):
+            key, _, value = stripped.partition(":")
+            value = value.strip().strip('"')
+            if key == "dnp":
+                bom[current]["dnp"] = value.lower() == "true"
+            else:
+                bom[current][key] = value
+    return bom
 
+
+def check_parts_yaml(model: DesignModel, path: str, refdes_map: dict) -> dict:
+    """Require the model's components to match a committed BOM.
+
+    Benchmark (c) has no IR document, so its anchor is the parts list AMB-39
+    authored. The map from refdes to instance path is written out rather than
+    derived by lowercasing, so a BOM line no instance covers fails loudly
+    instead of matching something close.
+
+    WHAT IS COMPARED: refdes membership, the DNP population, and - for every
+    line naming a real part - the package and the MPN. An earlier version
+    compared only the first two, which meant the gate printed "agrees with
+    parts.yaml" while every value, package and MPN in the model was
+    self-certified. The `value:` column is deliberately not compared: it is
+    free text ("4.7uF 25V X5R") with no parse this issue should be inventing.
+
+    WHAT IS NOT COMPARED, and cannot be here: connectivity. parts.yaml states
+    none. `check_power_tree` anchors the power chain against the document that
+    does state it; the remaining signal nets are transcribed from pin-plan.md
+    and are NOT externally verified. lang/README.md says so.
+    """
+    bom = _read_bom(path)
     flat = flatten(model)
     components = {i["path"] for i in flat["instances"] if i["kind"] == "component"}
     by_path = {i["path"]: i for i in flat["instances"]}
@@ -408,35 +432,126 @@ def check_parts_yaml(model: DesignModel, path: str, refdes_map: dict) -> dict:
         problems.append(f"refdes_map {refdes}: not in the BOM")
 
     mapped: set[str] = set()
+    compared_fields = 0
     for refdes in sorted(set(bom) & set(refdes_map)):
         target = refdes_map[refdes]
+        entry = bom[refdes]
         mapped.add(target)
         if target not in components:
             problems.append(f"BOM {refdes}: maps to {target}, which is not a component")
             continue
-        if by_path[target]["dnp"] != bom[refdes]:
+        instance = by_path[target]
+        if instance["dnp"] != entry["dnp"]:
             problems.append(
-                f"BOM {refdes}: dnp {by_path[target]['dnp']} vs BOM {bom[refdes]}"
+                f"BOM {refdes}: dnp {instance['dnp']} vs BOM {entry['dnp']}"
             )
+        compared_fields += 1
+
+        mpn = entry["mpn"] or ""
+        if mpn.startswith("n/a"):
+            # A mechanical item. parts.yaml names no part, so there is nothing
+            # to compare beyond presence and DNP.
+            continue
+        part = instance["part"]
+        if part is None:
+            problems.append(f"BOM {refdes}: names {mpn!r} but the model binds no part")
+            continue
+        for field, expected in (("mpn", mpn), ("package", entry["package"])):
+            if expected is None:
+                continue
+            value = part.constraints.get(field)
+            actual = value.text if value is not None and value.tag == "s" else None
+            compared_fields += 1
+            if actual != expected:
+                problems.append(
+                    f"BOM {refdes}: {field} {actual!r} vs BOM {expected!r}"
+                )
     for orphan in sorted(components - mapped):
         problems.append(f"component {orphan}: no BOM line maps to it")
 
     _fail(problems)
     return {
         "anchor": path,
-        "placements": len(bom),
-        "dnp": sum(1 for value in bom.values() if value),
-        "instances": len(flat["instances"]),
-        "nets": len(flat["nets"]),
-        "connections": len(flat["connections"]),
+        "kind": "parts-yaml",
+        "compared": (
+            f"{len(bom)} placements, "
+            f"{sum(1 for e in bom.values() if e['dnp'])} DNP, "
+            f"{compared_fields} refdes/package/MPN field(s)"
+        ),
     }
 
 
-def check_anchor(model: DesignModel) -> dict | None:
-    """Run whichever anchor the model declares, or report that it has none."""
+def check_power_tree(model: DesignModel, path: str) -> dict:
+    """Anchor the power chain against the benchmark's own power tree.
+
+    `benchmarks/esp32s3-devboard/power-tree.yaml` declares the series elements
+    between supply nodes - `- id: D1_schottky / from: VBUS_FILT / to: P5V0` -
+    and it was authored under AMB-39, by a process that knew nothing about this
+    model. Every edge must exist in the flattened netlist: the component named
+    by the edge id must have one port on the `from` net and one on the `to` net.
+
+    This exists because the BOM anchor verifies no connectivity at all, so
+    until this was added a mutation shorting VBUS straight to 3V3 passed every
+    gate while `bakeoff check` printed that the design agreed with its anchor.
+    """
+    edges: list[dict] = []
+    current = None
+    inside = False
+    for line in (REPO_ROOT / path).read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not line.startswith(" ") and stripped.startswith("edges:"):
+            inside = True
+            continue
+        if inside and line and not line.startswith((" ", "-", "\t")):
+            break
+        if not inside:
+            continue
+        if stripped.startswith("- id:"):
+            current = {"id": stripped.split(":", 1)[1].strip()}
+            edges.append(current)
+        elif current is not None and stripped.startswith(("from:", "to:")):
+            key, _, value = stripped.partition(":")
+            current[key] = value.strip()
+
+    flat = flatten(model)
+    by_net: dict[str, set[tuple[str, str]]] = {}
+    for connection in flat["connections"]:
+        by_net.setdefault(connection["net"], set()).add(
+            (connection["instance"], connection["port"])
+        )
+
+    problems: list[str] = []
+    checked = 0
+    for edge in edges:
+        if "from" not in edge or "to" not in edge:
+            problems.append(f"edge {edge.get('id')!r}: power-tree.yaml states no from/to")
+            continue
+        refdes = edge["id"].split("_", 1)[0].lower()
+        instance = f"/{refdes}"
+        upstream = {port for path_id, port in by_net.get(edge["from"], set()) if path_id == instance}
+        downstream = {port for path_id, port in by_net.get(edge["to"], set()) if path_id == instance}
+        checked += 1
+        if not upstream or not downstream:
+            problems.append(
+                f"edge {edge['id']}: {instance} should bridge {edge['from']} to "
+                f"{edge['to']}, but sits on "
+                f"{sorted(upstream) or 'nothing'} / {sorted(downstream) or 'nothing'}"
+            )
+    if not edges:
+        problems.append(f"{path}: declares no edges, so it anchors nothing")
+
+    _fail(problems)
+    return {"anchor": path, "kind": "power-tree", "compared": f"{checked} series edge(s)"}
+
+
+def check_anchor(model: DesignModel) -> list[dict]:
+    """Run every anchor the model declares. Empty list means it declares none."""
     anchor = model.anchor
     if not anchor:
-        return None
+        return []
     if anchor["kind"] == "netlist-ir":
-        return check_netlist_ir(model, anchor["path"])
-    return check_parts_yaml(model, anchor["path"], anchor.get("refdes_map", {}))
+        return [check_netlist_ir(model, anchor["path"])]
+    results = [check_parts_yaml(model, anchor["path"], anchor.get("refdes_map", {}))]
+    if anchor.get("power_tree"):
+        results.append(check_power_tree(model, anchor["power_tree"]))
+    return results

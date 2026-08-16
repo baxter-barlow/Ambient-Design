@@ -24,9 +24,14 @@ DOWN and EXECUTABLE, so here they are, in full:
         this was caught.
 
   T9-3  hardware_flags
-        `hardware_kind` and the L9 flags it implies come from the library. A
-        mounting hole is board-only and out of the BOM because it is a
-        mounting hole, not because the design said so twice.
+        `hardware_kind` and the L9 flags it implies come from the library —
+        but ONLY when the source said nothing about them at all. An earlier
+        version OR-ed the instance's flags with the library's, so a design
+        that deliberately kept a test point IN the BOM had that override
+        silently reverted on the way back in: a BOM flag flipping with no way
+        to say otherwise in source. Presence is now tracked separately from
+        value, so "the source was silent" and "the source said false" are
+        different states.
 
 There are deliberately NO value defaults ("a resistor is 0402", "a resistor is
 0.25 W"). They looked like the biggest saving available and they are a trap:
@@ -36,16 +41,29 @@ measurement a number that depends on which design happens to be in the corpus.
 A rule that only pays off when the corpus agrees with it is not an inference
 rule, it is a coincidence.
 
-THE TAX IS THEREFORE A LOWER BOUND on what a real type checker could recover,
-and the report says so. Under-claiming here is the safe direction: R59 at M2
-re-measures against the actual checker, and a preliminary number that came in
-low is a pleasant surprise, whereas one that came in high would have already
-been used to justify a decision.
+THE AGGREGATE IS NOT A LOWER BOUND, and an earlier version of this docstring
+said it was. Decomposing it settles the question: T9-1 alone is 59-77% of the
+total, and T9-1 is not inference — it is a component library supplying a pin
+list, which L2, D3 and D5 give unconditionally and which no candidate grammar
+would ever have charged an author for. The `explicit` denominator that
+includes it describes a language nobody proposed.
+
+Three biases, all of them now stated rather than one:
+
+  UP    counting T9-1 as inference at all
+  UP    benchmark (c) is built so every instance is port-recoverable (see
+        examples/make_esp32_model.py), which maximises T9-1 specifically
+  DOWN  no value defaults, so a real checker recovers more than T9-2 does
+
+The T9-2 delta — 4.3-7.0% — is the reading that answers T9's actual question,
+and `bakeoff measure` reports the three separately for that reason. R59 at M2
+re-measures against the real checker.
 
 This library is a bake-off fixture standing in for D3 part data. It is not the
 D5 seed library and nothing outside lang/ may read it.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from .model import Instance, Port
@@ -208,6 +226,28 @@ class LibraryError(KeyError):
     """A definition the library does not know."""
 
 
+# Which T9 rules are active. MEASUREMENT KNOB ONLY: the bake-off has to be
+# able to say how much each rule is worth on its own, because reporting one
+# aggregate "annotation tax" hid that two thirds of it was T9-1 — a component
+# library supplying a pin list, which is not inference and which no candidate
+# grammar was ever going to charge for. Nothing outside measure.py changes it,
+# and it is restored on the way out.
+ALL_RULES = frozenset({"T9-1", "T9-2", "T9-3"})
+ACTIVE_RULES = ALL_RULES
+
+
+@contextmanager
+def rule_set(rules):
+    """Run a block with only `rules` active. Single-threaded, restores on exit."""
+    global ACTIVE_RULES
+    previous = ACTIVE_RULES
+    ACTIVE_RULES = frozenset(rules)
+    try:
+        yield
+    finally:
+        ACTIVE_RULES = previous
+
+
 def lookup(definition: str) -> ComponentDef:
     try:
         return LIBRARY[definition]
@@ -222,6 +262,8 @@ def lookup(definition: str) -> ComponentDef:
 
 def inferable_ports(inst: Instance) -> bool:
     """True when T9-1 recovers this instance's ports exactly."""
+    if "T9-1" not in ACTIVE_RULES:
+        return False
     if inst.kind != "component":
         return False
     try:
@@ -231,7 +273,14 @@ def inferable_ports(inst: Instance) -> bool:
 
 
 def inferable_hardware(inst: Instance) -> bool:
-    """True when T9-3 recovers this instance's L9 facts exactly."""
+    """True when T9-3 recovers this instance's L9 facts exactly.
+
+    All three fields must match. A partial match is not inferable: the source
+    has to state the whole set or none of it, because there is no spelling for
+    "this one flag differs from the library".
+    """
+    if "T9-3" not in ACTIVE_RULES:
+        return False
     if inst.kind != "component":
         return False
     try:
@@ -247,6 +296,8 @@ def inferable_hardware(inst: Instance) -> bool:
 
 def inferable_constraints(inst: Instance) -> set[str]:
     """Constraint names T9-2 recovers from same-named instance parameters."""
+    if "T9-2" not in ACTIVE_RULES:
+        return set()
     if inst.part is None or inst.kind != "component":
         return set()
     try:
@@ -262,21 +313,42 @@ def inferable_constraints(inst: Instance) -> set[str]:
     }
 
 
-def apply_inference(inst: Instance) -> Instance:
+def apply_inference(inst: Instance, *, hardware_stated: bool = False) -> Instance:
     """Fill in everything the rules recover, for a parser reading `inferred`.
 
     The parser calls this on an instance it read without ports, hardware facts
     or duplicated constraints; the result must equal the instance the renderer
-    started from, which is what the round-trip test asserts. If a rule were
-    lossy the round trip would fail rather than the tax being overstated.
+    started from, which is what the round-trip test asserts.
+
+    THE KEYWORD ARGUMENT IS WHAT MAKES T9-3 INVERTIBLE, and it was added
+    because the round trip was silently lossy without it:
+
+      hardware_stated     the source declared at least one L9 fact, so T9-3
+                          must not touch any of them. Without this an
+                          instance-level `false` could not override a library
+                          `true`, because the renderers only spell a flag when
+                          it is set — so the flag flipped on the way back in.
+
+    T9-2 needs no such flag, and the reason is worth writing down because the
+    obvious fix does not work: "the renderer skipped it" and "the source never
+    had it" produce IDENTICAL text, so no amount of parser bookkeeping can
+    tell them apart. What closes the hole is a coherence rule on the MODEL
+    (`model.validate`): an instance with a part binding and a resolver-visible
+    parameter must carry the matching constraint. With that rule the second
+    case cannot exist, and restoring unconditionally is exact.
     """
     if inst.kind != "component":
         return inst
     definition = lookup(inst.definition)
     ports = inst.ports or definition.ports
-    hardware_kind = inst.hardware_kind or definition.hardware_kind
-    exclude = inst.exclude_from_bom or definition.exclude_from_bom
-    board_only = inst.board_only or definition.board_only
+    if hardware_stated:
+        hardware_kind = inst.hardware_kind
+        exclude = inst.exclude_from_bom
+        board_only = inst.board_only
+    else:
+        hardware_kind = definition.hardware_kind
+        exclude = definition.exclude_from_bom
+        board_only = definition.board_only
 
     part = inst.part
     if part is not None:

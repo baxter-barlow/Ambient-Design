@@ -184,8 +184,11 @@ class CorpusIntegrity(unittest.TestCase):
     def test_corpus_is_not_empty(self):
         self.assertTrue(CORPUS)
 
-    def test_every_design_declares_an_anchor(self):
+    def test_every_reference_design_declares_an_anchor(self):
+        """Coverage probes are exempt: there is nothing external to anchor to."""
         for design_id, model in CORPUS.items():
+            if model.purpose != "reference":
+                continue
             with self.subTest(design=design_id):
                 self.assertIsNotNone(
                     model.anchor,
@@ -197,15 +200,56 @@ class CorpusIntegrity(unittest.TestCase):
             with self.subTest(design=design_id):
                 check_anchor(model)
 
-    def test_blinker_reproduces_the_committed_ir(self):
-        summary = check_anchor(CORPUS["blinker-555"])
-        self.assertEqual(summary["anchor"], "ir/examples/blinker.ir.json")
-        self.assertEqual(summary["connections"], 25)
+    def test_the_corpus_has_at_least_one_coverage_probe(self):
+        self.assertTrue(
+            any(model.purpose == "coverage-probe" for model in CORPUS.values()),
+            "without a probe, an arm's expressiveness gap waits for a corpus "
+            "that happens to hit it",
+        )
 
-    def test_esp32_matches_the_committed_bom(self):
-        summary = check_anchor(CORPUS["esp32s3-devboard"])
-        self.assertEqual(summary["placements"], 60)
-        self.assertEqual(summary["dnp"], 3)
+    def test_blinker_reproduces_the_committed_ir(self):
+        anchors = check_anchor(CORPUS["blinker-555"])
+        self.assertEqual([a["kind"] for a in anchors], ["netlist-ir"])
+        self.assertIn("25 connections", anchors[0]["compared"])
+
+    def test_esp32_matches_the_committed_bom_and_power_tree(self):
+        anchors = check_anchor(CORPUS["esp32s3-devboard"])
+        self.assertEqual([a["kind"] for a in anchors], ["parts-yaml", "power-tree"])
+        self.assertIn("60 placements", anchors[0]["compared"])
+        self.assertIn("3 DNP", anchors[0]["compared"])
+        self.assertIn("5 series edge", anchors[1]["compared"])
+
+    def test_esp32_anchor_catches_a_broken_power_chain(self):
+        """The BOM anchors no connectivity; power-tree.yaml does."""
+        from bakeoff.elaborate import check_power_tree
+
+        document = json.loads(json.dumps(model_to_json(CORPUS["esp32s3-devboard"])))
+        root = document["modules"][0]
+        # Short VBUS_IN straight to the 3V3 rail past the whole chain.
+        p5v0 = next(n for n in root["nets"] if n["name"] == "P5V0")
+        p5v0["members"] = [m for m in p5v0["members"] if m != "d1.k"]
+        vbus = next(n for n in root["nets"] if n["name"] == "VBUS_IN")
+        vbus["members"] = sorted(vbus["members"] + ["d1.k"])
+        with self.assertRaises(AnchorError):
+            check_power_tree(
+                model_from_json(document),
+                "benchmarks/esp32s3-devboard/power-tree.yaml",
+            )
+
+    def test_esp32_anchor_catches_a_wrong_mpn(self):
+        from bakeoff.elaborate import check_parts_yaml
+
+        document = json.loads(json.dumps(model_to_json(CORPUS["esp32s3-devboard"])))
+        root = document["modules"][0]
+        u2 = next(i for i in root["instances"] if i["name"] == "u2")
+        u2["part"]["constraints"]["mpn"] = {"s": "AMS1117-3.3"}
+        with self.assertRaises(AnchorError) as caught:
+            check_parts_yaml(
+                model_from_json(document),
+                "benchmarks/esp32s3-devboard/parts.yaml",
+                CORPUS["esp32s3-devboard"].anchor["refdes_map"],
+            )
+        self.assertIn("mpn", str(caught.exception))
 
     def test_model_json_round_trips(self):
         for design_id, model in CORPUS.items():
@@ -213,15 +257,47 @@ class CorpusIntegrity(unittest.TestCase):
                 self.assertEqual(model_from_json(model_to_json(model)), model)
 
     def test_esp32_generator_is_deterministic(self):
-        """Regenerating must reproduce the committed bytes exactly."""
+        """Regenerating must reproduce the committed bytes exactly.
+
+        Uses --check, which compares without writing. The first version ran
+        the generator over the tracked fixture: it destroyed the baseline
+        before asserting on it, so a divergence between generator and commit
+        failed exactly once and was green forever after — and `make check`
+        wrote to a tracked source file on every invocation, including CI.
+        """
         target = LANG / "examples" / "esp32s3-devboard.design.json"
         before = target.read_bytes()
-        subprocess.run(
-            [sys.executable, str(LANG / "examples" / "make_esp32_model.py")],
-            check=True,
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LANG / "examples" / "make_esp32_model.py"),
+                "--check",
+            ],
             capture_output=True,
+            text=True,
         )
-        self.assertEqual(before, target.read_bytes())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(before, target.read_bytes(), "--check must not write")
+
+    def test_the_generator_check_mode_actually_fails_on_divergence(self):
+        """Mutation-proof: a --check that always exits 0 is not a check."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            decoy = Path(tmp) / "decoy.design.json"
+            decoy.write_text("{}\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(LANG / "examples" / "make_esp32_model.py"),
+                    "--check",
+                    "--out",
+                    str(decoy),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
 
 
 class RoundTrip(unittest.TestCase):
@@ -287,13 +363,24 @@ class RoundTrip(unittest.TestCase):
 
 class Inference(unittest.TestCase):
     def test_inference_is_lossless_on_the_corpus(self):
+        """Applied the way the parsers apply it, inference is the identity.
+
+        `hardware_stated` mirrors what the renderer did: it writes the L9 facts
+        out whenever the library cannot supply them, and the parser then must
+        not fill them in. Calling this with the flag hardcoded false asserted
+        something the parsers never do — and would have hidden the very
+        override bug the flag exists to fix.
+        """
         for design_id, model in CORPUS.items():
             for module in model.modules:
                 for inst in module.instances:
                     if inst.kind != "component":
                         continue
+                    stated = not library.inferable_hardware(inst)
                     with self.subTest(design=design_id, instance=inst.name):
-                        self.assertEqual(library.apply_inference(inst), inst)
+                        self.assertEqual(
+                            library.apply_inference(inst, hardware_stated=stated), inst
+                        )
 
     def test_library_covers_every_definition_the_corpus_uses(self):
         for design_id, model in CORPUS.items():
@@ -455,6 +542,110 @@ class StarlarkRestrictions(unittest.TestCase):
                     f"{forbidden}() would reinstate arbitrary code execution",
                 )
 
+    def test_reflection_through_a_string_method_is_rejected(self):
+        """`"{0.__class__}".format(x)` used to reach sys.modules and os.environ.
+
+        The `_`-prefix rule is a spelling rule, not a capability rule: it
+        checks ast.Attribute nodes, and a dunder chain inside a string literal
+        is invisible to it. Attribute access is now allowed only on the
+        builder and its handles.
+        """
+        failure = self._reject("leak = '{0.__class__}'.format(1)\n")
+        self.assertTrue(any(d.code == "AEDS0309" for d in failure.diagnostics))
+
+    def test_an_ordinary_method_call_is_a_diagnostic_not_a_crash(self):
+        """It used to raise a bare TypeError out of parse().
+
+        eval/aed_eval/protocol.py calls the gate with no handler around it, so
+        that exception did not become a scored failure — it aborted the whole
+        AC5 run and discarded every trial in it.
+        """
+        failure = self._reject("x = 'abc'.upper()\n")
+        self.assertTrue(failure.diagnostics)
+
+    def test_parse_never_raises_anything_but_parse_failure(self):
+        for snippet in ("x = 'abc'.upper()\n", "x = [1][9]\n", "x = 1 + 'a'\n"):
+            with self.subTest(snippet=snippet):
+                with self.assertRaises(ParseFailure):
+                    starlark_arm.parse(self.PREFIX + snippet + self.SUFFIX)
+
+    def test_a_huge_range_is_rejected(self):
+        """The step budget counts node visits; 14 of them allocated 1.25 GB."""
+        failure = self._reject("big = range(5000000)\n")
+        self.assertTrue(any(d.code == "AEDS0321" for d in failure.diagnostics))
+
+    def test_a_huge_string_is_rejected(self):
+        self._reject("s = 'x' * 99999999\n")
+
+    def test_recursion_through_a_parameter_is_caught_at_runtime(self):
+        """The static call graph only sees cycles through a bare name.
+
+        `helper(helper, 0)` routes the cycle through a PARAMETER, so the
+        static pass produces no edge for it and the evaluator used to recurse
+        until the interpreter's own stack gave out — which the docstring
+        explicitly said could not happen.
+        """
+        with self.assertRaises(ParseFailure) as caught:
+            starlark_arm.parse(
+                "def helper(f, n):\n"
+                "    return f(f, n + 1)\n"
+                "\n"
+                "def M(m):\n"
+                "    m.port('p', 'passive')\n"
+                "    helper(helper, 0)\n"
+                "\n"
+                "DESIGN = design(M)\n"
+            )
+        self.assertTrue(
+            any(d.code in ("AEDS0320", "AEDS0105") for d in caught.exception.diagnostics),
+            [d.code for d in caught.exception.diagnostics],
+        )
+
+    def test_a_decorator_is_rejected(self):
+        with self.assertRaises(ParseFailure) as caught:
+            starlark_arm.parse(
+                "def nope(f):\n    return f\n\n@nope\ndef M(m):\n"
+                "    m.port('p', 'passive')\n\nDESIGN = design(M)\n"
+            )
+        self.assertTrue(any(d.code == "AEDS0106" for d in caught.exception.diagnostics))
+
+    def test_default_arguments_are_rejected(self):
+        with self.assertRaises(ParseFailure):
+            starlark_arm.parse(
+                "def M(m, extra=1):\n    m.port('p', 'passive')\n\nDESIGN = design(M)\n"
+            )
+
+    def test_a_bound_method_cannot_be_taken_apart(self):
+        """`x.method` used to be an ordinary 2-tuple in the value space."""
+        self._reject("n = len('abc'.upper)\n")
+
+    def test_integer_division_and_modulo_still_evaluate(self):
+        """Bounding `str * int` was inserted at the wrong nesting level.
+
+        `//` and `%` lived in the int/int branch. The size check for `str`
+        and `list` repetition went in above them at the outer indent, so both
+        operators ended up reachable only once the operator was already
+        `Mult` — which it never is. Two operators the subset documents as
+        available started reporting "unsupported operand types", and nothing
+        caught it because no corpus design divides. The program below is the
+        conforming one, with its instance names computed instead of listed.
+        """
+        model = starlark_arm.parse(
+            "def M(m):\n"
+            "    m.port('p', 'passive')\n"
+            "    for i in range(4):\n"
+            "        if i % 2 == 0:\n"
+            "            r = m.part('r' + str(i // 2 + 1), "
+            "'aed.lib.passive.Resistor', resistance='1kohm')\n"
+            "            r.pins(('a', 'passive'), ('b', 'passive'))\n"
+            "            r.part(package='0402', resistance='1kohm')\n"
+            "    m.net('N', 'r1.a', 'r2.a')\n"
+            "    m.link('p', 'r1.b')\n"
+            "    m.link('r2.b', 'p')\n" + "\nDESIGN = design(M)\n",
+            "explicit",
+        )
+        self.assertEqual([i.name for i in model.root().instances], ["r1", "r2"])
+
     def test_a_conforming_program_still_runs(self):
         model = starlark_arm.parse(
             "def M(m):\n"
@@ -462,7 +653,7 @@ class StarlarkRestrictions(unittest.TestCase):
             "    for name in ['r1', 'r2']:\n"
             "        r = m.part(name, 'aed.lib.passive.Resistor', resistance='1kohm')\n"
             "        r.pins(('a', 'passive'), ('b', 'passive'))\n"
-            "        r.part(package='0402')\n"
+            "        r.part(package='0402', resistance='1kohm')\n"
             "    m.net('N', 'r1.a', 'r2.a')\n"
             "    m.link('p', 'r1.b')\n"
             "    m.link('r2.b', 'p')\n" + "\nDESIGN = design(M)\n",
@@ -562,6 +753,179 @@ class ReservedWords(unittest.TestCase):
                 self.assertIn("Reserved words", card)
                 for word in sorted(RESERVED):
                     self.assertIn(word, card)
+
+
+class CoverageProbe(unittest.TestCase):
+    """The probe exists so an expressiveness gap fails the gate, not luck."""
+
+    PROBE = "coverage-probe"
+
+    def test_the_probe_is_in_the_corpus(self):
+        self.assertIn(self.PROBE, CORPUS)
+        self.assertEqual(CORPUS[self.PROBE].purpose, "coverage-probe")
+
+    def test_the_probe_declares_no_anchor(self):
+        self.assertIsNone(CORPUS[self.PROBE].anchor)
+
+    def test_the_probe_is_excluded_from_the_measurement(self):
+        """Synthetic designs make the gate complete, not the numbers."""
+        import inspect
+
+        from bakeoff import measure as measure_module
+
+        source = inspect.getsource(measure_module.measure)
+        self.assertIn('purpose == "reference"', source)
+
+    def test_every_declared_field_is_used_somewhere_in_the_corpus(self):
+        """A field no fixture uses is a field no arm is required to express."""
+        schema = _schema(LANG / "design-model.schema.json")
+        blob = "".join(
+            (LANG / "examples" / f"{design_id}.design.json").read_text(encoding="utf-8")
+            for design_id in CORPUS
+        )
+        for section in (
+            schema["properties"],
+            schema["$defs"]["InstanceDef"]["properties"],
+            schema["$defs"]["NetDef"]["properties"],
+            schema["$defs"]["Port"]["properties"],
+            schema["$defs"]["PartBinding"]["properties"],
+        ):
+            for field in section:
+                with self.subTest(field=field):
+                    self.assertIn(f'"{field}"', blob)
+
+    def test_the_probe_covers_the_cases_that_were_missed(self):
+        model = CORPUS[self.PROBE]
+        root = model.root()
+        instances = {i.name: i for i in root.instances}
+
+        # An L9 flag with no hardware kind — the case the Starlark arm could
+        # not express at all.
+        self.assertTrue(instances["j1"].exclude_from_bom)
+        self.assertIsNone(instances["j1"].hardware_kind)
+
+        # An L9 flag that CONTRADICTS the library: a test point kept in the BOM.
+        self.assertEqual(instances["tp1"].hardware_kind, "test_point")
+        self.assertFalse(instances["tp1"].exclude_from_bom)
+        self.assertTrue(library.lookup("aed.lib.mech.TestPoint").exclude_from_bom)
+
+        # A single-endpoint net — L9b, and unspellable in all three arms until
+        # this probe existed.
+        self.assertTrue(any(len(net.members) == 1 for net in root.nets))
+
+        # An `nc` port, which must appear on no net.
+        leg = model.module("Leg")
+        self.assertIn("nc", {port.role for port in leg.ports})
+
+        # A resolved part that also carries constraints, and an abstract part
+        # whose every constraint T9-2 recovers.
+        self.assertTrue(instances["u1"].part.lockfile_key)
+        self.assertTrue(instances["u1"].part.constraints)
+        self.assertEqual(
+            set(instances["r1"].part.constraints),
+            library.inferable_constraints(instances["r1"]),
+        )
+
+    def test_all_five_quantity_forms_appear(self):
+        text = (LANG / "examples" / "coverage-probe.design.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"1kohm +/- 1%"', text)
+        self.assertIn('"4.7uF +/- 0.5uF"', text)
+        self.assertIn('"2.0V (1.8V to 2.4V)"', text)
+        self.assertIn('"3.0V to 3.6V"', text)
+        self.assertIn('"220ohm"', text)
+
+    def test_an_l9_flag_survives_the_round_trip_in_every_arm(self):
+        """The exact defect the probe was written for."""
+        model = CORPUS[self.PROBE]
+        for arm in ARMS.values():
+            for variant in arm.variants:
+                with self.subTest(arm=arm.key, variant=variant):
+                    parsed = arm.parse(arm.render(model, variant), variant)
+                    j1 = parsed.root().instance("j1")
+                    self.assertTrue(j1.exclude_from_bom)
+                    tp1 = parsed.root().instance("tp1")
+                    self.assertFalse(
+                        tp1.exclude_from_bom,
+                        "an instance-level false was reverted to the library's true",
+                    )
+
+
+class MeasurementKnobs(unittest.TestCase):
+    """The two readings are decomposed, not asserted as single numbers."""
+
+    def test_each_t9_rule_can_be_measured_alone(self):
+        model = CORPUS["esp32s3-devboard"]
+        arm = ARMS["candidate_a"]
+        explicit = len(arm.render(model, "explicit"))
+        savings = {}
+        for rule in sorted(library.ALL_RULES):
+            with library.rule_set({rule}):
+                savings[rule] = explicit - len(arm.render(model, "inferred"))
+        self.assertGreater(savings["T9-1"], savings["T9-2"])
+        self.assertGreater(savings["T9-2"], 0)
+        self.assertGreater(savings["T9-3"], 0)
+
+    def test_the_rule_set_is_restored(self):
+        before = library.ACTIVE_RULES
+        with library.rule_set({"T9-2"}):
+            self.assertEqual(library.ACTIVE_RULES, {"T9-2"})
+        self.assertEqual(library.ACTIVE_RULES, before)
+
+    def test_the_columnar_threshold_is_a_knob_not_a_fact(self):
+        """The comment on COLUMNAR_MIN_ROWS used to claim 3 was optimal."""
+        from bakeoff.arms.shared import columnar_threshold
+
+        model = CORPUS["esp32s3-devboard"]
+        arm = ARMS["candidate_a"]
+        with columnar_threshold(2):
+            at_two = len(arm.render(model, "inferred+columnar"))
+        with columnar_threshold(3):
+            at_three = len(arm.render(model, "inferred+columnar"))
+        self.assertLess(at_two, at_three)
+
+
+class NamespaceRules(unittest.TestCase):
+    def test_a_net_label_colliding_with_a_module_port_is_rejected(self):
+        """The own port was silently dropped and the module left severed."""
+        source = (
+            '#pragma language "0.1.0"\n\n'
+            "module Leg:\n"
+            "    port vin power_in\n"
+            "    r = new aed.lib.passive.Resistor\n"
+            "    r.resistance = 1kohm\n"
+            "    r.part = abstract\n"
+            "    r.part.resistance = 1kohm\n"
+            "    signal vin\n"
+            "    vin ~ r.a\n"
+            "    vin ~ r.b\n"
+        )
+        with self.assertRaises(ParseFailure) as caught:
+            ARMS["candidate_a"].parse(source, "inferred")
+        self.assertTrue(
+            any(d.code.endswith("0213") for d in caught.exception.diagnostics)
+        )
+
+    def test_a_module_instance_may_not_declare_ports(self):
+        """The rule examples/negative/n07 ships a control for."""
+        document = json.loads(json.dumps(model_to_json(CORPUS["blinker-555"])))
+        root = next(m for m in document["modules"] if m["name"] == "Blinker555")
+        indicator = next(i for i in root["instances"] if i["name"] == "indicator")
+        indicator["ports"] = [{"name": "ctl", "role": "input"}]
+        with self.assertRaises(ModelError) as caught:
+            model_from_json(document)
+        self.assertIn("may not declare ports", str(caught.exception))
+
+    def test_a_resolver_visible_parameter_needs_its_constraint(self):
+        """What makes T9-2 invertible: the "never stated" case cannot exist."""
+        document = json.loads(json.dumps(model_to_json(CORPUS["blinker-555"])))
+        root = next(m for m in document["modules"] if m["name"] == "Blinker555")
+        r_a = next(i for i in root["instances"] if i["name"] == "r_a")
+        del r_a["part"]["constraints"]["resistance"]
+        with self.assertRaises(ModelError) as caught:
+            model_from_json(document)
+        self.assertIn("resolver-visible", str(caught.exception))
 
 
 class Gates(unittest.TestCase):
