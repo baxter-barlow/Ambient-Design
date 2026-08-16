@@ -7,6 +7,7 @@
   "anchor": {
     "kind": "parts-yaml",
     "path": "benchmarks/esp32s3-devboard/parts.yaml",
+    "power_tree": "benchmarks/esp32s3-devboard/power-tree.yaml",
     "refdes_map": {
       "C1": "/c1",
       "C10": "/c10",
@@ -866,7 +867,7 @@
                 "s": "SS34-E3/57T"
               },
               "package": {
-                "s": "SMA"
+                "s": "SMA (DO-214AC)"
               }
             }
           }
@@ -2385,7 +2386,7 @@
             "c8.b",
             "c9.b",
             "d2.gnd",
-            "d3.k",
+            "d3.a",
             "d4.k",
             "d5.k",
             "h1.p",
@@ -2690,25 +2691,6 @@
           ]
         },
         {
-          "name": "N_FUSED",
-          "voltage_domain": "vbus_5v",
-          "members": [
-            "f1.b",
-            "fb1.a"
-          ]
-        },
-        {
-          "name": "N_LDO_OUT",
-          "voltage_domain": "p3v3",
-          "members": [
-            "c4.a",
-            "c5.a",
-            "j5.p1",
-            "jp1.a",
-            "u2.vout"
-          ]
-        },
-        {
           "name": "N_LED_PWR",
           "voltage_domain": "p5v0",
           "members": [
@@ -2726,6 +2708,17 @@
         },
         {
           "name": "P3V3",
+          "voltage_domain": "p3v3",
+          "members": [
+            "c4.a",
+            "c5.a",
+            "j5.p1",
+            "jp1.a",
+            "u2.vout"
+          ]
+        },
+        {
+          "name": "P3V3_LOAD",
           "voltage_domain": "p3v3",
           "members": [
             "c12.a",
@@ -2805,13 +2798,21 @@
           ]
         },
         {
-          "name": "VBUS",
+          "name": "VBUS_FILT",
+          "voltage_domain": "vbus_5v",
+          "members": [
+            "d1.a",
+            "fb1.b"
+          ]
+        },
+        {
+          "name": "VBUS_IN",
           "voltage_domain": "vbus_5v",
           "members": [
             "c1.a",
             "c2.a",
             "d2.vbus",
-            "d3.a",
+            "d3.k",
             "f1.a",
             "j1.vbus",
             "tp1.p"
@@ -2821,8 +2822,8 @@
           "name": "VBUS_PROT",
           "voltage_domain": "vbus_5v",
           "members": [
-            "d1.a",
-            "fb1.b"
+            "f1.b",
+            "fb1.a"
           ]
         }
       ]

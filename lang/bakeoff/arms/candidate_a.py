@@ -55,6 +55,10 @@ KEY = "candidate_a"
 TITLE = "A - statement"
 CODE_PREFIX = "AEDA"
 FLAGS = ("dnp", "exclude_from_bom", "board_only")
+# The L9 flags T9-3 infers. `dnp` is NOT one of them: it is never inferred
+# from the library, so writing it must not count as "the source stated its
+# hardware facts".
+HARDWARE_FLAGS = ("exclude_from_bom", "board_only")
 NET_ATTRIBUTES = ("ground_domain", "voltage_domain")
 
 
@@ -74,7 +78,12 @@ def _instance_lines(inst: Instance, infer: bool) -> list[str]:
         # genuinely portless component the library disagrees with has no
         # spelling at all — that is a fixture bug, and silence would turn it
         # into a wrong netlist both arms agreed on.
-        if infer and not inst.ports:
+        # Only a contradiction when the LIBRARY has pins and the instance does
+        # not: then silence would mean "ask the library" and there is no way to
+        # say "no pins here". A component the library also holds portless is
+        # unambiguous, and raising on it broke the per-rule decomposition.
+        supplied = library.LIBRARY.get(inst.definition)
+        if infer and not inst.ports and supplied is not None and supplied.ports:
             raise ValueError(
                 f"{inst.name}: is portless but the library gives "
                 f"{inst.definition} pins, so `inferred` has no way to say "
@@ -97,11 +106,16 @@ def _instance_lines(inst: Instance, infer: bool) -> list[str]:
             )
 
     if not (infer and library.inferable_hardware(inst)):
+        # Once any of these is written the parser stops inferring the set, so
+        # a false that contradicts the library has to be spelled out rather
+        # than left implicit.
         if inst.hardware_kind:
             lines.append(f"{inst.name}.hardware = {inst.hardware_kind}")
-        for flag in ("exclude_from_bom", "board_only"):
-            if getattr(inst, flag):
-                lines.append(f"{inst.name}.{flag} = true")
+        definition = library.LIBRARY.get(inst.definition)
+        for flag in HARDWARE_FLAGS:
+            value = getattr(inst, flag)
+            if value or (definition is not None and getattr(definition, flag)):
+                lines.append(f"{inst.name}.{flag} = {'true' if value else 'false'}")
     if inst.dnp:
         lines.append(f"{inst.name}.dnp = true")
     return lines
@@ -116,6 +130,16 @@ def _net_lines(net: Net) -> list[str]:
                 lines.append(f'{net.name}.{attribute} = "{value}"')
         lines.extend(f"{net.name} ~ {member}" for member in net.members)
         return lines
+    # A net with exactly ONE endpoint. L9b calls these out by name -
+    # "intentional single-pin nets" - and benchmark (c)'s design.md says the
+    # lint must accept them only when declared, so the language needs a way to
+    # declare one. Neither benchmark design happened to contain one, so all
+    # three arms shipped with no spelling for it at all: candidate A dropped
+    # the net silently, candidate B emitted a bare endpoint its own parser
+    # rejected, and the baseline's `m.link` demanded two. The coverage probe
+    # found it in one run.
+    if len(net.members) == 1:
+        return [f"isolated {net.members[0]}"]
     # Unlabelled: a chain of binary connections, which is what a pin-to-pin
     # grammar actually costs. Chaining rather than star-connecting keeps every
     # statement two endpoints wide, which is A's whole idea.
@@ -175,6 +199,8 @@ class _ModuleBuilder:
         # localisation column of the defect table would be uniformly blank —
         # measuring nothing, for every candidate equally.
         self.spans: dict = {}
+        # Endpoints declared as single-member nets (L9b).
+        self.isolated_endpoints: list[str] = []
 
 
 def _new_instance(name: str, definition: str) -> dict:
@@ -187,6 +213,12 @@ def _new_instance(name: str, definition: str) -> dict:
         "lockfile_key": None,
         "abstract": False,
         "hardware_kind": None,
+        # Did the source state any L9 hardware fact at all? Distinct from the
+        # values, because the renderers only spell a flag when it is set, so
+        # "silent" and "false" are otherwise the same text — and T9-3 filling
+        # a silent instance is right while overriding an explicit false is a
+        # BOM flag flipping behind the author's back.
+        "hardware_stated": False,
         "dnp": False,
         "exclude_from_bom": False,
         "board_only": False,
@@ -227,9 +259,18 @@ def _parse_statement(cursor: Cursor, builder: _ModuleBuilder, assertions: list) 
         )
         return
 
+    if cursor.at_keyword("isolated"):
+        cursor.advance()
+        token = cursor.current
+        endpoint = cursor.dotted_ref("an isolated endpoint")
+        cursor.expect_newline()
+        builder.isolated_endpoints.append(endpoint)
+        builder.spans.setdefault(endpoint, token.span(len(endpoint)))
+        return
+
     if cursor.at_keyword("signal"):
         cursor.advance()
-        name = cursor.expect_name("a signal name")
+        name = cursor.expect_free_name("a signal")
         cursor.expect_newline()
         if name in builder.signals:
             cursor.error("0202", f"signal {name!r} is declared twice", signal=name)
@@ -348,6 +389,7 @@ def _parse_assignment(cursor: Cursor, builder, path: list[str], start) -> None:
         cursor.advance()
         cursor.expect_newline()
         inst["hardware_kind"] = kind.text
+        inst["hardware_stated"] = True
         return
 
     if len(path) == 2 and path[1] in FLAGS:
@@ -358,6 +400,8 @@ def _parse_assignment(cursor: Cursor, builder, path: list[str], start) -> None:
             cursor.error("0208", f"{path[1]} is a flag: write `true` or `false`")
             cursor.fail()
         inst[path[1]] = value.flag
+        if path[1] in HARDWARE_FLAGS:
+            inst["hardware_stated"] = True
         return
 
     if len(path) == 2 and path[0] in builder.signals and path[1] in NET_ATTRIBUTES:
@@ -433,7 +477,7 @@ def parse(source: str, variant: str = "explicit") -> DesignModel:
             )
             cursor.fail()
         cursor.advance()
-        name = cursor.expect_name("a module name")
+        name = cursor.expect_free_name("a module")
         cursor.expect_block(f"module {name}")
 
         builder = _ModuleBuilder(name)
@@ -526,9 +570,12 @@ supplies them.
     VCC ~ timer.vcc
     ctl ~ r_lim.a
 
+    isolated tp1.p
+
 `signal` declares a named net; `~` attaches one endpoint. Two endpoints
-joined directly form an unnamed net. An endpoint is `<instance>.<pin>` or
-one of this module's own ports.
+joined directly form an unnamed net. `isolated` declares a net with a single
+endpoint (L9b). An endpoint is `<instance>.<pin>` or one of this module's own
+ports.
 
 ## Values
 

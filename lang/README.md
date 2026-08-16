@@ -12,7 +12,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 81 tests, stdlib only
+python3 -m unittest discover -s tests -t .  # 108 tests, stdlib only
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
@@ -49,7 +49,7 @@ in a dozen ways would produce a number nobody could attribute to anything.
 
 ## What makes the numbers comparable
 
-Three properties, all checked by `bakeoff check` and by the test suite. If any
+Four properties, all checked by `bakeoff check` and by the test suite. If any
 fails, the run reports a failure instead of numbers.
 
 **Round trip.** `parse(render(m)) == m` for every arm and variant. An arm whose
@@ -59,13 +59,35 @@ printer and parser disagree is measuring a language nobody can read back.
 model. Without this, "arm B is 20% cheaper" might only mean arm B was given
 less to say.
 
-**Anchoring.** Each design is checked against an artifact authored by a
-*different issue*. `blinker-555` is elaborated, flattened, and required to
+**Anchoring.** Each reference design is checked against an artifact authored by
+a *different issue*. `blinker-555` is elaborated, flattened, and required to
 reproduce `ir/examples/blinker.ir.json` (AMB-38) exactly — 12 instances, 7
 nets, 25 connections, 2 assertions. `esp32s3-devboard` is required to match
-`benchmarks/esp32s3-devboard/parts.yaml` (AMB-39) — 60 placements, 3 DNP. A
-bake-off whose reference netlist was written by the same hand as its parsers
-proves nothing.
+`benchmarks/esp32s3-devboard/parts.yaml` (AMB-39) — 60 placements, 3 DNP, and
+172 refdes/package/MPN fields — *and* to reproduce the five series edges in
+that benchmark's `power-tree.yaml`. A bake-off whose reference netlist was
+written by the same hand as its parsers proves nothing.
+
+The power tree is there because **a BOM anchors no connectivity whatsoever**.
+Until it was added, a mutation shorting VBUS straight to 3V3 passed every gate
+while `bakeoff check` cheerfully printed that the design agreed with its
+anchor. Adding it immediately failed, and the failures were real. D3's TVS was
+transcribed forward-biased across the supply — anode on VBUS, cathode on GND —
+when a TVS clamps in reverse bias and the SMF5.0A's 5 V figure is a *standoff*
+voltage, meaningless with the cathode anywhere else. And `VBUS_PROT` named the
+node after the ferrite bead in this model and the node after the fuse in the
+power tree, so one label meant two different nodes across two files describing
+one board. The node names here are now the power tree's, verbatim.
+
+**Coverage.** `coverage-probe` is a synthetic design whose only job is to use
+every field of `design-model.schema.json` at least once, so an arm that cannot
+express something fails the gate instead of waiting for a corpus that happens
+to hit it. It found two things the two benchmarks never happened to contain:
+`exclude_from_bom` on a component with no hardware kind, which the Starlark
+arm had no setter for and silently dropped, and L9b's intentional single-pin
+net, which **no arm could spell at all** — A dropped it, B emitted a bare
+endpoint its own parser rejected, and the baseline's `link` demanded two. All
+three now spell it `isolated`.
 
 Equality is structural and dimensional: instance order and key order do not
 matter, `100kohm` equals `100000ohm`, and an unlabelled net is identified by
@@ -84,6 +106,13 @@ committed IR. This is the design AC5a runs its trials on.
 generator, never the JSON; a test asserts regenerating reproduces it byte for
 byte. It carries the L6 and T9 readings, because it is the only corpus member
 with enough repeated structure for a columnar section to mean anything.
+
+`examples/coverage-probe.design.json` — not a circuit and not measured. It
+declares `purpose: coverage-probe`, which the schema uses to *forbid* it an
+anchor (there is nothing external for a synthetic design to agree with) and
+which `bakeoff measure` uses to exclude it from every number. A token count
+over a design nobody would build is a token count over nothing. It is in the
+corpus for the gate's sake, not the measurement's.
 
 **Benchmark (b), the buck converter, is deliberately absent.** Its BOM leaves
 the compensation network as "standard E96 R, C0G C — chosen at layout time"
@@ -107,23 +136,58 @@ over each arm's canonical rendering.
 | blinker-555 | candidate_a | 1223 | 905 | 905 |
 | blinker-555 | candidate_b | 980 | **747** | 747 |
 | blinker-555 | starlark | 1144 | 822 | — |
-| esp32s3-devboard | candidate_a | 8514 | 6278 | 5091 |
-| esp32s3-devboard | candidate_b | 6622 | **4994** | **4151** |
-| esp32s3-devboard | starlark | 7265 | 5056 | — |
+| esp32s3-devboard | candidate_a | 8553 | 6317 | 5130 |
+| esp32s3-devboard | candidate_b | 6630 | **5002** | **4159** |
+| esp32s3-devboard | starlark | 7273 | 5064 | — |
 
-Language cards: candidate_a 835, candidate_b 858, starlark 746 tokens — all
+Language cards: candidate_a 858, candidate_b 881, starlark 823 tokens — all
 comfortably inside §4's ~3K flip-criterion budget.
 
-**T9 annotation tax: 24-30%**, and it is a LOWER BOUND. The rules in
-`bakeoff/library.py` carry no value defaults, deliberately: the right default
-package for benchmark (a)'s through-hole build is wrong for (c)'s SMD build, so
-a library carrying one would hand the measurement a number that depends on
-which design happens to be in the corpus. A real type checker recovers at least
-this much.
+**T9 annotation tax: 24-30% in aggregate, and the aggregate is the wrong
+number.** An earlier version of this file called it a lower bound. Decomposing
+it per rule shows why that was wrong:
 
-**L6 columnar saving: 17-19% on (c), 0% on (a).** Nothing in a 555 blinker
-repeats three times with the same shape. L6 is a big-design feature or it is
-nothing, which is itself the answer to whether it earns a place in v1.
+| Design | Arm | T9-1 library pins | T9-2 inference | T9-3 L9 flags | all |
+|---|---|---:|---:|---:|---:|
+| blinker-555 | candidate_a | 15.3% | 7.0% | 3.7% | 26.0% |
+| blinker-555 | candidate_b | 14.6% | 6.4% | 2.8% | 23.8% |
+| blinker-555 | starlark | 20.6% | 4.5% | 3.0% | 28.1% |
+| esp32s3-devboard | candidate_a | 17.3% | 6.0% | 2.9% | 26.1% |
+| esp32s3-devboard | candidate_b | 16.5% | 5.8% | 2.3% | 24.6% |
+| esp32s3-devboard | starlark | 23.5% | 4.2% | 2.6% | 30.4% |
+
+T9-1 is 59-77% of the total, and T9-1 is not inference — it is a component
+library handing over a pin list, which L2, D3 and D5 give unconditionally and
+which no candidate grammar would ever have charged an author for. The
+`explicit` denominator that includes it describes a language nobody proposed.
+**The reading that answers T9's question is the T9-2 column: 4.2-7.0%.**
+
+Three biases, stated rather than one: counting T9-1 as inference at all biases
+UP; benchmark (c) is built so every instance is port-recoverable, which
+maximises T9-1 specifically, biasing UP; and the rules carry no value defaults
+— the right default package for (a)'s through-hole build is wrong for (c)'s
+SMD build, so a library carrying one would hand the measurement a number that
+depends on which design is in the corpus — which biases T9-2 DOWN.
+
+**L6 columnar saving: 843-1187 tokens (17-19%) on (c) at the default
+threshold, 0 on (a) — but the threshold is a judgement, so the report sweeps
+it.**
+`COLUMNAR_MIN_ROWS = 3` was documented here as "the smallest group where a
+table is shorter than the statements it replaces". Sweeping it showed that is
+simply false: 2 is cheaper still, on both candidates.
+
+| Design | Arm | ≥2 | ≥3 | ≥4 | ≥5 | ≥6 |
+|---|---|---:|---:|---:|---:|---:|
+| blinker-555 | candidate_a | 72 | 0 | 0 | 0 | 0 |
+| blinker-555 | candidate_b | 40 | 0 | 0 | 0 | 0 |
+| esp32s3-devboard | candidate_a | 1265 | 1187 | 1151 | 1151 | 1151 |
+| esp32s3-devboard | candidate_b | 901 | 843 | 819 | 819 | 819 |
+
+Three stays the default because a two-row table is a header and two lines,
+which reads worse than two statements — a readability judgement, now labelled
+as one. Whichever threshold you pick, the shape of the answer holds: nothing
+in a 555 blinker repeats enough to matter, so L6 is a big-design feature or it
+is nothing, which is itself the answer to whether it earns a place in v1.
 
 **Line counts against AC1's ceilings.** Benchmark (c) is budgeted at ~600 DSL
 lines and `design.md` estimates 380-450. Measured: 548 (A, inferred), 513 (B,
@@ -147,6 +211,45 @@ resistance silently becomes text. Both candidates reject it. This is §6's
 design fixes it while the host language owns literal syntax. A test pins the
 finding so a later change cannot make it disappear quietly.
 
+The table above counts the two reference designs; `bakeoff defects` also runs
+the coverage probe, where the same defect makes it three for three. Acceptance
+is now scored against the netlist rather than the exit code, and in all three
+cases the accepted design **differs from the intended one** — the baseline
+does not merely tolerate the corruption, it silently builds a different
+circuit. That distinction is the difference between a cosmetic miss and the
+failure this whole exercise exists to catch.
+
+**The baseline's second cost does not appear in any token count: it needs a
+sandbox, and sandboxes leak.** §6 rejects the embedded path partly over
+"arbitrary code execution from an untrusted model", so the baseline enforces
+its subset with an AST allowlist and a tree-walking evaluator rather than
+`exec` with tidied globals. Attacking that evaluator rather than reading it
+found five holes, every one of which the module docstring had claimed was
+closed:
+
+- **Attribute access was a spelling rule, not a capability rule.** It allowed
+  any non-underscore attribute on any value. `"".format` walks `.attr` and
+  `[key]` for free, so five lines of "design" could read `os.environ` and
+  `sys.modules` and put the host's state into the netlist. The surface is now
+  a table of the methods the builder and its handles declare, and nothing else.
+- **A method was an ordinary 2-tuple** in the value space, which the evaluator
+  happily indexed — so a design could pull the raw callable out and invoke it
+  with arguments the call protocol never saw.
+- **`callable(target)`** decided what could be called, which meant anything
+  callable that reached the value space could be.
+- **The step budget bounded syntax, not work.** Fourteen node visits allocate
+  1.25 GB via `range(5000000)`. Collection size is now charged separately.
+- **Recursion was checked statically on the call graph**, the way Starlark
+  does — but the static graph only sees a cycle routed through a bare name, so
+  `helper(helper, 0)` recursed until the interpreter's own stack gave out.
+  Depth is now counted at runtime too.
+
+None of this is an argument that a restricted-Python baseline cannot be made
+safe. It is a measurement of what "restricted" costs to actually mean, on a
+subset small enough to fit on one card, written by someone trying to get it
+right. A candidate grammar has no equivalent surface because it has no host
+language to restrict.
+
 ## Honest limits
 
 **No model has been near this.** Token cost here is a property of a grammar and
@@ -159,9 +262,17 @@ offline for zero spend, and they are not a substitute for the other half.
 accepted and bounded there. The T9 and L6 readings are preliminary by
 construction and AMB-57/R59 re-measures both against the real checker at M2.
 
-**The defect corpus is nine mutations on two designs, not a repair-loop
+**The defect corpus is nine mutations on three designs, not a repair-loop
 simulation.** It measures what a grammar says about a broken file, which is a
 necessary condition for the loop to converge and not a sufficient one.
+
+**Benchmark (c)'s signal nets are not externally anchored.** `parts.yaml`
+states no connectivity, and `power-tree.yaml` states only the series chain
+between supply nodes — five edges, all of which are checked. Everything else,
+the GPIO headers and the USB and strapping nets, is transcribed from
+`pin-plan.md` by hand and verified by nothing outside this package. The power
+tree is what turned "the BOM agrees" into "the BOM and the power chain agree";
+it did not turn it into "the netlist is correct".
 
 **L6 is only measured on top of `inferred`.** A columnar section is for uniform
 tabular data, and per-instance pin declarations are neither, so a columnar
@@ -177,6 +288,7 @@ for a construct nobody proposed.
 | Path | Role |
 |---|---|
 | `design-model.schema.json` | the arm-neutral design model, with negative controls under `examples/negative/` |
+| `examples/coverage-probe.design.json` | the synthetic probe that makes the gate's coverage complete |
 | `bakeoff/quantities.py` | the shared literal mini-language, exact decimals |
 | `bakeoff/layout.py` | the shared INDENT/DEDENT tokenizer (L5) |
 | `bakeoff/model.py` | the design model: loading, coherence, canonical equality |

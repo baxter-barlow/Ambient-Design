@@ -11,6 +11,7 @@ candidate's invention, so both spell it identically. That is what makes
 "columnar saves N tokens" a statement about L6 rather than about A or B.
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 from .. import library
@@ -29,6 +30,23 @@ from ..model import (
     validate,
 )
 from .base import COLUMNAR_MIN_ROWS, Cursor
+
+
+# MEASUREMENT KNOB ONLY, same contract as library.rule_set: COLUMNAR_MIN_ROWS
+# is an open L6 design parameter, so the report shows the whole curve instead
+# of one cell that could be improved by lowering the constant.
+_MIN_ROWS = COLUMNAR_MIN_ROWS
+
+
+@contextmanager
+def columnar_threshold(rows: int):
+    global _MIN_ROWS
+    previous = _MIN_ROWS
+    _MIN_ROWS = rows
+    try:
+        yield
+    finally:
+        _MIN_ROWS = previous
 
 
 def module_order(model: DesignModel) -> list[Module]:
@@ -136,7 +154,7 @@ def columnar_groups(instances) -> tuple[dict, list]:
 
     kept: dict[tuple, Table] = {}
     for key, table in tables.items():
-        if len(table.rows) >= COLUMNAR_MIN_ROWS:
+        if len(table.rows) >= _MIN_ROWS:
             kept[key] = table
         else:
             singles.extend(table.rows)
@@ -230,7 +248,7 @@ def parse_table_rows(cursor: Cursor, header: Table) -> list[tuple[str, list[Valu
         cursor.skip_newlines()
         if cursor.at("DEDENT") or cursor.at("EOF"):
             break
-        name = cursor.expect_name("a row's instance name")
+        name = cursor.expect_free_name("a table row")
         values = [cursor.value(f"{name}.{column}") for column in header.columns]
         if not cursor.at("NEWLINE"):
             cursor.error(
@@ -244,10 +262,10 @@ def parse_table_rows(cursor: Cursor, header: Table) -> list[tuple[str, list[Valu
         cursor.expect_newline()
         rows.append((name, values))
     cursor.end_block()
-    if len(rows) < COLUMNAR_MIN_ROWS:
+    if len(rows) < _MIN_ROWS:
         cursor.error(
             "0403",
-            f"a table needs at least {COLUMNAR_MIN_ROWS} rows, found {len(rows)}",
+            f"a table needs at least {_MIN_ROWS} rows, found {len(rows)}",
             fixit="write these as ordinary statements instead",
             rows=len(rows),
         )
@@ -268,6 +286,25 @@ def union_find_nets(builder, cursor: Cursor, code_prefix: str) -> list[Net]:
     candidates, and any other reading would make connectivity depend on the
     order the author wrote the statements in.
     """
+    collisions = sorted(
+        name for name in builder.signals if any(p.name == name for p in builder.ports)
+    )
+    if collisions:
+        cursor.diagnostics.append(
+            Diag(
+                code=f"{code_prefix}0213",
+                message=(
+                    "these names are both a net label and a port of this "
+                    "module: " + ", ".join(collisions) + ". A bare reference "
+                    "cannot mean both, so one of them would silently drop out "
+                    "of the net and the module would be left unconnected."
+                ),
+                params={"names": collisions},
+                fixit="rename the net label or the port",
+            )
+        )
+        cursor.fail()
+
     parent: dict[str, str] = {}
 
     def find(node: str) -> str:
@@ -289,6 +326,10 @@ def union_find_nets(builder, cursor: Cursor, code_prefix: str) -> list[Net]:
 
     for name in builder.signals:
         find(f"signal:{name}")
+    # Candidate arms collect these; the baseline expresses the same thing as a
+    # self-link, which the union-find already turns into a one-member group.
+    for endpoint in getattr(builder, "isolated_endpoints", ()):
+        find(f"port:{endpoint}")
     for left, right in builder.links:
         union(node_for(left), node_for(right))
 
@@ -393,7 +434,9 @@ def build_model(
             )
             if infer and kind == "component":
                 try:
-                    inst = library.apply_inference(inst)
+                    inst = library.apply_inference(
+                        inst, hardware_stated=bool(raw.get("hardware_stated"))
+                    )
                 except library.LibraryError as exc:
                     cursor.diagnostics.append(
                         Diag(

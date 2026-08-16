@@ -52,11 +52,16 @@ PRAGMA = '#pragma language "0.1.0"'
 
 VARIANTS = ("explicit", "inferred", "inferred+columnar")
 
-# A columnar section costs a header line, so it only pays for itself once
-# enough rows share it. Three is the smallest group where a table is shorter
-# than the statements it replaces in BOTH candidates; the threshold is a
-# constant rather than a tuned number so the L6 read cannot be improved by
-# quietly lowering it.
+# How many rows a columnar section needs before it is emitted.
+#
+# THIS IS AN OPEN L6 DESIGN PARAMETER, NOT A FACT. An earlier comment here
+# claimed 3 was "the smallest group where a table is shorter than the
+# statements it replaces", which is false: sweeping it shows 2 is cheaper
+# still on benchmark (c) in both candidates. Three is a readability judgement
+# — a two-row table is a header and two lines, which reads worse than two
+# statements — and because it is a judgement the measurement reports the whole
+# curve (`bakeoff measure` prints L6 across thresholds 2..6) rather than one
+# cell that could be improved by quietly lowering the constant.
 COLUMNAR_MIN_ROWS = 3
 
 # L5 makes the surface keyword-based, so these words cannot also be names.
@@ -68,7 +73,7 @@ COLUMNAR_MIN_ROWS = 3
 RESERVED = frozenset({
     "module", "port", "pin", "signal", "net", "table", "assert", "new",
     "part", "abstract", "hardware", "dnp", "exclude_from_bom", "board_only",
-    "within", "at", "least", "most", "to", "static", "dynamic",
+    "within", "at", "least", "most", "to", "static", "dynamic", "isolated", "no",
     "true", "false",
 })
 
@@ -181,6 +186,30 @@ class Cursor:
 
     def expect_name(self, what: str) -> str:
         return self.expect("NAME", what=what).text
+
+    def expect_free_name(self, what: str) -> str:
+        """A name being BOUND: rejected if it is a reserved word.
+
+        Every site that introduces an identifier goes through this. The
+        statement-head guard alone was not enough — table row names, table
+        header definitions, module names and port names all bound identifiers
+        through a bare `expect_name`, so a design could declare a row called
+        `net` that its own formatter could not re-emit.
+        """
+        token = self.current
+        name = self.expect_name(what)
+        if name in RESERVED:
+            self.diagnostics.append(
+                Diag(
+                    code=f"{self.prefix}0212",
+                    message=f"{name!r} is a reserved word and cannot name {what}",
+                    span=token.span(len(name)),
+                    params={"word": name},
+                    fixit="the reserved words are: " + ", ".join(sorted(RESERVED)),
+                )
+            )
+            self.fail()
+        return name
 
     def expect_newline(self) -> None:
         self.expect("NEWLINE", what="at end of statement")
@@ -352,7 +381,7 @@ def parse_role(cursor: Cursor, what: str) -> str:
 def parse_port_decl(cursor: Cursor) -> Port:
     """`port <name> <role>` — a module's own interface port."""
     cursor.advance()  # `port`
-    name = cursor.expect_name("a port name")
+    name = cursor.expect_free_name("a port")
     role = parse_role(cursor, f"port {name}")
     cursor.expect_newline()
     return Port(name=name, role=role)
@@ -361,7 +390,7 @@ def parse_port_decl(cursor: Cursor) -> Port:
 def parse_pin_decl(cursor: Cursor) -> Port:
     """`pin <name> <role> [<designator> ...]` — a component's pin-mapped port."""
     cursor.advance()  # `pin`
-    name = cursor.expect_name("a pin name")
+    name = cursor.expect_free_name("a pin")
     role = parse_role(cursor, f"pin {name}")
     designators = []
     while cursor.current.kind in ("NUMBER", "NAME") and not cursor.at("NEWLINE"):

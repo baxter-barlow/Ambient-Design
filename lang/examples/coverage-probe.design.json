@@ -1,0 +1,191 @@
+{
+  "model_version": 0,
+  "stability": "unstable",
+  "design_id": "coverage-probe",
+  "purpose": "coverage-probe",
+  "root_module": "Probe",
+  "notes": "NOT A CIRCUIT. This is a synthetic design whose only job is to use every field of design-model.schema.json at least once, so that an arm which cannot express something fails the gate instead of waiting for a corpus that happens to hit it.\n\nIt exists because that is exactly what went wrong: the Starlark baseline could not express `exclude_from_bom` on a component without a `hardware_kind` — `.hardware()` was the only setter and it demands a kind — so the flag was silently dropped on the round trip, and the cross-arm agreement gate passed because neither benchmark used that combination. An expressiveness gap that only shows up when a design happens to hit it is not caught by a gate, it is caught by luck.\n\nWhat this covers, deliberately: all five quantity forms (exact, relative tolerance, absolute tolerance, nominal-with-asymmetric-interval, bare interval); all four value tags; a `part abstract` whose every constraint is T9-2-recoverable, so the arms need a spelling for a binding with nothing left in it; a resolved part that also carries constraints; an L9 flag that CONTRADICTS the library (a test point deliberately kept in the BOM) and one with no hardware kind at all; `dnp` and `board_only`; a nested module with input, output and `nc` ports; labelled nets with both domain attributes, unlabelled two- and three-member nets, and a single-member net (the L9b case); and both assertion tiers including a one-sided bound.\n\nNo anchor, because there is nothing external to anchor a synthetic design to — which is what `purpose: coverage-probe` declares. Its electrical content is meaningless and no measurement is reported over it.",
+  "modules": [
+    {
+      "name": "Leg",
+      "qualified_name": "probe.Leg",
+      "ports": [
+        { "name": "p_in", "role": "input" },
+        { "name": "p_nc", "role": "nc" },
+        { "name": "p_out", "role": "output" }
+      ],
+      "instances": [
+        {
+          "name": "r2",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": { "resistance": { "q": "220ohm" } },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": { "resistance": { "q": "220ohm" } }
+          }
+        }
+      ],
+      "nets": [
+        { "members": ["p_in", "r2.a"] },
+        { "members": ["p_out", "r2.b"] }
+      ]
+    },
+    {
+      "name": "Probe",
+      "qualified_name": "probe.Probe",
+      "ports": [],
+      "instances": [
+        {
+          "name": "c1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Capacitor",
+          "parameters": { "capacitance": { "q": "4.7uF +/- 0.5uF" } },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": {
+              "capacitance": { "q": "4.7uF +/- 0.5uF" },
+              "package": { "s": "0402" }
+            }
+          }
+        },
+        {
+          "name": "d1",
+          "kind": "component",
+          "definition": "aed.lib.semiconductor.Led",
+          "parameters": {
+            "color": { "s": "amber" },
+            "forward_voltage": { "q": "2.0V (1.8V to 2.4V)" }
+          },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "k", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": { "color": { "s": "amber" } }
+          }
+        },
+        {
+          "name": "j1",
+          "kind": "component",
+          "definition": "aed.lib.connector.PinHeader1x2",
+          "ports": [
+            { "name": "p1", "role": "passive" },
+            { "name": "p2", "role": "passive" }
+          ],
+          "exclude_from_bom": true
+        },
+        {
+          "name": "k1",
+          "kind": "component",
+          "definition": "aed.lib.switch.TactileSwitch",
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "dnp": true,
+          "board_only": true
+        },
+        {
+          "name": "leg",
+          "kind": "module",
+          "definition": "Leg",
+          "parameters": { "matched": { "b": true }, "sections": { "i": 4 } }
+        },
+        {
+          "name": "mh1",
+          "kind": "component",
+          "definition": "aed.lib.mech.MountingHole",
+          "ports": [],
+          "hardware_kind": "mounting_hole",
+          "exclude_from_bom": true,
+          "board_only": true
+        },
+        {
+          "name": "r1",
+          "kind": "component",
+          "definition": "aed.lib.passive.Resistor",
+          "parameters": { "resistance": { "q": "1kohm +/- 1%" } },
+          "ports": [
+            { "name": "a", "role": "passive" },
+            { "name": "b", "role": "passive" }
+          ],
+          "part": {
+            "binding": "abstract",
+            "constraints": { "resistance": { "q": "1kohm +/- 1%" } }
+          }
+        },
+        {
+          "name": "tp1",
+          "kind": "component",
+          "definition": "aed.lib.mech.TestPoint",
+          "ports": [{ "name": "p", "role": "passive" }],
+          "hardware_kind": "test_point"
+        },
+        {
+          "name": "u1",
+          "kind": "component",
+          "definition": "aed.lib.timer.Ne555",
+          "parameters": { "window": { "q": "3.0V to 3.6V" } },
+          "ports": [
+            { "name": "ctl", "role": "passive", "pin_numbers": ["5"] },
+            { "name": "dis", "role": "open_collector", "pin_numbers": ["7"] },
+            { "name": "gnd", "role": "power_in", "pin_numbers": ["1"] },
+            { "name": "out", "role": "output", "pin_numbers": ["3"] },
+            { "name": "rst", "role": "input", "pin_numbers": ["4"] },
+            { "name": "thr", "role": "input", "pin_numbers": ["6"] },
+            { "name": "trig", "role": "input", "pin_numbers": ["2"] },
+            { "name": "vcc", "role": "power_in", "pin_numbers": ["8"] }
+          ],
+          "part": {
+            "binding": "resolved",
+            "lockfile_key": "timer.555/ti-NE555P@2",
+            "constraints": { "function": { "s": "timer_555" } }
+          }
+        }
+      ],
+      "nets": [
+        {
+          "name": "GNDN",
+          "ground_domain": "gnd",
+          "members": ["c1.b", "d1.k", "j1.p2", "k1.b", "u1.gnd"]
+        },
+        {
+          "name": "RAIL",
+          "voltage_domain": "rail_5v",
+          "members": ["c1.a", "j1.p1", "r1.a", "u1.rst", "u1.vcc"]
+        },
+        { "members": ["d1.a", "leg.p_out"] },
+        { "members": ["k1.a", "r1.b", "u1.trig"] },
+        { "members": ["leg.p_in", "u1.out"] },
+        { "members": ["tp1.p"] },
+        { "members": ["u1.ctl", "u1.dis", "u1.thr"] }
+      ]
+    }
+  ],
+  "assertions": [
+    {
+      "name": "probe_freq",
+      "tier": "dynamic",
+      "measurement": "frequency",
+      "subject": "RAIL",
+      "bounds": { "unit": "Hz", "min": "0.5", "max": "2.0" }
+    },
+    {
+      "name": "probe_power",
+      "tier": "static",
+      "measurement": "power_avg",
+      "subject": "RAIL",
+      "bounds": { "unit": "W", "max": "0.25" }
+    }
+  ]
+}

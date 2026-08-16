@@ -24,10 +24,23 @@ What is forbidden, and what each rejection is for:
     global / nonlocal        no free-function mutation of module state — one
                              of JITX's four banned patterns
     try / with / raise       no control flow that can swallow a failure
-    _-prefixed attributes    no reaching into the builder's internals
+    attributes off the API   an attribute access is only legal on a builder
+                             or a handle, and only for a method that builder
+                             declares. An earlier version allowed any
+                             non-underscore attribute on any value, which was
+                             not a restriction at all: `"".format` walks
+                             `.attr` and `[key]` for free, so five lines of
+                             design could read os.environ and sys.modules and
+                             put the host's state into the netlist. Blocking
+                             `_`-prefixed names is a spelling rule, not a
+                             capability rule.
     f-strings, walrus        no expression forms that hide a computation
 
-A step budget backs all of it: even an allowed program cannot run forever.
+A step budget bounds node visits, and `range()` and `+` are bounded
+separately — the budget alone does not bound WORK, because fourteen node
+visits can allocate a gigabyte. Call depth is counted at runtime as well as
+statically, because the static call graph only sees cycles routed through a
+bare function name, and a function passed as an argument is invisible to it.
 
 WHAT THIS BASELINE COSTS, VISIBLY. Every dimensioned value is a STRING,
 because `100kohm` is not a Python expression. That is §6's "SKiDL's stringly
@@ -66,6 +79,12 @@ CODE_PREFIX = "AEDS"
 VARIANTS = ("explicit", "inferred")
 
 STEP_BUDGET = 200_000
+
+# Bounds on WORK, not on syntax. The step budget counts node visits and a
+# handful of them can allocate arbitrarily much, so collection size and call
+# depth are charged separately.
+MAX_COLLECTION = 100_000
+MAX_CALL_DEPTH = 64
 
 _FORBIDDEN = {
     ast.Import: ("import", "a design may not reach outside itself (I3 hermeticity)"),
@@ -150,6 +169,27 @@ def _check_restrictions(tree: ast.Module) -> dict[str, ast.FunctionDef]:
         if isinstance(node, ast.FunctionDef):
             if node.name in functions:
                 _reject(node, "0103", f"function {node.name!r} is defined twice")
+            if node.decorator_list:
+                _reject(
+                    node,
+                    "0106",
+                    f"function {node.name!r} carries a decorator",
+                    fixit="decorators are neither applied nor allowed here",
+                )
+            if getattr(node, "type_params", ()):
+                _reject(
+                    node,
+                    "0107",
+                    f"function {node.name!r} carries type parameters",
+                    fixit="there is no type system in this subset to carry them",
+                )
+            if node.args.defaults or node.args.kw_defaults:
+                _reject(
+                    node,
+                    "0108",
+                    f"function {node.name!r} has default arguments",
+                    fixit="every call states every argument",
+                )
             if node.args.vararg or node.args.kwarg or node.args.kwonlyargs:
                 _reject(
                     node,
@@ -262,6 +302,21 @@ class _Handle:
         self.record["hardware_kind"] = kind
         self.record["exclude_from_bom"] = bool(exclude_from_bom)
         self.record["board_only"] = bool(board_only)
+        self.record["hardware_stated"] = True
+        return self
+
+    def fab(self, node=None, exclude_from_bom=False, board_only=False):
+        """L9 flags on a component that has no hardware kind.
+
+        Without this the arm could not express `exclude_from_bom` on an
+        ordinary component at all — `.hardware()` was the only setter and it
+        demands a kind — so the flags were silently dropped on the round trip.
+        The agreement gate passed only because neither corpus design used that
+        combination, which is what the coverage fixture now exists to stop.
+        """
+        self.record["exclude_from_bom"] = bool(exclude_from_bom)
+        self.record["board_only"] = bool(board_only)
+        self.record["hardware_stated"] = True
         return self
 
     def dnp(self, node=None):
@@ -293,6 +348,7 @@ class _ModuleBuilder:
             "lockfile_key": None,
             "abstract": False,
             "hardware_kind": None,
+            "hardware_stated": False,
             "dnp": False,
             "exclude_from_bom": False,
             "board_only": False,
@@ -331,7 +387,19 @@ class _ModuleBuilder:
             self.links.append((name, member))
             self.spans.setdefault(member, _span(node) if node is not None else None)
 
+    def isolated(self, endpoint, node=None):
+        """A net with exactly one endpoint (L9b intentional single-pin net)."""
+        self.links.append((endpoint, endpoint))
+        self.spans.setdefault(endpoint, _span(node) if node is not None else None)
+
     def link(self, *endpoints, node=None):
+        if len(endpoints) == 1:
+            _reject(
+                node,
+                "0210",
+                "a link joins at least two endpoints",
+                fixit="for a deliberate single-pin net use m.isolated(...)",
+            )
         if len(endpoints) < 2:
             _reject(node, "0210", "a link joins at least two endpoints")
         for left, right in zip(endpoints, endpoints[1:]):
@@ -357,6 +425,36 @@ class _ModuleBuilder:
                 maximum=None if max is None else str(max),
             )
         )
+
+
+class _BoundMethod:
+    """An API method bound to its receiver, opaque to the design.
+
+    A bare `(method, node)` tuple used to travel here, which the evaluator's
+    Subscript branch happily indexed - so a design could pull the raw callable
+    out and invoke it with arguments the call protocol never saw. This carries
+    no non-underscore attribute and is not a sequence, so there is nothing to
+    take apart.
+    """
+
+    __slots__ = ("_fn", "_node")
+
+    def __init__(self, fn, node):
+        self._fn = fn
+        self._node = node
+
+
+# The whole attribute surface. An attribute access is legal only on one of
+# these types and only for a method it declares here. Anything else - a
+# string's `.format`, a list's `.append`, a function's `.__globals__` - is a
+# capability the design does not get, and the reason the check is a table
+# rather than a `getattr` is that `getattr` is not a restriction.
+_API_METHODS = {
+    "_ModuleBuilder": frozenset(
+        {"port", "part", "sub", "net", "link", "isolated", "check"}
+    ),
+    "_Handle": frozenset({"pins", "part", "hardware", "fab", "dnp"}),
+}
 
 
 class _FunctionValue:
@@ -386,6 +484,11 @@ class _Evaluator:
     def __init__(self, functions):
         self.functions = functions
         self.steps = 0
+        self.depth = 0
+        # Identity set of the builtins a design may call. `callable(target)`
+        # used to stand here, which let anything callable that reached the
+        # value space be invoked.
+        self.builtins = set()
 
     def step(self, node):
         self.steps += 1
@@ -476,10 +579,24 @@ class _Evaluator:
             }
         if isinstance(node, ast.Attribute):
             owner = self.evaluate(node.value, env)
-            method = getattr(owner, node.attr, None)
-            if method is None or not callable(method) or node.attr.startswith("_"):
-                _reject(node, "0309", f"no method {node.attr!r} on this object")
-            return (method, node)
+            allowed = _API_METHODS.get(type(owner).__name__)
+            if allowed is None:
+                _reject(
+                    node,
+                    "0309",
+                    f"attribute access is not available on "
+                    f"{type(owner).__name__}; only the builder and the handles "
+                    "it returns have methods",
+                    fixit="the builder API is the whole surface a design has",
+                )
+            if node.attr not in allowed:
+                _reject(
+                    node,
+                    "0310",
+                    f"no method {node.attr!r} here; this object offers "
+                    + ", ".join(sorted(allowed)),
+                )
+            return _BoundMethod(getattr(owner, node.attr), node)
         if isinstance(node, ast.Call):
             return self.call(node, env)
         if isinstance(node, ast.UnaryOp):
@@ -516,13 +633,31 @@ class _Evaluator:
                 _reject(node, "0313", "index is out of range or of the wrong type")
         _reject(node, "0314", f"`{type(node).__name__}` is not an allowed expression")
 
+    def bounded(self, node, value):
+        """Reject a value the step budget would not have noticed building.
+
+        STEP_BUDGET counts node visits, and fourteen visits can allocate a
+        gigabyte: `big = range(5000000)` materialises a list. Size is charged
+        here so "elaboration is bounded" is about work and not only about
+        syntax.
+        """
+        if len(value) > MAX_COLLECTION:
+            _reject(
+                node,
+                "0321",
+                f"value would hold {len(value)} elements, over the "
+                f"{MAX_COLLECTION} limit",
+                fixit="elaboration is bounded in size as well as in steps",
+            )
+        return value
+
     def binop(self, node, left, right):
         operator = node.op
         if isinstance(operator, ast.Add):
             if isinstance(left, str) and isinstance(right, str):
-                return left + right
+                return self.bounded(node, left + right)
             if isinstance(left, list) and isinstance(right, list):
-                return left + right
+                return self.bounded(node, left + right)
             if isinstance(left, int) and isinstance(right, int):
                 return left + right
         if isinstance(left, int) and isinstance(right, int):
@@ -534,6 +669,11 @@ class _Evaluator:
                 return left // right
             if isinstance(operator, ast.Mod) and right != 0:
                 return left % right
+        if isinstance(operator, ast.Mult) and isinstance(right, int):
+            if isinstance(left, (str, list)):
+                if right > MAX_COLLECTION:
+                    _reject(node, "0321", f"result would exceed {MAX_COLLECTION} elements")
+                return self.bounded(node, left * right)
         _reject(node, "0315", "unsupported operand types for this operator")
 
     def compare(self, operator, left, right, node):
@@ -566,20 +706,36 @@ class _Evaluator:
 
         target = self.evaluate(node.func, env)
 
-        if isinstance(target, tuple) and len(target) == 2 and callable(target[0]):
-            method, _ = target
-            return method(*arguments, node=node, **keywords)
+        if isinstance(target, _BoundMethod):
+            return target._fn(*arguments, node=node, **keywords)
 
         if isinstance(target, _FunctionValue):
             names = [a.arg for a in target.node.args.args]
             if len(arguments) != len(names) or keywords:
                 _reject(node, "0318", f"{target.name}() takes {len(names)} positional argument(s)")
+            # Counted at runtime as well as statically. The static call graph
+            # only sees a cycle routed through a bare function name; a
+            # function passed as an argument and called through the parameter
+            # is invisible to it, and used to recurse until the interpreter's
+            # own stack gave out - which the docstring said could not happen.
+            self.depth += 1
+            if self.depth > MAX_CALL_DEPTH:
+                _reject(
+                    node,
+                    "0320",
+                    f"call depth exceeded {MAX_CALL_DEPTH}",
+                    fixit="elaboration must terminate (L1); this is a recursion "
+                    "the static call-graph check could not see",
+                )
             local = dict(env)
             local.update(dict(zip(names, arguments)))
-            result = self.exec_body(target.node.body, local)
+            try:
+                result = self.exec_body(target.node.body, local)
+            finally:
+                self.depth -= 1
             return result[1] if isinstance(result, tuple) else None
 
-        if callable(target):
+        if target in self.builtins:
             return target(*arguments, **keywords)
 
         _reject(node, "0319", "this expression is not callable")
@@ -587,10 +743,27 @@ class _Evaluator:
 
 def _builtins():
     """The whole builtin surface. Anything absent is simply not defined."""
+    def _range(*bounds):
+        values = range(*bounds)
+        if len(values) > MAX_COLLECTION:
+            raise StarlarkError(
+                [
+                    Diag(
+                        code=f"{CODE_PREFIX}0321",
+                        message=(
+                            f"range() of {len(values)} exceeds the "
+                            f"{MAX_COLLECTION} element limit"
+                        ),
+                        params={"length": len(values)},
+                    )
+                ]
+            )
+        return list(values)
+
     return {
         "design": lambda *modules: _DesignMarker(list(modules)),
         "len": lambda value: len(value),
-        "range": lambda *bounds: list(range(*bounds)),
+        "range": _range,
         "str": lambda value: str(value),
         "True": True,
         "False": False,
@@ -626,7 +799,8 @@ def _instance_lines(inst: Instance, infer: bool) -> list[str]:
     lines = [head]
 
     if inst.kind == "component" and not (infer and library.inferable_ports(inst)):
-        if infer and not inst.ports:
+        supplied = library.LIBRARY.get(inst.definition)
+        if infer and not inst.ports and supplied is not None and supplied.ports:
             raise ValueError(
                 f"{inst.name}: is portless but the library gives "
                 f"{inst.definition} pins, so `inferred` cannot say 'no pins here'."
@@ -656,13 +830,18 @@ def _instance_lines(inst: Instance, infer: bool) -> list[str]:
         )
         lines.append(f"{inst.name}.part({', '.join(arguments)})")
 
-    if not (infer and library.inferable_hardware(inst)) and inst.hardware_kind:
-        extra = "".join(
-            f", {flag}=True"
+    if not (infer and library.inferable_hardware(inst)):
+        definition = library.LIBRARY.get(inst.definition)
+        flags = "".join(
+            f", {flag}={'True' if getattr(inst, flag) else 'False'}"
             for flag in ("exclude_from_bom", "board_only")
             if getattr(inst, flag)
+            or (definition is not None and getattr(definition, flag))
         )
-        lines.append(f'{inst.name}.hardware("{inst.hardware_kind}"{extra})')
+        if inst.hardware_kind:
+            lines.append(f'{inst.name}.hardware("{inst.hardware_kind}"{flags})')
+        elif flags:
+            lines.append(f"{inst.name}.fab({flags.lstrip(', ')})")
     if inst.dnp:
         lines.append(f"{inst.name}.dnp()")
     return lines
@@ -696,6 +875,8 @@ def render(model: DesignModel, variant: str = "explicit") -> str:
                     if getattr(net, name)
                 )
                 body.append(f'm.net("{net.name}", {members}{attributes})')
+            elif len(net.members) == 1:
+                body.append(f"m.isolated({members})")
             else:
                 body.append(f"m.link({members})")
         if module.name == model.root_module:
@@ -749,6 +930,7 @@ def parse(source: str, variant: str = "explicit") -> DesignModel:
         functions = _check_restrictions(tree)
         evaluator = _Evaluator(functions)
         env = _builtins()
+        evaluator.builtins = {v for v in env.values() if callable(v)}
         evaluator.exec_body(tree.body, env)
 
         marker = env.get("DESIGN")
@@ -773,6 +955,38 @@ def parse(source: str, variant: str = "explicit") -> DesignModel:
             assertions.extend(builder.assertions)
     except StarlarkError as exc:
         raise ParseFailure(exc.diagnostics) from None
+    except ParseFailure:
+        raise
+    except RecursionError:
+        raise ParseFailure(
+            [
+                Diag(
+                    code=f"{CODE_PREFIX}0322",
+                    message="evaluation exhausted the interpreter stack",
+                    params={},
+                )
+            ]
+        ) from None
+    except Exception as exc:  # noqa: BLE001
+        # A LAST RESORT, and it exists because of a real failure: the
+        # evaluator injected `node=` into every attribute-resolved callable,
+        # so an ordinary Python method call raised a bare TypeError out of
+        # `parse`. eval/aed_eval/protocol.py calls the gate with no handler
+        # around it, so that exception did not become a scored failure - it
+        # aborted the whole AC5 run and discarded every trial in it. Whatever
+        # else goes wrong in here must come out as a diagnostic.
+        raise ParseFailure(
+            [
+                Diag(
+                    code=f"{CODE_PREFIX}0999",
+                    message=(
+                        f"the prototype evaluator failed unexpectedly: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                    params={"exception": type(exc).__name__},
+                )
+            ]
+        ) from None
 
     from .base import Cursor
     from ..layout import Token
@@ -793,6 +1007,7 @@ def _call_module(self, function: _FunctionValue, builder: _ModuleBuilder) -> Non
     if len(names) != 1:
         _reject(function.node, "0403", "a module function takes exactly one argument")
     local = dict(_builtins())
+    self.builtins |= {v for v in local.values() if callable(v)}
     for name, node in self.functions.items():
         local[name] = _FunctionValue(node)
     local[names[0]] = builder
@@ -816,7 +1031,10 @@ by naming its modules.
 ## Restrictions
 
 No import, while, class, lambda, comprehension, global/nonlocal, try/with/
-raise, f-string, walrus, `*args` unpacking, or private (`_`) attributes.
+raise, f-string, walrus, `*args` unpacking, decorators, type parameters, or
+default arguments. Attribute access works ONLY on the builder `m` and the
+handles it returns, and only for the methods listed here - strings, lists and
+dicts have no methods.
 Recursion is rejected statically. Evaluation is bounded by a step budget.
 Allowed: def, if, bounded for over a list, assignment, calls, arithmetic on
 whole numbers, string and list concatenation, comparisons, indexing.
@@ -841,6 +1059,7 @@ whole numbers, string and list concatenation, comparisons, indexing.
     indicator = m.sub("indicator", LedIndicator, color="red")
 
     mh1.hardware("mounting_hole", exclude_from_bom=True, board_only=True)
+    tp.fab(exclude_from_bom=True)
     j4.dnp()
 
 `m.part(name, definition, **parameters)` instantiates a component;
@@ -868,8 +1087,11 @@ A mA uA nA, W mW uW, Hz kHz MHz, s ms us ns, m mm um, degC.
     m.net("VCC", "j_bat.pos", "r_a.a", voltage_domain="vbat_9v")
     m.link("ctl", "r_lim.a")
 
+    m.isolated("tp1.p")
+
 `m.net` names a net and lists its members; `m.link` chains endpoints into an
-unnamed net. An endpoint is "instance.pin" or one of this module's ports.
+unnamed net; `m.isolated` declares a net with a single endpoint (L9b). An
+endpoint is "instance.pin" or one of this module's ports.
 
 ## Assertions
 

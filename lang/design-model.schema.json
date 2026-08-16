@@ -32,6 +32,13 @@
       "$ref": "#/$defs/Identifier",
       "description": "Name of the module definition in `modules` that is the top of this design. Every other module must be reachable from it by instantiation; an unreachable definition is dead weight in a token-cost measurement and is rejected by the loader."
     },
+    "purpose": {
+      "type": "string",
+      "enum": ["reference", "coverage-probe"],
+      "default": "reference",
+      "description": "\"reference\": a transcription of a benchmark design, which MUST declare an anchor — a reference netlist nothing external agrees with is an opinion. \"coverage-probe\": a synthetic design whose job is to exercise every field of this schema at least once, so that an arm which cannot express something fails the gate instead of waiting for a corpus that happens to hit it. A probe has nothing external to anchor to and must not claim one.",
+      "$comment": "The Starlark arm could not express exclude_from_bom on a component without a hardware kind, and the gate passed for months of nothing because neither benchmark used that combination."
+    },
     "source_benchmark": {
       "type": "string",
       "pattern": "^benchmarks/[a-z0-9-]+(?![\\s\\S])",
@@ -57,6 +64,28 @@
       "description": "Free-text provenance: where the connectivity came from, what was inferred, what was deliberately left out."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "not": { "required": ["purpose"] }
+      },
+      "then": { "required": ["anchor"] }
+    },
+    {
+      "if": {
+        "properties": { "purpose": { "const": "reference" } },
+        "required": ["purpose"]
+      },
+      "then": { "required": ["anchor"] }
+    },
+    {
+      "if": {
+        "properties": { "purpose": { "const": "coverage-probe" } },
+        "required": ["purpose"]
+      },
+      "then": { "properties": { "anchor": false, "source_benchmark": false } }
+    }
+  ],
   "$defs": {
     "Identifier": {
       "type": "string",
@@ -428,6 +457,11 @@
           "pattern": "^[a-z0-9][a-z0-9._/-]*(?![\\s\\S])",
           "description": "Repository-relative path of the anchor artifact."
         },
+        "power_tree": {
+          "type": "string",
+          "pattern": "^benchmarks/[a-z0-9-]+/power-tree\\.yaml(?![\\s\\S])",
+          "description": "For a parts-yaml anchor: the benchmark's power tree, whose declared series edges (`from`/`to` between supply nodes) the flattened netlist must reproduce. A BOM anchors no connectivity at all, so without this the netlist every measurement runs over would be self-certified."
+        },
         "refdes_map": {
           "type": "object",
           "description": "For a parts-yaml anchor: map from BOM refdes (e.g. \"C12\") to this model's instance path (e.g. \"/c12\"). Explicit rather than derived by lowercasing, so a BOM entry that no instance covers is a hard error instead of a silent near-miss.",
@@ -451,7 +485,7 @@
             "properties": { "kind": { "const": "netlist-ir" } },
             "required": ["kind"]
           },
-          "then": { "properties": { "refdes_map": false } }
+          "then": { "properties": { "refdes_map": false, "power_tree": false } }
         }
       ]
     }

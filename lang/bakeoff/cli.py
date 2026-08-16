@@ -38,23 +38,28 @@ def _check(args) -> int:
     checked = 0
     for design_id, model in sorted(designs.items()):
         try:
-            anchor = check_anchor(model)
+            anchors = check_anchor(model)
         except AnchorError as exc:
             problems.append(f"{design_id}: anchor: {exc}")
-            anchor = None
-        if anchor is None and model.anchor:
-            pass
-        elif anchor is None:
+            anchors = []
+        if not anchors and model.purpose == "reference":
             problems.append(
                 f"{design_id}: declares no anchor. A reference design nothing "
                 "external agrees with is an opinion."
             )
-        else:
+        if model.purpose == "coverage-probe":
             print(
-                f"bakeoff: {design_id}: agrees with {anchor['anchor']} "
-                f"({anchor.get('instances', '?')} instances, "
-                f"{anchor.get('nets', '?')} nets, "
-                f"{anchor.get('connections', '?')} connections)"
+                f"bakeoff: {design_id}: coverage probe — no anchor, exercises "
+                "every field of the design model"
+            )
+        for anchor in anchors:
+            # Prints WHAT WAS COMPARED, not what the model happens to contain.
+            # This line used to report the model's own net and connection
+            # counts beside a BOM that states neither, so a reader of the gate
+            # was told the netlist had been checked when it had not.
+            print(
+                f"bakeoff: {design_id}: {anchor['anchor']} — "
+                f"compared {anchor['compared']}"
             )
 
         for arm in ARMS.values():
@@ -130,22 +135,35 @@ def _measure(args) -> int:
         print(f"  {key:13} {card['tokens']:>6} tokens  {verdict} the ~3K budget")
 
     print()
-    print("T9 annotation tax (explicit -> inferred; lower bound)")
-    for design, arms in sorted(report["readings"]["t9_annotation_tax"].items()):
+    print("T9 annotation tax, per rule (T9-2 is the one that answers T9)")
+    print(f"  {'design':20} {'arm':13} {'T9-1 lib':>10} {'T9-2 infer':>12} "
+          f"{'T9-3 L9':>9} {'all':>8}")
+    t9 = report["readings"]["t9_annotation_tax"]
+    for design, arms in sorted(report["readings"]["t9_by_rule"].items()):
         for key, values in sorted(arms.items()):
+            rules = values["by_rule_fraction"]
+            total = t9.get(design, {}).get(key, {}).get("tax_fraction", 0.0)
             print(
-                f"  {design:20} {key:13} -{values['tax_tokens']:>6} tokens "
-                f"({values['tax_fraction'] * 100:.1f}%)"
+                f"  {design:20} {key:13} "
+                f"{rules['T9-1'] * 100:9.1f}% {rules['T9-2'] * 100:11.1f}% "
+                f"{rules['T9-3'] * 100:8.1f}% {total * 100:7.1f}%"
             )
 
     print()
-    print("L6 columnar saving (inferred -> inferred+columnar)")
-    for design, arms in sorted(report["readings"]["l6_columnar_saving"].items()):
-        for key, values in sorted(arms.items()):
-            print(
-                f"  {design:20} {key:13} -{values['saving_tokens']:>6} tokens "
-                f"({values['saving_fraction'] * 100:.1f}%)"
+    print("L6 columnar saving by threshold (COLUMNAR_MIN_ROWS is a judgement)")
+    thresholds = sorted(
+        next(
+            iter(
+                next(iter(report["readings"]["l6_threshold_curve"].values())).values()
             )
+        )["saving_by_threshold"]
+    )
+    print(f"  {'design':20} {'arm':13} " + " ".join(f"{'>=' + str(t):>8}" for t in thresholds))
+    for design, arms in sorted(report["readings"]["l6_threshold_curve"].items()):
+        for key, values in sorted(arms.items()):
+            curve = values["saving_by_threshold"]
+            cells = " ".join(f"{curve[t]:>8}" for t in thresholds)
+            print(f"  {design:20} {key:13} {cells}")
 
     if "defects" in report:
         print()

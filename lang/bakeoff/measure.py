@@ -95,12 +95,20 @@ def _read_pin() -> tuple[str, str]:
 def measure(allow_stub: bool = False, with_defects: bool = True) -> dict:
     tokenizer = load_tokenizer(allow_stub)
     identity = tokenizer.identity()
-    designs = load_corpus()
+    # Coverage probes are excluded from every number. They are synthetic and
+    # electrically meaningless, so a token count over one would be a token
+    # count over nothing — they exist to make the GATE complete, not the
+    # measurement. `bakeoff check` runs them; `bakeoff measure` does not.
+    designs = {
+        design_id: model
+        for design_id, model in load_corpus().items()
+        if model.purpose == "reference"
+    }
 
     anchors = {}
     for design_id, model in sorted(designs.items()):
         try:
-            anchors[design_id] = check_anchor(model)
+            anchors[design_id] = [dict(a) for a in check_anchor(model)]
         except AnchorError as exc:
             raise MeasurementError(
                 f"{design_id}: the corpus disagrees with its own anchor, so no "
@@ -163,7 +171,7 @@ def measure(allow_stub: bool = False, with_defects: bool = True) -> dict:
         "gating": identity.gating,
         "designs": {
             design_id: {
-                "anchor": anchors[design_id],
+                "anchors": anchors[design_id],
                 "instances": sum(len(m.instances) for m in model.modules),
                 "modules": len(model.modules),
                 "nets": sum(len(m.nets) for m in model.modules),
@@ -174,6 +182,8 @@ def measure(allow_stub: bool = False, with_defects: bool = True) -> dict:
         "language_cards": cards,
         "readings": _readings(cells),
     }
+    report["readings"]["t9_by_rule"] = _t9_by_rule(designs, tokenizer)
+    report["readings"]["l6_threshold_curve"] = _l6_curve(designs, tokenizer)
     if with_defects:
         rows = [
             row
@@ -190,6 +200,63 @@ def _cell(cells, design, arm, variant):
         if (entry["design"], entry["arm"], entry["variant"]) == (design, arm, variant):
             return entry
     return None
+
+
+def _t9_by_rule(designs, tokenizer) -> dict:
+    """What each T9 rule is worth on its own.
+
+    The aggregate hid that most of it was T9-1 — the component library
+    supplying a pin list, which is not inference. Reporting the three
+    separately is the difference between an answer to T9's question and a
+    number that flattered it.
+    """
+    from . import library
+
+    out: dict[str, dict] = {}
+    for design_id, model in sorted(designs.items()):
+        for arm in ARMS.values():
+            explicit = tokenizer.count(arm.render(model, "explicit"))
+            by_rule = {}
+            for rule in sorted(library.ALL_RULES):
+                with library.rule_set({rule}):
+                    by_rule[rule] = explicit - tokenizer.count(
+                        arm.render(model, "inferred")
+                    )
+            out.setdefault(design_id, {})[arm.key] = {
+                "explicit_tokens": explicit,
+                "by_rule_tokens": by_rule,
+                "by_rule_fraction": {
+                    rule: round(value / explicit, 4) for rule, value in by_rule.items()
+                },
+            }
+    return out
+
+
+def _l6_curve(designs, tokenizer) -> dict:
+    """L6 saving across columnar thresholds 2..6.
+
+    COLUMNAR_MIN_ROWS is a readability judgement, not a fact, so one cell would
+    be a number that could be improved by lowering a constant.
+    """
+    from .arms.shared import columnar_threshold
+
+    out: dict[str, dict] = {}
+    for design_id, model in sorted(designs.items()):
+        for arm in ARMS.values():
+            if "inferred+columnar" not in arm.variants:
+                continue
+            baseline = tokenizer.count(arm.render(model, "inferred"))
+            curve = {}
+            for rows in range(2, 7):
+                with columnar_threshold(rows):
+                    curve[rows] = baseline - tokenizer.count(
+                        arm.render(model, "inferred+columnar")
+                    )
+            out.setdefault(design_id, {})[arm.key] = {
+                "inferred_tokens": baseline,
+                "saving_by_threshold": curve,
+            }
+    return out
 
 
 def _readings(cells) -> dict:
@@ -227,10 +294,16 @@ def _readings(cells) -> dict:
         "t9_annotation_tax": t9,
         "l6_columnar_saving": l6,
         "note": (
-            "T9 is a LOWER BOUND: the rules in lang/bakeoff/library.py carry no "
-            "value defaults, so a real type checker recovers at least this much "
-            "and probably more. L6 is measured on top of `inferred` only. Both "
-            "are preliminary by construction — no type checker exists at M0 "
-            "(roadmap Risk 8), and AMB-57/R59 re-measures against the real one."
+            "The AGGREGATE T9 tax is NOT a lower bound: most of it is rule T9-1, "
+            "a component library supplying a pin list, which is not inference — "
+            "see t9_by_rule for the decomposition, and treat the T9-2 delta as "
+            "the reading that answers T9's question. Benchmark (c) is built so "
+            "every instance is port-recoverable, which biases T9-1 up further; "
+            "the absence of value defaults biases T9-2 down. L6 is measured on "
+            "top of `inferred` only, and its threshold is a readability "
+            "judgement, so l6_threshold_curve reports the whole sweep. Both "
+            "readings are preliminary by construction — no type checker exists "
+            "at M0 (roadmap Risk 8) — and AMB-57/R59 re-measures against the "
+            "real one."
         ),
     }

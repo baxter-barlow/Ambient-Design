@@ -309,6 +309,7 @@ class DesignModel:
     assertions: tuple[Assertion, ...] = ()
     source_benchmark: str | None = None
     anchor: dict | None = None
+    purpose: str = "reference"
     notes: str = ""
 
     def key(self) -> tuple:
@@ -461,6 +462,7 @@ def model_from_json(raw: dict) -> DesignModel:
         assertions=assertions,
         source_benchmark=raw.get("source_benchmark"),
         anchor=raw.get("anchor"),
+        purpose=raw.get("purpose", "reference"),
         notes=raw.get("notes", ""),
     )
     validate(model)
@@ -582,6 +584,16 @@ def validate(model: DesignModel) -> None:
                     raise ModelError(
                         f"{where}: instantiates undefined module {inst.definition!r}"
                     )
+                if inst.ports:
+                    # The rule examples/negative/n07 ships a control for. A
+                    # module instance's interface is its definition's, and a
+                    # second copy at the instantiation site can only ever
+                    # disagree with it. Enforced here as well as in the schema
+                    # so a model built by a parser is held to it too.
+                    raise ModelError(
+                        f"{where}: a module instance may not declare ports; its "
+                        f"interface is {inst.definition!r}'s"
+                    )
             else:
                 if model.module(inst.definition) is not None:
                     raise ModelError(
@@ -597,6 +609,35 @@ def validate(model: DesignModel) -> None:
                         "and must declare no ports"
                     )
             if inst.part is not None:
+                # T9-2 (lang/bakeoff/library.py) omits a resolver-visible
+                # constraint that duplicates a same-named parameter, and puts
+                # it back on the way in. "Omitted by inference" and "never
+                # stated" render to identical text, so the only way the rule
+                # can be exact is for the second case not to exist. A design
+                # that wants a part resolved on something OTHER than its
+                # elaboration parameter states the constraint explicitly with
+                # a different value, which is representable and untouched.
+                from .library import LibraryError, lookup as _lookup_component
+
+                try:
+                    resolver_visible = _lookup_component(
+                        inst.definition
+                    ).constraint_attributes
+                except LibraryError:
+                    resolver_visible = frozenset()
+                missing = sorted(
+                    name
+                    for name in resolver_visible
+                    if name in inst.parameters and name not in inst.part.constraints
+                )
+                if missing:
+                    raise ModelError(
+                        f"{where}: parameter(s) {', '.join(missing)} are "
+                        "resolver-visible for this component, so a part binding "
+                        "must carry them as constraints too. Otherwise the T9-2 "
+                        "inference rule cannot tell a constraint it omitted from "
+                        "one that was never there, and would invent it."
+                    )
                 if inst.part.binding == "abstract" and not inst.part.constraints:
                     raise ModelError(f"{where}: an abstract part needs constraints")
                 if inst.part.binding == "abstract" and inst.part.lockfile_key:
@@ -718,6 +759,8 @@ def model_to_json(model: DesignModel) -> dict:
         "design_id": model.design_id,
         "root_module": model.root_module,
     }
+    if model.purpose != "reference":
+        out["purpose"] = model.purpose
     if model.source_benchmark:
         out["source_benchmark"] = model.source_benchmark
     if model.anchor:
@@ -769,9 +812,11 @@ def diff(expected: DesignModel, actual: DesignModel, limit: int = 12) -> list[st
     if expected == actual:
         return []
 
+    # `design_id` is deliberately NOT compared: key() excludes it as fixture
+    # provenance, no arm renders it and no language card mentions it, so every
+    # parsed model carries "". Reporting it led every netlist-gate failure with
+    # an unfixable note about a field the grammars have no syntax for.
     notes: list[str] = []
-    if expected.design_id != actual.design_id:
-        notes.append(f"design_id: expected {expected.design_id!r}, got {actual.design_id!r}")
     if expected.root_module != actual.root_module:
         notes.append(
             f"root_module: expected {expected.root_module!r}, got {actual.root_module!r}"

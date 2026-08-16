@@ -30,6 +30,7 @@ Rerunning must produce byte-identical output; lang/tests/test_bakeoff.py
 asserts it, so the committed fixture can never drift from this generator.
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -91,8 +92,8 @@ CAPACITORS = {
 DNP = {"J4", "R6", "R10"}
 
 TEST_POINTS = {
-    "TP1": "VBUS",
-    "TP2": "P3V3",
+    "TP1": "VBUS_IN",
+    "TP2": "P3V3_LOAD",
     "TP3": "GND",
     "TP4": "GND",
     "TP5": "EN",
@@ -103,7 +104,7 @@ TEST_POINTS = {
 
 # pin-plan.md section 5, in header order.
 J2_PINS = [
-    "P3V3", "EN", "IO4", "IO5", "IO6", "IO7", "IO15", "IO16", "IO17", "IO18",
+    "P3V3_LOAD", "EN", "IO4", "IO5", "IO6", "IO7", "IO15", "IO16", "IO17", "IO18",
     "IO8", "IO9", "IO10", "IO11", "IO12", "IO13", "IO14", "IO21", "GND", "P5V0",
 ]
 J3_PINS = [
@@ -112,11 +113,14 @@ J3_PINS = [
     "IO20", "GND",
 ]
 # pin-plan.md section 4.
-J4_PINS = ["P3V3", "GND", "U0TXD", "U0RXD", "EN", "IO0"]
+J4_PINS = ["P3V3_LOAD", "GND", "U0TXD", "U0RXD", "EN", "IO0"]
 
 # Signal -> the U1 port that carries it. Only the three non-GPIO names need
 # spelling out; the rest are `IO<n>` -> `io<n>`.
-U1_SPECIAL = {"P3V3": "p3v3", "GND": "gnd", "EN": "en", "U0TXD": "io43", "U0RXD": "io44"}
+U1_SPECIAL = {
+    "P3V3_LOAD": "p3v3", "GND": "gnd", "EN": "en",
+    "U0TXD": "io43", "U0RXD": "io44",
+}
 
 
 def q(text):
@@ -214,7 +218,7 @@ def build():
     add("D1", component(
         "d1", "aed.lib.semiconductor.SchottkyDiode",
         parameters={"reverse_voltage": q("40V"), "forward_current": q("3A")},
-        constraints={"mpn": s("SS34-E3/57T"), "package": s("SMA")}))
+        constraints={"mpn": s("SS34-E3/57T"), "package": s("SMA (DO-214AC)")}))
     add("D2", component(
         "d2", "aed.lib.semiconductor.UsbEsdArray",
         constraints={"mpn": s("STMicro USBLC6-2SC6"), "package": s("SOT-23-6")}))
@@ -273,21 +277,31 @@ def build():
                          "mpn": s(mpn), "package": s(package),
                          "voltage_rating": q(rating)}))
 
-    # -- power chain (design.md section 1) --------------------------------
-    join("VBUS", "j1.vbus", "f1.a", "d2.vbus", "d3.a", "c1.a", "c2.a", "tp1.p",
-         voltage="vbus_5v")
-    join("N_FUSED", "f1.b", "fb1.a", voltage="vbus_5v")
-    join("VBUS_PROT", "fb1.b", "d1.a", voltage="vbus_5v")
+    # -- power chain -------------------------------------------------------
+    # Node names are power-tree.yaml's, verbatim, and that is not cosmetic:
+    # the model used to call the node after the bead VBUS_PROT while the
+    # power tree calls the node after the FUSE that, so the same label named
+    # two different nodes across two files describing one board. Sharing the
+    # vocabulary is also what lets `check_power_tree` anchor the chain against
+    # a document this issue did not write.
+    join("VBUS_IN", "j1.vbus", "f1.a", "d2.vbus", "d3.k", "c1.a", "c2.a",
+         "tp1.p", voltage="vbus_5v")
+    join("VBUS_PROT", "f1.b", "fb1.a", voltage="vbus_5v")
+    join("VBUS_FILT", "fb1.b", "d1.a", voltage="vbus_5v")
     join("P5V0", "d1.k", "c3.a", "u2.vin", "r7.a", voltage="p5v0")
-    join("N_LDO_OUT", "u2.vout", "c4.a", "c5.a", "j5.p1", "jp1.a", voltage="p3v3")
-    join("P3V3", "j5.p2", "jp1.b", "u1.p3v3", "r3.a", "r4.a", "tp2.p",
+    join("P3V3", "u2.vout", "c4.a", "c5.a", "j5.p1", "jp1.a", voltage="p3v3")
+    join("P3V3_LOAD", "j5.p2", "jp1.b", "u1.p3v3", "r3.a", "r4.a", "tp2.p",
          voltage="p3v3")
     for ref in ("c6", "c7", "c8", "c9", "c12", "c13", "c14", "c15", "c16",
                 "c17", "c19"):
-        join("P3V3", f"{ref}.a")
+        join("P3V3_LOAD", f"{ref}.a")
 
     # -- ground -----------------------------------------------------------
-    join("GND", "j1.gnd", "d2.gnd", "d3.k", "u1.gnd", "u2.gnd", "d4.k", "d5.k",
+    # D3's cathode is on VBUS_IN and its anode on GND: a TVS clamps in reverse
+    # bias, and the SMF5.0A's 5 V figure is a STANDOFF voltage, which is only
+    # meaningful with the cathode on the positive rail. The first draft had it
+    # the other way round - a forward-biased diode across the supply.
+    join("GND", "j1.gnd", "d2.gnd", "d3.a", "u1.gnd", "u2.gnd", "d4.k", "d5.k",
          "sw1.b", "sw2.b", "r1.b", "r2.b", "r5.b", "r6.b", "r9.b", "r10.b",
          "tp3.p", "tp4.p", "h1.p", ground="gnd")
     for ref in CAPACITORS:
@@ -355,7 +369,26 @@ def build():
     return instances, net_list, refdes_map
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=OUT,
+        help="where to write; defaults to the committed fixture",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "compare against --out instead of writing it. The determinism test "
+            "used to run this generator over the tracked fixture, so a "
+            "divergence failed exactly once and was green forever after - and "
+            "`make check` wrote to a tracked source file on every invocation."
+        ),
+    )
+    args = parser.parse_args(argv)
+
     instances, nets, refdes_map = build()
     model = {
         "model_version": 0,
@@ -366,6 +399,7 @@ def main() -> int:
         "anchor": {
             "kind": "parts-yaml",
             "path": "benchmarks/esp32s3-devboard/parts.yaml",
+            "power_tree": "benchmarks/esp32s3-devboard/power-tree.yaml",
             "refdes_map": {ref: refdes_map[ref] for ref in sorted(refdes_map)},
         },
         "notes": (
@@ -401,11 +435,24 @@ def main() -> int:
             }
         ],
     }
-    OUT.write_text(json.dumps(model, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(
-        f"wrote {OUT} ({len(instances)} instances, {len(nets)} nets, "
-        f"{sum(len(n['members']) for n in nets)} connections)"
+    text = json.dumps(model, indent=2, ensure_ascii=False) + "\n"
+    counts = (
+        f"{len(instances)} instances, {len(nets)} nets, "
+        f"{sum(len(n['members']) for n in nets)} connections"
     )
+    if args.check:
+        current = args.out.read_text(encoding="utf-8")
+        if current != text:
+            print(
+                f"FAIL: {args.out} is not what this generator produces. "
+                "Regenerate it rather than editing it by hand.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"{args.out} matches the generator ({counts})")
+        return 0
+    args.out.write_text(text, encoding="utf-8")
+    print(f"wrote {args.out} ({counts})")
     return 0
 
 
