@@ -55,11 +55,19 @@ parts/examples/*.part.json
 
     Electrical values transcribed from manufacturer datasheets, with the
     document and revision recorded per field in each record's `provenance`
-    block, and a table or section for most of them. Provenance is keyed by
-    JSON-pointer prefix with a record-level default, so a field covered only
-    by that default -- several ratings in each record -- has a document and
-    revision but no table. An earlier revision of this file claimed table or
-    section per field, which is not what the records do. Individual numbers are facts and are not themselves
+    block, and a table or section for nearly all of them. Provenance is keyed
+    by JSON-pointer prefix with a record-level default that names no table, so
+    a field covered only by that default has a document and revision and no
+    table: 6 of the 140 measured values across the five records, of which 4 are
+    ratings and all 4 are in ti-ne555p. The other four records have none.
+
+    Two earlier revisions of this sentence were wrong in opposite directions --
+    one claimed a table per field, the next generalised ti-ne555p's shape to
+    all five records. Recount before editing it: walk each record for objects
+    carrying a `unit`, resolve each against the longest matching provenance
+    pointer, and count the ones that land on "".
+
+    Individual numbers are facts and are not themselves
     copyrightable; the datasheets they were read from are not redistributed and
     are not included here. Each record declares a `license_class` describing
     the terms the underlying document was published under -- a vocabulary

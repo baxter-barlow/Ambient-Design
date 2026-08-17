@@ -279,7 +279,49 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
         if assertion.get("path"):
             identities.add(assertion["path"])
     nodes = source_map.get("nodes")
+    if not isinstance(nodes, dict):
+        # Failing open here gave the same cheerful summary a missing map used
+        # to give, which this file upgraded from a note to a problem one field
+        # up for exactly that reason.
+        problems.append(
+            f"{source_map_path.name}: has no `nodes` object, so no identity is "
+            "covered and the coverage rule checks nothing.")
     if isinstance(nodes, dict):
+        # SPAN SANITY. ir/README.md lists these as compiler-enforced and the
+        # map is the one committed illustration of I9: /c_byp was added with
+        # VCC's exact start position, the only same-file overlap in the file,
+        # because the span was copied from the neighbour above without checking
+        # what already sat on that line.
+        seen_spans = []
+        for name, node in sorted(nodes.items()):
+            for span in ([node.get("declaration")] if isinstance(node, dict) else []) \
+                    + list((node.get("instantiation_trace") or []) if isinstance(node, dict) else []):
+                if not isinstance(span, dict):
+                    continue
+                start, end = span.get("byte_start"), span.get("byte_end")
+                if isinstance(start, int) and isinstance(end, int) and end < start:
+                    problems.append(
+                        f"{source_map_path.name}: {name} has a span ending "
+                        f"before it starts ({start} > {end}).")
+                index = span.get("file")
+                if isinstance(index, int) and isinstance(source_map.get("files"), list):
+                    if not 0 <= index < len(source_map["files"]):
+                        problems.append(
+                            f"{source_map_path.name}: {name} names file index "
+                            f"{index}, which the `files` table does not have.")
+            declaration = node.get("declaration") if isinstance(node, dict) else None
+            if isinstance(declaration, dict) and isinstance(
+                    declaration.get("byte_start"), int):
+                seen_spans.append((declaration["file"], declaration["byte_start"],
+                                   declaration.get("byte_end", 0), name))
+        seen_spans.sort()
+        for left, right in zip(seen_spans, seen_spans[1:]):
+            if left[0] == right[0] and left[2] >= right[1]:
+                problems.append(
+                    f"{source_map_path.name}: the declarations of {left[3]} and "
+                    f"{right[3]} overlap in file {left[0]} "
+                    f"({left[1]}-{left[2]} against {right[1]}-{right[2]}). Two "
+                    "statements cannot begin at the same source position.")
         uncovered = sorted(identities - set(nodes))
         if uncovered:
             problems.append(
@@ -536,6 +578,51 @@ def self_test() -> int:
         permuted.write_text(json.dumps(shuffled), encoding="utf-8")
         sort_problems_seen, sort_notes = [], []
         check_document(permuted, sort_problems_seen, sort_notes)
+        # THE NODE-COVERAGE AND SPAN LEGS. Added last round with no case at
+        # all: deleting the coverage block left the self-test output
+        # byte-identical, including the summary line check-layout.sh
+        # reconciles. That is the state this self-test was expanded three times
+        # to prevent, in the leg written to close a defect that survived nine
+        # rounds precisely because nothing enforced it.
+        def _map_probe(mutate):
+            probe_ir = Path(tmp) / "probe.ir.json"
+            probe_map = Path(tmp) / "probe.sourcemap.json"
+            body = json.loads(text)
+            body["header"]["design_hash"] = ""
+            body["header"]["design_hash"] = design_hash_of(body)
+            probe_ir.write_text(json.dumps(body), encoding="utf-8")
+            side = json.loads((IR_EXAMPLES / "blinker.sourcemap.json").read_text(
+                encoding="utf-8"))
+            side["design_hash"] = body["header"]["design_hash"]
+            mutate(side)
+            probe_map.write_text(json.dumps(side), encoding="utf-8")
+            found, _ = [], []
+            check_document(probe_ir, found, _)
+            return found
+
+        def _drop_node(side):
+            side["nodes"].pop("/c_byp", None)
+
+        def _add_stray(side):
+            side["nodes"]["/ghost"] = side["nodes"]["/c_byp"]
+
+        def _overlap(side):
+            side["nodes"]["/c_byp"]["declaration"] = dict(
+                side["nodes"]["/c_ctl"]["declaration"])
+
+        def _no_nodes(side):
+            side.pop("nodes", None)
+
+        checks.append(("a source map missing an IR identity is caught",
+                       any("has no `nodes` entry" in p for p in _map_probe(_drop_node))))
+        checks.append(("a source map naming an identity the IR lacks is caught",
+                       any("which the IR does not contain" in p
+                           for p in _map_probe(_add_stray))))
+        checks.append(("two declarations at the same source position are caught",
+                       any("overlap in file" in p for p in _map_probe(_overlap))))
+        checks.append(("a source map with no nodes object is caught",
+                       any("has no `nodes` object" in p for p in _map_probe(_no_nodes))))
+
         checks.append((
             "check_document reports an array out of its declared order, even "
             "when the permuted document's own hash is self-consistent",

@@ -92,7 +92,7 @@ the 555 itself — comparator threshold ratio error, discharge-transistor Ron
 negligible), and finite edge shape — so the assertion window is set at device
 level:
 
-- **duty window: 53.3 – 55.8 %** (one-sided; see sec. 6)
+- **duty window: 53.3 – 55.8 %** (one-sided; see sec. "Duty-cycle window")
 
 LED on-current window from Vf spread (1.8–2.2 V), Voh spread (7.0–7.5 V),
 RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
@@ -265,7 +265,7 @@ wrong in three ways worth recording:
    window to 55.6 %, excluding the very corner it was widened to admit.
 
 Corners are now swept over `RA +/-1 %`, `RB +/-1 %`, `C +/-5 %` and
-`Ib in [0, 0.25 uA]` jointly, and rounded OUTWARD, which is what sec. 7 already
+`Ib in [0, 0.25 uA]` jointly, and rounded OUTWARD, which is what sec. "LED drive" already
 does for the LED window. The old number was computed from an incomplete model of the
 same circuit; nothing about the circuit got worse and no measurement was made to
 fit. The rescale itself is kept: a 1 uF film part has far better tolerance and

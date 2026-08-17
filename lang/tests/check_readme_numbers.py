@@ -100,7 +100,7 @@ MINIMUM_DISTINCT_ROWS = 12
 # 6 rows x 3 rules, counted as DISTINCT (design, arm, rule) identities: six
 # copies of one correct row met a cell count of 18 while five real rows left
 # the document, which is the third recurrence of this exact defect here.
-MINIMUM_T9_CELLS = 18
+MINIMUM_T9_CELLS = 24  # 6 rows x (3 rules + the `all` column)
 # 4 rows x 5 thresholds.
 MINIMUM_SWEEP_CELLS = 20
 
@@ -178,6 +178,13 @@ def measure_now():
             fractions = reading["by_rule_fraction"]
             for rule, value in fractions.items():
                 tokens[f"t9|{design}|{arm}|{rule}"] = round(value * 1000)
+    # THE `all` COLUMN, from the harness's own aggregate rather than a sum of
+    # the rounded rule columns. It was read by nothing, and one of its six
+    # cells was a tenth low.
+    for design, arms_seen in readings["t9_annotation_tax"].items():
+        for arm, reading in arms_seen.items():
+            tokens[f"t9all|{design}|{arm}"] = round(
+                1000 * reading["tax_tokens"] / reading["explicit_tokens"])
     return tokens
 
 
@@ -413,6 +420,18 @@ def token_problems(text, counts, problems, minimum=None):
             if len(cells) < 6 or cells[0] in ("---", ""):
                 continue
             design, arm = cells[0], cells[1]
+            want_all = counts.get(f"t9all|{design}|{arm}")
+            if want_all is not None and len(cells) > 5:
+                found_all = re.search(r"[\d.]+", cells[5])
+                if found_all and abs(float(found_all.group(0)) - want_all / 10.0) > 0.05:
+                    problems.append(
+                        f"lang/README.md: the T9 table publishes {cells[5]} in "
+                        f"the `all` column for {design}/{arm}, but the harness "
+                        f"measures {want_all / 10.0:.1f}%. The headline range is "
+                        "quoted from this column.")
+                elif found_all:
+                    t9_seen.add((design, arm, "all"))
+                    checked += 1
             for rule, cell in zip(t9_order, cells[2:5]):
                 if rule is None:
                     continue

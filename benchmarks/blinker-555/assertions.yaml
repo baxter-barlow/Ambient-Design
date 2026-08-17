@@ -40,7 +40,8 @@ assertions:
     signal: v(out)
     kind: trig_targ            # one .meas: RISE=1 -> RISE=2, VAL=3.7 V, TD=2 s
     expected: 1.012 s
-    window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.25 uA]; see design.md sec. 6
+    window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.25 uA]; see
+                               #   design.md sec. "Duty-cycle window"
     measured: 1.01191 s
     verdict: PASS
 
@@ -49,7 +50,12 @@ assertions:
     signal: v(out)
     kind: derived_param        # 1/t_period from the trig_targ period meas
     expected: 0.988 Hz         # exact ln2 form; 1.44/((RA+2RB)C) = 0.986 Hz
-    window: [0.923 Hz, 1.052 Hz] # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
+    window: [0.923 Hz, 1.052 Hz] # 1% R, 5% C AND Ib in [0, 0.25 uA]; see
+                               #   design.md sec. "Duty-cycle window". This read
+                               #   0.5 uA -- a bound design.md retracts, and one
+                               #   this window would FAIL: at 0.5 uA the joint
+                               #   corner gives f_min 0.91285 Hz, below the
+                               #   0.923 floor on the same line.
     measured: 0.98823 Hz
     verdict: PASS
 

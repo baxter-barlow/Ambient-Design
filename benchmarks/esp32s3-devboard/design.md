@@ -76,7 +76,7 @@ Table 6-2 "Recommended Operating Conditions", same datasheet.
 - R11/R12: 0 Ohm series links in D+/D- (isolation/rework aid; FS USB needs no
   series termination — the S3 PHY is internal).
 - Shield: R9 1 MOhm || C18 4.7 nF to GND (avoids hard shield-ground loop).
-- VBUS-visible bulk capacitance C1 + C3 = 4.7 + 4.7 = **9.5 uF <= 10 uF**
+- VBUS-visible bulk capacitance C1 + C2 + C3 = 4.7 + 0.1 + 4.7 = **9.5 uF <= 10 uF**
   USB attach limit; the 3.3 V bank charges behind the LDO's current limit.
 
 ## 4. 3.3 V LDO, sized against Wi-Fi TX peak

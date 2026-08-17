@@ -214,14 +214,14 @@ against a ~3K budget.
 near either grammar. AC5a is AMB-33's successor work, and if it contradicts
 this, the flip criterion in §4 is the mechanism, not this table.
 
-**T9 annotation tax: 24-30% in aggregate (23.8-30.1 measured), and the aggregate is the wrong
+**T9 annotation tax: 24-30% in aggregate (23.9-30.1 measured), and the aggregate is the wrong
 number.** An earlier version of this file called it a lower bound. Decomposing
 it per rule shows why that was wrong:
 
 | Design | Arm | T9-1 library pins | T9-2 inference | T9-3 L9 flags | all |
 |---|---|---:|---:|---:|---:|
 | blinker-555 | candidate_a | 15.1% | 7.7% | 3.4% | 26.1% |
-| blinker-555 | candidate_b | 14.3% | 7.0% | 2.5% | 23.8% |
+| blinker-555 | candidate_b | 14.3% | 7.0% | 2.5% | 23.9% |
 | blinker-555 | starlark | 20.4% | 4.9% | 2.7% | 28.0% |
 | esp32s3-devboard | candidate_a | 17.3% | 6.0% | 2.9% | 26.1% |
 | esp32s3-devboard | candidate_b | 16.5% | 5.8% | 2.3% | 24.6% |
