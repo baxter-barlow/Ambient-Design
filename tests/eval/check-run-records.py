@@ -43,6 +43,12 @@ EXAMPLES = ROOT / "eval" / "examples"
 # that thing changing.
 AC5A_THRESHOLD = Fraction(7, 10)
 
+# AC5a reads "in >=7/10 independent trials". The rate rule generalises the
+# threshold to other n, which is right — but it generalised DOWNWARD too, and
+# `ac5_gate(1, 1)` recorded a PASS through both eval gates. One trial is not a
+# measurement of a 70% success rate.
+MINIMUM_AC5A_TRIALS = 10
+
 # `kind` values that mean "a real model / gate / tokenizer produced this".
 # An ALLOWLIST, not a denylist: the harness and the schema both used
 # ("replay", "scripted", "stub") as a denylist, so an unrecognised kind
@@ -70,6 +76,19 @@ def problems_for(record, label):
     if isinstance(budget, dict):
         total, limit = budget.get("total"), budget.get("limit")
         headroom, passed = budget.get("headroom"), budget.get("passed")
+        # `breakdown` must account for `total`. The schema's own $comment says
+        # the per-part breakdown is required "precisely because A4 exists to
+        # stop the teaching payload migrating from the card into the skill and
+        # out of sight" — and the migrating payload was the one thing unchecked,
+        # so `{system_context: 27, task_prompt: 31, skill_payload: 243000}` under
+        # `total: 58` passed.
+        breakdown = budget.get("breakdown")
+        if isinstance(breakdown, dict) and isinstance(total, int):
+            parts = [v for v in breakdown.values() if isinstance(v, (int, float))]
+            if parts and abs(sum(parts) - total) > 0.5:
+                bad(f"a4_context_budget.breakdown sums to {sum(parts):g} but "
+                    f"total is {total}. The parts do not account for the whole, "
+                    "which is exactly how a payload migrates out of sight.")
         if isinstance(total, int) and isinstance(limit, int):
             if isinstance(headroom, int) and headroom != limit - total:
                 bad(f"a4_context_budget.headroom is {headroom}, but limit - total "
@@ -95,6 +114,32 @@ def problems_for(record, label):
             elif successes > trials:
                 bad(f"arm {name!r} records {successes} successes in {trials} "
                     "trials, which is impossible")
+        # `successes` is a SUMMARY of `trials`, and nothing reconciled them, so
+        # the AC5a verdict could be derived from a counter contradicting every
+        # trial record beside it.
+        listed_trials = arm.get("trials")
+        if isinstance(listed_trials, list) and isinstance(successes, int):
+            passed_count = sum(1 for x in listed_trials
+                               if isinstance(x, dict) and x.get("passed") is True)
+            if any(isinstance(x, dict) and "passed" in x for x in listed_trials) \
+                    and passed_count != successes:
+                bad(f"arm {name!r} records successes={successes} but "
+                    f"{passed_count} of its {len(listed_trials)} trial record(s) "
+                    "are marked passed")
+        outcomes = arm.get("outcomes")
+        if isinstance(outcomes, dict) and isinstance(successes, int):
+            # ABSENT means zero, not "unchecked": `{"failed": 10}` beside
+            # `successes: 8` is the contradiction, and reading a missing key as
+            # None skipped exactly that case.
+            recorded_pass = outcomes.get("passed", 0)
+            total = sum(v for v in outcomes.values() if isinstance(v, int))
+            count = _arm_count(arm)
+            if isinstance(count, int) and total and total != count:
+                bad(f"arm {name!r} outcomes sum to {total} but it records "
+                    f"{count} trial(s)")
+            if isinstance(recorded_pass, int) and recorded_pass != successes:
+                bad(f"arm {name!r} records successes={successes} but its "
+                    f"outcomes say passed={recorded_pass}")
         listed = arm.get("trials")
         if isinstance(listed, list) and isinstance(trials, int) and len(listed) != trials:
             bad(f"arm {name!r} declares trial_count={trials} but carries "
@@ -104,6 +149,10 @@ def problems_for(record, label):
     if isinstance(gate, dict):
         successes, trials = gate.get("successes"), gate.get("trials")
         passed, arm_name = gate.get("passed"), gate.get("arm")
+        if isinstance(trials, int) and trials < MINIMUM_AC5A_TRIALS and gate.get("passed"):
+            bad(f"ac5_gate passed on {trials} trial(s), below AC5a's stated "
+                f"{MINIMUM_AC5A_TRIALS}. The rate rule generalises the bar to "
+                "larger n; it does not license a smaller sample.")
         if isinstance(successes, int) and isinstance(trials, int) and trials > 0:
             if successes > trials:
                 bad(f"ac5_gate records {successes} successes in {trials} trials")
@@ -183,6 +232,45 @@ def problems_for(record, label):
             bad(f"minimum_effect_of_interest {list(effect)} declares the "
                 "primary arm at or above the baseline, which is the direction "
                 "this one-sided test has no power against")
+        # These four were gated on `paired`, so setting `paired: false` skipped
+        # them — including the arms-vs-verdict identity this file's own comment
+        # calls "the check that would have caught 'flip criterion MET' from
+        # 10/10 against 0/10". They apply to every flip verdict now.
+        for role in ("primary_arm", "baseline_arm"):
+            named = flip.get(role)
+            if named is not None and arms and named not in arms:
+                bad(f"flip_criterion.{role} is {named!r}, which this record has "
+                    "no arm data for")
+        primary, baseline = arms.get(flip.get("primary_arm")), arms.get(flip.get("baseline_arm"))
+        for role, arm, rate_key in (("primary", primary, "rhoform_rate"),
+                                    ("baseline", baseline, "baseline_rate")):
+            rate = flip.get(rate_key)
+            if (isinstance(arm, dict) and isinstance(rate, (int, float))
+                    and isinstance(arm.get("successes"), int)):
+                count = _arm_count(arm)
+                if isinstance(count, int) and count > 0:
+                    actual = arm["successes"] / count
+                    if abs(actual - rate) > 1e-6:
+                        bad(f"flip_criterion.{rate_key} is {rate} but the "
+                            f"{role} arm records {arm['successes']}/{count} = "
+                            f"{actual:.6g}")
+        if (verdict == "flip_criterion_met" and isinstance(primary, dict)
+                and isinstance(baseline, dict)
+                and isinstance(primary.get("successes"), int)
+                and isinstance(baseline.get("successes"), int)):
+            pc, bc = _arm_count(primary), _arm_count(baseline)
+            if isinstance(pc, int) and isinstance(bc, int) and pc and bc:
+                if primary["successes"] / pc >= baseline["successes"] / bc:
+                    bad(f"verdict is flip_criterion_met — 'statistically below "
+                        f"the baseline' — but the primary arm records "
+                        f"{primary['successes']}/{pc} against the baseline's "
+                        f"{baseline['successes']}/{bc}, which is not below it.")
+        # A paired TEST on an unpaired design. protocol.py: "PAIRING IS ONLY
+        # VALID WITH A REAL BLOCKING FACTOR, AND MATCHING SEED NUMBERS ARE NOT
+        # ONE." Recording McNemar with paired false is that error made explicit.
+        if str(flip.get("test", "")).startswith("mcnemar") and not flip.get("paired"):
+            bad(f"test is {flip.get('test')!r}, a paired test, but `paired` is "
+                f"{flip.get('paired')!r}")
         if flip.get("paired"):
             # `discordant_b`/`discordant_c` are read here and written NOWHERE in
             # the tree — a McNemar verdict is recorded without the 2x2 table it

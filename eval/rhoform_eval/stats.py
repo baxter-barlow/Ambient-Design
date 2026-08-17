@@ -279,7 +279,13 @@ def mcnemar_exact(b: int, c: int) -> float:
     Returns the p-value for "A is worse than B" = P(X <= b) where
     X ~ Binomial(b + c, 1/2) under the null of no difference.
 
-    PREFER THIS OVER FISHER when both arms run the same benchmark with the
+    DO NOT PREFER THIS OVER FISHER for the AC5 protocol as it stands. This
+    paragraph used to, and `protocol.py` says the opposite for a good reason:
+    "PAIRING IS ONLY VALID WITH A REAL BLOCKING FACTOR, AND MATCHING SEED
+    NUMBERS ARE NOT ONE." Under genuine independence pairing LOSES power in
+    this module's own numbers (0.182 against 0.291 at n=10), so recommending it
+    recommended the more expensive design. Use it only where a real blocking
+    factor exists. The text below describes when that would be true when both arms run the same benchmark with the
     same seed set. Pairing removes between-seed variance, so it detects a
     real difference at a substantially smaller n — which at roughly 150K
     tokens per trial is a direct cost saving, not a statistical nicety.
@@ -402,6 +408,18 @@ def flip_verdict(
             # Fisher's power is incoherent, and not harmlessly so: the two
             # differ substantially at these sample sizes, so the verdict
             # could be justified by a test that was never run.
+            #
+            # NOTE THE MODEL. The expression below is algebraically
+            # `ma(1-mb) + mb(1-ma)`: the discordance rate under INDEPENDENCE
+            # between arms — i.e. under the assumption that there is no
+            # blocking factor, which is the assumption pairing exists to relax.
+            # It is therefore an UPPER BOUND on real discordance, and power
+            # falls steeply below it: at n=10 a p_disc of 0.42 gives 0.182,
+            # 0.20 gives 0.015, 0.10 gives 0.0007. Since
+            # `power_against_declared_effect` is what promotes `inconclusive`
+            # to `flip_criterion_not_met`, the bound errs in the direction that
+            # certifies adequacy. Stated because the unpaired path's equivalent
+            # problem was fixed and this one was left.
             n_disc_expected = abs(ma - mb) + 2 * min(ma, mb) * (1 - max(ma, mb))
             n_disc_expected = min(1.0, max(0.0, n_disc_expected))
             share = 0.5 if n_disc_expected == 0 else max(

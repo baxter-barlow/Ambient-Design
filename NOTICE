@@ -20,9 +20,11 @@ Third-party material redistributed in this repository
 
 corpus/bugs.yaml
 
-    Contains 59 short verbatim excerpts from public forum posts, issue
-    trackers, mailing lists, blog postmortems and vendor errata, in the
-    `evidence:` field of the entries that cite them. Each excerpt is a sentence
+    Contains 83 short verbatim excerpts, spanning all 61 entries, from public
+    forum posts, issue trackers, mailing lists, blog postmortems and vendor
+    errata. They sit principally in the
+    `evidence:` field, and in a handful of cases in `symptom:` or
+    `root_cause:` where the source's own wording is the finding. Each excerpt is a sentence
     or two, is attributed to a specific public URL in the same entry's
     `source:` block, and is included so that a reader can check that the entry
     describes the bug its source describes.
