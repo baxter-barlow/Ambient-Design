@@ -80,8 +80,8 @@ the first draft (re-derived for RA = 100 k, RB = 680 k, C = 1 µF):
 
 - f_min = 0.988 / (1.01 · 1.05) = 0.932 Hz  (all R +1 %, C +5 %)
 - f_max = 0.988 / (0.99 · 0.95) = 1.051 Hz  (all R −1 %, C −5 %)
-- **f window: 0.932 – 1.051 Hz** (≈ ±6.1 %, cap tolerance dominates)
-- Equivalent period window: **0.952 – 1.073 s**
+- **f window: 0.923 – 1.052 Hz** (≈ ±6.1 %, cap tolerance dominates)
+- Equivalent period window: **0.951 – 1.083 s**
 
 Duty is a resistor ratio only, so passives contribute almost nothing
 (corners RA±1 %, RB∓1 % give 53.36 – 53.49 %). The realistic spread comes from
@@ -99,9 +99,9 @@ RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
 
 | Assertion | Predicted window | Measured | Verdict |
 |---|---|---|---|
-| f_osc | 0.932 – 1.051 Hz | 0.98823 Hz | PASS |
+| f_osc | 0.923 – 1.052 Hz | 0.98823 Hz | PASS |
 | duty_pct | 53.3 – 55.8 % | 53.45 % | PASS |
-| t_period | 0.952 – 1.073 s | 1.01191 s | PASS |
+| t_period | 0.951 – 1.083 s | 1.01191 s | PASS |
 | i_led_on | 8.0 – 10.5 mA | 9.257 mA | PASS |
 | v_out_high | 6.8 – 7.6 V | 7.199 V | PASS |
 
@@ -136,25 +136,59 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 
 ## AC1a: DSL expressibility
 
-The design is 8 components, 7 nets, 2 assertions — an illustrative Rhoform DSL
-rendering fits in ~30 lines, far under the ~150-line budget:
+The design is 8 components, 7 nets, 2 assertions. Rendered through the winning
+bake-off arm from `lang/examples/blinker-555.design.json`, in the frozen v0.1
+syntax:
+
+| variant | lines |
+|---|---|
+| explicit | 130 |
+| inferred | 93 |
+| inferred + columnar | 82 |
+
+against the ~150-line budget. The margin is 68 lines at the most compact
+variant and 20 at the most explicit one -- comfortable, but not the "far
+under" an earlier revision of this section claimed. That revision also quoted
+"~30 lines" for a hand-written snippet in a syntax the frozen grammar rejects:
+it used `supply`, brace blocks, `;` separators, and `freq`/`duty`, none of
+which exist in `lang/grammar/rhoform.ebnf` (`assertion ::= 'assert' NAME
+('static' | 'dynamic') NAME '(' NAME ')' bound`, and the measurement
+vocabulary is `frequency`/`duty_cycle`). The real number was available from the
+renderer the whole time.
+
+Reproduce with:
+
+    python3 -c "import sys; sys.path.insert(0,'lang'); \
+      from bakeoff.arms import candidate_a; from bakeoff.model import load_model; \
+      from pathlib import Path; \
+      print(candidate_a.render(load_model(Path('lang/examples/blinker-555.design.json')), \
+                               'inferred+columnar'))"
+
+The top-level module, verbatim from that command:
 
 ```rhoform
-design blinker_555 {
-  supply V9 { rail vcc 9V ramp 2ms }
-  part U1  NE555      { }
-  part RA  R 100k 1%  ; part RB R 680k 1%
-  part CT  C 1u 5%    ; part CB C 10n
-  part RL  R 560 1%   ; part D1 LED red
-  net vcc  { V9.+, U1.VCC, U1.RST, RA.1 }
-  net dis  { RA.2, RB.1, U1.DISCH }
-  net tim  { RB.2, CT.1, U1.THRES, U1.TRIG }
-  net ctl  { U1.CONT, CB.1 }
-  net led  { U1.OUT, RL.1 }  ; net anod { RL.2, D1.A }
-  net gnd  { V9.-, CT.2, CB.2, D1.K, U1.GND }
-  assert freq(U1.OUT) in 0.932Hz..1.051Hz after 2s
-  assert duty(U1.OUT) in 53.3%..55.8%   after 2s
-}
+module Blinker555:
+    table rhoform.lib.passive.Capacitor part abstract (capacitance, part.dielectric, part.package, part.voltage_rating):
+        c_byp  100nF +/- 10%  "X7R"       "0805"        50V
+        c_ctl  10nF +/- 10%   "X7R"       "0805"        50V
+        c_t    1uF +/- 5%     "PET_film"  "radial_5mm"  63V
+    indicator = new LedIndicator
+    indicator.color = "red"
+    indicator.current = 9.5mA (8.0mA to 10.5mA)
+    j_bat = new rhoform.lib.connector.BatteryConnector9V
+    j_bat.part = "conn.battery_9v/keystone-232@1"
+    mh1 = new rhoform.lib.mech.MountingHole
+    mh1.diameter = 3.2mm
+    r_a = new rhoform.lib.passive.Resistor
+    r_a.resistance = 100kohm +/- 1%
+    r_a.part.package = "axial_0207"
+    r_a.part.power_rating = 0.25W
+    r_b = new rhoform.lib.passive.Resistor
+    r_b.resistance = 680kohm +/- 1%
+    r_b.part.package = "axial_0207"
+    r_b.part.power_rating = 0.25W
+    timer = new rhoform.lib.timer.Ne555
+    timer.part = "timer.555/ti-NE555P@2"
 ```
 
 ## Duty-cycle window: why it is +/-2.2 points and not +/-1.0
@@ -240,8 +274,8 @@ equations, so all three are now swept over the same joint corner set:
 
 | assertion | was | is |
 |---|---|---|
-| `osc_period` | 0.952 – 1.073 s | **0.951 – 1.083 s** |
-| `osc_frequency` | 0.932 – 1.051 Hz | **0.923 – 1.052 Hz** |
+| `osc_period` | 0.951 – 1.083 s | **0.951 – 1.083 s** |
+| `osc_frequency` | 0.923 – 1.052 Hz | **0.923 – 1.052 Hz** |
 | `duty_cycle_high` | 52.4 – 54.4 % | **53.3 – 55.8 %** |
 
 The period window was also rounded INWARD at both ends even at `Ib = 0`

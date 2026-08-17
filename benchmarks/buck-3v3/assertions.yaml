@@ -33,7 +33,7 @@ assertions:
       max: 3.399              # 3.3 V + 3%
       unit: V
     measured: 3.29600
-    status: pass              # +0.85% (feedback divider 31.6k/10k regulation point)
+    status: pass              # -0.12% (feedback divider 31.2k/10k regulation point)
 
   - name: vout_ripple_pp
     kind: meas_pp             # .meas tran vout_pp PP v(out) 2.4m-2.5m
@@ -78,13 +78,13 @@ assertions:
     expected:
       max: 500.0
       unit: us
-    measured: 16.80
+    measured: 16.86
     status: pass
 
 cross_checks:                 # informational, not gating
   - name: inductor_ripple_pp
     meas_id: il_pp
     predicted: 0.479          # Vout*(1-D)/(L*fsw) at Vin=12, ideal D=0.275
-    measured: 0.487
+    measured: 0.4844
     note: measured duty exceeds ideal D=Vout/Vin to cover modeled IR drops
       (Ron + DCR ~= 26 mOhm)

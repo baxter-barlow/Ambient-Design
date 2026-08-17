@@ -457,7 +457,9 @@ def self_test():
             "method": "manual",
         }
 
-    MINIMUM_CASES = 26  # raise deliberately; drifting below is not a decision
+    # EQUAL to the case count, not one below it: a floor with slack in it
+    # permits exactly the silent drift it exists to name.
+    MINIMUM_CASES = 27  # raise deliberately; drifting below is not a decision
     cases = [
         ("L1", "unresolvable provenance pointer", mutate(lambda d: set_provenance_key(d, "/pins/99/role"))),
         ("L2", "provenance cites unknown source", mutate(lambda d: d["provenance"].__setitem__("", {"source_id": "nope", "confidence": "unverified", "method": "manual"}))),
@@ -589,8 +591,14 @@ def main() -> int:
             return 2
 
     if not files:
-        print("lint: no *.part.json records found; nothing to lint.")
-        return 0
+        # NOT a pass. `lint: PASS: 0 record(s) consistent` on an empty tree is
+        # indistinguishable from a linter that does nothing, which is the
+        # reasoning check-run-records.py already applies to itself.
+        print("lint: FAIL: no *.part.json records found. A checker with "
+              "nothing to check is indistinguishable from no checker; if the "
+              "records legitimately moved, point this gate at them.",
+              file=sys.stderr)
+        return 1
 
     problems, unchecked = [], []
     for path in files:

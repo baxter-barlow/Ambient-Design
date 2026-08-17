@@ -57,7 +57,7 @@ Choose the standard value **L = 10 uH**, which gives (ideal duty):
     DIL(12 V) = 3.3 x 0.725 / 5.0             = 0.479 App
     DIL(9 V)  = 3.3 x 0.633 / 5.0             = 0.418 App
 
-Measured in the behavioral deck: 0.487 App at 12 V, 0.565 App worst case at
+Measured in the behavioral deck: 0.4844 App at 12 V, 0.565 App worst case at
 14 V -- slightly above ideal because the loop regulates duty above D = Vout/Vin
 to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
 
@@ -92,14 +92,14 @@ ceramics in parallel: ~2 mOhm.
     DV_ESR = 0.565 x 0.002               = 1.1 mV
     DV_pp  ~= 5 mV  (terms are phase-shifted, not directly additive)
 
-Measured: 3.64 mVpp at 12 V -- **13.7x margin** against the 50 mV spec. The cap
+Measured: 3.587 mVpp at 12 V -- **13.9x margin** against the 50 mV spec. The cap
 size is actually set by the load-step requirement, not ripple: for a 1 A step
 with loop crossover fc, the droop is approximately
 
     DV_step ~= DI / (2 pi x fc x C) = 1.0 / (2 pi x 30e3 x 36e-6) = 147 mV
 
 which recovers within the band well inside 500 us (measured settling:
-16.9 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
+16.86 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
 spec; 2x22 uF satisfies both with margin.
 
 Input capacitor: worst-case input RMS ripple current
@@ -133,7 +133,7 @@ benchmark's model and the buildable hardware in one-to-one correspondence.
 
 ## 6. Loss budget and efficiency
 
-At Vin = 12 V, Iout = 2 A (Pout = 3.328 x 2.008 = 6.68 W):
+At Vin = 12 V, Iout = 2 A (Pout = 3.296 x 1.9988 = 6.588 W):
 
 | Mechanism | Formula | Value |
 |---|---|---|
@@ -161,7 +161,7 @@ subtotal ~= 0.11 W.
 The behavioral deck carries the conduction terms explicitly (Ron in the
 switch-node B-source, DCR and ESR as real elements) and draws the fixed
 0.40 W as a constant-power term on the input node (`PFIX`). Measured
-efficiency: **92.95%** -- matching the budget and leaving 7.95 points of
+efficiency: **92.864%** -- matching the budget and leaving 7.86 points of
 margin over the 85% floor to absorb budget error. This margin is the honest
 buffer for what a rung-0 behavioral model cannot measure (actual switching
 waveform losses); the design does not rely on behavioral optimism to pass.
@@ -172,12 +172,17 @@ Divider from the LM25145's 0.8 V reference:
 
     Vout = Vref x (1 + R1/R2) = 0.8 x (1 + 31.2k/10k) = 3.296 V  (-0.12%)
 
-E96 values; 80 uA divider current. Worst-case DC error stack: +/-1% ref,
-+/-1% resistors x2 -> ~+/-2.2%, inside the +/-3% window with the +0.85%
-centering offset (total worst case +3.0%/-1.4% -- the top of the window is
-grazed only when every tolerance lands worst-case simultaneously; production
-would use 0.5% resistors if this were a shipping design, noted as margin
-commentary, not a spec change).
+31.2k is an E192 value (192 x log10(3.12) = 95); 10k is E96. 80 uA divider
+current. Worst-case DC error stack: +/-1% ref, +/-1% resistors x2 -> +/-2.52%
+about a regulation point that sits 0.12% low, giving +2.42%/-2.60% -- inside
+the +/-3% window on both sides, and the table in sec. 12 reproduces it
+(3.2141 .. 3.3799 V). Production would use 0.5% resistors if this were a
+shipping design; that is margin commentary, not a spec change.
+
+An earlier revision of this paragraph quoted +3.0%/-1.4% for the 31.6k
+divider. That was wrong for 31.6k too -- the same table gives 3.2452 .. 3.4129,
+i.e. +3.42%/-1.66%, which grazes the top of the window rather than sitting
+inside it. Centring the divider is what fixed that, not the arithmetic.
 
 Control: voltage-mode PWM, Type-III compensation (== PID + parasitic poles).
 Plant: duty-to-Vout gain Vin with the LC double pole at
@@ -201,7 +206,7 @@ via Kd(s + w0)^2 = Kd s^2 + Kp s + Ki:
 plus a derivative-path pole at 159 kHz (1k/1n RC) standing in for Type-III's
 high-frequency poles and taming switching-ripple feedthrough. Soft start:
 the reference ramps 0 -> 0.8 V over 500 us (SS pin cap on the LM25145),
-which is why measured startup overshoot is 0.11% against the 5% budget.
+which is why measured startup overshoot is 0.0466% against the 5% budget.
 
 ## 8. Behavioral model (fidelity class: behavioral, rung 0)
 
@@ -223,7 +228,7 @@ Original construction, no vendor models:
   coming up under a rising rail); load is a 3.3 Ohm base (1 A) plus a 1 A
   PWL current step at t = 1.5 ms; `.tran 100n 2.5m 0 2n` gives 1250 cycles,
   1000 points per cycle.
-- **Settling detector**: a B-source flags |Vout - 3.328| > 33.3 mV; the
+- **Settling detector**: a B-source flags |Vout - 3.296| > 33.0 mV; the
   `.meas ... FALL=LAST` on that flag implements "enters and stays within
   +/-1%" exactly, immune to multi-crossing ringing.
 
@@ -237,11 +242,11 @@ belong to higher rungs.
 
 | Assertion | Window | Measured | Status |
 |---|---|---|---|
-| Mean Vout (2 A) | 3.3 V +/-3% | 3.3280 V (+0.85%) | pass |
-| Output ripple | <= 50 mVpp | 3.64 mVpp | pass |
-| Efficiency | >= 85% | 92.95% | pass |
-| Startup overshoot | <= 5% | 0.11% | pass |
-| 1A->2A settling | <= 500 us | 16.0 us | pass |
+| Mean Vout (2 A) | 3.3 V +/-3% | 3.2960 V (-0.12%) | pass |
+| Output ripple | <= 50 mVpp | 3.587 mVpp | pass |
+| Efficiency | >= 85% | 92.864% | pass |
+| Startup overshoot | <= 5% | 0.0466% | pass |
+| 1A->2A settling | <= 500 us | 16.86 us | pass |
 
 Input corners (9 V / 14 V, supplementary runs in `validation.log`): all five
 stay green; worst deltas are ripple-current 0.515 App at 14 V, settling
@@ -255,8 +260,8 @@ every target was met with the components as chosen.
 `efficiency` is **arithmetic over a hand-entered constant, not a measurement.**
 `Gin` injects `PFIX/V(in)` as input current, so `pin_avg` is identically
 `pout + I^2*(Ron+DCR) + PFIX`, and `eff` is a closed form in `PFIX = 0.40 W`.
-It is invariant under the timestep (0.929453 at 40 ns, 0.929462 at 2 ns) and
-essentially flat across the input range (0.929481 / 0.929462 / 0.929450 at
+It is invariant under the timestep (0.928704 at 40 ns, 0.928644 at 2 ns) and
+essentially flat across the input range (0.928649 / 0.928644 / 0.928625 at
 9 / 12 / 14 V). The `>= 0.85` bound is satisfied for any `PFIX <= 1.07 W`.
 Nothing about switching loss is being verified: at rung 0 there is no switching
 model to verify. The assertion earns its place by pinning the loss BUDGET, and
@@ -264,9 +269,9 @@ it should be re-derived against a real switching model at rung 1.
 
 `startup_overshoot` **measures steady-state ripple, not overshoot.** Probing the
 same expression over 1.20-1.40 ms — a window containing no startup transient,
-since soft-start ends at 600 us — gives 0.0477 % against the assertion's
-0.0477 %. The residual true overshoot is `vout_max_startup 3.32958` against
-`vmax_late 3.32957`, about 0.01 mV. The reported figure is half the
+since soft-start ends at 600 us — gives 0.0466 % against the assertion's
+0.0466 %. The residual true overshoot is `vout_max_startup 3.29754` against
+`vmax_late 3.29753`, about 0.01 mV. The reported figure is half the
 peak-to-peak ripple over the mean. It would report the same number on a
 converter with no soft-start at all.
 
@@ -281,11 +286,11 @@ artifacts. 2 ns is much closer and is not fully converged:
 
 | tmax | vout_pp | il_pp | overshoot_pct | wall |
 |---|---|---|---|---|
-| 40 ns | 7.090 mV | 0.5200 A | 0.1116 % | 0.4 s |
-| 4 ns | 4.528 mV | 0.4894 A | 0.0507 % | 2.9 s |
-| **2 ns (shipped)** | **3.635 mV** | **0.4872 A** | **0.0477 %** | 4.9 s |
-| 1 ns | 3.553 mV | 0.4869 A | 0.0456 % | 11.9 s |
-| 500 ps | 3.546 mV | 0.4858 A | 0.0445 % | 22.1 s |
+| 40 ns | 6.435 mV | 0.5159 A | 0.0964 % | 0.4 s |
+| 4 ns | 3.649 mV | 0.4857 A | 0.0480 % | 3 s |
+| **2 ns (shipped)** | **3.587 mV** | **0.4844 A** | **0.0466 %** | 5 s |
+| 1 ns | 3.548 mV | 0.4837 A | 0.0454 % | 11 s |
+| 500 ps | 3.476 mV | 0.4833 A | 0.0444 % | 24 s |
 
 `vout_pp` is ~2.5% above its converged value at 2 ns and `overshoot_pct` ~7%.
 Because `check-assertions.py` compares `measured:` at the precision it was

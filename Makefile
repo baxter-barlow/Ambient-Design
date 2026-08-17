@@ -131,8 +131,13 @@ policy:
 	# index to HEAD, so it goes silent the moment a defect is committed — which
 	# is how a trailing-whitespace failure landed in this repository while
 	# `make policy` reported clean. CI compares base..head; this compares the
-	# last commit, which is the local equivalent.
-	git diff --check HEAD~1 HEAD 2>/dev/null || git diff --check $$(git rev-list --max-parents=0 HEAD) HEAD
+	# whole branch against the default branch, which is what CI does. HEAD~1
+	# only covered the last commit, so a defect two commits back was invisible
+	# locally and red in CI -- the same index-vs-HEAD miss one commit further
+	# back. Falls back to the root commit on a branch with no merge-base.
+	git diff --check $$(git merge-base HEAD origin/main 2>/dev/null \
+	  || git merge-base HEAD main 2>/dev/null \
+	  || git rev-list --max-parents=0 HEAD) HEAD
 	git diff --check HEAD
 	sh .github/scripts/check-dco.sh $$(git rev-list --max-parents=0 HEAD) HEAD
 
