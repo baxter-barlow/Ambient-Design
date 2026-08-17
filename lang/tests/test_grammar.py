@@ -570,6 +570,37 @@ class Conformance(unittest.TestCase):
                 )
                 self.assertEqual(self._both(source), (True, True))
 
+    def test_a_keyword_cannot_absorb_the_name_that_follows_it(self):
+        """The boundary must hold on the KEYWORD side too.
+
+        The lookahead in rhoform.ebnf guards FREE_NAME, and the test above
+        probes it in the binding position -- where FREE_NAME is viable and
+        longest-match wins, so it can never reach the other direction. Lark's
+        LALR CONTEXTUAL lexer restricts the terminal set per parser state, so
+        wherever a keyword was the only viable terminal it matched a prefix of
+        the following identifier: `moduleM:` parsed identically to `module M:`,
+        and seven more constructs did the same. Every probe here is in a
+        position the existing test structurally cannot occupy.
+        """
+        body = "\n    net N_A:\n        r1.p1\n        r1.p2\n"
+        glued = (
+            "moduleM:" + body,
+            "module M:\n    pinb passive\n",
+            "module M:\n    pina passive 1\n",
+            "partabstract:\n    port p passive\n",
+            "module M:\n    hardwaretest_point tp1\n",
+            "module M:\n    r1 = new " + self.RESISTOR + "(resistance = 1kohm)\n"
+            "    noexclude_from_bom r1\n",
+            "module M:\n    f1 = newrhoform.lib.passive.Resistor\n",
+            "module M:\n    assert A staticfrequency(GND) within 1Hz to 2Hz\n",
+        )
+        for construct in glued:
+            with self.subTest(construct=construct.splitlines()[0]):
+                source = "#pragma rhoform-syntax 0.1\n\n" + construct
+                self.assertFalse(
+                    self._accepts(source),
+                    "a keyword absorbed the identifier that follows it")
+
     def test_a_bound_takes_the_shape_its_keyword_requires(self):
         """`within` needs an interval and `at least` needs a scalar.
 

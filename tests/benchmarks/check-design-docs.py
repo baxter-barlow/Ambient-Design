@@ -198,7 +198,17 @@ def check_case(case_dir, problems, minimum=None):
         # instead of catching drift. Rescaled only when the table says `%` and
         # the recorded value is a fraction, so a genuinely wrong number in
         # either notation still fails.
-        if "%" in cells[-2] and abs(want) <= 1.0 and abs(got) > 1.0:
+        # Rescale ONLY when the assertion declares a unit that says the
+        # recorded value is a fraction. Testing "is a fraction" as `<= 1.0` is
+        # true of any sub-1% percentage, so `overshoot_pct` -- recorded 0.0466
+        # with unit `percent` -- reconciled against a published 4.66%, a clean
+        # 100x error absorbed by the gate whose whole job is stale numbers.
+        declared_unit = str(
+            (match.get("expected") or {}).get("unit")
+            if isinstance(match.get("expected"), dict)
+            else match.get("reported_unit") or "").strip().lower()
+        recorded_is_fraction = declared_unit in ("", "1", "fraction", "ratio")
+        if "%" in cells[-2] and recorded_is_fraction and abs(want) <= 1.0:
             want = want * 100.0
         # Into the DOC's unit: "3.587 mVpp" against a recorded 0.00359 V.
         # The RECORDED value's unit comes from the assertion, not from guessing:

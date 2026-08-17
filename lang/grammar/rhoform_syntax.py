@@ -355,7 +355,24 @@ class Lit(Node):
         self.text = text
 
     def render(self, dialect: str) -> str:
-        return f'"{self.text}"' if dialect == "lark" else f"'{self.text}'"
+        if dialect != "lark":
+            return f"'{self.text}'"
+        # KEYWORDS CARRY THEIR OWN WORD BOUNDARY. An anonymous "module"
+        # literal is matched by Lark's LALR CONTEXTUAL lexer, which restricts
+        # the viable terminal set per parser state -- so in a state where
+        # MODULE is the only candidate, `moduleM` matched the keyword and left
+        # `M`, and `moduleM:` parsed identically to `module M:`. Eight
+        # constructs did this (`pinb passive`, `partabstract:`, `noexclude_
+        # from_bom`, `newrhoform.lib...`, and so on).
+        #
+        # rhoform.ebnf:21 already encodes the boundary on the FREE_NAME side,
+        # and lang/tests/test_grammar.py asserts "the negative lookahead must
+        # end at a word boundary" -- but every probe was in the BINDING
+        # position, where FREE_NAME is viable and longest-match wins, so no
+        # test could reach this. The guard belongs on both sides.
+        if self.text.isidentifier():
+            return f'/{self.text}(?![A-Za-z0-9_])/'
+        return f'"{self.text}"'
 
 
 class Term(Node):
