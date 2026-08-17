@@ -45,6 +45,89 @@ def _interval(value):
     raise ValueError(f"{value!r} is not a two-element interval")
 
 
+def _leaf_numbers(mapping, prefix=""):
+    """Every numeric leaf in `inputs`, keyed by dotted path."""
+    out = {}
+    if isinstance(mapping, dict):
+        for k, v in mapping.items():
+            out.update(_leaf_numbers(v, f"{prefix}{k}." if prefix == "" else f"{prefix}{k}."))
+        return {k.rstrip("."): v for k, v in out.items()} if prefix else out
+    return out
+
+
+def _flatten(value, path, out):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _flatten(v, f"{path}.{k}" if path else k, out)
+    elif isinstance(value, (list, tuple)):
+        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+            out[path] = list(value)
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        out[path] = value
+
+
+def _resolve(inputs, name):
+    flat = {}
+    _flatten(inputs, "", flat)
+    if name not in flat:
+        raise KeyError(f"`inputs` has no numeric key {name!r} (has: {sorted(flat)})")
+    return flat[name]
+
+
+_ALLOWED = None
+
+
+def evaluate_formula(expr, inputs):
+    """Arithmetic over `inputs` keys only. No calls, no attributes, no names
+    beyond the input keys themselves."""
+    import ast
+    flat = {}
+    _flatten(inputs, "", flat)
+    tree = ast.parse(expr, mode="eval")
+    def walk(node):
+        if isinstance(node, ast.Expression):
+            return walk(node.body)
+        if isinstance(node, ast.BinOp) and isinstance(
+                node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)):
+            a, b = walk(node.left), walk(node.right)
+            # Branch, do not build a dict: a dict literal evaluates ALL FOUR
+            # operations, so `a ** b` overflowed on a plain multiply and the
+            # gate crashed instead of reporting the finding it had found.
+            if isinstance(node.op, ast.Add):
+                return a + b
+            if isinstance(node.op, ast.Sub):
+                return a - b
+            if isinstance(node.op, ast.Mult):
+                return a * b
+            if isinstance(node.op, ast.Div):
+                return a / b
+            return a ** b
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            v = walk(node.operand)
+            return v if isinstance(node.op, ast.UAdd) else -v
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.Name):
+            if node.id not in flat:
+                raise ValueError(f"formula names {node.id!r}, which is not an input key")
+            return float(flat[node.id])
+        if isinstance(node, ast.Attribute):
+            parts = []
+            cur = node
+            while isinstance(cur, ast.Attribute):
+                parts.append(cur.attr)
+                cur = cur.value
+            if not isinstance(cur, ast.Name):
+                raise ValueError("unsupported expression")
+            parts.append(cur.id)
+            key = ".".join(reversed(parts))
+            if key not in flat:
+                raise ValueError(f"formula names {key!r}, which is not an input key")
+            return float(flat[key])
+        raise ValueError(f"unsupported expression element {type(node).__name__}")
+    return walk(tree)
+
+
 def evaluate(check, inputs):
     """Return (holds, explanation) for one declared relation."""
     if check == "interval-within":
@@ -61,8 +144,12 @@ def evaluate(check, inputs):
         parts = [float(v) for v in inputs["parts"]]
         limit = float(inputs["limit"])
         return sum(parts) <= limit, f"sum({parts}) = {sum(parts):.6g} <= {limit}"
+    if check == "at-least-all":
+        have = float(inputs["have"])
+        needs = [float(v) for v in inputs["needs"]]
+        return all(have >= n for n in needs), f"{have} >= max({needs})"
     raise ValueError(
-        f"unknown check {check!r}; declare one of interval-within, at-least, "
+        f"unknown check {check!r}; declare one of interval-within, at-least, at-least-all, "
         "at-most, sum-at-most, or add it here with its arithmetic"
     )
 
@@ -130,35 +217,102 @@ def check_spec(spec, label, problems, minimum=None):
             f"floor of {floor}. Lowering the floor is a deliberate "
             "decision; drifting under it is not."
         )
-    # `inputs` is the field a reader edits. If it disagrees with `check_inputs`
-    # on a value they share, the gate is re-deriving from a copy the reader
-    # never sees — which is how the docstring's own attack kept passing.
+    # THE RECONCILIATION, rebuilt. It used to compare SETS OF NUMBERS between
+    # `check_inputs` and `inputs`, which means (i) swapping the operands was
+    # invisible -- one auditor asserted a 0.001 A LDO supplies a 99 A rail with
+    # the gate green -- and (ii) it only required check_inputs SUBSET inputs, so
+    # every input the operands did not happen to use could be set to physical
+    # nonsense. Now each operand names the input key it comes from, and every
+    # numeric input must be either used or declared ungated with a reason.
     for assertion in assertions:
-        declared = assertion.get("check_inputs") or {}
+        name = assertion.get("id") or assertion.get("name") or "<unnamed>"
+        declared = assertion.get("check_inputs")
+        if not declared:
+            continue
         recorded = assertion.get("inputs")
         if not isinstance(recorded, dict):
-            recorded = {}
-        # Flatten LISTS too. `interval-within` takes two of them and
-        # `sum-at-most` one, so filtering them out left A1 and A8 unreconciled —
-        # their `inputs` could be made absurd while `check_inputs` stayed put.
-        def _numbers(mapping):
-            out = set()
-            for value in mapping.values():
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    out.add(value)
-                elif isinstance(value, (list, tuple)):
-                    out.update(v for v in value
-                               if isinstance(v, (int, float)) and not isinstance(v, bool))
-            return out
-        shared, listed = _numbers(declared), _numbers(recorded)
-        missing = shared - listed
-        if declared and recorded and missing:
             problems.append(
-                f"{label}/{assertion.get('id', '?')}: check_inputs uses "
-                f"{sorted(missing)}, which appear nowhere in the `inputs` block "
-                "a reader edits. The two must agree, or the gate re-derives the "
-                "verdict from a copy nobody maintains."
-            )
+                f"{label}/{name}: has `check_inputs` but no `inputs` mapping to "
+                "reconcile them against.")
+            continue
+        origin = assertion.get("check_inputs_from")
+        formulas = assertion.get("check_inputs_derived") or {}
+        if not isinstance(origin, dict):
+            problems.append(
+                f"{label}/{name}: declares no `check_inputs_from`, so its "
+                "operands are a copy of the inputs that nothing reconciles. "
+                "Name the `inputs` key each operand comes from.")
+            continue
+        used = set()
+        for operand, value in declared.items():
+            if operand in formulas:
+                try:
+                    got = evaluate_formula(formulas[operand], recorded)
+                except (ValueError, KeyError, SyntaxError, ArithmeticError) as exc:
+                    problems.append(f"{label}/{name}: {operand}: {exc}")
+                    continue
+                import ast as _ast
+                for node in _ast.walk(_ast.parse(formulas[operand], mode="eval")):
+                    if isinstance(node, _ast.Name):
+                        used.add(node.id)
+                    elif isinstance(node, _ast.Attribute):
+                        parts, cur = [], node
+                        while isinstance(cur, _ast.Attribute):
+                            parts.append(cur.attr); cur = cur.value
+                        if isinstance(cur, _ast.Name):
+                            parts.append(cur.id); used.add(".".join(reversed(parts)))
+                if abs(got - float(value)) > abs(float(value)) * 1e-3 + 1e-12:
+                    problems.append(
+                        f"{label}/{name}: operand {operand}={value} but its own "
+                        f"formula over `inputs` gives {got:.6g}. The gated number "
+                        "is not the number the inputs produce.")
+                continue
+            if operand not in origin:
+                problems.append(
+                    f"{label}/{name}: operand {operand!r} is not in "
+                    "`check_inputs_from`, so nothing ties it to an input.")
+                continue
+            keys = origin[operand]
+            keys = keys if isinstance(keys, list) else [keys]
+            used.update(keys)
+            try:
+                resolved = [_resolve(recorded, k) for k in keys]
+            except KeyError as exc:
+                problems.append(f"{label}/{name}: {operand}: {exc}")
+                continue
+            got = resolved[0] if len(resolved) == 1 else resolved
+            if isinstance(value, list):
+                flatv = [float(v) for v in value]
+                flatg = [float(v) for v in (got if isinstance(got, list) else [got])]
+                if len(flatg) == 1 and isinstance(resolved[0], list):
+                    flatg = [float(v) for v in resolved[0]]
+                ok = len(flatv) == len(flatg) and all(
+                    abs(a - b) <= abs(b) * 1e-9 + 1e-15 for a, b in zip(flatv, flatg))
+            else:
+                ok = (not isinstance(got, list)
+                      and abs(float(value) - float(got)) <= abs(float(got)) * 1e-9 + 1e-15)
+            if not ok:
+                problems.append(
+                    f"{label}/{name}: operand {operand}={value!r} does not equal "
+                    f"`inputs.{'+'.join(map(str, keys))}`={got!r}. The gate is "
+                    "re-deriving the verdict from a copy nobody maintains.")
+        flat = {}
+        _flatten(recorded, "", flat)
+        ungated = assertion.get("inputs_not_gated") or {}
+        orphans = sorted(set(flat) - used - set(ungated))
+        if orphans:
+            problems.append(
+                f"{label}/{name}: numeric input(s) {orphans} feed no operand and "
+                "are not listed in `inputs_not_gated`. An input nothing reads can "
+                "be set to anything, which is how a 500 C ambient passed.")
+        for key, reason in ungated.items():
+            if key not in flat:
+                problems.append(
+                    f"{label}/{name}: `inputs_not_gated` names {key!r}, which is "
+                    "not a numeric input.")
+            elif not str(reason).strip():
+                problems.append(
+                    f"{label}/{name}: `inputs_not_gated[{key}]` states no reason.")
     return checked
 
 
@@ -179,6 +333,14 @@ def self_test():
     cases = []
 
     def probe(assertion):
+        # The arithmetic probes predate `check_inputs_from`; they exist to test
+        # the RELATIONS, so the reconciliation wiring is synthesised for them
+        # and tested separately by the three cases at the end of this list.
+        if "check_inputs" in assertion and "inputs" not in assertion:
+            ci = assertion["check_inputs"]
+            assertion = dict(assertion,
+                             inputs={f"in_{k}": v for k, v in ci.items()},
+                             check_inputs_from={k: f"in_{k}" for k in ci})
         problems = []
         check_spec({"assertions": [assertion]}, "probe", problems, minimum=0)
         return problems
@@ -215,6 +377,36 @@ def self_test():
         {"id": "a", "check": "at-least",
          "check_inputs": {"have": 1.0, "need": 2.0}, "status": "FAIL"})))
 
+    # THE RECONCILIATION CONTRACT itself, which the arithmetic probes above
+    # synthesise past. These are the two attacks both round-5 auditors landed.
+    cases.append(("an operand tied to no input key is caught", any(
+        "check_inputs_from" in p for p in probe(
+            {"id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
+             "inputs": {"rating_a": 1.0, "need_a": 0.5}, "status": "PASS"}))))
+    cases.append(("swapped operands are caught even though the numbers all appear", any(
+        "does not equal" in p for p in probe(
+            {"id": "a", "check": "at-least", "check_inputs": {"have": 99.0, "need": 0.001},
+             "check_inputs_from": {"have": "rating_a", "need": "need_a"},
+             "inputs": {"rating_a": 0.001, "need_a": 99.0}, "status": "PASS"}))))
+    cases.append(("an input feeding no operand is caught", any(
+        "feed no operand" in p for p in probe(
+            {"id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
+             "check_inputs_from": {"have": "rating_a", "need": "need_a"},
+             "inputs": {"rating_a": 1.0, "need_a": 0.5, "ta_c": 500}, "status": "PASS"}))))
+    cases.append(("a derived operand that the inputs do not produce is caught", any(
+        "not the number the inputs produce" in p for p in probe(
+            {"id": "a", "check": "at-least", "check_inputs": {"have": 3.8, "need": 3.5618},
+             "check_inputs_from": {"have": "v_in"},
+             "check_inputs_derived": {"need": "v_out + k * i"},
+             "inputs": {"v_in": 3.8, "v_out": 99.0, "k": 0.5, "i": 0.3916},
+             "status": "PASS"}))))
+    cases.append(("an ungated input with no stated reason is caught", any(
+        "states no reason" in p for p in probe(
+            {"id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
+             "check_inputs_from": {"have": "rating_a", "need": "need_a"},
+             "inputs": {"rating_a": 1.0, "need_a": 0.5, "spare": 1.0},
+             "inputs_not_gated": {"spare": ""}, "status": "PASS"}))))
+
     # WIRING, over the real entry point. Eight assertions because main() applies
     # MINIMUM_MECHANISED, and a wiring case that dodged the floor would not be
     # driving the shipped path.
@@ -223,7 +415,9 @@ def self_test():
     def drive(have, need):
         body = "assertions:\n" + "".join(
             f"  - id: a{i}\n    check: at-least\n"
-            f"    check_inputs: {{have: {have}, need: {need}}}\n    status: PASS\n"
+            f"    check_inputs: {{have: {have}, need: {need}}}\n"
+            f"    check_inputs_from: {{have: h, need: n}}\n"
+            f"    inputs: {{h: {have}, n: {need}}}\n    status: PASS\n"
             for i in range(8))
         with tempfile.TemporaryDirectory() as tmp:
             case = Path(tmp)
