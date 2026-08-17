@@ -1,4 +1,27 @@
 # Rhoform benchmark (a): dynamic assertions for the 9V 555 LED blinker
+#
+# THE WINDOWS BELOW ARE THE **TYPICAL** MODEL, and they are derived
+# mechanically by tests/benchmarks/derive-555-windows.py from the values
+# parts/examples/ti-ne555p.part.json transcribes — not by hand. Four hand
+# derivations produced four different wrong answers, each omitting a different
+# term, so the arithmetic now lives in a script that `make sim` re-runs.
+#
+# Typical means: passive tolerance and timing-pin bias current, at NOMINAL
+# comparator levels. That is what a real board with a typical part does and
+# what the rung-0 macromodel measures — its B-sources implement exactly the
+# nominal divider and draw zero input current.
+#
+# The GUARANTEED window, over every corner the part record permits including
+# the comparator spread, is far wider: duty 38.5-70.5 %, period 0.708-1.639 s,
+# frequency 0.610-1.412 Hz. The NE555's threshold levels are specified to about
+# +/-26 % of nominal, and duty is sensitive to them. That range is a fact about
+# the part, and it is deliberately NOT gated: the deck has no comparator
+# tolerance and no bias current, so an assertion against those corners could
+# never fail — and a window nothing can fail is not an assertion, which is a
+# defect this repository has now found in several of its own gates.
+#
+# Conflating the two is the error four revisions kept making. A narrow window
+# here is a REGRESSION check on the deck, not a claim about the part.
 # Measurement kinds use the V2 vocabulary; the two headline assertions
 # (frequency, duty) are each backed by ONE .meas TRIG/TARG on v(out).
 # settle window: 2 s (V3 ramped-supply fixture; first high phase ~0.86 s

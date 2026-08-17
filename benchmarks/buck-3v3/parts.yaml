@@ -70,10 +70,15 @@ parts:
 
   - ref: R1
     role: feedback_divider_top
-    value: 31.6 kOhm, 1%
+    value: 31.2 kOhm, 1%
     package: "0402"
-    mpn: Yageo RC0402FR-0731K6L
-    notes: Vout = 0.8*(1 + 31.6k/10k) = 3.328 V (+0.85% of nominal).
+    mpn: Yageo RC0402FR-0731K2L
+    notes: >-
+      Vout = 0.8*(1 + 31.2k/10k) = 3.296 V (-0.12% of nominal). Was 31.6k,
+      centring at +0.85%, which put the worst-case error stack (+/-1% reference,
+      +/-1% on both resistors) at +3.42% and outside the design's own +/-3%
+      window. Centring the divider is the fix; widening the window would have
+      been asserting a spec the design does not meet.
 
   - ref: R2
     role: feedback_divider_bottom

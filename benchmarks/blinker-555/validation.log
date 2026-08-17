@@ -73,14 +73,14 @@ i_led_on            =  9.25678e-03 at=  2.34169e+00
 v_out_high          =  7.19860e+00 at=  2.34169e+00
 
 
-Total analysis time (seconds) = 0.226998
+Total analysis time (seconds) = 0.232177
 
-Total elapsed time (seconds) = 0.233 
+Total elapsed time (seconds) = 0.249 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available =  467.328 MB.
-Maximum ngspice program size =   11.250 MB.
-Current ngspice program size =   11.250 MB.
+DRAM currently available =  111.562 MB.
+Maximum ngspice program size =   11.266 MB.
+Current ngspice program size =   11.266 MB.
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===

@@ -170,7 +170,7 @@ waveform losses); the design does not rely on behavioral optimism to pass.
 
 Divider from the LM25145's 0.8 V reference:
 
-    Vout = Vref x (1 + R1/R2) = 0.8 x (1 + 31.6k/10k) = 3.328 V  (+0.85%)
+    Vout = Vref x (1 + R1/R2) = 0.8 x (1 + 31.2k/10k) = 3.296 V  (-0.12%)
 
 E96 values; 80 uA divider current. Worst-case DC error stack: +/-1% ref,
 +/-1% resistors x2 -> ~+/-2.2%, inside the +/-3% window with the +0.85%
@@ -299,3 +299,23 @@ the timestep for a real reason should re-record the five values and say so.
 None of the engineering conclusions move across the sweep: `Ipk` 2.26 A,
 saturation margin 1.6x, ripple margin 13.7x, efficiency 0.9295 (timestep
 invariant), settling 16.9 us against a 500 us budget.
+
+## Output-voltage error stack
+
+`Vout = Vref x (1 + R1/R2)`, and the terms are the LM25145's +/-1% reference and
++/-1% on both divider resistors. With the original 31.6k/10k the nominal was
+3.328 V, already +0.85% before any tolerance, and the worst case reached
+**3.4129 V — outside the design's own [3.201, 3.399] window**, i.e. the
+converter did not meet the +/-3% specification it asserts.
+
+| divider | nominal | worst case | fits +/-3% |
+|---|---|---|---|
+| 31.6k / 10k | 3.328 V (+0.85%) | 3.2452 .. 3.4129 V | **no** |
+| **31.2k / 10k** | **3.296 V (-0.12%)** | **3.2141 .. 3.3799 V** | yes |
+
+Centring the divider is the fix. Widening the window to admit 3.413 V would
+have been asserting a specification the design does not meet, which is the same
+move as fitting an expected value to a bug.
+
+The simulation never showed this: it runs at nominal, where both dividers are
+comfortably inside. This is a tolerance defect, and the deck has no tolerance.
