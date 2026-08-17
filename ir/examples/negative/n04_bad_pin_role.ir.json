@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: port /timer.vcc declares role \"power\", which is not a member of the T2 pin-role lattice. The ERC lattice is closed (power_in / power_out / passive / bidirectional / open_drain / open_collector / tri_state / input / output / nc); an unknown role would silently disable direction checking on that pin.",
+  "x_negative_control": "REJECTED at /instances/1/ports/0/role: port /timer.vcc declares role \"power\", which is not a member of the T2 pin-role lattice. The ERC lattice is closed (power_in / power_out / passive / bidirectional / open_drain / open_collector / tri_state / input / output / nc); an unknown role would silently disable direction checking on that pin.",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

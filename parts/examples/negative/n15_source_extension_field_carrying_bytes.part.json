@@ -47,8 +47,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Source has NO ^x_ extension point, unlike every other object in the schema. With one, x_pdf could carry a base64 datasheet and still validate, so the no-redistribution guarantee would be enforced by nobody. Review found exactly this hole; this fixture is what keeps it shut."
-  }
+  "x_negative_control": "REJECTED at /sources/0: Source has NO ^x_ extension point, unlike every other object in the schema. With one, x_pdf could carry a base64 datasheet and still validate, so the no-redistribution guarantee would be enforced by nobody. Review found exactly this hole; this fixture is what keeps it shut."
 }

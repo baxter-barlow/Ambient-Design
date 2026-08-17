@@ -2104,8 +2104,5 @@
     "n_vocab": null,
     "name": "stub-whitespace"
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "'flip_criterion_not_met' asserts adequate power, meaningful only against an effect declared before the run."
-  }
+  "x_negative_control": "REJECTED at /flip_criterion/verdict: 'flip_criterion_not_met' asserts adequate power, meaningful only against an effect declared before the run."
 }

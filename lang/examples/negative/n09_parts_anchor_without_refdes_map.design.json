@@ -45,5 +45,6 @@
     "kind": "parts-yaml",
     "path": "benchmarks/x/parts.yaml"
   },
-  "notes": "EXPECTED-INVALID control: a BOM anchor with no refdes map cannot say which line covers which instance."
+  "notes": "EXPECTED-INVALID control: a BOM anchor with no refdes map cannot say which line covers which instance.",
+  "x_negative_control": "REJECTED at /anchor: parts anchor without refdes map"
 }

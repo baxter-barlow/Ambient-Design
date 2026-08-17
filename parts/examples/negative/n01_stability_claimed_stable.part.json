@@ -42,8 +42,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "stability is const 'unstable' at schema_version 0. A producer must not be able to assert a stability guarantee that v1.0 does not make; promotion happens at 1.x per open question 8-Q3."
-  }
+  "x_negative_control": "REJECTED at /stability: stability is const 'unstable' at schema_version 0. A producer must not be able to assert a stability guarantee that v1.0 does not make; promotion happens at 1.x per open question 8-Q3."
 }

@@ -46,8 +46,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "retrieved_at must be UTC with a literal trailing Z. A non-UTC offset is rejected rather than silently normalized, so records from different machines compare directly. This fixture also proves the constraint is REAL: it was previously expressed as format:'date-time', which neither Python jsonschema nor ajv enforces by default, and so enforced nothing."
-  }
+  "x_negative_control": "REJECTED at /sources/0/retrieved_at: retrieved_at must be UTC with a literal trailing Z. A non-UTC offset is rejected rather than silently normalized, so records from different machines compare directly. This fixture also proves the constraint is REAL: it was previously expressed as format:'date-time', which neither Python jsonschema nor ajv enforces by default, and so enforced nothing."
 }

@@ -51,8 +51,5 @@
     }
   ],
   "shared_pins": [],
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "shared_pins has minItems 1. An empty array is not 'no shared pins' - it is an authoring accident; omitting the field is how a part with no shared pins is expressed."
-  }
+  "x_negative_control": "REJECTED at /shared_pins: shared_pins has minItems 1. An empty array is not 'no shared pins' - it is an authoring accident; omitting the field is how a part with no shared pins is expressed."
 }

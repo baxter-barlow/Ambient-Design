@@ -1931,15 +1931,18 @@
   },
   "authoritative": false,
   "flip_criterion": {
-    "rhoform_rate": 0.8,
     "alpha": 0.05,
     "baseline_arm": "starlark_baseline",
     "baseline_rate": 0.6,
     "interpretation": "The run lacked power to distinguish the arms. This is NOT evidence of equivalence; add trials or record the question as unanswered.",
+    "minimum_effect_of_interest": null,
     "p_value": 1.0,
     "paired": true,
+    "power_against_declared_effect": null,
+    "power_against_observed_effect": 0.001110000311551918,
     "power_against_reference_effect": 0.007383637700683594,
     "primary_arm": "grammar_a",
+    "rhoform_rate": 0.8,
     "test": "mcnemar_exact_one_sided",
     "verdict": "inconclusive"
   },
@@ -1978,8 +1981,5 @@
     "n_vocab": null,
     "name": "stub-whitespace"
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "AC5's repair-iteration budget has two defensible readings that differ by about 33% in generosity. Only the two named readings are recordable, so numbers taken under different readings can never be silently compared."
-  }
+  "x_negative_control": "REJECTED at /arms/grammar_a/config/iteration_semantics: AC5's repair-iteration budget has two defensible readings that differ by about 33% in generosity. Only the two named readings are recordable, so numbers taken under different readings can never be silently compared."
 }

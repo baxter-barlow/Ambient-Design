@@ -2101,8 +2101,5 @@
     "n_vocab": null,
     "name": "stub-whitespace"
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "A stub tokenizer is non-gating by construction and an authoritative record cannot rest on a replayed model or gate."
-  }
+  "x_negative_control": "REJECTED at /gate/kind + /model/kind + /tokenizer/gating: A stub tokenizer is non-gating by construction and an authoritative record cannot rest on a replayed model or gate."
 }

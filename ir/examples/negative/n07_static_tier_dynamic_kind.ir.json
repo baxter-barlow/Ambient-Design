@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: assertion /assert_duty is tier \"static\" but measures duty_cycle, a dynamic-only V2 kind with no interval-arithmetic rule. Without this constraint the assertion would look checked while no static evaluator can produce a value for it. (tier \"static\" + measurement \"power_avg\" is the valid counterpart.)",
+  "x_negative_control": "REJECTED at /assertions/0/measurement: assertion /assert_duty is tier \"static\" but measures duty_cycle, a dynamic-only V2 kind with no interval-arithmetic rule. Without this constraint the assertion would look checked while no static evaluator can produce a value for it. (tier \"static\" + measurement \"power_avg\" is the valid counterpart.)",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "Blinker_555",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -41,5 +45,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: corpus keys are kebab-case so report output and file names agree."
+  "notes": "EXPECTED-INVALID control: corpus keys are kebab-case so report output and file names agree.",
+  "x_negative_control": "REJECTED at /design_id: design id not kebab case"
 }

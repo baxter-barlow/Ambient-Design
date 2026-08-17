@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: assertion /assert_freq declares bounds with a unit but neither min nor max, i.e. an assertion that can never fail. AssertionBounds requires at least one of min/max (anyOf).",
+  "x_negative_control": "REJECTED at /assertions/0/bounds: assertion /assert_freq declares bounds with a unit but neither min nor max, i.e. an assertion that can never fail. AssertionBounds requires at least one of min/max (anyOf).",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

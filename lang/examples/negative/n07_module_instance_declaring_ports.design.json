@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -52,5 +56,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: a module instance's interface is its definition's, and repeating it lets the two disagree."
+  "notes": "EXPECTED-INVALID control: a module instance's interface is its definition's, and repeating it lets the two disagree.",
+  "x_negative_control": "REJECTED at /modules/0/instances/1: module instance declaring ports"
 }

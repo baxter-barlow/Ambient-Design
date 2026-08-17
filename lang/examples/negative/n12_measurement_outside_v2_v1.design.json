@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -53,5 +57,6 @@
       }
     }
   ],
-  "notes": "EXPECTED-INVALID control: the V2 v1 vocabulary is closed; widening it is an IR version bump, not a fixture edit."
+  "notes": "EXPECTED-INVALID control: the V2 v1 vocabulary is closed; widening it is an IR version bump, not a fixture edit.",
+  "x_negative_control": "REJECTED at /assertions/0/measurement: measurement outside v2 v1"
 }

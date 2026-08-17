@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: /indicator is kind \"module\" but carries a part binding. Modules are hierarchical scopes, not hardware; only kind=component may bind a part (D1 reference-only binding).",
+  "x_negative_control": "REJECTED at /instances/1: /indicator is kind \"module\" but carries a part binding. Modules are hierarchical scopes, not hardware; only kind=component may bind a part (D1 reference-only binding).",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

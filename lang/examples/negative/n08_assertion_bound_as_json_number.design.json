@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -54,5 +58,6 @@
       }
     }
   ],
-  "notes": "EXPECTED-INVALID control: an assertion window through an IEEE double is no longer the window that was written."
+  "notes": "EXPECTED-INVALID control: an assertion window through an IEEE double is no longer the window that was written.",
+  "x_negative_control": "REJECTED at /assertions/0/bounds/max + /assertions/0/bounds/min: assertion bound as json number"
 }

@@ -275,14 +275,14 @@ NON_GOALS = (
     "kicad-import",
 )
 
-# V2's v1 dynamic vocabulary, and V2's deferred list. The split is the whole
-# point of having two dynamic reason codes: one says "v1 catches this, in the
-# other tier", the other says "v1 catches this nowhere".
-V2_VOCABULARY = (
-    "operating-point", "ripple", "oscillation-frequency", "oscillation-period",
-    "duty-cycle", "gain", "bandwidth", "rise-time", "fall-time", "prop-delay",
-    "settling-time", "overshoot", "power-avg", "power-rms", "efficiency",
-)
+# V2's DEFERRED list. Its v1 counterpart is not here: that one is the frozen
+# grammar's `measurement_kind` and is resolved live in `build_resolvers`. The
+# split is the whole point of having two dynamic reason codes: one says "v1
+# catches this, in the other tier", the other says "v1 catches this nowhere".
+#
+# This half stays transcribed because a deferred kind is by definition absent
+# from every frozen artifact — there is nothing in the repository to resolve it
+# against, which is exactly why it is reported as transcribed on every run.
 V2_DEFERRED = ("phase-margin", "gain-margin", "soa", "thd-fft", "monte-carlo", "corners")
 
 # Requirement ids that may be cited. Deliberately the ids only: this gate
@@ -394,6 +394,21 @@ def build_resolvers(schema, grammar):
     keywords = set(grammar.KEYWORDS) if grammar else set()
     vocabularies = grammar.CLOSED_VOCABULARIES if grammar else {}
 
+    # V2's v1 vocabulary is NOT transcribed: it is the frozen grammar's
+    # `measurement_kind`, in the module already imported two lines up, spelled
+    # with hyphens here because that is how the citations read.
+    #
+    # It used to be a hand-copied tuple justified by "the memo is in Notion and
+    # this gate cannot fetch it offline" — true of the memo, false of the
+    # vocabulary, which is in this repository and frozen. The copy had drifted:
+    # it carried `oscillation-frequency`/`oscillation-period` where the grammar
+    # says `frequency`/`period`, so the gate ACCEPTED two names no artifact
+    # contains and would have REJECTED the two it does. Both spellings were
+    # cited by real verdicts.
+    v2_vocabulary = tuple(
+        kind.replace("_", "-") for kind in vocabularies.get("measurement_kind", ())
+    )
+
     def vocab(token: str) -> bool:
         name, _, member = token.partition(".")
         members = vocabularies.get(name)
@@ -410,7 +425,7 @@ def build_resolvers(schema, grammar):
         "ga": (lambda t: t in GA_RULES or t in GA_DIAGNOSTICS, "transcribed"),
         "ga-excluded": (lambda t: t in GA_EXCLUSIONS, "transcribed"),
         "req": (lambda t: t in REQUIREMENTS, "transcribed"),
-        "v2": (lambda t: t in V2_VOCABULARY, "transcribed"),
+        "v2": (lambda t: t in v2_vocabulary, "live"),
         "v2-deferred": (lambda t: t in V2_DEFERRED, "transcribed"),
         "nongoal": (lambda t: t in NON_GOALS, "transcribed"),
     }
@@ -430,14 +445,29 @@ def decision_hash(entries) -> str:
     indistinguishable from a reclassification, and people would learn to update
     the hash without reading the diff.
 
-    Sorted so file ordering is not load-bearing. Tab-joined AND newline-joined,
-    which only forbids forged record boundaries because `check_entry` pins ids
-    to ID_PATTERN — an id free to contain a tab or a newline could otherwise
-    encode two records as one and change the denominator at a fixed digest.
+    Sorted so file ordering is not load-bearing, and JSON-encoded so no field
+    VALUE can forge a record boundary.
+
+    The encoding is the security property, and the previous one did not have
+    it. Records were tab-joined and newline-joined, defended by this docstring
+    on the grounds that "`check_entry` pins ids to ID_PATTERN" — which is true
+    and irrelevant. The delimiters were reachable from every OTHER field, and
+    on an in-scope entry `compound`, `gap_class`, `missing_path`, `carried_at`,
+    `residual_blocker`, `residual_kind` and `gap_class_also` were unvalidated
+    free text that still fed the tuple. So: delete an in-scope entry from both
+    files, drop `corpus_entry_count`, and append the deleted record's line to
+    the surviving entry's `compound` after a newline. The digest is unchanged,
+    the gate exits 0, and the AC2 denominator has quietly gone from 22 to 21 —
+    which is exactly the move this hash exists to prevent, by the issue that
+    has the motive.
+    `json.dumps` escapes `\\n` and `\\t`, so a value cannot contain a
+    delimiter; the list encoding makes field count structural rather than
+    positional. `check_entry` now also refuses out-of-scope-only fields on an
+    in-scope entry, so the forged text has nowhere to live either.
     """
     lines = sorted(
-        "\t".join(
-            (
+        json.dumps(
+            [
                 e["id"],
                 e["verdict"],
                 e.get("family") or e.get("reason") or "",
@@ -448,9 +478,11 @@ def decision_hash(entries) -> str:
                 e.get("carried_at") or "",
                 e.get("residual_blocker") or "",
                 e.get("residual_kind") or "",
-                ",".join(e.get("gap_class_also") or ()),
+                sorted(e.get("gap_class_also") or ()),
                 e.get("compound") or "",
-            )
+            ],
+            ensure_ascii=True,
+            sort_keys=True,
         )
         for e in entries
     )
@@ -681,6 +713,18 @@ def check_entry(entry, resolvers, schema, problems):
         if entry.get("missing_fact") and reason != "d3-gap":
             problems.append(f"{entry_id}: `missing_fact` only belongs on a D3 entry")
     else:
+        # Out-of-scope-only fields on an in-scope entry. Symmetrical with the
+        # in-scope-only sweep above, and missing until the audit that found
+        # `decision_hash` forgeable: these seven fed the digest while nothing
+        # constrained them, so they were the free text the forged record
+        # boundary was written into. The encoding fix makes the injection
+        # inert; this makes the fields unwritable in the first place.
+        for stray in ("gap_class", "gap_class_also", "missing_path", "carried_at",
+                      "residual_blocker", "residual_kind", "compound", "reason"):
+            if entry.get(stray):
+                problems.append(
+                    f"{entry_id}: `{stray}` belongs only on an out-of-scope entry"
+                )
         at_risk = entry.get("at_risk")
         if at_risk is not None and not str(at_risk).strip():
             problems.append(f"{entry_id}: `at_risk` is present but empty")
@@ -1274,6 +1318,31 @@ def self_test() -> int:
         moved = [dict(a[0]), {**a[1], field: value}]
         checks.append((f"changing {field} moves decision_hash",
                        decision_hash(a) != decision_hash(moved)))
+
+    # The ENCODING, not just the field set. A delimiter reachable from a field
+    # value lets one record forge another's boundary: with tab/newline joining,
+    # appending "\n" + a deleted record's line to a surviving entry's free text
+    # reproduced the deleted record at an unchanged digest, dropping the AC2
+    # denominator from 22 to 21 with the gate green. JSON escapes both
+    # delimiters, so the forged text can only ever be part of one field.
+    victim = {"id": "BUG-0019", "verdict": "in-scope", "family": "erc-pin-role"}
+    survivor = {"id": "BUG-0018", "verdict": "in-scope", "family": "erc-pin-role"}
+    forged = [{**survivor, "compound": "\n" + json.dumps(
+        [victim["id"], victim["verdict"], victim["family"],
+         "", "", "", "", "", "", "", [], ""])}]
+    checks.append((
+        "a field value cannot forge a record boundary in decision_hash",
+        decision_hash([victim, survivor]) != decision_hash(forged),
+    ))
+
+    # And the field is unwritable in the first place, which is the other half.
+    stray_problems: list[str] = []
+    check_entry({**survivor, "cites": ["d3:pins[].role"], "compound": "x"},
+                {"d3": (lambda _t: True, "live")}, None, stray_problems)
+    checks.append((
+        "an out-of-scope-only field on an in-scope entry is rejected",
+        any("belongs only on an out-of-scope entry" in p for p in stray_problems),
+    ))
 
     # And the published-summary contract: the block must be derived, so a
     # count that no longer matches the data must not survive a round trip.

@@ -40,7 +40,9 @@ from grammar.rhoform_syntax import (  # noqa: E402
     KEYWORDS,
     LEXER_QUANTITY,
     PRAGMA_TEXT,
+    RESERVED_FUTURE,
     RULES,
+    SYNTAX_VERSION,
     TERMINALS,
     Alt,
     Lit,
@@ -280,6 +282,45 @@ class Anchoring(unittest.TestCase):
             with self.subTest(vocabulary=kind):
                 self.assertEqual(set(words) & set(KEYWORDS), set())
 
+    def test_reserved_future_words_are_not_keywords_and_not_vocabulary(self):
+        """The two tuples must stay disjoint, and neither may eat a role name.
+
+        `RESERVED_FUTURE` exists only to keep FREE_NAME from binding a word v1
+        needs. If one ever became a real literal it belongs in KEYWORDS, and
+        `test_every_literal_in_the_tree_is_a_declared_keyword` would say so.
+        """
+        self.assertEqual(set(RESERVED_FUTURE) & set(KEYWORDS), set())
+        for kind, words in CLOSED_VOCABULARIES.items():
+            with self.subTest(vocabulary=kind):
+                self.assertEqual(set(words) & set(RESERVED_FUTURE), set())
+
+    def test_every_declared_terminal_reaches_both_artifacts(self):
+        """A terminal in TERMINALS must appear in the EBNF *and* the Lark.
+
+        `emit_lark` used to hand-write its terminal list, so the Lark artifact
+        carried its own SET rather than the declared one: adding INTEGER put it
+        in the EBNF only, and the sole symptom was Lark refusing to build.
+        Regenerating both from TERMINALS is the fix; this is what holds it.
+        """
+        ebnf, lark = rhoform_syntax.emit_ebnf(), rhoform_syntax.emit_lark()
+        for name in rhoform_syntax.TERMINALS:
+            with self.subTest(terminal=name):
+                self.assertRegex(ebnf, rf"(?m)^{name} ::= ")
+                self.assertRegex(lark, rf"(?m)^{name}(\.\d+)?: ")
+
+    def test_the_pragma_terminal_is_exactly_the_declared_pragma(self):
+        """L8's header has one legal spelling and the terminal generates it.
+
+        Held so `SYNTAX_VERSION`/`PRAGMA_TEXT` stay load-bearing: the terminal
+        was once `\\#pragma[ -~]*`, which accepted any version and any other
+        language's pragma, and the constants were read only to interpolate a
+        comment.
+        """
+        self.assertEqual(
+            rhoform_syntax.TERMINALS["PRAGMA"], re.escape(PRAGMA_TEXT)
+        )
+        self.assertIn(SYNTAX_VERSION, PRAGMA_TEXT)
+
 
 @unittest.skipIf(
     not conformance.GRAMMAR_PATH.exists(), "the grammar artifact is missing"
@@ -440,6 +481,84 @@ class Conformance(unittest.TestCase):
                         self._accepts(source),
                         f"{word!r} is a keyword but binds as a name here",
                     )
+
+    def test_a_reserved_future_word_is_not_bindable(self):
+        """v1's words are unusable as names NOW, so adding them is not breaking.
+
+        This is the one place the frozen grammar is deliberately STRICTER than
+        the prototype, which happily binds all eight. E1 forbids a breaking
+        syntax change without a deterministic auto-migrator, and reserving a
+        word after designs exist is exactly that; reserving it while the only
+        v0.1 sources are this repo's examples costs nothing.
+        """
+        for word in RESERVED_FUTURE:
+            for body in (
+                f"module {word}:\n    port p passive\n",
+                f"    net {word}:\n        p\n",
+                f"    {word} = new {self.RESISTOR}(resistance = 1kohm)\n",
+            ):
+                source = (
+                    f"{PRAGMA_TEXT}\n\n{body}"
+                    if body.startswith("module")
+                    else self._design(body)
+                )
+                with self.subTest(word=word, site=body.split()[0]):
+                    self.assertFalse(
+                        self._accepts(source),
+                        f"{word!r} is reserved for v1 but binds as a name here",
+                    )
+
+    def test_a_word_merely_containing_a_reserved_future_word_is_fine(self):
+        """The lookahead must end at a word boundary here too, or `interfaces`
+        and `format` become unusable for the sake of `interface` and `for`."""
+        for word in ("interfaces", "format", "iffy", "important", "informal"):
+            with self.subTest(name=word):
+                source = self._design(
+                    f"    {word} = new {self.RESISTOR}(resistance = 1kohm)\n"
+                )
+                self.assertTrue(self._accepts(source))
+
+    def test_a_bare_decimal_is_not_a_value_but_a_whole_count_is(self):
+        """The `value` rule's docstring said this before the grammar did.
+
+        `value` took NUMBER, so `resistance = 1.5` parsed here and failed in
+        the prototype with RHOB0003 — the grammar asserting a rule it did not
+        implement, in text rendered verbatim into both artifacts.
+        """
+        for literal, legal in (("1.5", False), ("-0.5", False), ("8", True), ("-3", True)):
+            with self.subTest(literal=literal):
+                source = self._design(
+                    f"    r1 = new {self.RESISTOR}(count = {literal})\n"
+                )
+                self.assertEqual(self._accepts(source), legal)
+
+    def test_a_decimal_is_still_legal_where_a_bound_takes_one(self):
+        """The narrowing must not reach `bound`: a duty-cycle window is two
+        bare decimals, and `within 0.5 to 0.6` has to keep parsing."""
+        source = self._design(
+            "    assert d static duty_cycle(OUT) within 0.5 to 0.6\n"
+        )
+        self.assertTrue(self._accepts(source))
+
+    def test_the_pragma_names_this_syntax_version_and_no_other(self):
+        """L8's header must be able to refuse a file from another version.
+
+        The terminal was `\\#pragma[ -~]*`, so `#pragma verilog 1.0` parsed as
+        a Rhoform file. The prototype rejects every one of these with
+        "unsupported syntax-version pragma", so this closes a divergence
+        rather than opening one.
+        """
+        for pragma, legal in (
+            (PRAGMA_TEXT, True),
+            ("#pragma rhoform-syntax 9.9", False),
+            ("#pragma rhoform-syntax 0.10", False),
+            ("#pragma verilog 1.0", False),
+            ("#pragma", False),
+            ("#pragma rhoform-syntax", False),
+        ):
+            with self.subTest(pragma=pragma):
+                source = f"{pragma}\n\nmodule M:\n    port p passive\n"
+                self.assertEqual(self._accepts(source), legal)
 
     def test_a_name_merely_starting_with_a_keyword_is_fine(self):
         """The negative lookahead must end at a word boundary, or `module_a`

@@ -2,6 +2,10 @@
   "model_version": 1,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -41,5 +45,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: a fixture claiming a schema version this file does not describe."
+  "notes": "EXPECTED-INVALID control: a fixture claiming a schema version this file does not describe.",
+  "x_negative_control": "REJECTED at /model_version: model version not zero"
 }

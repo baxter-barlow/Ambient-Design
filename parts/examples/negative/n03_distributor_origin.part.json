@@ -42,8 +42,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Source.origin is restricted to vendor-direct | bootstrap-list. Distributor-derived provenance (MPN-to-URL lookups) lives only in a short-lived ephemeral cache upstream and must never reach a persistent record."
-  }
+  "x_negative_control": "REJECTED at /sources/0/origin: Source.origin is restricted to vendor-direct | bootstrap-list. Distributor-derived provenance (MPN-to-URL lookups) lives only in a short-lived ephemeral cache upstream and must never reach a persistent record."
 }

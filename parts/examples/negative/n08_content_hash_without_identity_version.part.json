@@ -45,8 +45,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "content_hash and identity_version are mutually required. Content hashes minted under different normalization or stamp-strip versions are not comparable, so an unversioned one cannot be used for drift detection."
-  }
+  "x_negative_control": "REJECTED at /sources/0: content_hash and identity_version are mutually required. Content hashes minted under different normalization or stamp-strip versions are not comparable, so an unversioned one cannot be used for drift detection."
 }

@@ -42,8 +42,5 @@
     }
   },
   "license_class": "restricted-nda",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "restricted-nda is deliberately absent from the LicenseClass enum. That material is never ingested, so the red line is unrepresentable in a record rather than merely forbidden by policy."
-  }
+  "x_negative_control": "REJECTED at /license_class: restricted-nda is deliberately absent from the LicenseClass enum. That material is never ingested, so the red line is unrepresentable in a record rather than merely forbidden by policy."
 }

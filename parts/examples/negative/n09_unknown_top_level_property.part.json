@@ -43,8 +43,5 @@
   },
   "license_class": "vendor-public",
   "manufacturor": "Acme Components",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Objects are closed apart from the ^x_ extension namespace. A misspelled field must fail loudly rather than being silently discarded as data the consumer never sees."
-  }
+  "x_negative_control": "REJECTED at /: Objects are closed apart from the ^x_ extension namespace. A misspelled field must fail loudly rather than being silently discarded as data the consumer never sees."
 }

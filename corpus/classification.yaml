@@ -27,7 +27,7 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:0f2e8fe8d6d32bb835ba185325ba272cc63427aee3e1890c638392af31f2289d
+  decision_hash: sha256:da6dfe69ddf18cdb99ee21eb8ebb8d8c1ac8c324aebd9b81a9b79d1a10ac9ae9
 
 entries:
 
@@ -174,7 +174,7 @@ entries:
 - id: BUG-0011
   verdict: out-of-scope
   reason: dynamic-vocabulary
-  cites: ["v2:ripple", "v2:oscillation-frequency"]
+  cites: ["v2:ripple", "v2:frequency"]
   rationale: >-
     Telling an undersized 1 uH inductor from a correct one requires observing discontinuous
     conduction and the resulting undamped LC ringing. Netlist, declared domains and every closed
@@ -898,7 +898,7 @@ entries:
 - id: BUG-0060
   verdict: out-of-scope
   reason: dynamic-vocabulary
-  cites: ["v2:oscillation-frequency", "v2:ripple"]
+  cites: ["v2:frequency", "v2:ripple"]
   rationale: >-
     Nothing static separates the buffer with and without the 400 ohm and 3.3 pF network: roles,
     domains, abs-max windows and member counts are identical, and "negative real part of input

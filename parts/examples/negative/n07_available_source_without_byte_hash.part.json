@@ -45,8 +45,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "A source in state 'available' must carry byte_sha256 and retrieved_at. A citation to bytes nobody identified cannot be re-verified."
-  }
+  "x_negative_control": "REJECTED at /sources/0: A source in state 'available' must carry byte_sha256 and retrieved_at. A citation to bytes nobody identified cannot be re-verified."
 }

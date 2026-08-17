@@ -57,8 +57,5 @@
       ]
     }
   ],
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Mode.kind is a closed vocabulary (active/idle/sleep/shutdown/inrush). It exists so a budget checker can tell a steady state from a startup surge; an unrecognised kind would let inrush be summed into a steady-state budget."
-  }
+  "x_negative_control": "REJECTED at /modes/0/kind: Mode.kind is a closed vocabulary (active/idle/sleep/shutdown/inrush). It exists so a budget checker can tell a steady state from a startup surge; an unrecognised kind would let inrush be summed into a steady-state budget."
 }
