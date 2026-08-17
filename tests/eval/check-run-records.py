@@ -112,6 +112,16 @@ def _int_fields(record, problems_out, label):
     for name, arm in (record.get("arms") or {}).items():
         if not isinstance(arm, dict):
             continue
+        # `outcomes` too. The first version of COUNT_PATHS omitted it, so
+        # {"passed": 0.0, "failed": 10.0} beside successes=8 disabled BOTH the
+        # sum check and the passed-vs-successes check with one `.0` -- the sum
+        # over ints came to 0, which is falsy, so the sum leg skipped as well.
+        for key, value in (arm.get("outcomes") or {}).items():
+            if isinstance(value, float):
+                problems_out.append(
+                    f"{label}: arms.{name}.outcomes.{key} is written as "
+                    f"{value!r}, a JSON float; a trial count cannot be "
+                    "fractional and every check on it tests isinstance(int).")
         for key in ("successes", "trial_count"):
             if isinstance(arm.get(key), float):
                 problems_out.append(
@@ -165,6 +175,24 @@ def _arm_count(arm):
         return count
     listed = arm.get("trials")
     return len(listed) if isinstance(listed, list) else None
+
+
+def _pinned_fingerprint():
+    """The manifest's tokenizer fingerprint, read without PyYAML."""
+    manifest = ROOT / "toolchain" / "versions.yaml"
+    if not manifest.is_file():
+        return None
+    inside = False
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("tokenizer:"):
+            inside = True
+            continue
+        if inside and stripped.startswith("fingerprint:"):
+            return stripped.split(":", 1)[1].strip().strip('"')
+        if inside and stripped and not line.startswith(" "):
+            break
+    return None
 
 
 def problems_for(record, label):
@@ -498,6 +526,60 @@ def problems_for(record, label):
                         "paired design those are the same number, so these "
                         "counts cannot have come from one run.")
 
+    # FIELDS NOTHING READ. An auditor built a record that validates and
+    # produces zero findings while asserting ten trials on one seed (AC5a's
+    # text is ">=7/10 INDEPENDENT trials"), zero total tokens against a
+    # 150000 budget, and every inner gate failed under trials marked passed.
+    for name, arm in (record.get("arms") or {}).items():
+        if not isinstance(arm, dict):
+            continue
+        trials = arm.get("trials")
+        if isinstance(trials, list) and trials:
+            trial_seeds = [t.get("seed") for t in trials if isinstance(t, dict)]
+            present = [s for s in trial_seeds if s is not None]
+            if present and len(set(present)) != len(present):
+                bad(f"arm {name!r} runs {len(present)} trial(s) on "
+                    f"{len(set(present))} distinct seed(s). AC5a counts "
+                    "INDEPENDENT trials; repeating a seed re-runs one.")
+            declared = arm.get("seeds")
+            if isinstance(declared, list) and present and sorted(declared) != sorted(present):
+                bad(f"arm {name!r} declares seeds {sorted(declared)} but its "
+                    f"trials ran {sorted(present)}.")
+            arm_total = arm.get("total_tokens")
+            trial_total = sum(t.get("total_tokens") or 0 for t in trials
+                              if isinstance(t, dict))
+            if isinstance(arm_total, int) and arm_total != trial_total:
+                bad(f"arm {name!r} records total_tokens={arm_total}, but its "
+                    f"trials sum to {trial_total}.")
+            if isinstance(arm_total, int) and arm_total == 0 and trials:
+                bad(f"arm {name!r} records zero total tokens across "
+                    f"{len(trials)} trial(s). A run that cost nothing did not "
+                    "happen.")
+            for index, trial in enumerate(trials):
+                if not isinstance(trial, dict):
+                    continue
+                gates = trial.get("gates") or trial.get("checks")
+                if isinstance(gates, list) and gates and trial.get("passed"):
+                    failed = [g for g in gates if isinstance(g, dict)
+                              and g.get("passed") is False]
+                    if failed:
+                        bad(f"arm {name!r} trial {index} is marked passed while "
+                            f"{len(failed)} of its own gate(s) record "
+                            "passed=false.")
+
+    # The tokenizer fingerprint, against the manifest pin. versions.yaml says
+    # "two records are comparable only if their fingerprints match", and no
+    # gate compared a record's fingerprint to the pin -- so a record could
+    # carry 64 zeros and still be cited as evidence.
+    tokenizer = record.get("tokenizer")
+    if isinstance(tokenizer, dict) and record.get("authoritative"):
+        pinned = _pinned_fingerprint()
+        actual = tokenizer.get("fingerprint")
+        if pinned and actual and actual != pinned:
+            bad(f"authoritative record's tokenizer fingerprint is {actual}, but "
+                f"toolchain/versions.yaml pins {pinned}. The manifest says two "
+                "records are comparable only if their fingerprints match.")
+
     if record.get("authoritative"):
         reasons = record.get("non_authoritative_reasons") or []
         if reasons:
@@ -509,6 +591,22 @@ def problems_for(record, label):
         # recording `model_identity.kind: "replay"` validated and passed --
         # exactly the "inconsistent forgery" the schema's $comment says schema
         # validation catches. It does not; neither did this.
+        if isinstance(arms, dict) and arms:
+            stated = {(arm.get("model_identity") or {}).get("kind")
+                      for arm in arms.values() if isinstance(arm, dict)}
+            stated.discard(None)
+        # The model ID, not just its kind. `kind` alone let a record claim
+        # model "claude-not-a-real-id" over arms that every one of them
+        # recorded as "scripted-demo-model", with every trial's response
+        # naming the latter.
+        header_model_id = (record.get("model") or {}).get("model")
+        if isinstance(arms, dict) and arms and header_model_id is not None:
+            arm_models = {(arm.get("model_identity") or {}).get("model")
+                          for arm in arms.values() if isinstance(arm, dict)}
+            arm_models.discard(None)
+            if arm_models and header_model_id not in arm_models:
+                bad(f"header model.model is {header_model_id!r} but no arm ran "
+                    f"under it (arms record {sorted(arm_models)}).")
         if isinstance(arms, dict) and arms:
             stated = {(arm.get("model_identity") or {}).get("kind")
                       for arm in arms.values() if isinstance(arm, dict)}
@@ -764,6 +862,27 @@ def self_test():
                 set_authoritative(r), r["model"].update(kind="anthropic")))),
         ("a p-value the arms do not produce is caught", hit(
             "lower-tail Fisher", lambda r: r["flip_criterion"].update(p_value=0.5))),
+        # ROUND 7's forgery: five fields nothing read.
+        ("ten trials on one seed is caught", hit(
+            "INDEPENDENT trials", lambda r: [
+                tr.update(seed=1) for tr in r["arms"][arm_name]["trials"]])),
+        ("declared seeds disagreeing with the trials is caught", hit(
+            "but its trials ran", lambda r: r["arms"][arm_name].update(
+                seeds=[99, 98, 97, 96, 95, 94, 93, 92, 91, 90]))),
+        ("an arm whose tokens do not sum to its trials is caught", hit(
+            "trials sum to", lambda r: r["arms"][arm_name].update(total_tokens=7))),
+        ("outcomes written as JSON floats are caught", hit(
+            "a JSON float", lambda r: r["arms"][arm_name]["outcomes"].update(
+                passed=0.0, failed=10.0))),
+        ("a forged tokenizer fingerprint is caught", hit(
+            "fingerprint", lambda r: (
+                set_authoritative(r),
+                r.setdefault("tokenizer", {}).update(
+                    fingerprint="sha256:" + "0" * 64)))),
+        ("a header model id no arm ran under is caught", hit(
+            "model.model", lambda r: (
+                set_authoritative(r),
+                r["model"].update(model="claude-not-a-real-id")))),
     ]
     # HONEST LIMIT. Two of the clauses above are MASKED rather than uncovered:
     # deleting the `adequate_power_threshold` branch, or the trials-list-length
