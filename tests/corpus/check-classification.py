@@ -42,23 +42,27 @@ WHAT IS CHECKED, AND AGAINST WHAT:
   gap falsified   `d3-gap` is the largest out-of-scope population, so it is the
                   code that does the most to shrink the AC2 denominator. Each
                   one names the field path a checker would need, and the gate
-                  proves that path does NOT resolve. Entries whose fact IS in
-                  D3, behind a conventional key in an open map, use the
-                  `open-map-value` class and name that map in `carried_at`,
-                  which the gate resolves — so "absent" and "present but not
-                  enumerated" are different, checkable states. Without this
-                  the largest out-of-scope population rested on unread prose
-                  while in-scope citations were walked against the schema.
+                  proves that path does NOT resolve — anchor included, so the
+                  claim is about a real place in the schema. Entries whose
+                  fact IS in D3, behind a conventional key in an open map,
+                  name that map in `carried_at`, which the gate resolves and
+                  requires to end in an open map — so "absent" and "present
+                  but not enumerated" are different, checkable states.
   freeze          `decision_hash` recomputed from the verdicts themselves.
   published       the summary block in corpus/README.md regenerated and
                   compared, so the published populations cannot drift from
                   the data the way hand-maintained counts do.
 
-`decision_hash` covers id, verdict, key, `gap_class` and `missing_path` — the
-decisions and the falsifiable claims behind them. NOT the rationale prose:
-hashing that would make a typo fix indistinguishable from a reclassification,
-and the predictable result is people updating the hash without reading the
-diff. A freeze everybody learns to bypass is worse than none.
+`decision_hash` covers the decision fields and the falsifiable claims behind
+them, and NOT the rationale prose: hashing that would make a typo fix
+indistinguishable from a reclassification, and the predictable result is
+people updating the hash without reading the diff. A freeze everybody learns
+to bypass is worse than none.
+
+The exact field list is `decision_hash` below, and is deliberately not
+restated in prose — not here and not in corpus/README.md, which delegates to
+it. Both copies of that list went stale three revisions running, which is the
+argument for having one.
 
 Exit codes follow tests/structure/check-layout.sh: 0 pass, 1 violation, 2 when
 the gate could not run.
@@ -200,17 +204,33 @@ RESIDUAL_KINDS = {
     "not-a-postmortem": "the entry states a requirement rather than reporting an observed failure, so there is no buggy board for any check to catch",
 }
 
-# A residual of this kind asserts the fact exists nowhere. `d3-not-enumerated`
-# asserts it exists in an open map. They cannot both be true.
 # Each of these says nothing a schema change reaches, so none can sit on an
-# entry that also claims the fix is a promotion. Keyed on `carried_at` rather
-# than on a reason code, since that is now what carries the promotion claim.
+# entry that also claims the fix is a promotion. Keyed on `carried_at`, which
+# is what carries that claim.
 RESIDUAL_KIND_EMPTIES_PROMOTION = (
     "fact-undocumented",
     "designs-identical",
     "not-design-time",
     "not-a-postmortem",
 )
+
+# `at_risk` entries group into the decisions that would lose them together.
+# Reporting sixteen conditional verdicts as sixteen independent risks both
+# overstates the exposure and buries the useful fact: two of these decisions
+# fail AC2 on their own, which is something to go and settle rather than a
+# number to worry about.
+AT_RISK_GROUPS = {
+    "l9b-leg": "the L9b undeclared-single-pin-net leg is implemented, not only the T2 no-driver leg",
+    "decoupling-rule": "the generic decoupling rule survives the zero-spurious-errors precision pass",
+    "domain-attributes": "the designs under test declare `voltage_domain`, which the grammar makes optional",
+    "gpio-roles": "MCU general-purpose pins are transcribed with directional or open-drain roles",
+    "part-record": "one individual part-record authoring call; unlike the others, these are independent of each other",
+}
+
+# Members of these are independent calls, so the group fails on a SUBSET. The
+# block figure in the table is the pessimistic end; the subset figure is the
+# one that bites first, and it is emitted alongside.
+INDEPENDENT_GROUPS = ("part-record",)
 
 ID_PATTERN = re.compile(r"^BUG-\d{4}$")
 
@@ -424,10 +444,12 @@ def decision_hash(entries) -> str:
                 e.get("gap_class") or "",
                 e.get("missing_path") or "",
                 e.get("at_risk") or "",
+                e.get("at_risk_group") or "",
                 e.get("carried_at") or "",
                 e.get("residual_blocker") or "",
                 e.get("residual_kind") or "",
                 ",".join(e.get("gap_class_also") or ()),
+                e.get("compound") or "",
             )
         )
         for e in entries
@@ -604,6 +626,25 @@ def check_entry(entry, resolvers, schema, problems):
                         f"{entry_id}: residual_kind `v1-non-goal` must cite the non-goal "
                         "or ground-architecture exclusion it rests on"
                     )
+            # `gap_class` is single-valued, so an entry whose missing fact is
+            # a conjunction is counted under one row and understates what it
+            # needs. Rather than rely on a reviewer noticing, force the call on
+            # every candidate: name the second class, or say there isn't one.
+            fact = entry.get("missing_fact") or ""
+            if (" and " in fact or ", and " in fact) and not (
+                entry.get("gap_class_also") or entry.get("compound") == "single-class"
+            ):
+                problems.append(
+                    f"{entry_id}: `missing_fact` names more than one fact, so one "
+                    "`gap_class` understates it. Give `gap_class_also`, or "
+                    "`compound: single-class` if the conjunction is not a second class."
+                )
+            if entry.get("compound") not in (None, "single-class"):
+                # Deliberately not the word `no`: YAML reads that as a boolean,
+                # which silently turned every adjudication into False.
+                problems.append(
+                    f"{entry_id}: `compound` takes only the value `single-class`"
+                )
             for extra in entry.get("gap_class_also") or []:
                 if extra not in GAP_CLASSES:
                     problems.append(
@@ -620,8 +661,11 @@ def check_entry(entry, resolvers, schema, problems):
                     "from this field, so it cannot be free text"
                 )
         else:
-            if entry.get("at_risk"):
-                problems.append(f"{entry_id}: `at_risk` annotates in-scope entries only")
+            for stray in ("at_risk", "at_risk_group"):
+                if entry.get(stray):
+                    problems.append(
+                        f"{entry_id}: `{stray}` annotates in-scope entries only"
+                    )
             for stray in ("gap_class", "gap_class_also", "missing_path", "carried_at",
                           "residual_blocker", "residual_kind"):
                 if entry.get(stray):
@@ -637,6 +681,18 @@ def check_entry(entry, resolvers, schema, problems):
         if entry.get("missing_fact") and reason != "d3-gap":
             problems.append(f"{entry_id}: `missing_fact` only belongs on a D3 entry")
     else:
+        at_risk = entry.get("at_risk")
+        if at_risk is not None and not str(at_risk).strip():
+            problems.append(f"{entry_id}: `at_risk` is present but empty")
+        group = entry.get("at_risk_group")
+        if at_risk and group not in AT_RISK_GROUPS:
+            problems.append(
+                f"{entry_id}: at_risk_group {group!r} is not one of "
+                f"{sorted(AT_RISK_GROUPS)} — the published single-point-of-failure list "
+                "is generated from it, so it cannot be free text"
+            )
+        if group and not at_risk:
+            problems.append(f"{entry_id}: `at_risk_group` without `at_risk`")
         required = FAMILY_REQUIRES.get(family, ())
         citations = entry.get("cites") or []
         if required and not any(c.startswith(r) for c in citations for r in required):
@@ -723,14 +779,13 @@ def summary_block(entries) -> str:
         )
     else:
         tail = (
-            f"This is an upper bound on exposure, not a prediction: the flags are not "
-            f"independent and most will resolve the favourable way. But if every one went "
-            f"against the checker the tier would catch {surviving} of {len(in_scope)} "
-            f"against a bar of {must_catch}, so the honest statement is that **the AC2 "
-            f"outcome is decided by part-record authoring and rule-implementation choices, "
-            f"not by this classification**. {len(at_risk)} of {len(in_scope)} verdicts are "
-            f"conditional; only {surviving} are unconditional, which is fewer than the bar. "
-            "AMB-61 should resolve the flags deliberately rather than discover them."
+            f"{len(at_risk)} of {len(in_scope)} verdicts are conditional and only "
+            f"{surviving} are unconditional, which is fewer than the bar of {must_catch}. "
+            "So **the AC2 outcome is decided by part-record authoring and "
+            "rule-implementation choices, not by this classification**. The flags are not "
+            f"independent, though: counting them as {len(at_risk)} separate risks would "
+            "overstate the exposure and bury the actionable part. They are a handful of "
+            "decisions."
         )
     emptied = sorted(
         {
@@ -744,12 +799,50 @@ def summary_block(entries) -> str:
     if emptied:
         tail += (
             " Losing them also empties "
-            + ", ".join(f"`{f}`" for f in emptied)
+            + (f"`{emptied[0]}`" if len(emptied) == 1
+               else ", ".join(f"`{f}`" for f in emptied[:-1]) + f" and `{emptied[-1]}`")
             + " entirely, so the gate would stop testing "
             + ("that family" if len(emptied) == 1 else "those families")
             + " at all — which no count above shows."
         )
     lines += ["", tail]
+    if at_risk:
+        groups = {}
+        for entry in at_risk:
+            groups.setdefault(entry.get("at_risk_group"), []).append(entry["id"])
+        lines += ["", "| decision | entries | caught if it goes the wrong way | verdict |",
+                  "|---|---|---|---|"]
+        alone_fails = []
+        for key in sorted(groups, key=lambda k: (-len(groups[k]), k)):
+            members = sorted(groups[key])
+            left = len(in_scope) - len(members)
+            if left < must_catch:
+                alone_fails.append(key)
+                outcome = "**fails**"
+            elif left == must_catch:
+                outcome = "passes, with nothing to spare"
+            else:
+                outcome = f"passes, {left - must_catch} to spare"
+            if key in INDEPENDENT_GROUPS:
+                tolerable = len(in_scope) - must_catch
+                outcome += f" (but any {tolerable + 1} of them fails)"
+            lines.append(
+                f"| **`{key}`** — {AT_RISK_GROUPS.get(key, '?')} | "
+                + ", ".join(f"`{i}`" for i in members)
+                + f" | {left} of {len(in_scope)} | {outcome} |"
+            )
+        if alone_fails:
+            named = ", ".join(f"`{k}`" for k in alone_fails)
+            lines += [
+                "",
+                f"{named} "
+                + ("is a single point of failure for AC2 on its own"
+                   if len(alone_fails) == 1
+                   else "are each a single point of failure for AC2 on their own")
+                + ", and the groups that pass alone do not survive being combined. Settling "
+                + ("it" if len(alone_fails) == 1 else "those")
+                + " is worth more to AMB-61 than any amount of checker tuning.",
+            ]
 
     gaps = [e for e in out_scope if e.get("reason") == "d3-gap"]
     if gaps:
@@ -797,10 +890,13 @@ def summary_block(entries) -> str:
     if promotions:
         lines += [
             "",
-            f"{len(promotions)} of those entries make a weaker claim than the rest: the fact is "
-            "already in D3 v0, in an open map, so the fix is to **promote** a key rather than "
-            "add a field. They are marked here rather than given their own reason code, "
-            "because a code with one member costs more than it buys.",
+            (
+                f"{len(promotions)} entry makes" if len(promotions) == 1
+                else f"{len(promotions)} of those entries make"
+            )
+            + " a weaker claim: the fact is already in D3 v0, in an open map, so the fix is "
+            "to **promote** a key rather than add a field. Marked here rather than given a "
+            "reason code, because a code with one member costs more than it buys.",
             "",
             "| entry | carried at | further blocker, if any |",
             "|---|---|---|",
@@ -1130,6 +1226,25 @@ def self_test() -> int:
                            "cites": ["d3:pins[].abs_max.voltage"]})),
         ("at_risk on an out-of-scope entry is rejected",
          problems_for({**good_out, "at_risk": "something"})),
+        ("at_risk with no group is rejected",
+         problems_for({**good_in, "at_risk": "conditional"})),
+        ("at_risk with an unknown group is rejected",
+         problems_for({**good_in, "at_risk": "conditional", "at_risk_group": "vibes"})),
+        ("at_risk with a known group passes",
+         not problems_for({**good_in, "at_risk": "conditional",
+                           "at_risk_group": "part-record"})),
+        ("at_risk_group with no at_risk is rejected",
+         problems_for({**good_in, "at_risk_group": "part-record"})),
+        ("a compound missing_fact with no adjudication is rejected",
+         problems_for({**good_gap, "missing_fact": "one thing and another thing"})),
+        ("a compound missing_fact adjudicated single-class passes",
+         not problems_for({**good_gap, "missing_fact": "one thing and its own detail",
+                           "compound": "single-class"})),
+        ("a compound missing_fact with a second class passes",
+         not problems_for({**good_gap, "missing_fact": "one thing and another",
+                           "gap_class_also": ["bus-address"]})),
+        ("compound with any other value is rejected",
+         problems_for({**good_gap, "missing_fact": "a and b", "compound": "yes"})),
         ("an open-map d3 citation is rejected as not checker-reliable",
          problems_for({**good_in, "cites": ["d3:parameters"]})),
         ("a d3 citation into an open map is rejected",
