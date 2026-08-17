@@ -85,7 +85,12 @@ def problems_for(record, label):
         breakdown = budget.get("breakdown")
         if isinstance(breakdown, dict) and isinstance(total, int):
             parts = [v for v in breakdown.values() if isinstance(v, (int, float))]
-            if parts and abs(sum(parts) - total) > 0.5:
+            if not parts and total:
+                bad(f"a4_context_budget.breakdown is empty while total is "
+                    f"{total}. An empty breakdown accounts for nothing, and "
+                    "the breakdown exists precisely to stop a payload hiding "
+                    "outside the parts.")
+            elif parts and abs(sum(parts) - total) > 0.5:
                 bad(f"a4_context_budget.breakdown sums to {sum(parts):g} but "
                     f"total is {total}. The parts do not account for the whole, "
                     "which is exactly how a payload migrates out of sight.")
@@ -209,6 +214,16 @@ def problems_for(record, label):
                 bad("verdict is flip_criterion_not_met with no declared minimum "
                     "effect of interest; 'not met' is a claim about power, and "
                     "without a declared effect there is none to report")
+            elif power is None:
+                bad("verdict is flip_criterion_not_met with no recorded power "
+                    "against the declared effect. 'Not met' is a claim ABOUT "
+                    "power; omitting the number does not make the claim safer, "
+                    "it makes it unfalsifiable.")
+            elif threshold is None:
+                bad("verdict is flip_criterion_not_met with no recorded "
+                    "`adequate_power_threshold`, so the power beside it is "
+                    "compared against nothing. Both fields are optional in the "
+                    "schema, so deleting either used to disable this check.")
             elif (isinstance(power, (int, float)) and isinstance(threshold, (int, float))
                   and power < threshold):
                 bad(f"verdict is flip_criterion_not_met with power "
@@ -219,10 +234,18 @@ def problems_for(record, label):
         # decision, and nothing related it to its own p-value.
         alpha = flip.get("alpha")
         p_value = flip.get("p_value")
-        if (verdict == "flip_criterion_met" and isinstance(p_value, (int, float))
-                and isinstance(alpha, (int, float)) and p_value > alpha):
-            bad(f"verdict is flip_criterion_met at p={p_value} against "
-                f"alpha={alpha}. The verdict and the test disagree.")
+        if isinstance(p_value, (int, float)) and isinstance(alpha, (int, float)):
+            significant = p_value <= alpha
+            if verdict == "flip_criterion_met" and not significant:
+                bad(f"verdict is flip_criterion_met at p={p_value} against "
+                    f"alpha={alpha}. The verdict and the test disagree.")
+            # The other direction was unchecked, so a significant flip could be
+            # recorded as `inconclusive` — burying the result that reopens the
+            # standalone-DSL decision.
+            if verdict in ("inconclusive", "flip_criterion_not_met") and significant:
+                bad(f"verdict is {verdict!r} at p={p_value} against "
+                    f"alpha={alpha}, which IS significant. A significant result "
+                    "recorded as inconclusive buries the finding.")
         # A one-sided test has no power against an effect declared in the other
         # direction, and the paired branch reports the same power either way.
         effect = flip.get("minimum_effect_of_interest")

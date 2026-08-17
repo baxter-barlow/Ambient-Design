@@ -296,6 +296,25 @@ def self_test() -> int:
         ROOT = real_root
         globals()["tracked_files"] = real_tracked
 
+    # And main() itself. Every sibling gate gained this case; this file did
+    # not, so `return 1` -> `return 0` left the self-test AND `make structure`
+    # green with a real retired name planted in a tracked file. That is the same
+    # kill switch this file's own docstring describes moving down a layer — it
+    # had moved UP one, to the entry point.
+    import contextlib as _c, io as _i
+    _real = scan_repository
+    try:
+        globals()["scan_repository"] = lambda: ["planted.md:1"]
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _planted = main([])
+        globals()["scan_repository"] = lambda: []
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _clean = main([])
+    finally:
+        globals()["scan_repository"] = _real
+    wiring_cases.append(("main() exits non-zero on a hit", _planted == 1))
+    wiring_cases.append(("main() exits zero with none", _clean == 0))
+
     failures = 0
     for name, ok in wiring_cases:
         failures += 0 if ok else 1

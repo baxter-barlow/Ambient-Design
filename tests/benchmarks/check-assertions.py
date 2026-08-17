@@ -292,11 +292,21 @@ def check_benchmark(case, spec, log_text, problems):
                         )
                         continue
                 else:
-                    bound = high if high < float("inf") else low
-                    if bound != 0 and abs(bound / centre) > MAX_ONE_SIDED_RATIO:
+                    # A `max:` is meaningless when far ABOVE the value; a
+                    # `min:` when far BELOW it. Testing `bound/centre > ratio`
+                    # only caught the first, so `efficiency min=1e-30` passed —
+                    # and `bound == 0` was skipped outright, so `min=0.0` did
+                    # too. The slack is measured in the direction the bound
+                    # actually constrains.
+                    if high < float("inf"):
+                        bound, slack = high, (abs(high / centre) if centre else 0.0)
+                    else:
+                        bound = low
+                        slack = (abs(centre / low) if low else float("inf"))
+                    if slack > MAX_ONE_SIDED_RATIO:
                         problems.append(
-                            f"{label}: one-sided bound {bound:.6g} is "
-                            f"{abs(bound / centre):.1f}x its expected value "
+                            f"{label}: one-sided bound {bound:.6g} leaves "
+                            f"{slack:.1f}x slack against its expected value "
                             f"{centre:.6g}, so it cannot fail."
                         )
                         continue

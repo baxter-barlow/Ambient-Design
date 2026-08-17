@@ -198,9 +198,18 @@ def declared_pins(manifest):
                 f"{entry.get('image', '')}@{entry.get('digest', '')}",
             ))
     for name, block in (dig(manifest, ("ci", "containers")) or {}).items():
-        if isinstance(block, dict) and block.get("image") and block.get("digest"):
-            pins.append((("ci", "containers", name),
-                         f"{block['image']}@{block['digest']}"))
+        if not isinstance(block, dict) or not block.get("image"):
+            continue
+        if not block.get("digest"):
+            # An image with no digest is a MUTABLE TAG, which versions.yaml's
+            # own comment says must never exist ("a mutable tag re-points on
+            # every patch release, which would change export output under our
+            # feet"). Emitted with a sentinel so it fails rather than vanishing.
+            pins.append((("ci", "containers", name, "digest"),
+                         "<missing: pinned by mutable tag>"))
+            continue
+        pins.append((("ci", "containers", name),
+                     f"{block['image']}@{block['digest']}"))
 
     # Anything the five shapes above did not reach. `declared_pins` used to
     # enumerate only those, so a whole new manifest group — `ci.containers.export`,
@@ -397,12 +406,25 @@ def check(manifest, read=None):
         for block in (dig(manifest, ("ci", "actions")) or {}).values()
         if isinstance(block, dict) and "ref" in block
     }
-    for workflow in (CHECKS, DCO, POLICY):
+    # EVERY workflow, discovered rather than listed. Three hard-coded paths
+    # meant `uses: attacker/evil-action@main` in a fourth file was invisible —
+    # arbitrary third-party code inside the trust boundary of every job, in a
+    # gate whose own text says "an unpinned or unrecorded one is unaudited code".
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml")) + \
+                sorted((ROOT / ".github" / "workflows").glob("*.yaml"))
+    for workflow in (workflows or [CHECKS, DCO, POLICY]):
         text = read(workflow)
         if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
+            # `- uses: x` is the list form and is at least as common as the
+            # mapping form. Requiring the line to START with `uses:` made every
+            # step written that way invisible — including the one an auditor
+            # planted, which is arbitrary third-party code inside every job's
+            # trust boundary.
+            if stripped.startswith("- "):
+                stripped = stripped[2:].lstrip()
             if not stripped.startswith("uses:"):
                 continue
             ref = stripped[len("uses:"):].split("#")[0].strip()
