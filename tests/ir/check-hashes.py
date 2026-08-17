@@ -136,11 +136,18 @@ def sort_problems(document, label):
                 f"{label}: instance {instance.get('path')!r} has `ports` out of "
                 "the bytewise-ascending order the schema declares.")
         for port in instance.get("ports") or []:
-            pins = port.get("pins")
+            # `pin_numbers`, which is what ir/netlist-ir.schema.json actually
+            # declares. This read `pins`, a field the IR does not have, so the
+            # rule was dead -- and its self-test case passed because the case
+            # fed a synthetic dict using the same wrong name. That is the exact
+            # defect check-run-records.py's own docstring describes for
+            # arm["trials"], repeated in a sibling gate.
+            pins = port.get("pin_numbers")
             if isinstance(pins, list) and pins != sorted(pins):
                 problems.append(
                     f"{label}: {instance.get('path')!r}/{port.get('name')!r} has "
-                    "`pins` out of the ascending order the schema declares.")
+                    "`pin_numbers` out of the ascending order the schema "
+                    "declares.")
     return problems
 
 
@@ -251,6 +258,18 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
         return
 
     source_map = json.loads(source_map_path.read_text(encoding="utf-8"))
+    # ir/source-map.schema.json declares `files` "Sorted bytewise-ascending by
+    # path", and nothing enforced it -- so the map has the same one-design-many-
+    # hashes property the IR had, via source_hash.
+    files = source_map.get("files")
+    if isinstance(files, list):
+        paths = [f.get("path") or "" for f in files if isinstance(f, dict)]
+        if paths != sorted(paths):
+            problems.append(
+                f"{source_map_path.name}: `files` is not in the "
+                "bytewise-ascending path order the source-map schema declares. "
+                "source_hash is taken over that list, so an unsorted map gives "
+                "one source set more than one hash.")
     sm_rel = (source_map_path.relative_to(ROOT)
               if source_map_path.is_relative_to(ROOT) else source_map_path.name)
     if source_map.get("design_hash") != committed:
@@ -291,6 +310,22 @@ def _raises(thunk, exception) -> bool:
     except exception:
         return True
     return False
+
+
+def _unsorted_map_probe():
+    import json as _json, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        doc = Path(tmp) / "p.ir.json"
+        text = (IR_EXAMPLES / "blinker.ir.json").read_text(encoding="utf-8")
+        doc.write_text(text, encoding="utf-8")
+        real = _json.loads(
+            (IR_EXAMPLES / "blinker.sourcemap.json").read_text(encoding="utf-8"))
+        if isinstance(real.get("files"), list):
+            real["files"] = list(reversed(real["files"]))
+        (Path(tmp) / "p.sourcemap.json").write_text(_json.dumps(real), encoding="utf-8")
+        problems = []
+        check_document(doc, problems, [])
+        return problems
 
 
 def self_test() -> int:
@@ -371,8 +406,20 @@ def self_test() -> int:
     ))
     checks.append((
         "pin designators out of order are caught",
-        any("pins" in p for p in sort_problems({"instances": [
-            {"path": "/x", "ports": [{"name": "a", "pins": ["2", "1"]}]}]}, "probe")),
+        any("pin_numbers" in p for p in sort_problems({"instances": [
+            {"path": "/x", "ports": [{"name": "a", "pin_numbers": ["2", "1"]}]}]},
+            "probe")),
+    ))
+    checks.append((
+        "a source map with unsorted files is caught",
+        any("bytewise-ascending path order" in p
+            for p in _unsorted_map_probe()),
+    ))
+    checks.append((
+        "the field the rule reads is the field the schema declares",
+        "pin_numbers" in json.loads(
+            (ROOT / "ir" / "netlist-ir.schema.json").read_text(encoding="utf-8")
+        )["$defs"]["Port"]["properties"],
     ))
     checks.append((
         "the committed IR satisfies every sort rule the schema states",

@@ -11,6 +11,12 @@ deck_absent_reason: >-
 # power-tree.yaml; module data from ESP32-S3-WROOM-1 Datasheet v1.8 (tables
 # cited inline). These are the gating checks; no ngspice run is required.
 
+# Pins WHICH INPUT PLAYS WHICH ROLE in every mechanised assertion. Swapping the
+# mapping alongside the values is arithmetically valid and electrically
+# meaningless; this makes that a reviewed change rather than an edited line.
+# Regenerate deliberately with: check-hand-assertions.py --write <dir>
+check_inputs_structure_hash: sha256:41214e016d87ed68637ef3ba159e4edda7cdb37292f5d1b156d80c75af50e4e4
+
 assertions:
   - id: A1_rail_voltage_containment
     check: interval-within

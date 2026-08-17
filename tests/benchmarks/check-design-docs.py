@@ -44,11 +44,20 @@ ROOT = Path(__file__).resolve().parents[2]
 # Benchmarks that MUST carry a checkable table. Enumerating from the filesystem
 # would let a benchmark leave the gate by deleting its own doc, which is the
 # failure mode run-sim.sh already learned twice.
-REQUIRED = ("blinker-555", "buck-3v3")
+# name -> how many results rows that benchmark MUST publish. Deriving the floor
+# from the document (`floor = len(rows)`) meant a row escaping the parser also
+# lowered the bar: de-verdicting four of buck's five rows reported "6 rows agree"
+# and exited 0. These counts are the answer to "how many rows should be here",
+# which the document cannot be trusted to supply.
+REQUIRED = {"blinker-555": 5, "buck-3v3": 5}
 
 # A row is `| cell | cell | ... |`. The verdict column is the last cell.
 ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$")
-VERDICT = re.compile(r"^(pass|fail|PASS|FAIL)$")
+# A verdict cell, however it is dressed. `^(pass|fail|PASS|FAIL)$` meant a row
+# opted out of the gate by writing `Pass`, `pass (see note)` or `pass /checkmark/`
+# -- one character in a cell no reader treats as data, and four of buck's five
+# rows left the gate that way with `make all` green.
+VERDICT = re.compile(r"^(pass|fail)\b", re.IGNORECASE)
 # The first number in a cell, with an optional unit and an optional sign.
 NUMBER = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
@@ -81,18 +90,28 @@ def _scale_of(cell):
     return SI[found.group("prefix")] if found else 1.0
 
 
+# Significant digits: leading zeros are not significant, TRAILING ONES ARE.
+SIGNIFICANT = re.compile(r"\d[\d.]*")
+
+
 def _sig_figs(cell):
     """Significant figures the cell states.
 
     Comparison happens at the COARSER of the two, so a doc rounded to four
-    figures is not failed by a record carrying three -- the rule
-    check-assertions.py already applies to `measured:` against a fresh run.
+    figures is not failed by a record carrying three.
+
+    This used to `rstrip("0")`, which made "3.000" ONE significant figure --
+    so a design.md publishing 3.000 V against a recorded 3.296 V reconciled at
+    a single figure, printed `pass`, and sat next to a +/-3 % window the value
+    is outside. "20 us" against 16.86 did the same. It is now the identical
+    function check-assertions.py uses on `measured:`; the two gates disagreeing
+    about what a figure is was the defect.
     """
-    found = NUMBER.search(cell.replace(",", ""))
-    if found is None:
+    text = str(cell).replace(",", "").strip()
+    found = SIGNIFICANT.search(text.lstrip("+-").split("e")[0].split("E")[0])
+    if not found:
         return 0
-    digits = found.group(0).lstrip("+-").replace(".", "").lstrip("0")
-    return len(digits.rstrip("0")) or 1
+    return max(1, len(found.group(0).replace(".", "").lstrip("0")))
 
 
 def _round_sig(value, figures):
@@ -202,6 +221,13 @@ def check_case(case_dir, problems, minimum=None):
             continue
         reconciled += 1
 
+    expected = REQUIRED.get(case_dir.name) if minimum is None else minimum
+    if expected is not None and len(rows) < expected:
+        problems.append(
+            f"{case_dir.name}/design.md: publishes {len(rows)} results row(s), "
+            f"but this benchmark must publish {expected}. A row leaves this gate "
+            "by losing its verdict cell, so the count is pinned here rather than "
+            "read from the document.")
     floor = len(rows) if minimum is None else minimum
     if reconciled < floor:
         problems.append(
@@ -305,7 +331,7 @@ def main(argv):
     if argv:
         cases = [Path(a) for a in argv]
     else:
-        cases = [ROOT / "benchmarks" / name for name in REQUIRED]
+        cases = [ROOT / "benchmarks" / name for name in sorted(REQUIRED)]
         for case in cases:
             if not case.is_dir():
                 print(f"design-docs: FAIL: {case.name} is missing; a benchmark "
