@@ -16,6 +16,7 @@ check: structure schemas lint ir-hashes bakeoff grammar eval-tests
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
 structure:
+	python3 tests/structure/check-retired-names.py --self-test
 	bash tests/structure/check-layout.sh
 
 # Schema well-formedness and example validation across every declared
