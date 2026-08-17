@@ -53,6 +53,11 @@ dist/
 # begins `validation` is a deliverable, not scratch output.
 !**/validation*.log
 !tests/golden/UPDATES.log
+# STILL AN ALLOWLIST. Both widenings were reactions to the specific file that
+# had just been swallowed. A deliverable named e.g. `thermal-sweep.log` is
+# ignored today and check-layout.sh cannot see it either. The next evidence
+# file that is not called `validation...` has to be added here AND to that
+# script's find expression; there is no rule that catches it automatically.
 
 # Cross-agent configuration is intentionally versioned. These negations
 # override common user-global ignores for Claude and agent configuration.

@@ -136,32 +136,35 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 
 ## AC1a: DSL expressibility
 
-The design is 9 components, 7 nets, 2 assertions. Rendered through the winning
-bake-off arm from `lang/examples/blinker-555.design.json`, in the frozen v0.1
-syntax:
+The design is 9 components, 7 nets, 2 assertions. Rendered through
+**candidate_b, the arm the bake-off chose** (`lang/README.md`), from
+`lang/examples/blinker-555.design.json`:
 
 | variant | lines |
 |---|---|
-| explicit | 130 |
-| inferred | 93 |
-| inferred + columnar | 82 |
+| explicit | 119 |
+| inferred | 82 |
+| inferred + columnar | 71 |
 
-against the ~150-line budget. The margin is 68 lines at the most compact
-variant and 20 at the most explicit one -- comfortable, but not the "far
-under" an earlier revision of this section claimed. That revision also quoted
-"~30 lines" for a hand-written snippet in a syntax the frozen grammar rejects:
-it used `supply`, brace blocks, `;` separators, and `freq`/`duty`, none of
-which exist in `lang/grammar/rhoform.ebnf` (`assertion ::= 'assert' NAME
-('static' | 'dynamic') NAME '(' NAME ')' bound`, and the measurement
-vocabulary is `frequency`/`duty_cycle`). The real number was available from the
-renderer the whole time.
+against the ~150-line budget: 79 lines of margin at the most compact
+variant, 31 at the most explicit.
+
+An earlier revision of this section published 130/93/82 and called them "the
+winning bake-off arm ... in the frozen v0.1 syntax". Both halves were wrong.
+Those are **candidate_a**'s counts, and candidate_a is the arm that LOST --
+`lang/tests/test_grammar.py::test_the_grammar_rejects_the_losing_candidates_surface`
+asserts the frozen grammar rejects exactly that rendering. So AC1a's headline
+evidence was measured on a syntax the frozen grammar refuses, and labelled as
+the frozen syntax. `check-design-docs.py` reads only tables whose last column
+is a verdict, so this one is outside it by construction; the counts are
+reproducible from the command below instead.
 
 Reproduce with:
 
     python3 -c "import sys; sys.path.insert(0,'lang'); \
-      from bakeoff.arms import candidate_a; from bakeoff.model import load_model; \
+      from bakeoff.arms import candidate_b; from bakeoff.model import load_model; \
       from pathlib import Path; \
-      print(candidate_a.render(load_model(Path('lang/examples/blinker-555.design.json')), \
+      print(candidate_b.render(load_model(Path('lang/examples/blinker-555.design.json')), \
                                'inferred+columnar'))"
 
 The top-level module, verbatim from that command:
@@ -172,23 +175,21 @@ module Blinker555:
         c_byp  100nF +/- 10%  "X7R"       "0805"        50V
         c_ctl  10nF +/- 10%   "X7R"       "0805"        50V
         c_t    1uF +/- 5%     "PET_film"  "radial_5mm"  63V
-    indicator = new LedIndicator
-    indicator.color = "red"
-    indicator.current = 9.5mA (8.0mA to 10.5mA)
-    j_bat = new rhoform.lib.connector.BatteryConnector9V
-    j_bat.part = "conn.battery_9v/keystone-232@1"
-    mh1 = new rhoform.lib.mech.MountingHole
-    mh1.diameter = 3.2mm
-    r_a = new rhoform.lib.passive.Resistor
-    r_a.resistance = 100kohm +/- 1%
-    r_a.part.package = "axial_0207"
-    r_a.part.power_rating = 0.25W
-    r_b = new rhoform.lib.passive.Resistor
-    r_b.resistance = 680kohm +/- 1%
-    r_b.part.package = "axial_0207"
-    r_b.part.power_rating = 0.25W
-    timer = new rhoform.lib.timer.Ne555
-    timer.part = "timer.555/ti-NE555P@2"
+    indicator = new LedIndicator(color = "red", current = 9.5mA (8.0mA to 10.5mA))
+    j_bat = new rhoform.lib.connector.BatteryConnector9V:
+        part "conn.battery_9v/keystone-232@1"
+    mh1 = new rhoform.lib.mech.MountingHole(diameter = 3.2mm)
+    r_a = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
+        part abstract:
+            package = "axial_0207"
+            power_rating = 0.25W
+    r_b = new rhoform.lib.passive.Resistor(resistance = 680kohm +/- 1%):
+        part abstract:
+            package = "axial_0207"
+            power_rating = 0.25W
+    timer = new rhoform.lib.timer.Ne555:
+        part "timer.555/ti-NE555P@2":
+            function = "timer_555"
 ```
 
 ## Duty-cycle window: why it is +/-2.2 points and not +/-1.0

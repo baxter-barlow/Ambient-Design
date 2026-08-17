@@ -463,7 +463,14 @@ def check_spec(spec, label, problems, minimum=None, gate_structure=True):
                     # 500 C worst-case ambient sat in the record with the gate
                     # green. An input has to move the result by at least as
                     # much as the comparison can see.
-                    tolerance = abs(float(value)) * 1e-3 + 1e-12
+                    # Against the perturbation's own size, not the operand's.
+                    # `abs(value)*1e-3` is a 0.1%-of-operand floor, so a
+                    # coefficient of 0.0025 on a 500 C ambient counted as
+                    # material while contributing 0.1% of the physics: A5
+                    # reported Tj = 123.05 C against a true 571.9 C, above the
+                    # part's 150 C absolute maximum. A term that matters moves
+                    # the result by an amount comparable to the term itself.
+                    tolerance = abs(got) * 1e-9 + 1e-12
                     if _math.isfinite(moved) and abs(moved - got) <= tolerance:
                         problems.append(
                             f"{label}/{name}: formula for {operand} names "
@@ -537,6 +544,20 @@ def load_yaml(path):
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise GateUnavailable(f"{path} is not readable as YAML: {exc}") from exc
+
+
+def _must_mechanise_probe():
+    """MUST_MECHANISE is keyed by benchmark, so it is exercised with a real
+    name rather than with a fixture label -- the scoping mistake that tripped
+    four earlier floors in this repository."""
+    problems = []
+    check_spec({"assertions": [
+        {"id": "filler", "check": "at-least",
+         "check_inputs": {"have": 1.0, "need": 0.5},
+         "check_inputs_from": {"have": "h", "need": "n"},
+         "inputs": {"h": 1.0, "n": 0.5}, "status": "PASS"}]},
+        "esp32s3-devboard", problems, gate_structure=False)
+    return problems
 
 
 def self_test():
@@ -633,6 +654,45 @@ def self_test():
             {"id": "a", "check": "at-least",
              "check_inputs": {"have": 0.001, "need": 99.0}}))))
 
+    # THE THREE DEFENCES THAT WERE PINNED BY NOTHING. An auditor deleted each
+    # in turn with `--self-test` green and the real run green, restoring both
+    # forgeries this file was written to close.
+    STRUCT2 = structure_hash([
+        {"id": "a", "check": "at-least",
+         "check_inputs_from": {"have": "h", "need": "n"}}])
+    def spec_probe(spec_extra, assertion, label="probe"):
+        problems = []
+        spec = {"assertions": [assertion]}
+        spec.update(spec_extra)
+        check_spec(spec, label, problems, minimum=0)
+        return problems
+
+    base_assertion = {
+        "id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
+        "check_inputs_from": {"have": "h", "need": "n"},
+        "inputs": {"h": 1.0, "n": 0.5}, "status": "PASS"}
+    cases.append(("a spec with no structure hash is caught", any(
+        "records no `check_inputs_structure_hash`" in p
+        for p in spec_probe({}, base_assertion))))
+    cases.append(("a structure hash that does not match is caught", any(
+        "A binding changed" in p for p in spec_probe(
+            {"check_inputs_structure_hash": "sha256:" + "0" * 64},
+            base_assertion))))
+    cases.append(("a correct structure hash passes", not spec_probe(
+        {"check_inputs_structure_hash": STRUCT2}, base_assertion)))
+    cases.append(("a benchmark missing a MUST_MECHANISE assertion is caught", any(
+        "must be mechanised" in p for p in _must_mechanise_probe())))
+    # STATED LIMIT, not a case. An auditor scaled a term to 0.0025 * ta_c so a
+    # 500 C ambient reported Tj = 123.05 C against a true 571.9 C. Perturbation
+    # cannot catch that: the term DOES move the result, by about 1%, and a
+    # gate cannot tell "small coefficient" from "legitimately small
+    # contribution" without knowing the physics. What covers it is
+    # `check_inputs_derived` being inside `structure_hash` -- editing the
+    # formula moves the hash and needs a reviewed commit. The perturbation loop
+    # catches inert terms (0*x, x-x); the hash catches rewritten ones. Tying
+    # the tolerance to the operand rather than the result was still wrong and
+    # is fixed, but it was never what stood between the tree and this attack.
+
     # WIRING, over the real entry point. Eight assertions because main() applies
     # MINIMUM_MECHANISED, and a wiring case that dodged the floor would not be
     # driving the shipped path.
@@ -673,6 +733,33 @@ def self_test():
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
+    if argv and argv[0] == "--write":
+        # The spec file documents this as the reviewed way to regenerate
+        # check_inputs_structure_hash -- and it did not exist, so the stated
+        # procedure for the freeze's own regeneration was a command that
+        # printed usage and exited 2.
+        if len(argv) != 2:
+            print("usage: check-hand-assertions.py --write <benchmark-dir>",
+                  file=sys.stderr)
+            return 2
+        case_dir = Path(argv[1])
+        spec_path = case_dir / "assertions.yaml"
+        try:
+            spec = load_yaml(spec_path)
+        except GateUnavailable as exc:
+            print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
+            return 2
+        digest = structure_hash(spec.get("assertions") or [])
+        text = spec_path.read_text(encoding="utf-8")
+        import re as _re
+        if "check_inputs_structure_hash:" in text:
+            text = _re.sub(r"check_inputs_structure_hash: \S+",
+                           f"check_inputs_structure_hash: {digest}", text, count=1)
+        else:
+            text = f"check_inputs_structure_hash: {digest}\n\n" + text
+        spec_path.write_text(text, encoding="utf-8")
+        print(f"hand-assert: wrote check_inputs_structure_hash: {digest}")
+        return 0
     if len(argv) != 1:
         print("usage: check-hand-assertions.py <benchmark-dir>", file=sys.stderr)
         return 2

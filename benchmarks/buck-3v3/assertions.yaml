@@ -48,7 +48,7 @@ assertions:
     kind: meas_ratio          # avg(-v(in)*i(V3)) vs avg(v(out)*i(Vsl)), 2.0m-2.5m
     informational_at_rung_0: >-
       Gin injects PFIX/V(in), so eff is a closed form in the hand-entered
-      PFIX = 0.40 W and cannot fail for any PFIX <= 1.07 W. It pins the loss
+      PFIX = 0.40 W and cannot fail for any PFIX <= 1.056 W. It pins the loss
       BUDGET, not switching behaviour, which rung 0 does not model. See
       design.md.
     meas_id: eff

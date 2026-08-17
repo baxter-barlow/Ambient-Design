@@ -291,7 +291,12 @@ value.
 `pout + I^2*(Ron+DCR) + PFIX`, and `eff` is a closed form in `PFIX = 0.40 W`.
 It is invariant under the timestep (0.928704 at 40 ns, 0.928644 at 2 ns) and
 essentially flat across the input range (0.928649 / 0.928644 / 0.928625 at
-9 / 12 / 14 V). The `>= 0.85` bound is satisfied for any `PFIX <= 1.07 W`.
+9 / 12 / 14 V). The `>= 0.85` bound is satisfied for any `PFIX <= 1.056 W`:
+`PFIX_max = Pout/0.85 - Pout - conduction = 6.588/0.85 - 6.588 - 0.106 = 1.0564 W`,
+confirmed by running the deck at PFIX = 1.056 (eff 0.850042) and 1.06
+(eff 0.849603). This read 1.07 W, at which the assertion actually fails
+(eff 0.848509) -- overstating the headroom in the unsafe direction, in the one
+place a reader is told the check is weak.
 Nothing about switching loss is being verified: at rung 0 there is no switching
 model to verify. The assertion earns its place by pinning the loss BUDGET, and
 it should be re-derived against a real switching model at rung 1.
@@ -321,7 +326,12 @@ artifacts. 2 ns is much closer and is not fully converged:
 | 1 ns | 3.548 mV | 0.4837 A | 0.0454 % | 11 s |
 | 500 ps | 3.476 mV | 0.4833 A | 0.0444 % | 24 s |
 
-`vout_pp` is ~2.5% above its converged value at 2 ns and `overshoot_pct` ~7%.
+`vout_pp` at 2 ns is 3.19% above the 500 ps value and `overshoot_pct` 4.98%
+((3.587-3.476)/3.476 and (0.0466-0.0444)/0.0444 from the table above). An
+earlier revision said "~2.5%" and "~7%"; neither is derivable from that table,
+and 2.5% is below the minimum possible value -- the sequence decreases
+monotonically in h, so any extrapolated limit is at most 3.476 mV and the 2 ns
+error is at least 3.19%.
 Because `check-assertions.py` compares `measured:` at the precision it was
 recorded to, refining further still fails `make sim` until those values are
 re-recorded — the same coupling that made the 40 ns error un-fixable without a
