@@ -108,97 +108,19 @@ for json_root in $JSON_ROOTS; do
   done < <(find "$ROOT/$json_root" -type f -name '*.json' | LC_ALL=C sort)
 done
 
-# Retired names must not come back. AMB-122 renamed AED to Rhoform across
-# everything that ships, and AMB-118 moved the KiCad library prefix off
-# `ael:` because AEL is Keysight ADS's Application Extension Language - a
-# same-industry collision. Without a gate, one copied snippet or one reverted
-# file reintroduces either and nothing notices until it is inconsistent again.
-#
-# The library prefix is matched as `ael:` and not as a bare word, because
-# unlike the project name it is retired only in that one position: three
-# letters that occur inside ordinary English would fail on the next document
-# that happens to contain them.
-#
-# PATHS ARE CHECKED AS WELL AS CONTENTS. The first version of this scanned
-# file bodies only, so re-creating `eval/aed_eval/` and tracking a file in it
-# passed cleanly - which is precisely the miss AMB-122 was written to prevent,
-# since the thing its inventory nearly lost was a DIRECTORY NAME.
-#
-# Four exclusions are deliberate, listed explicitly rather than matched
-# loosely:
-#
-#   aed-part-data / aed_part_data   a SEPARATE project's repository
-#   sha256 digests                  two of them spell the letters mid-hash
-#   the note in tests/ir/           records that the rename happened
-#   this file                       a check cannot forbid a word without
-#                                   naming it, so it does not scan itself
-#
-# Only tracked files are scanned: an untracked scratch tree is not the
-# repository. Needs python3 and git; without either it reports itself
-# unavailable rather than passing silently.
+# Retired names must not come back. That check grew two matchers and a set
+# of exclusions, so it lives in its own script with its own self-test rather
+# than as embedded Python here - the same shape as the part linter and the IR
+# hash gate, and for the same reason: a check that silently stopped firing
+# must fail loudly instead of reporting a clean sweep.
 brand_check="scanned"
 if ! command -v git >/dev/null 2>&1 || [ "$json_parser" != "python3" ]; then
   brand_check="DEFERRED (needs python3 and git)"
   printf 'WARN: retired-name scan %s; it did not run.\n' "$brand_check" >&2
 else
-  brand_hits=$(cd "$ROOT" && git ls-files -z | python3 -c '
-import re, sys
-ALLOWED = ("aed-part-data", "aed_part_data")
-HEX = re.compile(r"\b[0-9a-f]{64}\b")
-NOTE = "tests/ir/check-hashes.py"
-SELF = "tests/structure/check-layout.sh"
-BRAND = re.compile("aed", re.I)
-PREFIX = re.compile(r"\bael:", re.I)
-hits = []
-for raw in sys.stdin.buffer.read().split(b"\0"):
-    rel = raw.decode()
-    if not rel or rel == SELF:
-        continue
-    # The path itself, which is how a renamed package or skill directory
-    # comes back. Stripped THEN searched, exactly as the body is below: an
-    # earlier version exempted the whole path if any allowed token appeared
-    # anywhere in it, so a single `aed-part-data` segment switched the gate
-    # off for everything beneath it - the moment that pipeline is vendored or
-    # mirrored under its own name, the subtree stops being checked.
-    probe = rel
-    for token in ALLOWED:
-        probe = probe.replace(token, "")
-    if BRAND.search(probe):
-        hits.append(f"{rel}  (path)")
-    try:
-        text = open(rel, encoding="utf-8").read()
-    except FileNotFoundError:
-        continue
-    except IsADirectoryError:
-        continue
-    except UnicodeDecodeError:
-        # Not text. Report rather than skip: a binary carrying the old name
-        # is still the old name, and silence here would be the same bug as
-        # not looking at paths.
-        hits.append(f"{rel}  (binary, not scanned)")
-        continue
-    except OSError as exc:
-        # Unreadable. Reported as a finding so the scan still COMPLETES and
-        # the real residue elsewhere is still listed; letting this raise
-        # aborted the whole scan and turned a diagnosable failure into a
-        # bare non-zero exit.
-        hits.append(f"{rel}  (unreadable: {exc.strerror}, not scanned)")
-        continue
-    for token in ALLOWED:
-        text = text.replace(token, "")
-    text = HEX.sub("", text)
-    if rel == NOTE:
-        text = text.replace("the AED -> Rhoform rename", "")
-    for line_no, line in enumerate(text.split("\n"), 1):
-        if BRAND.search(line) or PREFIX.search(line):
-            hits.append(f"{rel}:{line_no}")
-if hits:
-    print("\n".join(hits))
-')
-  if [ -n "$brand_hits" ]; then
-    printf 'FAIL: a retired name (AED, or the ael: library prefix) reappears in tracked files:\n%s\n' "$brand_hits" >&2
-    exit 1
-  fi
+  python3 "$SCRIPT_DIR/check-retired-names.py" --self-test >/dev/null \
+    || fail "the retired-name scan's own self-test failed"
+  python3 "$SCRIPT_DIR/check-retired-names.py" >/dev/null || exit 1
 fi
 
 # The toolchain manifest must parse as YAML when PyYAML is available.
