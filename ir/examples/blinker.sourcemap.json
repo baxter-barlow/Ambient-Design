@@ -28,21 +28,21 @@
     "/assert_duty": {
       "declaration": {
         "file": 0,
-        "byte_start": 920,
-        "byte_end": 958,
-        "line_start": 18,
+        "byte_start": 944,
+        "byte_end": 982,
+        "line_start": 19,
         "col_start": 5,
-        "line_end": 18,
+        "line_end": 19,
         "col_end": 43
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 920,
-          "byte_end": 958,
-          "line_start": 18,
+          "byte_start": 944,
+          "byte_end": 982,
+          "line_start": 19,
           "col_start": 5,
-          "line_end": 18,
+          "line_end": 19,
           "col_end": 43
         }
       ]
@@ -50,21 +50,21 @@
     "/assert_freq": {
       "declaration": {
         "file": 0,
-        "byte_start": 860,
-        "byte_end": 901,
-        "line_start": 17,
+        "byte_start": 884,
+        "byte_end": 925,
+        "line_start": 18,
         "col_start": 5,
-        "line_end": 17,
+        "line_end": 18,
         "col_end": 46
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 860,
-          "byte_end": 901,
-          "line_start": 17,
+          "byte_start": 884,
+          "byte_end": 925,
+          "line_start": 18,
           "col_start": 5,
-          "line_end": 17,
+          "line_end": 18,
           "col_end": 46
         }
       ]
@@ -354,21 +354,21 @@
     "GND": {
       "declaration": {
         "file": 0,
-        "byte_start": 590,
-        "byte_end": 641,
-        "line_start": 12,
+        "byte_start": 614,
+        "byte_end": 665,
+        "line_start": 13,
         "col_start": 5,
-        "line_end": 12,
+        "line_end": 13,
         "col_end": 56
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 590,
-          "byte_end": 641,
-          "line_start": 12,
+          "byte_start": 614,
+          "byte_end": 665,
+          "line_start": 13,
           "col_start": 5,
-          "line_end": 12,
+          "line_end": 13,
           "col_end": 56
         }
       ]
@@ -376,21 +376,21 @@
     "N_CTL": {
       "declaration": {
         "file": 0,
-        "byte_start": 834,
-        "byte_end": 859,
-        "line_start": 16,
+        "byte_start": 858,
+        "byte_end": 883,
+        "line_start": 17,
         "col_start": 5,
-        "line_end": 16,
+        "line_end": 17,
         "col_end": 30
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 834,
-          "byte_end": 859,
-          "line_start": 16,
+          "byte_start": 858,
+          "byte_end": 883,
+          "line_start": 17,
           "col_start": 5,
-          "line_end": 16,
+          "line_end": 17,
           "col_end": 30
         }
       ]
@@ -398,21 +398,21 @@
     "N_DIS": {
       "declaration": {
         "file": 0,
-        "byte_start": 660,
-        "byte_end": 695,
-        "line_start": 13,
+        "byte_start": 684,
+        "byte_end": 719,
+        "line_start": 14,
         "col_start": 5,
-        "line_end": 13,
+        "line_end": 14,
         "col_end": 40
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 660,
-          "byte_end": 695,
-          "line_start": 13,
+          "byte_start": 684,
+          "byte_end": 719,
+          "line_start": 14,
           "col_start": 5,
-          "line_end": 13,
+          "line_end": 14,
           "col_end": 40
         }
       ]
@@ -451,21 +451,21 @@
     "N_TH": {
       "declaration": {
         "file": 0,
-        "byte_start": 720,
-        "byte_end": 765,
-        "line_start": 14,
+        "byte_start": 744,
+        "byte_end": 789,
+        "line_start": 15,
         "col_start": 5,
-        "line_end": 14,
+        "line_end": 15,
         "col_end": 50
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 720,
-          "byte_end": 765,
-          "line_start": 14,
+          "byte_start": 744,
+          "byte_end": 789,
+          "line_start": 15,
           "col_start": 5,
-          "line_end": 14,
+          "line_end": 15,
           "col_end": 50
         }
       ]
@@ -473,21 +473,21 @@
     "OUT": {
       "declaration": {
         "file": 0,
-        "byte_start": 790,
-        "byte_end": 833,
-        "line_start": 15,
+        "byte_start": 814,
+        "byte_end": 857,
+        "line_start": 16,
         "col_start": 5,
-        "line_end": 15,
+        "line_end": 16,
         "col_end": 48
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 790,
-          "byte_end": 833,
-          "line_start": 15,
+          "byte_start": 814,
+          "byte_end": 857,
+          "line_start": 16,
           "col_start": 5,
-          "line_end": 15,
+          "line_end": 16,
           "col_end": 48
         }
       ]
@@ -495,21 +495,21 @@
     "VCC": {
       "declaration": {
         "file": 0,
-        "byte_start": 520,
-        "byte_end": 567,
-        "line_start": 11,
+        "byte_start": 544,
+        "byte_end": 591,
+        "line_start": 12,
         "col_start": 5,
-        "line_end": 11,
+        "line_end": 12,
         "col_end": 52
       },
       "instantiation_trace": [
         {
           "file": 0,
-          "byte_start": 520,
-          "byte_end": 567,
-          "line_start": 11,
+          "byte_start": 544,
+          "byte_end": 591,
+          "line_start": 12,
           "col_start": 5,
-          "line_end": 11,
+          "line_end": 12,
           "col_end": 52
         }
       ]
