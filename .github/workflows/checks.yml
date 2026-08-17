@@ -255,7 +255,13 @@ jobs:
         # here fails the job loudly instead of skipping the value comparison.
         # Keep in sync with toolchain/versions.yaml (python.packages.pyyaml).
         run: |
+          # Debian testing's python3/python3-yaml are NOT the pins in
+          # toolchain/versions.yaml, and this is the one job that produces
+          # numeric results. The assertion checkers are stdlib + PyYAML only and
+          # their behaviour does not vary across these versions, but the
+          # divergence is recorded rather than described as "in sync".
           apt-get install -y --no-install-recommends python3 python3-yaml
+          python3 -c "import sys, yaml; print('sim job interpreter', sys.version.split()[0], 'PyYAML', yaml.__version__, '(NOT the pinned versions; see comment)')"
           python3 -c "import yaml, sys; print('python', sys.version.split()[0], 'PyYAML', yaml.__version__)"
       - name: Self-test the assertion checkers
         run: |

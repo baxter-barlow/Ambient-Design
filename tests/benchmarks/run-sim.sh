@@ -53,6 +53,17 @@ fi
 # the gate had no idea what it was supposed to run: deleting every deck printed
 # "nothing to run" and exited 0, and renaming one just made the run shorter.
 # `deck: null` is how benchmark (c) says it deliberately has none.
+# Benchmarks that must exist. Enumerating work from assertions.yaml moved the
+# source of truth from decks to specs and reproduced the identical defect one
+# file to the left: `rm benchmarks/blinker-555/assertions.yaml` printed
+# "1 deck(s) completed" and exited 0, and removing all of them printed
+# "nothing to run".
+REQUIRED_BENCHMARKS="blinker-555 buck-3v3 esp32s3-devboard"
+for required in $REQUIRED_BENCHMARKS; do
+  [ -f "$BENCH_DIR/$required/assertions.yaml" ] \
+    || fail_env "benchmarks/$required/assertions.yaml is missing; a benchmark cannot leave the gate by losing its spec."
+done
+
 expected_decks=""
 missing_decks=""
 for spec in "$BENCH_DIR"/*/assertions.yaml; do
