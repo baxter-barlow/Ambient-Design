@@ -80,7 +80,9 @@ the first draft (re-derived for RA = 100 k, RB = 680 k, C = 1 µF):
 
 - f_min = 0.988 / (1.01 · 1.05) = 0.932 Hz  (all R +1 %, C +5 %)
 - f_max = 0.988 / (0.99 · 0.95) = 1.051 Hz  (all R −1 %, C −5 %)
-- **f window: 0.923 – 1.052 Hz** (≈ ±6.1 %, cap tolerance dominates)
+- **f window: 0.923 – 1.052 Hz** (-6.58 %/+6.48 % about the 0.988 Hz
+  nominal, ±6.53 % about the window's own midpoint; cap tolerance
+  dominates). This read ±6.1 %, which is reproducible from neither.
 - Equivalent period window: **0.951 – 1.083 s**
 
 Duty is a resistor ratio only, so passives contribute almost nothing
@@ -136,7 +138,11 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 
 ## AC1a: DSL expressibility
 
-The design is 9 components, 7 nets, 2 assertions. Rendered through
+The design is 9 BOM lines (`parts.yaml`), 7 nets and 2 assertions. The
+rendering below shows 11 component instances: the count above is fitted
+parts, and `mh1` (a mounting hole) and `tp_out` (a test point) are
+instances that carry no BOM line. Stating the rule because the reader's
+eye lands on the DSL, where the two numbers disagree. Rendered through
 **candidate_b, the arm the bake-off chose** (`lang/README.md`), from
 `lang/examples/blinker-555.design.json`:
 
