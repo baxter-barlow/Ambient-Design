@@ -240,13 +240,13 @@ belong to higher rungs.
 
 ## 9. Results vs. assertions
 
-| Assertion | Window | Measured | Status |
+| Assertion (`meas_id`) | Window | Measured | Status |
 |---|---|---|---|
-| Mean Vout (2 A) | 3.3 V +/-3% | 3.2960 V (-0.12%) | pass |
-| Output ripple | <= 50 mVpp | 3.587 mVpp | pass |
-| Efficiency | >= 85% | 92.864% | pass |
-| Startup overshoot | <= 5% | 0.0466% | pass |
-| 1A->2A settling | <= 500 us | 16.86 us | pass |
+| Mean Vout (2 A) (`vout_avg`) | 3.3 V +/-3% | 3.2960 V (-0.12%) | pass |
+| Output ripple (`vout_pp`) | <= 50 mVpp | 3.587 mVpp | pass |
+| Efficiency (`eff`) | >= 85% | 92.864% | pass |
+| Startup overshoot (`overshoot_pct`) | <= 5% | 0.0466% | pass |
+| 1A->2A settling (`t_settle_us`) | <= 500 us | 16.86 us | pass |
 
 Input corners (9 V / 14 V, supplementary runs in `validation.log`): all five
 stay green; worst deltas are ripple-current 0.515 App at 14 V, settling
