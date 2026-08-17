@@ -39,7 +39,9 @@ jobs:
           python3 --version
           python3 -m pip install PyYAML==6.0.2
       - name: Validate monorepo layout invariants
-        run: bash tests/structure/check-layout.sh
+        run: |
+          python3 tests/structure/check-retired-names.py --self-test
+          bash tests/structure/check-layout.sh
 
   schemas:
     name: Schemas and part data
@@ -65,11 +67,6 @@ jobs:
         # stopped firing would otherwise report a clean sweep over every
         # record, which is indistinguishable from having no linter at all.
         run: python3 parts/lint-part-data.py --self-test
-      - name: Retired-name scan self-test
-        # The scan itself runs inside check-layout.sh; this proves its
-        # matchers still fire before trusting the sweep they produce.
-        run: python3 tests/structure/check-retired-names.py --self-test
-
       - name: IR content hashes
         # Proves `design_hash` describes its own bytes and the source map
         # agrees. Stdlib only. The self-test runs first so a check that

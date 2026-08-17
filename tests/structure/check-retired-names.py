@@ -45,16 +45,37 @@ HEX = re.compile(r"\b[0-9a-f]{64}\b")
 # The project name: a word, anywhere.
 PROJECT = re.compile(r"aed", re.I)
 
-# The library nickname, in each shape it actually takes. A footprint-shaped
-# tail on the colon form is what lets `AEL: Application Extension Language`
-# through while still catching `"ael:DIP-8_W7.62mm"`.
-NICKNAME_IN_TEXT = re.compile(r"\bael:[A-Za-z0-9_.\-]|\"ael\"", re.I)
+# The library nickname, in each shape it actually takes. Every alternative is
+# keyed on POSITION - a reference, a declaration, a library artefact - never on
+# the quote character. Keying on quotes was both too broad and too narrow at
+# once: it flagged `Keysight's language is "AEL".` while missing the same
+# declaration written with single quotes or none.
+#
+# The footprint-shaped tail on the colon form is what lets
+# `AEL: Application Extension Language` through, which this repository has to
+# be able to write in order to explain why the prefix moved at all.
+NICKNAME_IN_TEXT = re.compile(
+    r"\bael:[A-Za-z0-9_.\-]"                                    # a reference
+    # No leading \b: the key is often a SUFFIX, as in `HOUSE_LIBRARY = "ael"`.
+    r"|(?:name|nickname|library|lib)\s*[:=]\s*[\"']?ael[\"']?(?![A-Za-z0-9_])"
+    r"|\(\s*name\s+[\"']?ael[\"']?\s*\)"                        # an s-expression
+    r"|\bael\.(?:pretty|kicad_sym|kicad_mod)\b",                # a library artefact
+    re.I,
+)
 NICKNAME_IN_PATH = re.compile(r"(?<![A-Za-z0-9])ael(?![A-Za-z0-9])", re.I)
 
-# Files that must be able to name what they forbid.
-EXEMPT_FILES = {
-    "tests/structure/check-retired-names.py",
-    "tests/ir/check-hashes.py",
+# Only this file is exempt WHOLESALE, because a check cannot forbid a word
+# without naming it repeatedly.
+EXEMPT_FILES = {"tests/structure/check-retired-names.py"}
+
+# Everything else that legitimately names a retired name gets the PHRASE
+# blanked and the rest of the file scanned. An earlier version exempted
+# `check-hashes.py` entirely to spare one historical note, which turned a live
+# gate script into a blind spot: `.aed-cache` and `import aed_eval` planted in
+# it became invisible. Breadth bought nothing - that file produces exactly one
+# hit, and it is the note.
+EXEMPT_PHRASES = {
+    "tests/ir/check-hashes.py": ("the AED -> Rhoform rename",),
 }
 
 
@@ -80,11 +101,31 @@ def scan_path(rel: str) -> str | None:
 def scan_text(rel: str, text: str) -> list[str]:
     for token in ALLOWED:
         text = text.replace(token, "")
+    for phrase in EXEMPT_PHRASES.get(rel, ()):
+        text = text.replace(phrase, "")
     text = HEX.sub("", text)
     hits = []
     for line_no, line in enumerate(text.split("\n"), 1):
         if PROJECT.search(line) or NICKNAME_IN_TEXT.search(line):
             hits.append(f"{rel}:{line_no}")
+    return hits
+
+
+def scan_files(files) -> list[str]:
+    """Scan an iterable of (path, text). The layer the self-test can drive.
+
+    Split out from `scan_repository` because the exemption logic lives here,
+    and a self-test that only exercised the matchers could not see it: making
+    `EXEMPT_FILES` match everything left the suite green and the gate dead.
+    """
+    hits: list[str] = []
+    for rel, text in files:
+        if rel in EXEMPT_FILES:
+            continue
+        path_hit = scan_path(rel)
+        if path_hit:
+            hits.append(path_hit)
+        hits.extend(scan_text(rel, text))
     return hits
 
 
@@ -131,6 +172,13 @@ def self_test() -> int:
         ('"footprint_ref": "AEL:R_0402_1005Metric"', True),
         ('(lib (name "ael")(uri "${KIPRJMOD}/ael.pretty"))', True),
         ('HOUSE_LIBRARY = "ael"', True),
+        # Same declaration, other spellings. Keying on the quote character
+        # caught only the first of these.
+        ("HOUSE_LIBRARY = 'ael'", True),
+        ("library: ael", True),
+        ("(lib (name 'ael')(uri 'x'))", True),
+        ('(uri "${KIPRJMOD}/ael.pretty")', True),
+        ("nickname = 'AEL'", True),
         ("python3 -m aed_eval replay", True),
         ("the .aed-cache directory", True),
         # Prose about Keysight's language must survive: this repository has to
@@ -138,6 +186,12 @@ def self_test() -> int:
         ("AEL: Application Extension Language, by Keysight.", False),
         ("## AEL: why the prefix moved", False),
         ("Keysight's AEL is a different thing entirely.", False),
+        # Quoted prose and data about Keysight's language. Matching a bare
+        # quoted "ael" flagged every one of these.
+        ('Keysight\'s scripting language is "AEL".', False),
+        ('Vendors ship "SKILL", "AEL", "Verilog-A".', False),
+        ('{"scripting_languages": ["skill", "ael", "spectre"]}', False),
+        ('| language | "AEL" | Keysight |', False),
         ("Michael: see also Israel: and parallel: notes", False),
         ('"footprint_ref": "rho:DIP-8_W7.62mm"', False),
         ("a paella recipe", False),
@@ -154,7 +208,35 @@ def self_test() -> int:
         ("eval/rhoform_eval/__init__.py", False),
     ]
 
+    # The exemption layer, which the matcher cases cannot see. Widening
+    # EXEMPT_FILES to match everything is a silent kill switch, and that is
+    # exactly how a whole-file exemption over a live gate script slipped past
+    # a 21-case suite.
+    exemption_cases = [
+        (
+            "a planted hit in a phrase-exempt file is still reported",
+            bool(scan_files([("tests/ir/check-hashes.py", "import aed_eval\n")])),
+        ),
+        (
+            "the exempt phrase itself is not reported",
+            not scan_files(
+                [("tests/ir/check-hashes.py", "# the AED -> Rhoform rename\n")]
+            ),
+        ),
+        (
+            "an ordinary file is scanned",
+            bool(scan_files([("parts/README.md", "import aed_eval\n")])),
+        ),
+        (
+            "only this script is exempt wholesale",
+            EXEMPT_FILES == {"tests/structure/check-retired-names.py"},
+        ),
+    ]
+
     failures = 0
+    for name, ok in exemption_cases:
+        failures += 0 if ok else 1
+        print(f"{'ok  ' if ok else 'FAIL'} exempt      {name}")
     for sample, want in text_cases:
         got = bool(scan_text("probe.txt", sample))
         ok = got == want
@@ -171,7 +253,7 @@ def self_test() -> int:
         return 1
     print(
         f"retired-names: self-test PASS: "
-        f"{len(text_cases) + len(path_cases)} cases."
+        f"{len(text_cases) + len(path_cases) + len(exemption_cases)} cases."
     )
     return 0
 
