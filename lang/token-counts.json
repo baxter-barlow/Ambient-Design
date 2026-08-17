@@ -1,6 +1,6 @@
 {
   "_comment": "Generated. Regenerate deliberately with: python3 lang/tests/check_readme_numbers.py --write, on a machine with the optional tiktoken pin installed and its cache warm. lang/README.md is held to this file OFFLINE.",
-  "inputs_fingerprint": "sha256:2e453921acdd476e1c141fee0828dc68f410e201f4b68728f739ecbc8029c94f",
+  "inputs_fingerprint": "sha256:4a2b2478b1cf28741ab72f8c37dad854f15dd50b4375e3501a03dc5dbd3630c9",
   "counts": {
     "blinker-555|candidate_a|explicit": 1344,
     "blinker-555|candidate_a|inferred": 993,

@@ -139,10 +139,12 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 ## AC1a: DSL expressibility
 
 The design is 9 BOM lines (`parts.yaml`), 7 nets and 2 assertions. The
-rendering below shows 11 component instances: the count above is fitted
-parts, and `mh1` (a mounting hole) and `tp_out` (a test point) are
-instances that carry no BOM line. Stating the rule because the reader's
-eye lands on the DSL, where the two numbers disagree. Rendered through
+full 71-line rendering has 11 component instances: the count above is
+fitted parts, and `mh1` (a mounting hole) and `tp_out` (a test point) are
+instances that carry no BOM line. Neither number is countable from the
+20-line excerpt below, which shows 8 components and stops before `tp_out`;
+run the reproduce command for the whole thing. Stating the rule because the
+reader's eye lands on the DSL, where the two numbers otherwise disagree. Rendered through
 **candidate_b, the arm the bake-off chose** (`lang/README.md`), from
 `lang/examples/blinker-555.design.json`:
 

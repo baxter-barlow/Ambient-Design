@@ -54,8 +54,12 @@ corpus/bugs.yaml
 parts/examples/*.part.json
 
     Electrical values transcribed from manufacturer datasheets, with the
-    document, revision and table or section recorded per field in each record's
-    `provenance` block. Individual numbers are facts and are not themselves
+    document and revision recorded per field in each record's `provenance`
+    block, and a table or section for most of them. Provenance is keyed by
+    JSON-pointer prefix with a record-level default, so a field covered only
+    by that default -- several ratings in each record -- has a document and
+    revision but no table. An earlier revision of this file claimed table or
+    section per field, which is not what the records do. Individual numbers are facts and are not themselves
     copyrightable; the datasheets they were read from are not redistributed and
     are not included here. Each record declares a `license_class` describing
     the terms the underlying document was published under -- a vocabulary

@@ -176,7 +176,12 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
   evidence="$ROOT/${pair%%:*}"
   command="$ROOT/${pair##*:}"
   [ -f "$evidence" ] && [ -f "$command" ] || continue
+  # BOTH summary lines. The first version grepped for "$prefix: PASS", which
+  # does not match "$prefix: self-test PASS", so the self-test line above it
+  # was free -- and both files were stale on exactly that line, by 4 and 27
+  # checks. The round-9 fix reconciled the line the round-9 defect was on.
   fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
+  fresh_self=$(python3 "$command" --self-test 2>/dev/null | grep -m1 ": self-test PASS" || true)
   if [ -z "$fresh" ]; then
     printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' \
       "${pair##*:}" "${pair%%:*}" >&2
@@ -194,6 +199,17 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
     exit 1
   fi
   transcripts_checked=$((transcripts_checked + 1))
+  if [ -n "$fresh_self" ]; then
+    quoted_self=$(grep -m1 "$prefix: self-test PASS" "$evidence" \
+                  | sed 's/^[[:space:]]*//' || true)
+    if [ -n "$quoted_self" ] && [ "$quoted_self" != "$fresh_self" ]; then
+      printf 'FAIL: %s quotes a self-test summary the gate no longer prints:\n' \
+        "${pair%%:*}" >&2
+      printf '  file: %s\n  now:  %s\n' "$quoted_self" "$fresh_self" >&2
+      exit 1
+    fi
+    [ -n "$quoted_self" ] && transcripts_checked=$((transcripts_checked + 1))
+  fi
   if [ "$quoted" != "$fresh" ]; then
     printf 'FAIL: %s quotes a summary the gate no longer prints:\n' "${pair%%:*}" >&2
     printf '  file: %s\n  now:  %s\n' "$quoted" "$fresh" >&2
@@ -201,8 +217,8 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
     exit 1
   fi
 done
-if [ "$transcripts_checked" -lt 2 ]; then
-  printf 'FAIL: reconciled %s evidence transcript(s), expected 2. A leg that\n' \
+if [ "$transcripts_checked" -lt 4 ]; then
+  printf 'FAIL: reconciled %s evidence summary line(s), expected 4. A leg that\n' \
     "$transcripts_checked" >&2
   printf 'quietly checks nothing is indistinguishable from one that passes.\n' >&2
   exit 1

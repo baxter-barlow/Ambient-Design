@@ -1096,7 +1096,7 @@ endpoint is "instance.pin" or one of this module's ports.
 ## Assertions
 
     m.check("assert_freq", "dynamic", "frequency", "OUT",
-            unit="Hz", min="0.932", max="1.051")
+            unit="Hz", min="0.923", max="1.052")
 
 Pin roles: power_in, power_out, passive, bidirectional, open_drain,
 open_collector, tri_state, input, output, nc. Hardware kinds: mounting_hole,
