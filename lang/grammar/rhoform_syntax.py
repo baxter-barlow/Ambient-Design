@@ -37,6 +37,7 @@ dependency.
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -56,6 +57,9 @@ SYNTAX_VERSION = "0.1"
 # The grammar does distinguish the interval form from the scalar forms, which
 # is a different thing — see the two patterns below.
 _NUM = r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
+# The same numeral with the fractional part removed. `value` takes this and
+# `bound` takes _NUM; see the TERMINALS comment on INTEGER for why.
+_INT = r"-?(?:0|[1-9][0-9]*)"
 _UNIT = r"[A-Za-z][A-Za-z0-9/]*"
 _IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 
@@ -123,27 +127,91 @@ KEYWORDS = (
     "within",
 )
 
+# Words v0.1 does not use and v1 will. Reserved now, because reserving a word
+# later is a BREAKING syntax change and E1 forbids those without a
+# deterministic auto-migrator that does not exist.
+#
+# The distinction from KEYWORDS is the point: these are not literals in any
+# rule below, and `test_every_literal_in_the_tree_is_a_declared_keyword` still
+# holds KEYWORDS to be exactly the words the grammar spells. They are excluded
+# from FREE_NAME and nothing else, so today they are simply unusable as bound
+# names — which costs nothing while the only v0.1 sources are this repo's own
+# examples, and costs a migrator once anyone else has written a design.
+#
+# WHY THESE EIGHT, and not a guess at the language's future. Each is required
+# by an approved M·core requirement that a later milestone implements:
+#
+#   interface, component  L2 core nouns, alongside `module`, which IS a
+#                         keyword here. AMB-44 adds them.
+#   if, else, for, in     L3 `if` over parameters and bounded `for`
+#                         comprehensions. AMB-44.
+#   import, from          L4/X2 imports, spelled `import X from "path"` in the
+#                         package-identity spec's own worked example. AMB-45.
+#
+# This is a DELIBERATE divergence from the prototype, which accepts all eight
+# as names — unlike the two fixes either side of it, which close gaps where
+# the grammar was looser than the prototype. Recorded here because an anchor
+# test that reads "the grammar and the prototype disagree" should say why.
+#
+# `signal` is deliberately NOT here. It is candidate A's dead net keyword, not
+# a word v1 needs; see KEYWORDS above and
+# `test_the_freeze_drops_signal_and_nothing_else`.
+RESERVED_FUTURE = (
+    "component",
+    "else",
+    "for",
+    "from",
+    "if",
+    "import",
+    "in",
+    "interface",
+)
+
+
 def _free_name_pattern() -> str:
-    """An identifier that is not a keyword.
+    """An identifier that is neither a keyword nor a reserved future keyword.
 
     L5 makes the surface keyword-based, and a keyword-based grammar has to say
     so somewhere. Without this the contextual lexer happily reads `module` as
     an ordinary NAME wherever a name is expected, so `module module:` and
     `net net:` parse — while the prototype rejects every one of them. The
-    exclusion is generated from KEYWORDS, so it cannot fall behind.
+    exclusion is generated from both tuples, so it cannot fall behind either.
 
     The trailing lookahead matters: without it `moduleX` would be rejected as
     if it began with the keyword `module`.
     """
-    alternatives = "|".join(KEYWORDS)
+    alternatives = "|".join(sorted(KEYWORDS + RESERVED_FUTURE))
     return rf"(?!(?:{alternatives})(?![A-Za-z0-9_])){_IDENT}"
 
+
+def _pragma_pattern() -> str:
+    """The one pragma line this artifact defines, escaped from PRAGMA_TEXT."""
+    return re.escape(PRAGMA_TEXT)
+
+
 TERMINALS: dict[str, str] = {
-    # Printable ASCII, like COMMENT and STRING. The pragma line was the last
-    # lexeme still admitting a tab or a non-ASCII character that the
-    # tokenizer rejects per character, which made L5's ASCII rule hold
-    # everywhere except the one line every file is required to carry.
-    "PRAGMA": r"\#pragma[ -~]*",
+    # EXACTLY the one pragma this artifact defines, generated from PRAGMA_TEXT.
+    #
+    # It used to be `\#pragma[ -~]*` — any printable text after the word — which
+    # made L8's version header decorative: `#pragma rhoform-syntax 9.9` and
+    # `#pragma verilog 1.0` both parsed, while the prototype rejects both with
+    # "unsupported syntax-version pragma" (base.py). A version header nothing
+    # validates cannot do its one job, which is to refuse a file written for a
+    # syntax version this artifact does not define.
+    #
+    # Generating it from PRAGMA_TEXT is what makes SYNTAX_VERSION load-bearing:
+    # it was previously read only to interpolate a comment, so the constant
+    # could have said anything without a test noticing.
+    #
+    # This does NOT change the two recorded pragma/comment asymmetries: the
+    # exclusion on COMMENT still ends at a word boundary, so `#pragmatic` is
+    # still a comment and a mid-line `#pragma x` is still rejected. See
+    # `test_the_pragma_and_comment_boundary_is_a_decision`. It removes a THIRD
+    # asymmetry that was never recorded, in the direction of the prototype.
+    #
+    # The ASCII rule this line used to be the last exception to is now
+    # enforced trivially: the only accepted pragma is ASCII by construction.
+    "PRAGMA": _pragma_pattern(),
     # Two identifier terminals, because the prototype checks reserved words at
     # some name positions and not others. FREE_NAME is where a name is being
     # BOUND — module, port, net, table row, instance — and is the set the
@@ -156,13 +224,52 @@ TERMINALS: dict[str, str] = {
     "QUANTITY": _QUANTITY_SCALAR,
     "QUANTITY_INTERVAL": _QUANTITY_INTERVAL,
     "QUANTITY_PLAIN": _QUANTITY_PLAIN,
+    # Two numeric terminals, for the same reason QUANTITY is split three ways:
+    # the positions are not interchangeable, and one terminal serving both let
+    # the grammar accept what the prototype rejects.
+    #
+    # NUMBER is a bound's operand and MUST admit decimals — `within 0.5 to 0.6`
+    # is a legal duty-cycle assertion, pinned by test_grammar.py.
+    #
+    # INTEGER is a `value`'s operand and must NOT. The `value` rule's own
+    # docstring, rendered verbatim into both artifacts, has always said "a bare
+    # decimal is not a value: it is either a quantity missing its unit or a
+    # count that should be whole" — and the grammar did not implement it, so
+    # `resistance = 1.5` parsed here and failed in the prototype with RHOB0003.
+    # A whole count IS a value (`count = 8`), which is why this is a narrowing
+    # of NUMBER rather than dropping the alternative.
     "NUMBER": _NUM,
+    "INTEGER": _INT,
     # Printable ASCII only, and the closing quote excluded. The tokenizer
     # scans every character of every line for tabs and non-ASCII, so `"µF"`
     # is a lexical error there; a grammar that allowed it would disagree
     # about a file, and L5's ASCII rule would hold between tokens and nowhere
     # else.
     "STRING": r'"[ !#-~]*"',
+}
+
+# Lark lexer priorities. A terminal absent from this map is emitted unranked.
+#
+# This used to be spelled by hand-writing eight `NAME.priority: pattern` lines
+# in `emit_lark`, which meant the Lark artifact carried its own terminal LIST:
+# adding INTEGER to TERMINALS put it in the EBNF and not in the Lark, and the
+# only symptom was `GrammarError: Rule 'INTEGER' used but not defined`. The set
+# now comes from TERMINALS for both artifacts and only the ranking lives here,
+# so the two cannot disagree about which terminals exist.
+#
+#   PRAGMA             outranks COMMENT, which is also `#`-initial.
+#   QUANTITY_INTERVAL  outranks QUANTITY so `A to B` lexes as the interval
+#                      wherever both are legal.
+#   INTEGER            outranks NUMBER so that a value position, where only
+#                      INTEGER is grammatical, cannot lex `8` as a NUMBER and
+#                      then fail to reduce. NUMBER still wins on `1.5` because
+#                      it matches longer, which is exactly the rejection the
+#                      `value` rule wants.
+LARK_TERMINAL_PRIORITY = {
+    "PRAGMA": 2,
+    "QUANTITY_INTERVAL": 2,
+    "QUANTITY": 1,
+    "INTEGER": 1,
 }
 
 # Names the grammar checks by list AFTER parsing, never as keywords. See the
@@ -341,6 +448,7 @@ def _vocab(kind: str) -> Node:
 
 NEWLINE, INDENT, DEDENT = Term("NEWLINE"), Term("INDENT"), Term("DEDENT")
 NAME, NUMBER, STRING = Term("NAME"), Term("NUMBER"), Term("STRING")
+INTEGER = Term("INTEGER")
 QUANTITY, QUANTITY_INTERVAL = Term("QUANTITY"), Term("QUANTITY_INTERVAL")
 QUANTITY_PLAIN = Term("QUANTITY_PLAIN")
 # A name being bound, which may not be a keyword. See TERMINALS.
@@ -583,8 +691,9 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "value",
         "T3/T4 literals. A bare decimal is not a value: it is either a "
-        "quantity missing its unit or a count that should be whole.",
-        Alt(QUANTITY, QUANTITY_INTERVAL, STRING, NUMBER, Lit("true"), Lit("false")),
+        "quantity missing its unit or a count that should be whole — hence "
+        "INTEGER here and NUMBER in `bound`.",
+        Alt(QUANTITY, QUANTITY_INTERVAL, STRING, INTEGER, Lit("true"), Lit("false")),
     ),
     (
         "endpoint",
@@ -753,16 +862,13 @@ def emit_lark() -> str:
         out.append(f"{name}: {node.render('lark')}")
         out.append("")
 
-    out.append("// Terminals. QUANTITY_INTERVAL outranks QUANTITY so that the")
-    out.append("// `A to B` form lexes as the interval wherever both are legal.")
-    out.append(f'PRAGMA.2: {_regex_literal(TERMINALS["PRAGMA"])}')
-    out.append(f'QUANTITY_INTERVAL.2: {_regex_literal(TERMINALS["QUANTITY_INTERVAL"])}')
-    out.append(f'QUANTITY.1: {_regex_literal(TERMINALS["QUANTITY"])}')
-    out.append(f'QUANTITY_PLAIN: {_regex_literal(TERMINALS["QUANTITY_PLAIN"])}')
-    out.append(f'FREE_NAME: {_regex_literal(TERMINALS["FREE_NAME"])}')
-    out.append(f'NAME: {_regex_literal(TERMINALS["NAME"])}')
-    out.append(f'NUMBER: {_regex_literal(TERMINALS["NUMBER"])}')
-    out.append(f'STRING: {_regex_literal(TERMINALS["STRING"])}')
+    out.append("// Terminals, emitted from TERMINALS so this artifact cannot")
+    out.append("// carry a different terminal SET from the EBNF. Priorities come")
+    out.append("// from LARK_TERMINAL_PRIORITY; see it for why each is ranked.")
+    for name, pattern in TERMINALS.items():
+        priority = LARK_TERMINAL_PRIORITY.get(name)
+        label = f"{name}.{priority}" if priority is not None else name
+        out.append(f"{label}: {_regex_literal(pattern)}")
     out.append("")
     for name, parts, doc in LEXICAL:
         out.append(f"// {doc}")

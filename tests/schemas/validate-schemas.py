@@ -39,6 +39,7 @@ Requires the pinned jsonschema from toolchain/versions.yaml:
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -60,6 +61,39 @@ SCHEMA_ROOTS = {
 }
 
 NEGATIVE_DIR_NAME = "negative"
+
+# Every negative fixture carries its own statement of what it proves, in this
+# member, and the statement is machine-checked.
+#
+# WHY. A negative control earns its keep only if the guarantee it names is the
+# reason it is rejected. Asserting merely "≥1 error" does not establish that,
+# and the difference is not academic: all 16 part-data controls carried an
+# `x_negative_control` OBJECT while that schema's extension rule caps `x_`
+# members at scalars, so every one of them failed on its own metadata as well
+# as on its subject — and 15 of the 15 guarantees they name could be deleted
+# with the gate green. Every `lang/` control was missing the required `anchor`,
+# and five `eval/` controls carried `e03`'s missing-power defect: same disease,
+# three more roots, found only once this check existed.
+#
+# The declaration also documents the fixture. A reader sees the exact pointer
+# the defect lives at without running anything, and a defect that legitimately
+# spans several fields (a cross-field consistency rule) says so explicitly
+# rather than being waved through by a loosened threshold.
+CONTROL_KEY = "x_negative_control"
+CONTROL_PREFIX = re.compile(r"^REJECTED at (?P<locs>[^:]+):")
+
+
+def declared_locations(example):
+    """The JSON Pointers a negative control says it fails at, or None."""
+    if not isinstance(example, dict):
+        return None
+    control = example.get(CONTROL_KEY)
+    if not isinstance(control, str):
+        return None
+    match = CONTROL_PREFIX.match(control.strip())
+    if not match:
+        return None
+    return {loc.strip() for loc in match.group("locs").split("+") if loc.strip()}
 
 
 def load_json(path, rel, failures):
@@ -156,13 +190,26 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
                     f"{rel}: negative control unexpectedly VALIDATES against "
                     f"{schema_name}; expected-invalid examples must fail."
                 )
-            else:
-                first = errors[0]
-                loc = "/" + "/".join(str(p) for p in first.absolute_path)
-                print(
-                    f"schemas: {rel}: invalid as expected "
-                    f"({len(errors)} error(s), first at {loc})."
+            elif (declared := declared_locations(example)) is None:
+                failures.append(
+                    f"{rel}: negative control does not declare where it fails. "
+                    f"Its `{CONTROL_KEY}` must be a string starting "
+                    f"`REJECTED at <json-pointer>[ + <json-pointer>...]: ` so "
+                    "the gate can check that the fixture fails THERE and only "
+                    "there."
                 )
+            elif declared != (actual := {
+                "/" + "/".join(str(p) for p in e.absolute_path) for e in errors
+            }):
+                failures.append(
+                    f"{rel}: negative control declares it fails at "
+                    f"{sorted(declared)} but actually fails at {sorted(actual)}. "
+                    "A control that fails somewhere it does not name would "
+                    "still be rejected with its guarantee removed, so it stops "
+                    "testing that guarantee and nothing says so."
+                )
+            else:
+                print(f"schemas: {rel}: invalid as expected, at the {len(declared)} location(s) it declares: {', '.join(sorted(declared))}.")
         else:
             positive_count += 1
             for error in errors:

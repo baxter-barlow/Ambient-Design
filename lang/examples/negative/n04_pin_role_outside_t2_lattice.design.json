@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -41,5 +45,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: 'power' is not in the T2 lattice; 'power_in' and 'power_out' are."
+  "notes": "EXPECTED-INVALID control: 'power' is not in the T2 lattice; 'power_in' and 'power_out' are.",
+  "x_negative_control": "REJECTED at /modules/0/instances/0/ports/0/role: pin role outside t2 lattice"
 }

@@ -2104,8 +2104,5 @@
     "n_vocab": null,
     "name": "stub-whitespace"
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "A budget block claiming to have passed must show non-negative headroom. It was previously stored verbatim from the caller and never checked, so a record could assert a 64K context passed a 12K limit and validate cleanly."
-  }
+  "x_negative_control": "REJECTED at /a4_context_budget/headroom: A budget block claiming to have passed must show non-negative headroom. It was previously stored verbatim from the caller and never checked, so a record could assert a 64K context passed a 12K limit and validate cleanly."
 }

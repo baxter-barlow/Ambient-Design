@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -38,5 +42,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: a net with no endpoints is not a net."
+  "notes": "EXPECTED-INVALID control: a net with no endpoints is not a net.",
+  "x_negative_control": "REJECTED at /modules/0/nets/0/members: net with no members"
 }

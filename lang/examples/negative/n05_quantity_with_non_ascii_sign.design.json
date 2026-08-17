@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -41,5 +45,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: L5 is ASCII only: the tolerance sign is `+/-`, never U+00B1."
+  "notes": "EXPECTED-INVALID control: L5 is ASCII only: the tolerance sign is `+/-`, never U+00B1.",
+  "x_negative_control": "REJECTED at /modules/0/instances/0/parameters/resistance/q: quantity with non ascii sign"
 }

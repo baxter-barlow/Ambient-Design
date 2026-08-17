@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: hardware_kind \"mounting_hole\" is a pinless L9 kind and must carry zero ports, but /mh1 declares a port. Expected rejection at /instances/1/ports (maxItems 0).",
+  "x_negative_control": "REJECTED at /instances/1/ports: hardware_kind \"mounting_hole\" is a pinless L9 kind and must carry zero ports, but /mh1 declares a port. Expected rejection at /instances/1/ports (maxItems 0).",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

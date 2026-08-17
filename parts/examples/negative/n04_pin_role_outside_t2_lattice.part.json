@@ -42,8 +42,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "PinRole is the closed T2 lattice, identical to the netlist IR's enum. 'power' is not a member (the members are power_in / power_out). A divergence between the two schemas would only surface at check time, so it is rejected at authoring time."
-  }
+  "x_negative_control": "REJECTED at /pins/0/role: PinRole is the closed T2 lattice, identical to the netlist IR's enum. 'power' is not a member (the members are power_in / power_out). A divergence between the two schemas would only surface at check time, so it is rejected at authoring time."
 }

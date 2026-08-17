@@ -47,8 +47,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Source is closed and has no member that can hold document bytes. Datasheets are fetched on demand and never redistributed by Rhoform; the schema makes embedding them impossible rather than discouraged."
-  }
+  "x_negative_control": "REJECTED at /sources/0: Source is closed and has no member that can hold document bytes. Datasheets are fetched on demand and never redistributed by Rhoform; the schema makes embedding them impossible rather than discouraged."
 }

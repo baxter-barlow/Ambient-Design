@@ -17,13 +17,14 @@ source module as CLOSED_VOCABULARIES.
 *)
 
 (* Terminals. *)
-PRAGMA ::= /\#pragma[ -~]*/
-FREE_NAME ::= /(?!(?:abstract|assert|at|board_only|dnp|dynamic|exclude_from_bom|false|hardware|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
+PRAGMA ::= /\#pragma\ rhoform\-syntax\ 0\.1/
+FREE_NAME ::= /(?!(?:abstract|assert|at|board_only|component|dnp|dynamic|else|exclude_from_bom|false|for|from|hardware|if|import|in|interface|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
 NAME ::= /[A-Za-z_][A-Za-z0-9_]*/
 QUANTITY ::= /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
 QUANTITY_INTERVAL ::= /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
 QUANTITY_PLAIN ::= /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
 NUMBER ::= /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?/
+INTEGER ::= /-?(?:0|[1-9][0-9]*)/
 STRING ::= /"[ !#-~]*"/
 
 (* The lexical layer. *)
@@ -133,8 +134,8 @@ arguments ::= '(' (argument (',' argument)*)? ')'
 (* One named parameter. *)
 argument ::= NAME '=' value
 
-(* T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole. *)
-value ::= QUANTITY | QUANTITY_INTERVAL | STRING | NUMBER | 'true' | 'false'
+(* T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole — hence INTEGER here and NUMBER in `bound`. *)
+value ::= QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | 'true' | 'false'
 
 (* A connectable point: this module's port, or an instance pin. *)
 endpoint ::= NAME ('.' NAME)?

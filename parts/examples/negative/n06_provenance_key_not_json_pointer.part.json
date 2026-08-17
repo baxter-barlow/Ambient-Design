@@ -47,8 +47,5 @@
     }
   },
   "license_class": "vendor-public",
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "provenance keys are RFC 6901 JSON Pointers. A dotted path does not resolve, so the nearest-ancestor resolution rule could never find it and the field would silently appear unsourced."
-  }
+  "x_negative_control": "REJECTED at /provenance: provenance keys are RFC 6901 JSON Pointers. A dotted path does not resolve, so the nearest-ancestor resolution rule could never find it and the field would silently appear unsourced."
 }

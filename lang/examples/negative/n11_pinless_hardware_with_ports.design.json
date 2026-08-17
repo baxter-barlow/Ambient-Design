@@ -2,6 +2,10 @@
   "model_version": 0,
   "stability": "unstable",
   "design_id": "n",
+  "anchor": {
+    "kind": "netlist-ir",
+    "path": "ir/examples/blinker.ir.json"
+  },
   "root_module": "M",
   "modules": [
     {
@@ -42,5 +46,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: a mounting hole is pinless; ports on one would join nets that cannot exist."
+  "notes": "EXPECTED-INVALID control: a mounting hole is pinless; ports on one would join nets that cannot exist.",
+  "x_negative_control": "REJECTED at /modules/0/instances/0/ports: pinless hardware with ports"
 }

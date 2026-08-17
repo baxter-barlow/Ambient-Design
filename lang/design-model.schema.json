@@ -4,6 +4,29 @@
   "title": "Rhoform Bake-off Design Model v0",
   "description": "ARM-NEUTRAL description of one design, used only by the §8-Q1 syntax bake-off (issue AMB-32 / roadmap R5b). It is the thing every candidate grammar and the Starlark baseline must express, so that a token-cost comparison between them is a comparison of GRAMMARS rather than of designs. Each arm renders a model to source and parses source back to a model; the round trip and the cross-arm agreement are what make the numbers comparable.\n\nTHIS IS NOT THE IR. ir/netlist-ir.schema.json describes a fully ELABORATED design: flattened nets, resolved parameters, content hashes, generator metadata. This describes SOURCE-LEVEL facts before elaboration: module definitions, their instances, their local nets. The vocabularies that both share — pin roles, hardware kinds, measurement kinds, path-safe identifiers — are deliberately identical, and lang/tests/test_bakeoff.py fails if they ever drift apart.\n\nTHIS IS A THROWAWAY FIXTURE FORMAT. R5b's prototypes are explicitly disposable; the frozen grammar's real source of truth lands in AMB-33/R6 and the living benchmark sources in AMB-50/R53. Nothing outside lang/ may depend on this schema.",
   "type": "object",
+  "patternProperties": {
+    "^x_": {
+      "description": "Reserved top-level extension point. Tools must ignore unknown x_* members. EXTENSION POINTS CANNOT CARRY A PAYLOAD: an x_ member must be a scalar of at most 1024 characters, never an object or array — the same cap parts/part-data.schema.json states, for the same reason.",
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 1024
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
   "additionalProperties": false,
   "required": [
     "model_version",
@@ -34,7 +57,10 @@
     },
     "purpose": {
       "type": "string",
-      "enum": ["reference", "coverage-probe"],
+      "enum": [
+        "reference",
+        "coverage-probe"
+      ],
       "default": "reference",
       "description": "\"reference\": a transcription of a benchmark design, which MUST declare an anchor — a reference netlist nothing external agrees with is an opinion. \"coverage-probe\": a synthetic design whose job is to exercise every field of this schema at least once, so that an arm which cannot express something fails the gate instead of waiting for a corpus that happens to hit it. A probe has nothing external to anchor to and must not claim one.",
       "$comment": "The Starlark arm could not express exclude_from_bom on a component without a hardware kind, and the gate passed for months of nothing because neither benchmark used that combination."
@@ -51,12 +77,16 @@
     "modules": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/ModuleDef" },
+      "items": {
+        "$ref": "#/$defs/ModuleDef"
+      },
       "description": "All module definitions, sorted bytewise-ascending by `name` (the loader enforces the order, so two models describing the same design serialize identically)."
     },
     "assertions": {
       "type": "array",
-      "items": { "$ref": "#/$defs/Assertion" },
+      "items": {
+        "$ref": "#/$defs/Assertion"
+      },
       "description": "Design assertions declared on the root module, sorted bytewise-ascending by `name`. Assertion syntax is part of the surface under test, so the corpus carries real ones."
     },
     "notes": {
@@ -67,23 +97,52 @@
   "allOf": [
     {
       "if": {
-        "not": { "required": ["purpose"] }
+        "not": {
+          "required": [
+            "purpose"
+          ]
+        }
       },
-      "then": { "required": ["anchor"] }
+      "then": {
+        "required": [
+          "anchor"
+        ]
+      }
     },
     {
       "if": {
-        "properties": { "purpose": { "const": "reference" } },
-        "required": ["purpose"]
+        "properties": {
+          "purpose": {
+            "const": "reference"
+          }
+        },
+        "required": [
+          "purpose"
+        ]
       },
-      "then": { "required": ["anchor"] }
+      "then": {
+        "required": [
+          "anchor"
+        ]
+      }
     },
     {
       "if": {
-        "properties": { "purpose": { "const": "coverage-probe" } },
-        "required": ["purpose"]
+        "properties": {
+          "purpose": {
+            "const": "coverage-probe"
+          }
+        },
+        "required": [
+          "purpose"
+        ]
       },
-      "then": { "properties": { "anchor": false, "source_benchmark": false } }
+      "then": {
+        "properties": {
+          "anchor": false,
+          "source_benchmark": false
+        }
+      }
     }
   ],
   "$defs": {
@@ -112,13 +171,31 @@
       "type": "object",
       "additionalProperties": false,
       "oneOf": [
-        { "required": ["q"] },
-        { "required": ["s"] },
-        { "required": ["i"] },
-        { "required": ["b"] }
+        {
+          "required": [
+            "q"
+          ]
+        },
+        {
+          "required": [
+            "s"
+          ]
+        },
+        {
+          "required": [
+            "i"
+          ]
+        },
+        {
+          "required": [
+            "b"
+          ]
+        }
       ],
       "properties": {
-        "q": { "$ref": "#/$defs/Quantity" },
+        "q": {
+          "$ref": "#/$defs/Quantity"
+        },
         "s": {
           "type": "string",
           "minLength": 1,
@@ -138,8 +215,12 @@
     "ValueMap": {
       "type": "object",
       "description": "Map from parameter name to value. Key order in the file is irrelevant; the loader sorts.",
-      "propertyNames": { "$ref": "#/$defs/Identifier" },
-      "additionalProperties": { "$ref": "#/$defs/Value" }
+      "propertyNames": {
+        "$ref": "#/$defs/Identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Value"
+      }
     },
     "PinRole": {
       "type": "string",
@@ -171,10 +252,17 @@
     "Port": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "role"],
+      "required": [
+        "name",
+        "role"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/Identifier" },
-        "role": { "$ref": "#/$defs/PinRole" },
+        "name": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "role": {
+          "$ref": "#/$defs/PinRole"
+        },
         "pin_numbers": {
           "type": "array",
           "minItems": 1,
@@ -191,15 +279,24 @@
       "type": "object",
       "additionalProperties": false,
       "description": "Reference-only part binding (D1), matching the IR's discriminated shape. The model never inlines part data.\n\nA RESOLVED part may carry constraints as well as a key — the IR keeps them as the provenance record of what the pick was required to satisfy, so that re-resolution has to be explicit rather than silent. An earlier draft used `oneOf` here and rejected exactly that, which the 555's resolved-with-constraints binding caught.",
-      "required": ["binding"],
+      "required": [
+        "binding"
+      ],
       "properties": {
         "binding": {
           "type": "string",
-          "enum": ["abstract", "resolved"],
+          "enum": [
+            "abstract",
+            "resolved"
+          ],
           "description": "\"abstract\": only the constraint set is known. \"resolved\": pinned in the parts lockfile."
         },
         "constraints": {
-          "allOf": [{ "$ref": "#/$defs/ValueMap" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/ValueMap"
+            }
+          ],
           "minProperties": 1,
           "description": "Constraint set the part must satisfy."
         },
@@ -213,59 +310,106 @@
       "allOf": [
         {
           "if": {
-            "properties": { "binding": { "const": "abstract" } },
-            "required": ["binding"]
+            "properties": {
+              "binding": {
+                "const": "abstract"
+              }
+            },
+            "required": [
+              "binding"
+            ]
           },
           "then": {
-            "required": ["constraints"],
-            "properties": { "lockfile_key": false }
+            "required": [
+              "constraints"
+            ],
+            "properties": {
+              "lockfile_key": false
+            }
           }
         },
         {
           "if": {
-            "properties": { "binding": { "const": "resolved" } },
-            "required": ["binding"]
+            "properties": {
+              "binding": {
+                "const": "resolved"
+              }
+            },
+            "required": [
+              "binding"
+            ]
           },
-          "then": { "required": ["lockfile_key"] }
+          "then": {
+            "required": [
+              "lockfile_key"
+            ]
+          }
         }
       ]
     },
     "InstanceDef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "kind", "definition"],
+      "required": [
+        "name",
+        "kind",
+        "definition"
+      ],
       "description": "One member of a module: either a component leaf or a nested module instantiation.",
       "properties": {
-        "name": { "$ref": "#/$defs/Identifier" },
+        "name": {
+          "$ref": "#/$defs/Identifier"
+        },
         "kind": {
           "type": "string",
-          "enum": ["component", "module"],
+          "enum": [
+            "component",
+            "module"
+          ],
           "description": "Matches the IR's Instance.kind."
         },
         "definition": {
           "$ref": "#/$defs/QualifiedName",
           "description": "For kind=module, the `name` of another entry in `modules`. For kind=component, the library-qualified component name."
         },
-        "parameters": { "$ref": "#/$defs/ValueMap" },
+        "parameters": {
+          "$ref": "#/$defs/ValueMap"
+        },
         "ports": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Port" },
+          "items": {
+            "$ref": "#/$defs/Port"
+          },
           "description": "Component ports with their T2 roles and footprint pins. Omitted for kind=module: a module instance's interface is its definition's `ports`, and repeating it would let the two disagree."
         },
-        "part": { "$ref": "#/$defs/PartBinding" },
-        "hardware_kind": { "$ref": "#/$defs/HardwareKind" },
+        "part": {
+          "$ref": "#/$defs/PartBinding"
+        },
+        "hardware_kind": {
+          "$ref": "#/$defs/HardwareKind"
+        },
         "dnp": {
           "type": "boolean",
           "description": "L9 do-not-populate. Absent means false; the renderer emits the attribute only when true, so the token cost of a flag is the cost of the ones that are actually set."
         },
-        "exclude_from_bom": { "type": "boolean" },
-        "board_only": { "type": "boolean" }
+        "exclude_from_bom": {
+          "type": "boolean"
+        },
+        "board_only": {
+          "type": "boolean"
+        }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "kind": { "const": "module" } },
-            "required": ["kind"]
+            "properties": {
+              "kind": {
+                "const": "module"
+              }
+            },
+            "required": [
+              "kind"
+            ]
           },
           "then": {
             "properties": {
@@ -279,23 +423,39 @@
           "if": {
             "properties": {
               "hardware_kind": {
-                "enum": ["mounting_hole", "fiducial", "artwork"]
+                "enum": [
+                  "mounting_hole",
+                  "fiducial",
+                  "artwork"
+                ]
               }
             },
-            "required": ["hardware_kind"]
+            "required": [
+              "hardware_kind"
+            ]
           },
           "then": {
-            "properties": { "ports": { "type": "array", "maxItems": 0 } }
+            "properties": {
+              "ports": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
           }
         },
         {
           "if": {
             "properties": {
               "hardware_kind": {
-                "enum": ["test_point", "grounded_mounting_hole"]
+                "enum": [
+                  "test_point",
+                  "grounded_mounting_hole"
+                ]
               }
             },
-            "required": ["hardware_kind"]
+            "required": [
+              "hardware_kind"
+            ]
           },
           "then": {
             "properties": {
@@ -305,8 +465,14 @@
                 "maxItems": 1,
                 "items": {
                   "type": "object",
-                  "required": ["role"],
-                  "properties": { "role": { "const": "passive" } }
+                  "required": [
+                    "role"
+                  ],
+                  "properties": {
+                    "role": {
+                      "const": "passive"
+                    }
+                  }
                 }
               }
             }
@@ -322,17 +488,25 @@
     "NetDef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["members"],
+      "required": [
+        "members"
+      ],
       "description": "A net local to one module definition.\n\nA net is an equivalence class of ports, so an UNLABELLED net's identity is exactly its member set — which is why `name` is optional. Modelling every net as labelled would have been simpler and would have quietly rigged the measurement: a two-member link like `ctl ~ r_lim.a` costs one line in a pin-to-pin grammar and three in a label-then-attach grammar, so forcing a label on it charges one candidate for a modelling artifact rather than for its own syntax. Labels appear where a human would write one (rails, named signals) and nowhere else.\n\nWhat is NOT modelled here is DERIVED naming — the rule that invents a name for an unlabelled net. That is I2's stable-identity problem, and letting each arm apply its own rule would make cross-arm comparison depend on the rule rather than on the syntax.",
       "properties": {
         "name": {
-          "allOf": [{ "$ref": "#/$defs/NetName" }],
+          "allOf": [
+            {
+              "$ref": "#/$defs/NetName"
+            }
+          ],
           "description": "Explicit label, when the design gives the net one. Absent means an unlabelled net identified by its members."
         },
         "members": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/PortRef" },
+          "items": {
+            "$ref": "#/$defs/PortRef"
+          },
           "description": "Endpoints joined by this net, sorted by the loader. A single-member net is legal and intentional (L9b): H2-H4 in benchmark (c) exist to exercise exactly that rule."
         },
         "ground_domain": {
@@ -348,7 +522,10 @@
     "ModuleDef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "qualified_name"],
+      "required": [
+        "name",
+        "qualified_name"
+      ],
       "properties": {
         "name": {
           "$ref": "#/$defs/Identifier",
@@ -360,17 +537,23 @@
         },
         "ports": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Port" },
+          "items": {
+            "$ref": "#/$defs/Port"
+          },
           "description": "This module's own interface. A port here has no `pin_numbers`."
         },
         "instances": {
           "type": "array",
-          "items": { "$ref": "#/$defs/InstanceDef" },
+          "items": {
+            "$ref": "#/$defs/InstanceDef"
+          },
           "description": "Members, sorted bytewise-ascending by `name` by the loader."
         },
         "nets": {
           "type": "array",
-          "items": { "$ref": "#/$defs/NetDef" },
+          "items": {
+            "$ref": "#/$defs/NetDef"
+          },
           "description": "Local nets, sorted bytewise-ascending by `name` by the loader."
         }
       }
@@ -399,7 +582,13 @@
     "Assertion": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "tier", "measurement", "subject", "bounds"],
+      "required": [
+        "name",
+        "tier",
+        "measurement",
+        "subject",
+        "bounds"
+      ],
       "properties": {
         "name": {
           "$ref": "#/$defs/Identifier",
@@ -407,10 +596,15 @@
         },
         "tier": {
           "type": "string",
-          "enum": ["static", "dynamic"],
+          "enum": [
+            "static",
+            "dynamic"
+          ],
           "description": "Matches the IR's Assertion.tier."
         },
-        "measurement": { "$ref": "#/$defs/MeasurementKind" },
+        "measurement": {
+          "$ref": "#/$defs/MeasurementKind"
+        },
         "subject": {
           "$ref": "#/$defs/NetName",
           "description": "Net probed by this assertion. The IR's Probe also admits port and instance forms; the bake-off corpus only needs the net form, and admitting forms the corpus never exercises would put untested syntax into every arm's grammar."
@@ -418,8 +612,21 @@
         "bounds": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["unit"],
-          "anyOf": [{ "required": ["min"] }, { "required": ["max"] }],
+          "required": [
+            "unit"
+          ],
+          "anyOf": [
+            {
+              "required": [
+                "min"
+              ]
+            },
+            {
+              "required": [
+                "max"
+              ]
+            }
+          ],
           "description": "Acceptance bounds; at least one of min/max, both means a closed interval. Matches the IR's AssertionBounds.",
           "properties": {
             "unit": {
@@ -444,12 +651,18 @@
     "Anchor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "path"],
+      "required": [
+        "kind",
+        "path"
+      ],
       "description": "An external artifact this model is verified against, so the bake-off's reference cannot be quietly reshaped to suit its own parsers.",
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["netlist-ir", "parts-yaml"],
+          "enum": [
+            "netlist-ir",
+            "parts-yaml"
+          ],
           "description": "\"netlist-ir\": the model, elaborated and flattened, must reproduce that IR document's instances, nets, connections and assertions. \"parts-yaml\": the model's component set must match that BOM's refdes/dnp population exactly."
         },
         "path": {
@@ -465,7 +678,9 @@
         "refdes_map": {
           "type": "object",
           "description": "For a parts-yaml anchor: map from BOM refdes (e.g. \"C12\") to this model's instance path (e.g. \"/c12\"). Explicit rather than derived by lowercasing, so a BOM entry that no instance covers is a hard error instead of a silent near-miss.",
-          "propertyNames": { "pattern": "^[A-Za-z]+[0-9]+(?![\\s\\S])" },
+          "propertyNames": {
+            "pattern": "^[A-Za-z]+[0-9]+(?![\\s\\S])"
+          },
           "additionalProperties": {
             "type": "string",
             "pattern": "^(/[A-Za-z_][A-Za-z0-9_]*)+(?![\\s\\S])"
@@ -475,17 +690,38 @@
       "allOf": [
         {
           "if": {
-            "properties": { "kind": { "const": "parts-yaml" } },
-            "required": ["kind"]
+            "properties": {
+              "kind": {
+                "const": "parts-yaml"
+              }
+            },
+            "required": [
+              "kind"
+            ]
           },
-          "then": { "required": ["refdes_map"] }
+          "then": {
+            "required": [
+              "refdes_map"
+            ]
+          }
         },
         {
           "if": {
-            "properties": { "kind": { "const": "netlist-ir" } },
-            "required": ["kind"]
+            "properties": {
+              "kind": {
+                "const": "netlist-ir"
+              }
+            },
+            "required": [
+              "kind"
+            ]
           },
-          "then": { "properties": { "refdes_map": false, "power_tree": false } }
+          "then": {
+            "properties": {
+              "refdes_map": false,
+              "power_tree": false
+            }
+          }
         }
       ]
     }

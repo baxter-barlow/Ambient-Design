@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: /r_a carries an undeclared \"refdes\" member. Identity is the path (L7); refdes is assigned downstream and is not an IR field. Unprefixed unknown members are rejected (additionalProperties false); only ^x_ members are tolerated.",
+  "x_negative_control": "REJECTED at /instances/1: /r_a carries an undeclared \"refdes\" member. Identity is the path (L7); refdes is assigned downstream and is not an IR field. Unprefixed unknown members are rejected (additionalProperties false); only ^x_ members are tolerated.",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

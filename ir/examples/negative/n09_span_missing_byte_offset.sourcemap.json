@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT (source-map schema): the declaration span for /r_a omits byte_start. Byte offsets are the authoritative half of a span; line/col are denormalized. A span carrying only line/col cannot be re-resolved after reformatting, which is exactly what the diagnostic-anchor rule exists to prevent.",
+  "x_negative_control": "REJECTED at /nodes//r_a/declaration: DEFECT (source-map schema): the declaration span for /r_a omits byte_start. Byte offsets are the authoritative half of a span; line/col are denormalized. A span carrying only line/col cannot be re-resolved after reformatting, which is exactly what the diagnostic-anchor rule exists to prevent.",
   "sourcemap_version": 0,
   "ir_version": 0,
   "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",

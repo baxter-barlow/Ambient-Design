@@ -2103,8 +2103,5 @@
     "n_vocab": null,
     "name": "stub-whitespace"
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "The flip criterion must report the power it had."
-  }
+  "x_negative_control": "REJECTED at /flip_criterion: The flip criterion must report the power it had."
 }

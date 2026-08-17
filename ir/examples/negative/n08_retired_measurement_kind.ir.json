@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: measurement \"phase_margin\" is not in the V2 v1 vocabulary. It appeared in an earlier draft of this schema and was retired; a tool that still needs it must carry it as a reserved x_ member on the assertion, never by widening MeasurementKind. This fixture is the guard against the enum silently drifting back.",
+  "x_negative_control": "REJECTED at /assertions/0/measurement: measurement \"phase_margin\" is not in the V2 v1 vocabulary. It appeared in an earlier draft of this schema and was retired; a tool that still needs it must carry it as a reserved x_ member on the assertion, never by widening MeasurementKind. This fixture is the guard against the enum silently drifting back.",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

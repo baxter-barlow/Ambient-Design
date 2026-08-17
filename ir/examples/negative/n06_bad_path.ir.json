@@ -1,5 +1,5 @@
 {
-  "x_negative_control": "DEFECT: instance path \"r_a\" is missing the leading \"/\", so it is not a rooted hierarchical identity. Parenthood is computed by longest-strict-path-prefix; an unrooted path would silently detach the instance from the hierarchy.",
+  "x_negative_control": "REJECTED at /instances/1/path: instance path \"r_a\" is missing the leading \"/\", so it is not a rooted hierarchical identity. Parenthood is computed by longest-strict-path-prefix; an unrooted path would silently detach the instance from the hierarchy.",
   "header": {
     "ir_version": 0,
     "language_version": "0.1.0",

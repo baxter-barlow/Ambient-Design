@@ -47,8 +47,5 @@
       "unit": "kohm"
     }
   },
-  "x_negative_control": {
-    "expects": "REJECTED",
-    "guarantee_under_test": "Measure requires at least one of min/typ/max/peak. A measure carrying only a unit asserts nothing while looking like data, which is worse than omitting the field."
-  }
+  "x_negative_control": "REJECTED at /parameters/resistance: Measure requires at least one of min/typ/max/peak. A measure carrying only a unit asserts nothing while looking like data, which is worse than omitting the field."
 }
