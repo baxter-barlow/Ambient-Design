@@ -111,8 +111,15 @@ done
 # The retired project name must not come back. AMB-122 renamed AED to
 # Rhoform across everything that ships; without a gate, one copied snippet or
 # one reverted file reintroduces it and nothing notices until the name is
-# inconsistent again. Three exclusions are deliberate and are listed
-# explicitly rather than pattern-matched loosely:
+# inconsistent again.
+#
+# PATHS ARE CHECKED AS WELL AS CONTENTS. The first version of this scanned
+# file bodies only, so re-creating `eval/aed_eval/` and tracking a file in it
+# passed cleanly - which is precisely the miss AMB-122 was written to prevent,
+# since the thing its inventory nearly lost was a DIRECTORY NAME.
+#
+# Four exclusions are deliberate, listed explicitly rather than matched
+# loosely:
 #
 #   aed-part-data / aed_part_data   a SEPARATE project's repository
 #   sha256 digests                  two of them spell the letters mid-hash
@@ -121,22 +128,47 @@ done
 #                                   naming it, so it does not scan itself
 #
 # Only tracked files are scanned: an untracked scratch tree is not the
-# repository.
-if [ "$json_parser" = "python3" ] && command -v git >/dev/null 2>&1; then
+# repository. Needs python3 and git; without either it reports itself
+# unavailable rather than passing silently.
+brand_check="scanned"
+if ! command -v git >/dev/null 2>&1 || [ "$json_parser" != "python3" ]; then
+  brand_check="DEFERRED (needs python3 and git)"
+  printf 'WARN: retired-name scan %s; it did not run.\n' "$brand_check" >&2
+else
   brand_hits=$(cd "$ROOT" && git ls-files -z | python3 -c '
 import re, sys
 ALLOWED = ("aed-part-data", "aed_part_data")
 HEX = re.compile(r"\b[0-9a-f]{64}\b")
 NOTE = "tests/ir/check-hashes.py"
 SELF = "tests/structure/check-layout.sh"
+BRAND = re.compile("aed", re.I)
 hits = []
-for rel in sys.stdin.buffer.read().split(b"\0"):
-    rel = rel.decode()
+for raw in sys.stdin.buffer.read().split(b"\0"):
+    rel = raw.decode()
     if not rel or rel == SELF:
         continue
+    # The path itself, which is how a renamed package or skill directory
+    # comes back.
+    if BRAND.search(rel) and not any(a in rel for a in ALLOWED):
+        hits.append(f"{rel}  (path)")
     try:
         text = open(rel, encoding="utf-8").read()
-    except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+    except FileNotFoundError:
+        continue
+    except IsADirectoryError:
+        continue
+    except UnicodeDecodeError:
+        # Not text. Report rather than skip: a binary carrying the old name
+        # is still the old name, and silence here would be the same bug as
+        # not looking at paths.
+        hits.append(f"{rel}  (binary, not scanned)")
+        continue
+    except OSError as exc:
+        # Unreadable. Reported as a finding so the scan still COMPLETES and
+        # the real residue elsewhere is still listed; letting this raise
+        # aborted the whole scan and turned a diagnosable failure into a
+        # bare non-zero exit.
+        hits.append(f"{rel}  (unreadable: {exc.strerror}, not scanned)")
         continue
     for token in ALLOWED:
         text = text.replace(token, "")
@@ -144,11 +176,11 @@ for rel in sys.stdin.buffer.read().split(b"\0"):
     if rel == NOTE:
         text = text.replace("the AED -> Rhoform rename", "")
     for line_no, line in enumerate(text.split("\n"), 1):
-        if re.search("aed", line, re.I):
+        if BRAND.search(line):
             hits.append(f"{rel}:{line_no}")
 if hits:
     print("\n".join(hits))
-' 2>/dev/null)
+')
   if [ -n "$brand_hits" ]; then
     printf 'FAIL: the retired name AED reappears in tracked files:\n%s\n' "$brand_hits" >&2
     exit 1
@@ -165,5 +197,5 @@ if [ "$json_parser" = "python3" ] && python3 -c 'import yaml' 2>/dev/null; then
   yaml_check="parsed"
 fi
 
-printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s).\n' \
-  "$md_count" "$json_count" "$JSON_ROOTS" "$yaml_check"
+printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s, retired-name scan %s).\n' \
+  "$md_count" "$json_count" "$JSON_ROOTS" "$yaml_check" "$brand_check"
