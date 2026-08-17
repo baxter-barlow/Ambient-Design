@@ -538,6 +538,17 @@ def problems_for(record, label):
         if not isinstance(arm, dict):
             continue
         trials = arm.get("trials")
+        # `trials` is NOT in the schema's `required` for an arm, so deleting
+        # one array skipped the seed-independence check, the declared-seeds
+        # check, the token-sum check, the zero-token check and the inner-gate
+        # check at once -- reopening the forgery the comment above describes.
+        # An arm that claims trials must carry them.
+        declared_count = arm.get("trial_count")
+        if isinstance(declared_count, int) and declared_count > 0 and not trials:
+            bad(f"arm {name!r} records trial_count={declared_count} but carries "
+                "no `trials` list, so every per-trial check is skipped: seeds, "
+                "token sums and inner gate verdicts are all unexamined while "
+                "successes and trial_count still drive the AC5a gate.")
         if isinstance(trials, list) and trials:
             trial_seeds = [t.get("seed") for t in trials if isinstance(t, dict)]
             present = [s for s in trial_seeds if s is not None]
@@ -878,6 +889,15 @@ def self_test():
                 set_authoritative(r), r["model"].update(kind="anthropic")))),
         ("a p-value the arms do not produce is caught", hit(
             "lower-tail Fisher", lambda r: r["flip_criterion"].update(p_value=0.5))),
+        # The inner-gate clause: its NAME was fixed last round and its coverage
+        # gap -- the thing that let the wrong name survive -- was not.
+        ("a trial marked passed whose own final gate failed is caught", hit(
+            "its final iteration's own gate", lambda r: [
+                tr["iterations"][-1]["gate"].update(passed=False, exit_code=1)
+                for tr in r["arms"][arm_name]["trials"] if tr.get("passed")])),
+        ("an arm claiming trials but carrying none is caught", hit(
+            "carries no `trials` list",
+            lambda r: r["arms"][arm_name].pop("trials"))),
         # ROUND 7's forgery: five fields nothing read.
         ("ten trials on one seed is caught", hit(
             "INDEPENDENT trials", lambda r: [

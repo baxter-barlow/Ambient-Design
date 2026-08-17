@@ -583,6 +583,16 @@ def self_test():
 # itself.
 MAXIMUM_UNCHECKED = 2
 
+# Records that must exist. Deleting one took `5 record(s)` to `4` and exited 0:
+# a linter with fewer things to lint is indistinguishable from a clean tree.
+REQUIRED_RECORDS = (
+    "ti-ne555p.part.json",
+    "ti-sn74hc00d.part.json",
+    "espressif-esp32-s3-wroom-1-n8r2.part.json",
+    "diodes-ap7361c-33e-13.part.json",
+    "vishay-crcw040210k0fked.part.json",
+)
+
 
 def main() -> int:
     args = sys.argv[1:]
@@ -609,6 +619,17 @@ def main() -> int:
               "records legitimately moved, point this gate at them.",
               file=sys.stderr)
         return 1
+
+    # Each named record must be among the files being linted. A count that can
+    # shrink silently is the same defect as a floor with slack in it.
+    if not args:
+        present = {path.name for path in files}
+        gone = [name for name in REQUIRED_RECORDS if name not in present]
+        if gone:
+            print(f"lint: FAIL: record(s) {gone} are named as required and are "
+                  "not present. Deleting one took the reported count from 5 to "
+                  "4 and exited 0.", file=sys.stderr)
+            return 1
 
     problems, unchecked = [], []
     for path in files:
