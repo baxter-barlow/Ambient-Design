@@ -56,7 +56,10 @@ CONSUMERS = {
     ("python", "packages", "jsonschema"): (lambda v: f"jsonschema=={v}", [CHECKS, MAKEFILE]),
     ("python", "packages", "pyyaml"): (lambda v: f"PyYAML=={v}", [CHECKS]),
     ("python", "packages", "lark"): (lambda v: f"lark=={v}", [CHECKS, MAKEFILE]),
-    ("ngspice", "version"): (lambda v: f'version: "{v}"', [MANIFEST]),
+    # run-sim.sh READS the manifest and fails on a mismatch, so its consumer is
+    # the sed expression that extracts the pin, not a copy of the value. Was
+    # `[MANIFEST]`, which asserted only that the manifest contains its own value.
+    ("ngspice", "version"): (lambda v: "ngspice.version", [RUN_SIM]),
     ("ngspice", "debian_package"): (lambda v: v, [CHECKS]),
     ("ci", "actions", "checkout", "ref"): (lambda v: f"uses: {v}", [CHECKS, DCO, POLICY]),
     ("ci", "actions", "setup_python", "ref"): (lambda v: f"uses: {v}", [CHECKS]),
@@ -78,6 +81,10 @@ CONSUMERS = {
 # kicad half of AMB-28 came to be recorded as delivered while nothing had ever
 # resolved either digest.
 NOT_YET_CONSUMED = set()
+
+# The number of pin/consumer agreements a healthy tree has. Raise it when a pin
+# is added; lower it only in the same change that deliberately removes one.
+MINIMUM_AGREEMENTS = 15
 
 
 class GateUnavailable(Exception):
@@ -161,7 +168,10 @@ def check(manifest, read=None):
                     "kicad half of AMB-28 was recorded as delivered."
                 )
             continue
-        if path[:3] == ("python", "packages") and path[2] in optional:
+        # Was `path[:3] == ("python", "packages")`, comparing a 3-tuple to a
+        # 2-tuple: always false, so `optional` was dead and the self-test case
+        # naming it passed vacuously.
+        if path[:2] == ("python", "packages") and path[2] in optional:
             continue
 
         spec = CONSUMERS.get(path)
@@ -237,6 +247,7 @@ def self_test():
                  "          kicad/kicad:9.0.9@sha256:aaa\n"),
         MAKEFILE: "jsonschema==4.26.0 lark==1.3.0\n",
         MANIFEST: 'version: "46"\n',
+        RUN_SIM: "# reads ngspice.version from the manifest and fails on mismatch\n",
         DCO: "  uses: actions/checkout@abc\n",
         POLICY: "  uses: actions/checkout@abc\n",
     }
@@ -280,6 +291,27 @@ def self_test():
     cases.append(("an optional package needs no consumer", not any(
         "tiktoken" in p for p in check(fake, reader(good))[0])))
 
+    # WIRING. Everything above drives `check()` directly, so the branch that
+    # turns a detected problem into a non-zero EXIT is the one part of this
+    # gate nothing exercised — and deleting it is indistinguishable from a
+    # clean sweep. That is the same seam check-hashes.py's planted-document
+    # case was written for, one call level higher, and it was open in every
+    # Python gate here.
+    import contextlib, io
+    real_check, real_load = check, load_manifest
+    try:
+        globals()["load_manifest"] = lambda: {"python": {"version": "3.12"}}
+        globals()["check"] = lambda *_a, **_k: (["planted problem"], 0)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            planted = main([])
+        globals()["check"] = lambda *_a, **_k: ([], MINIMUM_AGREEMENTS)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            clean = main([])
+    finally:
+        globals()["check"], globals()["load_manifest"] = real_check, real_load
+    cases.append(("main() exits non-zero when check() reports a problem", planted == 1))
+    cases.append(("main() exits zero when check() reports none", clean == 0))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1
@@ -304,6 +336,18 @@ def main(argv):
         print("toolchain-pins: FAIL:", file=sys.stderr)
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
+        return 1
+    # A self-reported statistic is not an assertion — check-layout.sh's words.
+    # This gate reported 14 agreements where a healthy run reports 15 while a
+    # pin silently stopped being checked, and nothing noticed.
+    if checked < MINIMUM_AGREEMENTS:
+        print(
+            f"toolchain-pins: FAIL: verified only {checked} pin/consumer "
+            f"agreement(s), below the floor of {MINIMUM_AGREEMENTS}. Pins are "
+            "not being checked; raise the floor deliberately if one was "
+            "legitimately removed.",
+            file=sys.stderr,
+        )
         return 1
     print(f"toolchain-pins: PASS: {checked} pin/consumer agreement(s) verified.")
     return 0
