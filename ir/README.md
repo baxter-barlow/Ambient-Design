@@ -15,6 +15,33 @@ Files here:
 | `examples/negative/` | Negative controls: each file must be **rejected** by its schema |
 | `validation.log` | Transcript of the validation runs, and the carried-forward retraction |
 
+## `rhoform-canonical-json/1`
+
+The serialization profile `header.canonical_form` names and `design_hash` is
+taken over. It was referenced by the schema and defined nowhere, which meant
+the determinism claim below rested on a document nobody had written — and the
+gate did not implement it either, hashing raw committed bytes instead. Two
+conforming implementations could therefore produce different `design_hash`
+values for the same design, which is the one thing "IR v0" had to nail down.
+
+1. UTF-8, no BOM, exactly one trailing `LF`.
+2. Object keys sorted by Unicode code point. **Not** "the order given by this
+   schema": open maps (`parameters`, `x_` extensions) have no schema order, so
+   that rule was unimplementable for precisely the objects most likely to
+   differ between implementations.
+3. No insignificant whitespace — `,` and `:` separators and nothing else.
+4. Non-ASCII characters emitted literally, never `\u`-escaped.
+5. `NaN` and `Infinity` are not representable and are an error.
+6. Arrays keep their order. Order is meaning here; each array's sort rule is
+   stated on its own field and is not the encoder's business.
+
+`design_hash` is the SHA-256 of that serialization with `header.design_hash`
+set to `""`. Because it is computed from the parsed document, re-indenting a
+committed file or reordering its keys does not move it, while any change to the
+data does. `tests/ir/check-hashes.py` implements the profile and its self-test
+asserts all three invariances.
+
+
 ## Versioning policy
 
 - `header.ir_version` is a **plain integer**, starting at `0`.

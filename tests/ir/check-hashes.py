@@ -52,42 +52,110 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 IR_EXAMPLES = ROOT / "ir" / "examples"
 
-# The blanking rule, verbatim from ir/README.md: the hash is taken over the
-# document's bytes with the `design_hash` VALUE replaced by an empty string.
-# Done textually rather than by re-serializing the parsed JSON, because the
-# hash is over the committed bytes — re-serializing would silently normalize
-# whitespace and key order and compute a hash of something else.
-_DESIGN_HASH_RE = re.compile(r'("design_hash": )"[^"]*"')
+# rhoform-canonical-json/1 — the serialization profile the hash is taken over.
+#
+# The schema has always said `design_hash` covers "this IR document's CANONICAL
+# serialization". It did not: the hash was taken over the committed BYTES, with
+# a regex blanking the hash field, on the stated grounds that re-serializing
+# "would compute a hash of something else". That reasoning inverts the
+# requirement. Hashing bytes proves the file has not been edited; it does not
+# prove two toolchains agree on one design, which is what the determinism
+# contract (P5) and AC4/I2/I5 actually gate on. Re-serializing the SAME
+# document under a profile that satisfied every clause the schema listed —
+# same keys, LF, UTF-8 — produced a different digest, and the committed example
+# was itself internally inconsistent, serializing one Quantity expanded and
+# another inline.
+#
+# The profile named in the schema, `rhoform-canonical-json/1`, was defined
+# nowhere in the repository. It is defined here and in ir/README.md, and it is
+# what this function implements:
+#
+#   1. UTF-8, no BOM, a single trailing LF.
+#   2. Object keys sorted by Unicode code point. NOT "the order given by the
+#      schema": open maps (`parameters`, `x_` extensions) have no schema order,
+#      so that rule was unimplementable for exactly the objects most likely to
+#      differ between implementations.
+#   3. No insignificant whitespace: `,` and `:` separators, nothing else.
+#   4. Non-ASCII characters emitted literally rather than \u-escaped, so the
+#      bytes are the text.
+#   5. NaN and Infinity are not representable and are an error, not `NaN`.
+#   6. Arrays keep their order — order is meaning in this IR, and the sort
+#      rules for each array are the schema's business, not the encoder's.
+#
+# The hash is taken with `header.design_hash` set to the empty string, which is
+# unchanged, and is now done structurally rather than by regex.
+CANONICAL_PROFILE = "rhoform-canonical-json/1"
 
 
-def design_hash_of(text: str) -> str:
-    blanked, count = _DESIGN_HASH_RE.subn(lambda m: m.group(1) + '""', text, count=1)
-    if count != 1:
+def canonical_bytes(document) -> bytes:
+    """Serialize per rhoform-canonical-json/1."""
+    return json.dumps(
+        document,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8") + b"\n"
+
+
+def design_hash_of(document) -> str:
+    """The hash of `document` with its own `design_hash` blanked.
+
+    Takes the PARSED document, so re-indenting a committed file, reordering its
+    keys, or writing a Quantity inline instead of expanded does not move the
+    digest — while any change to the data does.
+    """
+    if not isinstance(document, dict) or "header" not in document:
+        raise ValueError("document has no `header` to read `design_hash` from")
+    if "design_hash" not in document["header"]:
         raise ValueError("document has no single `design_hash` field to blank")
-    return "sha256:" + hashlib.sha256(blanked.encode()).hexdigest()
+    blanked = json.loads(json.dumps(document))
+    blanked["header"]["design_hash"] = ""
+    return "sha256:" + hashlib.sha256(canonical_bytes(blanked)).hexdigest()
 
 
 def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None:
     text = ir_path.read_text(encoding="utf-8")
-    rel = ir_path.relative_to(ROOT)
+    # `relative_to` only for display, and it must not raise: the self-test
+    # drives this function over a planted document in a temp directory, which
+    # is the only way to exercise the mismatch branch without editing a
+    # committed example.
+    rel = ir_path.relative_to(ROOT) if ir_path.is_relative_to(ROOT) else ir_path.name
     document = json.loads(text)
     header = document.get("header", {})
 
+    declared_profile = header.get("canonical_form")
+    if declared_profile != CANONICAL_PROFILE:
+        problems.append(
+            f"{rel}: header.canonical_form is {declared_profile!r}, but this gate "
+            f"hashes under {CANONICAL_PROFILE!r}. A document that names a "
+            "different profile is hashed under rules nobody has stated."
+        )
+
     committed = header.get("design_hash")
     try:
-        expected = design_hash_of(text)
+        expected = design_hash_of(document)
     except ValueError as exc:
         problems.append(f"{rel}: {exc}")
         return
     if committed != expected:
         problems.append(
-            f"{rel}: design_hash is {committed}, but the document's bytes hash "
+            f"{rel}: design_hash is {committed}, but the document canonicalizes "
             f"to {expected}. Recompute it; the content changed."
         )
 
     source_map_path = ir_path.with_name(ir_path.name.replace(".ir.json", ".sourcemap.json"))
     if not source_map_path.exists():
-        notes.append(f"{rel}: no paired source map")
+        # Was a NOTE, so `rm ir/examples/blinker.sourcemap.json` left every
+        # gate green while the gate printed "...and every paired source map
+        # agrees" — vacuously true, and the source map is half of AMB-38's
+        # deliverable. Renaming the IR file had the same effect.
+        problems.append(
+            f"{rel}: has no paired source map at {source_map_path.name}. The "
+            "(IR, source map) pairing is the only live integrity check on the "
+            "map, so a deleted or renamed half must fail rather than reduce "
+            "the number of things checked."
+        )
         return
 
     source_map = json.loads(source_map_path.read_text(encoding="utf-8"))
@@ -124,6 +192,14 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
         )
 
 
+def _raises(thunk, exception) -> bool:
+    try:
+        thunk()
+    except exception:
+        return True
+    return False
+
+
 def self_test() -> int:
     """Prove the check fails on a document whose content moved.
 
@@ -133,11 +209,12 @@ def self_test() -> int:
     """
     ir_path = IR_EXAMPLES / "blinker.ir.json"
     text = ir_path.read_text(encoding="utf-8")
+    document = json.loads(text)
 
     checks = []
 
-    genuine = design_hash_of(text)
-    committed = json.loads(text)["header"]["design_hash"]
+    genuine = design_hash_of(document)
+    committed = document["header"]["design_hash"]
     checks.append(("the committed example verifies", genuine == committed))
 
     # A stand-in for the edit a rename performs. Deliberately NOT spelled as
@@ -150,20 +227,64 @@ def self_test() -> int:
     if mutated == text:
         raise AssertionError("the self-test mutation no longer changes anything")
     checks.append(
-        ("a changed definition moves the hash", design_hash_of(mutated) != genuine)
+        ("a changed definition moves the hash",
+         design_hash_of(json.loads(mutated)) != genuine)
     )
+
+    # THE CANONICAL PROPERTY, which is the whole reason the hash moved off raw
+    # bytes: a document re-serialized under any formatting must hash the same.
+    # Under the old byte-hash it did not, so two conforming implementations
+    # disagreed on one design and `design_hash` proved only "this file has not
+    # been edited".
+    for label, dumped in (
+        ("re-indented", json.dumps(document, indent=4)),
+        ("keys sorted", json.dumps(document, sort_keys=True)),
+        ("whitespace stripped", json.dumps(document, separators=(",", ":"))),
+    ):
+        checks.append((f"a {label} document hashes the same",
+                       design_hash_of(json.loads(dumped)) == genuine))
+
+    # ...and the profile is not merely whatever json.dumps does today.
+    checks.append((
+        "canonical_bytes sorts keys and strips insignificant whitespace",
+        canonical_bytes({"b": 1, "a": {"d": 2, "c": 3}})
+        == b'{"a":{"c":3,"d":2},"b":1}\n',
+    ))
+    checks.append((
+        "canonical_bytes refuses NaN rather than emitting it",
+        _raises(lambda: canonical_bytes({"x": float("nan")}), ValueError),
+    ))
+    checks.append((
+        "the example declares the profile this gate hashes under",
+        document["header"].get("canonical_form") == CANONICAL_PROFILE,
+    ))
 
     # And the blanking rule itself: two documents differing ONLY in the
     # design_hash value must hash identically, or the rule is not idempotent
     # and every recomputation would chase its own tail.
-    rehashed = _DESIGN_HASH_RE.sub(lambda m: m.group(1) + '"sha256:' + "0" * 64 + '"', text, count=1)
+    rehashed = json.loads(text)
+    rehashed["header"]["design_hash"] = "sha256:" + "0" * 64
     checks.append(("blanking ignores the old hash", design_hash_of(rehashed) == genuine))
 
-    try:
-        design_hash_of('{"header": {}}')
-        checks.append(("a document with no design_hash is rejected", False))
-    except ValueError:
-        checks.append(("a document with no design_hash is rejected", True))
+    checks.append(("a document with no design_hash is rejected",
+                   _raises(lambda: design_hash_of({"header": {}}), ValueError)))
+
+    # AMB-121's third scope bullet, undelivered until now: the FAILURE path had
+    # no committed test. `check_document` was never invoked by anything but the
+    # live run, so the mismatch branch was one refactor from decorative — which
+    # is the defect class AMB-121 was filed about.
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        planted = Path(tmp) / "planted.ir.json"
+        broken = json.loads(text)
+        broken["header"]["design_name"] = "not-the-design-this-hash-describes"
+        planted.write_text(json.dumps(broken), encoding="utf-8")
+        problems, notes = [], []
+        check_document(planted, problems, notes)
+        checks.append(("check_document reports a hash mismatch",
+                       any("canonicalizes to" in p for p in problems)))
+        checks.append(("check_document reports a missing source map",
+                       any("no paired source map" in p for p in problems)))
 
     failed = 0
     for name, ok in checks:
