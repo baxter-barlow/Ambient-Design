@@ -15,6 +15,27 @@ corpus-classification: unverified: citation spaces ga, ga-excluded, nongoal, req
 corpus-classification: PASS: 61 entries classified exactly once, 22 in scope, every citation resolves, decision_hash matches, populations published.
 exit=0
 
+=== HISTORICAL RECORD, and a loss ===
+
+The collection-phase log this file replaces described a 63-entry corpus with
+ids BUG-0001..BUG-0063 contiguous, and named the script it ran its checks with:
+`check_corpus.py`. That script was never committed, so AMB-35's one substantive
+criterion rested on a log referencing something nobody could run. It is now
+tests/corpus/check-corpus.py.
+
+Two entries — BUG-0009 and BUG-0063 — were withdrawn between that log and the
+corpus's first commit, which already read `entry_count: 61` (912f7ce). No
+record of WHY survives, because the log holding it was untracked. Regenerating
+this file under AMB-123 did not destroy that reason; it was already outside the
+repository. The gap is now ledgered in check-corpus.py's RETIRED table, which
+states what is known and explicitly declines to assert what is not.
+
+Figures the old log recorded, carried forward as history rather than as
+findings of this run: 63 entries drawn from 78 raw candidates, 15 removed as
+duplicates of the same underlying bug with merged URLs retained; 63/63 with an
+http(s) source URL; six entries flagged needs-source-recheck (BUG-0009, 0031,
+0034, 0035, 0045, 0051), of which AMB-36 later re-fetched and corrected five.
+
 Coverage NOT provided by this run, stated rather than hidden:
   - The corpus file itself (corpus/bugs.yaml) is checked by
     tests/corpus/check-corpus.py as of AMB-123; before that nothing

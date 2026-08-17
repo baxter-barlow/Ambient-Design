@@ -42,6 +42,14 @@ jobs:
         run: |
           python3 tests/structure/check-retired-names.py --self-test
           bash tests/structure/check-layout.sh
+      - name: AC2 corpus contents
+        # The population AC2 is measured over. Until AMB-123 nothing gated it:
+        # an entry could lose its source, its root cause and its evidence and
+        # stay green, and the classification's decision_hash would not move
+        # because that hash covers classification.yaml only.
+        run: |
+          python3 tests/corpus/check-corpus.py --self-test
+          python3 tests/corpus/check-corpus.py
       - name: AC2 corpus classification and freeze
         # Here rather than in the schemas job because this is the job that
         # already installs PyYAML, which this gate needs. Putting it in
@@ -111,7 +119,12 @@ jobs:
         # can reproduce offline should not decide a merge.
         run: cd lang && python3 -m bakeoff check
       - name: Prototype tests
-        run: python3 -m unittest discover -s lang/tests -t lang
+        # `-p 'test_bakeoff.py'` because the default `test*.py` pattern also
+        # collects test_grammar.py, which this job installs no lark for: 16 of
+        # its 39 cases ran here and reported OK, in a job whose own comment says
+        # running them here "would report a green suite that never loaded the
+        # grammar". The grammar job runs the full 39 with lark present.
+        run: python3 -m unittest discover -s lang/tests -t lang -p 'test_bakeoff.py'
 
   grammar:
     name: Frozen syntax v0

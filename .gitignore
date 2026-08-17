@@ -47,12 +47,6 @@ dist/
 !**/validation.log
 !tests/golden/UPDATES.log
 
-# Transient agent worktrees. The negations below deliberately version
-# `.agents/` and `.claude/skills/`; they also un-ignored this, so a stale
-# worktree sat untracked in every `git status` and was one `git add -A` from
-# being committed as a second copy of the repository.
-.claude/worktrees/
-
 # Cross-agent configuration is intentionally versioned. These negations
 # override common user-global ignores for Claude and agent configuration.
 !.agents/
@@ -61,3 +55,11 @@ dist/
 !.claude/**
 !AGENTS.md
 !CLAUDE.md
+
+# Transient agent worktrees. This must come AFTER the negations above, because
+# the last matching rule wins: `!.claude/**` was written to version `.agents/`
+# and `.claude/skills/` and also un-ignored this, so a stale worktree sat
+# untracked in every `git status` and was one `git add -A` away from being
+# committed as a second, pre-rename copy of the whole repository. Which is
+# exactly what happened while fixing it.
+.claude/worktrees/

@@ -1,0 +1,55 @@
+Rhoform
+Copyright 2026 Baxter Barlow
+
+This product includes software developed for the Rhoform project.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+--------------------------------------------------------------------------------
+Third-party material redistributed in this repository
+--------------------------------------------------------------------------------
+
+corpus/bugs.yaml
+
+    Contains 59 short verbatim excerpts from public forum posts, issue
+    trackers, mailing lists, blog postmortems and vendor errata, in the
+    `evidence:` field of the entries that cite them. Each excerpt is a sentence
+    or two, is attributed to a specific public URL in the same entry's
+    `source:` block, and is included so that a reader can check that the entry
+    describes the bug its source describes.
+
+    These excerpts are NOT licensed under Apache-2.0 and are not the project's
+    to relicense. They are quoted for identification, criticism and research;
+    copyright in each remains with its author. Anyone redistributing this
+    corpus should satisfy themselves on that basis independently.
+
+    The corpus records a source URL for every entry. It does not record a
+    checksum or a per-source licence determination, which AGENTS.md asks for
+    when redistributing vendor artifacts. That gap is real and is tracked
+    rather than papered over -- see the Linear issue referenced in
+    corpus/README.md.
+
+parts/examples/*.part.json
+
+    Electrical values transcribed from manufacturer datasheets, with the
+    document, revision, table and page recorded per field in each record's
+    `provenance` block. Individual numbers are facts and are not themselves
+    copyrightable; the datasheets they were read from are not redistributed and
+    are not included here. Each record declares a `license_class` describing
+    the terms the underlying document was published under -- a vocabulary
+    separate from this repository's own licence, defined in
+    parts/part-data.schema.json.
+
+atopile
+
+    Rhoform's surface syntax adopts constructs from atopile, which is
+    MIT-licensed. See the "Attribution" section of LICENSES.md.
