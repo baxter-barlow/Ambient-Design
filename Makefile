@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure schemas lint bakeoff eval-tests sim golden
+.PHONY: all check structure schemas lint bakeoff grammar eval-tests sim golden
 
 # Everything CI runs.
 all: check sim golden
@@ -11,7 +11,7 @@ all: check sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure schemas lint bakeoff eval-tests
+check: structure schemas lint bakeoff grammar eval-tests
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -41,6 +41,18 @@ lint:
 bakeoff:
 	cd lang && python3 -m bakeoff check
 	python3 -m unittest discover -s lang/tests -t lang
+
+# Frozen syntax v0 (lang/grammar/): the EBNF and Lark artifacts must still
+# match the source of truth they are generated from, and the Lark grammar must
+# actually parse everything the winning prototype renders. The second leg
+# needs the lark pin from toolchain/versions.yaml:
+#   python3 -m pip install lark==1.3.0
+# It exits 2 rather than 0 when that is absent, because a grammar nobody could
+# load is not a grammar that passed.
+grammar:
+	cd lang && python3 -m grammar.rhoform_syntax --check
+	cd lang && python3 -m grammar.conformance
+	python3 -m unittest discover -s lang/tests -t lang -p 'test_grammar.py'
 
 # Measurement-harness tests (eval/). stdlib unittest only, so this needs no
 # dependency beyond the pinned interpreter; the harness's optional tiktoken

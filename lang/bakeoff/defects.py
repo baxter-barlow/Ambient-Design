@@ -167,7 +167,7 @@ def _unterminated_string(source):
     """Drop the closing quote of the first string literal."""
     lines = source.splitlines()
     for index, line in enumerate(lines):
-        # Skip the pragma and comments: corrupting `#pragma language "0.1.0"`
+        # Skip the pragma and comments: corrupting `#pragma rhoform-syntax 0.1`
         # seeds a bad-pragma defect, not a bad-string one.
         if line.lstrip().startswith("#"):
             continue

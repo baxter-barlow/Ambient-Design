@@ -65,6 +65,13 @@ python:
     # (tests/structure/check-layout.sh); installed explicitly in the CI
     # structure job so that gate never silently defers.
     pyyaml: "6.0.2"                # verified locally: yaml.__version__ == 6.0.2
+    # Parser generator for the frozen syntax gate (lang/grammar/). Required
+    # rather than optional: L5 asks for a Lark artifact, and an artifact no
+    # parser has ever loaded proves nothing about the grammar it claims to
+    # freeze. The gate exits 2 (unavailable) without it, never 0. Pinned
+    # because a parser generator that changed how it resolves a terminal
+    # would silently change which designs are legal.
+    lark: "1.3.0"                  # verified locally: lark 1.3.0, LALR + Indenter
   optional_packages:
     # Needed only to run the measurement harness (eval/) against a live
     # model or to take gating token counts. The harness's own test suite is

@@ -48,7 +48,13 @@ from ..model import (
 )
 from ..quantities import QuantityError, parse_quantity
 
-PRAGMA = '#pragma language "0.1.0"'
+# L8's syntax-version pragma, spelled as the §8-Q2 naming decision fixed it
+# (AMB-30): `#pragma rhoform-syntax <major.minor>`. The placeholder this
+# replaced, `#pragma language "0.1.0"`, predated the decision. Only the
+# pragma moves to the decided vocabulary here — `aed.lib.*` and the AED
+# diagnostic prefixes belong to the repository-wide rename, which is a
+# different piece of work. Freezing a grammar does not license a rename.
+PRAGMA = "#pragma rhoform-syntax 0.1"
 
 VARIANTS = ("explicit", "inferred", "inferred+columnar")
 
@@ -76,6 +82,32 @@ RESERVED = frozenset({
     "within", "at", "least", "most", "to", "static", "dynamic", "isolated", "no",
     "true", "false",
 })
+
+
+def reserved_words_block(width: int = 76) -> str:
+    """The reserved words, wrapped, for a language card to interpolate.
+
+    Generated rather than transcribed. Both cards previously carried the list
+    by hand and both had fallen two words behind `RESERVED` — `isolated` and
+    `no` were reserved without being taught, so the A4 artifact told a model a
+    name was available that the parser rejects. The test meant to catch it
+    asked `assertIn(word, card)` against the whole card, and a two-letter word
+    like `no` is a substring of `not`, `none` and `nominal`, so it passed on
+    prose. A card and a parser that read the same constant cannot drift.
+    """
+    words = sorted(RESERVED)
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = word if not current else f"{current} {word}"
+        if len(candidate) > width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
 
 
 def variant_flags(variant: str) -> tuple[bool, bool]:
