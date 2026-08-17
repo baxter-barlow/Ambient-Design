@@ -3,10 +3,13 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
+.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
 
-# Everything CI runs.
-all: check sim golden
+# Everything CI runs. That comment used to be false: .github/workflows/
+# repository-policy.yml ran two gates no make target invoked, so a contributor
+# could get `make all` green and still take a red CI on a check they had no way
+# to run locally.
+all: check policy sim golden
 
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
@@ -62,6 +65,8 @@ ir-hashes:
 # enforceable rather than aspirational: AMB-61 must not be able to move its own
 # denominator quietly. Self-test first, as everywhere else here.
 corpus:
+	python3 tests/corpus/check-corpus.py --self-test
+	python3 tests/corpus/check-corpus.py
 	python3 tests/corpus/check-classification.py --self-test
 	python3 tests/corpus/check-classification.py
 
@@ -106,6 +111,13 @@ eval-tests:
 sim:
 	python3 tests/benchmarks/check-assertions.py --self-test
 	bash tests/benchmarks/run-sim.sh
+
+# The gates in .github/workflows/repository-policy.yml. Kept as its own target
+# rather than folded into `check` because the whitespace leg needs a commit
+# range, which only exists once something is committed.
+policy:
+	sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
+	git diff --check HEAD
 
 # Golden-file harness; exits 0 with "no cases" while tests/golden is empty.
 golden:

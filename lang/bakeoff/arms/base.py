@@ -368,14 +368,14 @@ def open_source(source: str, code_prefix: str) -> Cursor:
     return cursor
 
 
-def render_role(role: str) -> str:
-    return role
-
-
-def render_pin(port) -> str:
-    """`pin <name> <role> [<designator> ...]` — shared by both candidates."""
-    pins = " " + " ".join(port.pin_numbers) if port.pin_numbers else ""
-    return f"pin {port.name} {port.role}{pins}"
+# `render_pin` and `render_role` used to live here, with a docstring saying the
+# pin renderer was "shared by both candidates". Neither had a call site: each
+# arm inlines its own, because the pin SHAPE is one of the axes the bake-off
+# measures (`pin r1.a passive` against `pin a passive`). The code was right and
+# the docstring was wrong, which is the dangerous direction — the fairness
+# argument rests on non-axis constructs being held identical BY being shared, so
+# a reader auditing "what is held identical" by reading this file got a false
+# answer. Removed rather than corrected: what is shared should be what is here.
 
 
 def render_assertion(assertion) -> str:

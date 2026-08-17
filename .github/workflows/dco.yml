@@ -1,14 +1,21 @@
 name: DCO
 
+# Pull requests AND direct pushes to main. `pull_request` alone meant the check
+# had never executed against this repository even once: `git rev-list --merges`
+# returns 0 across the whole history, because every commit so far arrived by
+# pushing to main. A provenance gate that the project's actual workflow bypasses
+# is opt-in, and CONTRIBUTING.md states the requirement unconditionally.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: dco-${{ github.event.pull_request.number }}
+  group: dco-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -22,6 +29,20 @@ jobs:
           fetch-depth: 0
       - name: Verify Developer Certificate of Origin
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: sh .github/scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"
+          # On a PR, the range is base..head. On a push, `github.event.before`
+          # is the branch tip before the push; it is all-zeroes for the first
+          # push to a new branch, and can name a commit that no longer exists
+          # after a force-push, so the script is given a fallback of the first
+          # parent and reports which range it checked.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "base $BASE_SHA is unavailable (new branch or rewritten history);" \
+                 "falling back to the first parent of $HEAD_SHA"
+            BASE_SHA=$(git rev-parse "$HEAD_SHA^" 2>/dev/null || git rev-list --max-parents=0 "$HEAD_SHA")
+          fi
+          echo "checking $BASE_SHA..$HEAD_SHA"
+          sh .github/scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"

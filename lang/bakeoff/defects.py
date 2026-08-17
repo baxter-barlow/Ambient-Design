@@ -95,7 +95,7 @@ def _connection_lines(source):
 
 
 def _endpoint_match(line: str):
-    """The first `x.y` on a connection line that is really an ENDPOINT.
+    r"""The first `x.y` on a connection line that is really an ENDPOINT.
 
     In the candidate grammars an endpoint is bare text; in the baseline it is a
     quoted string and the first bare `\w+\.\w+` on the line is the builder

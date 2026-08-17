@@ -18,5 +18,6 @@
 *.gif binary
 *.raw binary
 
-# Preserve the approved planning artifact byte-for-byte during its initial import.
-v1-roadmap.md whitespace=-blank-at-eof
+# (An exemption for `v1-roadmap.md` lived here. That file was moved to Notion in
+# 4834eb4, and check-layout.sh's ALLOWED_ROOT_MD now rejects it at the root, so
+# the rule granted an exemption to a state that is a layout violation.)

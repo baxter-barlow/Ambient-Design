@@ -59,7 +59,7 @@ Public contributors can start with a GitHub issue. Before implementation begins,
 
 Run the gates locally with `make check` (layout, schemas, part-data lint), `make sim` (benchmark decks), or `make all`.
 
-Everything in this tree is Apache-2.0 source and operational configuration. Product specifications and research documents are CC-BY-4.0 and live in Notion rather than in the repository; see [LICENSES.md](LICENSES.md) for the exact boundary.
+Source and operational configuration are Apache-2.0, copyright 2026 Baxter Barlow. Product specifications and research documents are CC-BY-4.0 and live in Notion rather than in the repository. Two directories are exceptions: `corpus/` quotes third-party postmortems and `parts/` records carry their own datasheet licence class. See [LICENSES.md](LICENSES.md) for the boundary and [NOTICE](NOTICE) for the per-directory statement.
 
 ## Contributing
 
