@@ -119,6 +119,7 @@ eval-tests:
 sim:
 	python3 tests/benchmarks/check-assertions.py --self-test
 	python3 tests/benchmarks/check-hand-assertions.py --self-test
+	python3 tests/benchmarks/derive-555-windows.py --check
 	bash tests/benchmarks/run-sim.sh
 
 # The gates in .github/workflows/repository-policy.yml. Kept as its own target

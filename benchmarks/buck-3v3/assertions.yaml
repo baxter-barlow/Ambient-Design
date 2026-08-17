@@ -32,7 +32,7 @@ assertions:
       min: 3.201              # 3.3 V - 3%
       max: 3.399              # 3.3 V + 3%
       unit: V
-    measured: 3.32800
+    measured: 3.29600
     status: pass              # +0.85% (feedback divider 31.6k/10k regulation point)
 
   - name: vout_ripple_pp
@@ -41,7 +41,7 @@ assertions:
     expected:
       max: 0.050
       unit: V
-    measured: 0.00364
+    measured: 0.00359
     status: pass
 
   - name: efficiency
@@ -55,7 +55,7 @@ assertions:
     expected:
       min: 0.85
       unit: ratio
-    measured: 0.92946
+    measured: 0.92864
     status: pass              # conduction losses explicit (DCR 20.4 mOhm max);
                               # 0.40 W fixed-loss budget
 
@@ -69,7 +69,7 @@ assertions:
     expected:
       max: 5.0
       unit: percent
-    measured: 0.0477
+    measured: 0.0466
     status: pass              # 500 us soft-start ramp on the reference
 
   - name: load_step_settling
@@ -78,7 +78,7 @@ assertions:
     expected:
       max: 500.0
       unit: us
-    measured: 16.90
+    measured: 16.80
     status: pass
 
 cross_checks:                 # informational, not gating

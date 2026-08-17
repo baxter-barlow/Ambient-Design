@@ -77,60 +77,42 @@ No. of Data Rows : 1265047
 
   Measurements for Transient Analysis
 
-vout_avg            =  3.32800e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.63541e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  4.87191e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.19151e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.68424e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.29462e-01
-vout_pre            =  3.32799e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.32958e+00 at=  1.03718e-03
-overshoot_pct       =  4.77082e-02
-t_reenter           =   1.51690e-03
-t_settle_us         =  1.68960e+01
+vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.58710e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.84413e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.09423e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.58802e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.28644e-01
+vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.29754e+00 at=  1.11718e-03
+overshoot_pct       =  4.66129e-02
+t_reenter           =   1.51683e-03
+t_settle_us         =  1.68280e+01
 
 
-Total analysis time (seconds) = 4.84339
+Total analysis time (seconds) = 4.8506
 
-Total elapsed time (seconds) = 4.873 
+Total elapsed time (seconds) = 4.881 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available =  449.375 MB.
+DRAM currently available =  156.500 MB.
 Maximum ngspice program size =   96.844 MB.
 Current ngspice program size =   96.844 MB.
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===
-vout_avg            =  3.32800e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.63541e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  4.87191e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.19151e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.68424e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.29462e-01
-vout_pre            =  3.32799e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.32958e+00 at=  1.03718e-03
-overshoot_pct       =  4.77082e-02
-t_reenter           =   1.51690e-03
-t_settle_us         =  1.68960e+01
+vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.58710e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.84413e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.09423e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.58802e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.28644e-01
+vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.29754e+00 at=  1.11718e-03
+overshoot_pct       =  4.66129e-02
+t_reenter           =   1.51683e-03
+t_settle_us         =  1.68280e+01
 
 === assertion windows ===
 sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows.
 exit=0
-
-=== Input-corner runs (9 V / 12 V / 14 V), at the converged 2 ns timestep ===
-
-design.md cites these as "supplementary runs in validation.log". They were in
-the pre-AMB-123 log and regenerating it dropped them, which left a live citation
-pointing at a file that no longer contained what it named — a fresh gap opened
-while closing a stale one. Reproduced here by retargeting V3's final value and
-re-running; everything else in the deck is unchanged.
-
-  9 V (low corner)     vout_avg=3.32800e+00  vout_pp=3.13876e-03  il_pp=4.23283e-01  eff=9.29481e-01  t_settle_us=4.55420e+01
-  12 V (nominal)       vout_avg=3.32800e+00  vout_pp=3.63856e-03  il_pp=4.87195e-01  eff=9.29462e-01  t_settle_us=1.68760e+01
-  14 V (high corner)   vout_avg=3.32800e+00  vout_pp=4.12012e-03  il_pp=5.14993e-01  eff=9.29450e-01  t_settle_us=1.54620e+01
-
-Ipk at the worst corner = 2.0 + il_pp/2, which is what sets the inductor
-saturation margin quoted in design.md sec. 4. Note these are the CONVERGED
-numbers: at the deck's former 40 ns grid the 9 V corner read 24.4 mVpp of
-output ripple and design.md explained it as an envelope oscillation. It was
-beat against the time grid, and it is not there at 2 ns.

@@ -19,7 +19,7 @@
 .param KP=2.46
 .param KI=6.47e4
 .param KD=2.33e-5
-.param VTGT=3.328     ; regulation point: 0.8*(1+31.6k/10k)
+.param VTGT=3.296     ; regulation point: 0.8*(1+31.2k/10k)
 .param SBAND=33.3m    ; 1% settling band around VTGT
 
 * ---------- input fixture: ramped supply (V3) ----------
@@ -44,7 +44,7 @@ Rload outl 0 3.3
 Istep outl 0 PWL(0 0 1.5m 0 1.501m 1 1 1)
 
 * ---------- feedback and control (voltage-mode PID ~ Type-III) ----------
-Rfb1 out fb 31.6k
+Rfb1 out fb 31.2k
 Rfb2 fb 0 10k
 * soft-started reference (0 -> 0.8 V between 100 us and 600 us)
 Vr vr 0 PWL(0 0 100u 0 600u {VREF} 1 {VREF})
