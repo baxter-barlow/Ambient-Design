@@ -366,6 +366,25 @@ def self_test() -> int:
         checks.append(("a source map whose design_hash disagrees is caught",
                        bool(problems)))
 
+
+    # WIRING. Everything above drives the check function; nothing proved
+    # `main()` turns a finding into a non-zero exit. That branch was still one
+    # refactor from decorative, one call level up from where the last fix
+    # stopped.
+    import contextlib as _c, io as _i
+    _real = check_document
+    try:
+        globals()["check_document"] = lambda _path, _p, _n: _p.append("planted")
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _planted = main([])
+        globals()["check_document"] = lambda _path, _p, _n: None
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _clean = main([])
+    finally:
+        globals()["check_document"] = _real
+    checks.append(("main() exits non-zero when a problem is found", _planted == 1))
+    checks.append(("main() exits zero when none is", _clean == 0))
+
     failed = 0
     for name, ok in checks:
         print(f"{'ok  ' if ok else 'FAIL'} {name}")

@@ -457,6 +457,7 @@ def self_test():
             "method": "manual",
         }
 
+    MINIMUM_CASES = 26  # raise deliberately; drifting below is not a decision
     cases = [
         ("L1", "unresolvable provenance pointer", mutate(lambda d: set_provenance_key(d, "/pins/99/role"))),
         ("L2", "provenance cites unknown source", mutate(lambda d: d["provenance"].__setitem__("", {"source_id": "nope", "confidence": "unverified", "method": "manual"}))),
@@ -522,6 +523,34 @@ def self_test():
         else:
             print(f"self-test FAIL: L12 did NOT report {description} as unchecked")
             failures += 1
+
+    # WIRING. self_test() called lint() and nothing else, so main()'s exit
+    # branch was untested — and with it dead, every committed part record went
+    # unchecked while both the Makefile and CI advertise the self-test as the
+    # thing that stops a silent clean sweep.
+    import contextlib as _c, io as _i
+    _real, _argv = lint, sys.argv
+    try:
+        # main() re-reads sys.argv, which still says --self-test; without this
+        # the probe re-enters self_test() and recurses.
+        sys.argv = ["lint-part-data.py"]
+        globals()["lint"] = lambda *_a, **_k: ["planted"]
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _planted = main()
+        globals()["lint"] = lambda *_a, **_k: []
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _clean = main()
+    finally:
+        globals()["lint"], sys.argv = _real, _argv
+    for _name, _ok in (("main() exits non-zero when lint reports a problem", _planted == 1),
+                       ("main() exits zero when it does not", _clean == 0)):
+        print(f"self-test {'ok:  ' if _ok else 'FAIL:'} {_name}")
+        failures += 0 if _ok else 1
+
+    if len(cases) < MINIMUM_CASES:
+        print(f"self-test FAIL: only {len(cases)} defect cases, below the floor "
+              f"of {MINIMUM_CASES}")
+        failures += 1
 
     if failures:
         print(f"\nself-test: {failures} check(s) did not fire.")
