@@ -13,10 +13,13 @@
 #
 # The GUARANTEED window, over every corner the part record permits including
 # the comparator spread, is far wider: duty 38.5-70.5 %, period 0.708-1.639 s,
-# frequency 0.610-1.412 Hz. The NE555's threshold levels are specified to about
-# +/-26 % of nominal, and duty is sensitive to them. That range is a fact about
-# the part, and it is deliberately NOT gated: the deck has no comparator
-# tolerance and no bias current, so an assertion against those corners could
+# frequency 0.610-1.412 Hz. The NE555's threshold levels are specified over
+# -28.0 %/+26.0 % of nominal -- not the symmetric "+/-26 %" this comment used to
+# claim -- and duty is sensitive to them. That range is a bound on the MODEL
+# derive-555-windows.py implements, not on the part: the record leaves TRIG's
+# input current unbounded at the operating point, which the script says out
+# loud. It is deliberately NOT gated: the deck has no comparator
+# tolerance, so an assertion against those corners could
 # never fail — and a window nothing can fail is not an assertion, which is a
 # defect this repository has now found in several of its own gates.
 #
@@ -56,7 +59,22 @@ assertions:
     kind: derived_param        # 100*t_on/t_period; t_on is one trig_targ meas
                                #   (RISE=1 -> FALL=1, VAL=3.7 V, TD=2 s)
     expected: 53.42 %          # (RA+RB)/(RA+2RB); passives move it <0.1 pt.
-    window: [53.3 %, 55.8 %]   # Ib in [0, 0.25 uA], one-sided. 0.25 uA is the
+    window: [53.3 %, 55.8 %]   # Ib in [0, 0.25 uA], one-sided. NOTE the deck
+                               #   cannot produce Ib at all: Bset/Bthr draw
+                               #   exactly zero input current, so it measures the
+                               #   Ib = 0 row and always will. Only 0.13 of these
+                               #   2.5 points is reachable, and duty_pct could
+                               #   drift 4.4 % relative without failing. The
+                               #   window is a legitimate DESIGN bound and is kept
+                               #   as one, but it is 20x looser than the deck's own
+                               #   repeatability, and the guaranteed model above is
+                               #   excluded partly on a "no bias current" argument
+                               #   that applies here too. Tightening this to the
+                               #   deck's reachable range would make it a real
+                               #   regression check; that is AMB-124 territory,
+                               #   because it needs the comparator model the part
+                               #   record cannot yet express.
+                               #   0.25 uA is the
                                #   GUARANTEED THRES max; an earlier revision used
                                #   0.5 uA, obtained by inverting the datasheet's
                                #   RA+RB ceiling note -- but that guideline sits at
