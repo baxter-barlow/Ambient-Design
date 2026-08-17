@@ -496,6 +496,64 @@ def self_test():
                        r.update(non_authoritative_reasons=["stub tokenizer"])))),
     ]
 
+    # The batch added last, which had no cases at all. Every one fires today —
+    # verified individually — but each was deletable with `make eval-tests`
+    # green, which is the coverage debt this self-test's own docstring argues
+    # mutating the committed record makes unrepresentable. It only does that for
+    # checks that HAVE a case.
+    cases += [
+        ("an empty breakdown under a non-zero total is caught", hit(
+            "accounts for nothing", lambda r: r["a4_context_budget"].update(breakdown={}))),
+        ("a breakdown that does not sum to the total is caught", hit(
+            "do not account for the whole", lambda r:
+                r["a4_context_budget"]["breakdown"].update(skill_payload=243000))),
+        ("negative counts are caught", hit(
+            "negative counts", lambda r: r["arms"][arm_name].update(successes=-1))),
+        ("outcomes that do not sum to the trial count are caught", hit(
+            "outcomes sum to", lambda r: r["arms"][arm_name].update(outcomes={"passed": 8, "failed": 99}))),
+        ("a gate with more successes than trials is caught", hit(
+            "successes in", lambda r: r["ac5_gate"].update(successes=99, trials=10))),
+        ("a gate passing below AC5a's trial floor is caught", hit(
+            "below AC5a's stated", lambda r:
+                r["ac5_gate"].update(successes=1, trials=1, passed=True))),
+        ("a paired verdict with no discordant counts is caught", hit(
+            "records no discordant", lambda r: (
+                r["flip_criterion"].update(paired=True, test="mcnemar_exact_one_sided"),
+                r["flip_criterion"].pop("discordant_b", None),
+                r["flip_criterion"].pop("discordant_c", None)))),
+        ("an impossible paired table is caught", hit(
+            "same number", lambda r: (
+                r["flip_criterion"].update(paired=True, test="mcnemar_exact_one_sided",
+                                           discordant_b=0, discordant_c=10),
+                r["arms"][arm_name].update(successes=10),
+                r["arms"][other].update(successes=0)))),
+        ("'not met' with no recorded power is caught", hit(
+            "no recorded power", lambda r: r["flip_criterion"].update(
+                verdict="flip_criterion_not_met",
+                minimum_effect_of_interest=[0.6, 0.9],
+                power_against_declared_effect=None))),
+        ("'not met' with no adequacy threshold is caught", hit(
+            "no recorded `adequate_power_threshold`", lambda r: (
+                r["flip_criterion"].update(
+                    verdict="flip_criterion_not_met",
+                    minimum_effect_of_interest=[0.6, 0.9],
+                    power_against_declared_effect=0.02),
+                r["flip_criterion"].pop("adequate_power_threshold", None)))),
+        ("a significant result recorded as inconclusive is caught", hit(
+            "buries the finding", lambda r:
+                r["flip_criterion"].update(verdict="inconclusive", p_value=0.001, alpha=0.05))),
+        ("a trials list disagreeing with trial_count is caught", hit(
+            "trial record(s)", lambda r: r["arms"][arm_name]["trials"].pop())),
+    ]
+    # HONEST LIMIT. Two of the clauses above are MASKED rather than uncovered:
+    # deleting the `adequate_power_threshold` branch, or the trials-list-length
+    # branch, still fails its case — but by way of a sibling check that catches
+    # the same mutation with a different message (the power comparison, and the
+    # trials-vs-successes count). So the DEFECT stays caught if either clause is
+    # removed, while the clause itself is not individually pinned. Recorded
+    # because a coverage claim that quietly relies on masking is the kind of
+    # claim this file exists to stop being made.
+
     # WIRING. Everything above drives `problems_for`; nothing proved `main()`
     # turns a finding into a non-zero exit. That branch was the one part of
     # every gate here that no self-test touched.
