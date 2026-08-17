@@ -53,9 +53,13 @@ RUN_SIM = ROOT / "tests/benchmarks/run-sim.sh"
 # consumer or match some unrelated occurrence of "4.26.0".
 CONSUMERS = {
     ("python", "version"): (lambda v: f'python-version: "{v}"', [CHECKS]),
-    ("python", "packages", "jsonschema"): (lambda v: f"jsonschema=={v}", [CHECKS, MAKEFILE]),
+    # NOT the Makefile: its `python3 -m pip install jsonschema==...` lines are
+    # comments telling a human what to install. A comment is documentation, not
+    # a consumer — treating it as one is how a stale comment came to satisfy
+    # this check for a drifted live command.
+    ("python", "packages", "jsonschema"): (lambda v: f"jsonschema=={v}", [CHECKS]),
     ("python", "packages", "pyyaml"): (lambda v: f"PyYAML=={v}", [CHECKS]),
-    ("python", "packages", "lark"): (lambda v: f"lark=={v}", [CHECKS, MAKEFILE]),
+    ("python", "packages", "lark"): (lambda v: f"lark=={v}", [CHECKS]),
     # run-sim.sh READS the manifest and fails on a mismatch, so its consumer is
     # the sed expression that extracts the pin, not a copy of the value. Was
     # `[MANIFEST]`, which asserted only that the manifest contains its own value.
@@ -84,7 +88,7 @@ NOT_YET_CONSUMED = set()
 
 # The number of pin/consumer agreements a healthy tree has. Raise it when a pin
 # is added; lower it only in the same change that deliberately removes one.
-MINIMUM_AGREEMENTS = 15
+MINIMUM_AGREEMENTS = 13
 
 
 class GateUnavailable(Exception):
@@ -105,6 +109,36 @@ def load_manifest():
         return yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
     except Exception as exc:
         raise GateUnavailable(f"{MANIFEST} is not readable as YAML: {exc}") from exc
+
+
+def _strip_comment(line: str) -> str:
+    """A YAML/shell line with its comment removed. Comments are not consumers."""
+    quote = None
+    for index, char in enumerate(line):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char == "#":
+            return line[:index]
+    return line
+
+
+def _key_of(needle: str) -> str:
+    """The part of a needle that identifies WHICH lines must carry it.
+
+    `jsonschema==4.26.0` -> `jsonschema==`, so every pip line naming jsonschema
+    is compared, not just the ones that already agree.
+    """
+    # `@` FIRST: `uses: actions/checkout@<sha>` must key on
+    # `uses: actions/checkout@`, not on `uses: `, or every action line in the
+    # file is compared against one action's pin.
+    for separator in ("@", "==", ": ", ":"):
+        head, found, _ = needle.partition(separator)
+        if found:
+            return head + found
+    return needle
 
 
 def dig(tree, path):
@@ -190,12 +224,33 @@ def check(manifest, read=None):
             if text is None:
                 problems.append(f"{'.'.join(path)}: consumer {file_path} does not exist")
                 continue
-            if needle not in text:
+            # LIVE lines only, and EVERY occurrence of the key must agree.
+            #
+            # Substring-in-file was two holes at once. A stale comment
+            # (`# previously: jsonschema==4.26.0`) satisfied the check for a
+            # drifted live command beneath it. And a file with six
+            # `python-version:` lines passed with one of them drifted, because
+            # the other five still carried the pinned string — which is exactly
+            # the corruption this gate's docstring says it exists to catch.
+            live = [_strip_comment(line) for line in text.splitlines()]
+            live = [line for line in live if line.strip()]
+            key = _key_of(needle)
+            occurrences = [line for line in live if key and key in line]
+            if needle not in "\n".join(live):
                 problems.append(
                     f"{'.'.join(path)}: manifest pins {value!r}, but "
                     f"{file_path.relative_to(ROOT) if file_path.is_absolute() else file_path} "
                     f"does not contain {needle!r}. The stated toolchain and the "
                     "real one disagree."
+                )
+            elif occurrences and any(needle not in line for line in occurrences):
+                stray = next(line.strip() for line in occurrences if needle not in line)
+                problems.append(
+                    f"{'.'.join(path)}: manifest pins {value!r}, and "
+                    f"{file_path.name} carries {len(occurrences)} line(s) using "
+                    f"{key!r}, but at least one disagrees: {stray!r}. Every "
+                    "occurrence must match, or one drifted line hides behind "
+                    "the others."
                 )
             else:
                 checked += 1
@@ -245,9 +300,8 @@ def self_test():
                  "ngspice=46+ds-1\n  uses: actions/checkout@abc\n  uses: actions/setup-python@def\n"
                  "      image: debian:x@sha256:y\n"
                  "          kicad/kicad:9.0.9@sha256:aaa\n"),
-        MAKEFILE: "jsonschema==4.26.0 lark==1.3.0\n",
         MANIFEST: 'version: "46"\n',
-        RUN_SIM: "# reads ngspice.version from the manifest and fails on mismatch\n",
+        RUN_SIM: 'fail_env "could not read ngspice.version from the manifest."\n',
         DCO: "  uses: actions/checkout@abc\n",
         POLICY: "  uses: actions/checkout@abc\n",
     }

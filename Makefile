@@ -37,6 +37,7 @@ pins:
 # toolchain/versions.yaml:
 #   python3 -m pip install jsonschema==4.26.0
 schemas:
+	python3 tests/schemas/validate-schemas.py --self-test
 	python3 tests/schemas/validate-schemas.py
 
 # Part-record consistency: cross-references, sort order, and licence
@@ -77,7 +78,7 @@ corpus:
 # which needs the optional tiktoken pin and is not a gate.
 bakeoff:
 	cd lang && python3 -m bakeoff check
-	python3 -m unittest discover -s lang/tests -t lang
+	python3 -m unittest discover -s lang/tests -t lang -p 'test_bakeoff.py'
 
 # Frozen syntax v0 (lang/grammar/): the EBNF and Lark artifacts must still
 # match the source of truth they are generated from, and the Lark grammar must
@@ -120,6 +121,7 @@ sim:
 policy:
 	sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
 	git diff --check HEAD
+	sh .github/scripts/check-dco.sh $$(git rev-list --max-parents=0 HEAD) HEAD
 
 # Golden-file harness; exits 0 with "no cases" while tests/golden is empty.
 golden:

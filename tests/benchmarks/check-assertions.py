@@ -371,6 +371,30 @@ def self_test():
             {"expected": {"min": 0.85, "unit": "ratio"}}, "x")[1] == float("inf")),
     ]
 
+    # WIRING, as above: main() must turn a finding into a non-zero exit. This
+    # drives the real entry point over a benchmark directory whose deck output
+    # is planted, rather than over `check_benchmark` alone.
+    import contextlib as _ctx, io as _io, tempfile as _tmp
+    with _tmp.TemporaryDirectory() as _d:
+        _case = Path(_d) / "probe"
+        _case.mkdir()
+        (_case / "assertions.yaml").write_text(
+            "deck: netlist.cir\nassertions:\n"
+            "  - name: osc_period\n    meas_id: t_period\n"
+            "    window: [2.0 s, 3.0 s]\n", encoding="utf-8")
+        _log = Path(_d) / "ng.log"
+        _log.write_text("t_period   =  1.01191e+00\n", encoding="utf-8")
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted = main([str(_case), str(_log)])
+        (_case / "assertions.yaml").write_text(
+            "deck: netlist.cir\nassertions:\n"
+            "  - name: osc_period\n    meas_id: t_period\n"
+            "    window: [0.9 s, 1.1 s]\n", encoding="utf-8")
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _clean = main([str(_case), str(_log)])
+    cases.append(("main() exits 1 on a value outside its window", _planted == 1))
+    cases.append(("main() exits 0 on a value inside it", _clean == 0))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1

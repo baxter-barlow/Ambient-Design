@@ -230,7 +230,97 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
     return len(schema_paths), positive_count, negative_count
 
 
+def self_test() -> int:
+    """Prove this gate can fail, over a throwaway tree.
+
+    Every sibling gate runs a self-test first and the Makefile says so four
+    times. The gate that owns all 48 negative controls had none, so its
+    location comparison could be deleted and a fixture pointed at a location it
+    does not fail at with `make check` still green. That is the exact shape the
+    declaration mechanism was added to close, one level up.
+
+    Each case builds a minimal root and drives `main()`, so the wiring from
+    "problem found" to "non-zero exit" is covered too.
+    """
+    import contextlib, io, json as _json, tempfile
+
+    SCHEMA = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"stability": {"const": "unstable"}},
+        "required": ["stability"],
+        "patternProperties": {"^x_": {"type": "string"}},
+        "additionalProperties": False,
+    }
+
+    def run(positive, negatives):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "parts" / "examples" / "negative").mkdir(parents=True)
+            (root / "parts" / "part-data.schema.json").write_text(_json.dumps(SCHEMA))
+            (root / "parts" / "examples" / "good.part.json").write_text(_json.dumps(positive))
+            for name, body in negatives.items():
+                (root / "parts" / "examples" / "negative" / name).write_text(_json.dumps(body))
+            argv = sys.argv
+            sys.argv = ["validate-schemas.py", str(root)]
+            try:
+                with contextlib.redirect_stdout(io.StringIO()) as out, \
+                     contextlib.redirect_stderr(io.StringIO()) as err:
+                    code = main()
+                return code, out.getvalue() + err.getvalue()
+            finally:
+                sys.argv = argv
+
+    good = {"stability": "unstable"}
+    control = {"stability": "stable",
+               "x_negative_control": "REJECTED at /stability: stability is const"}
+
+    cases = []
+    code, _ = run(good, {"n1.part.json": control})
+    cases.append(("a well-formed root passes", code == 0))
+
+    code, text = run(good, {"n1.part.json": dict(control, stability="unstable")})
+    cases.append(("a control that VALIDATES is caught",
+                  code == 1 and "unexpectedly VALIDATES" in text))
+
+    code, text = run(good, {"n1.part.json": dict(
+        control, x_negative_control="REJECTED at /nowhere: points at nothing")})
+    cases.append(("a control declaring a location it does not fail at is caught",
+                  code == 1 and "actually fails at" in text))
+
+    code, text = run(good, {"n1.part.json": dict(control, extra_defect=1)})
+    cases.append(("a control failing somewhere it does not declare is caught",
+                  code == 1 and "actually fails at" in text))
+
+    code, text = run(good, {"n1.part.json": {"stability": "stable"}})
+    cases.append(("a control with no declaration is caught",
+                  code == 1 and "does not declare where it fails" in text))
+
+    code, text = run(good, {"n1.txt.json": control})
+    cases.append(("an example matched by no suffix rule is caught",
+                  code == 1 and "no example-to-schema mapping" in text))
+
+    code, text = run({"stability": "stable"}, {"n1.part.json": control})
+    cases.append(("an invalid POSITIVE example is caught", code == 1))
+
+    code, text = run(good, {})
+    cases.append(("a root with no negative controls is caught",
+                  code == 1 and "ships no negative controls" in text))
+
+    failures = 0
+    for name, ok in cases:
+        failures += 0 if ok else 1
+        print(f"{'ok  ' if ok else 'FAIL'} {name}")
+    if failures:
+        print(f"schemas: SELF-TEST FAILED: {failures} case(s)", file=sys.stderr)
+        return 1
+    print(f"schemas: self-test PASS: {len(cases)} cases.")
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        return self_test()
     root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_ROOT
 
     present = [name for name in sorted(SCHEMA_ROOTS) if (root / name).is_dir()]
