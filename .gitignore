@@ -56,6 +56,29 @@ dist/
 !AGENTS.md
 !CLAUDE.md
 
+# ...but the secrets rules above must WIN there too. `!.agents/**` and
+# `!.claude/**` are the last matching rule for everything beneath those
+# directories, so they re-admitted `.env`, `*.pem`, `*.key` and every cache
+# pattern — the negations were written to version skills and instructions and
+# they also switched off the secrets section for two whole subtrees. AGENTS.md:
+# "Keep credentials ... out of source, skills, Linear, Notion, and Slack."
+#
+# Re-stated after the negations rather than tightened above them, because the
+# negations legitimately need to be broad: the rule that must come last is the
+# one that refuses secrets, not the one that admits configuration.
+.agents/**/.env
+.agents/**/.env.*
+.agents/**/*.pem
+.agents/**/*.key
+.claude/**/.env
+.claude/**/.env.*
+.claude/**/*.pem
+.claude/**/*.key
+.agents/**/__pycache__/
+.claude/**/__pycache__/
+.agents/**/.DS_Store
+.claude/**/.DS_Store
+
 # Transient agent worktrees. This must come AFTER the negations above, because
 # the last matching rule wins: `!.claude/**` was written to version `.agents/`
 # and `.claude/skills/` and also un-ignored this, so a stale worktree sat

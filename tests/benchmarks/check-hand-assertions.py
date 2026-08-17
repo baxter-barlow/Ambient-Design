@@ -67,12 +67,20 @@ def evaluate(check, inputs):
     )
 
 
-def check_spec(spec, label, problems):
+# At least this many assertions must actually be evaluated. Without a floor,
+# relabelling every `check:` as `not_mechanisable` reported "0 assertion(s)
+# follow from their inputs" and exited 0 — the set that "cannot grow quietly"
+# growing to everything.
+MINIMUM_MECHANISED = 8
+
+
+def check_spec(spec, label, problems, minimum=None):
     assertions = spec.get("assertions") or []
     if not assertions:
         problems.append(f"{label}: declares no assertions")
         return 0
     checked = 0
+    unmechanised = 0
     for assertion in assertions:
         name = assertion.get("id") or assertion.get("name") or "<unnamed>"
         check = assertion.get("check")
@@ -81,6 +89,7 @@ def check_spec(spec, label, problems):
             # so the set cannot grow quietly.
             print(f"hand-assert: not mechanisable: {label}/{name}: "
                   f"{assertion['not_mechanisable'].strip()}")
+            unmechanised += 1
             continue
         if check is None:
             # Not yet machine-checkable. Reported, never skipped: an assertion
@@ -93,7 +102,7 @@ def check_spec(spec, label, problems):
             )
             continue
         try:
-            holds, shown = evaluate(check, assertion.get("check_inputs") or assertion.get("inputs") or {})
+            holds, shown = evaluate(check, assertion.get("check_inputs") or {})
         except (ValueError, KeyError, TypeError) as exc:
             problems.append(f"{label}/{name}: {exc}")
             continue
@@ -104,6 +113,32 @@ def check_spec(spec, label, problems):
                 f"{label}/{name}: recorded status {assertion.get('status')!r} but "
                 f"the inputs give {shown} -> {'PASS' if holds else 'FAIL'}. The "
                 "verdict does not follow from the numbers beside it."
+            )
+    floor = MINIMUM_MECHANISED if minimum is None else minimum
+    if checked < floor:
+        problems.append(
+            f"{label}: only {checked} of {len(assertions)} assertion(s) were "
+            f"evaluated ({unmechanised} declared unmechanisable), below the "
+            f"floor of {floor}. Lowering the floor is a deliberate "
+            "decision; drifting under it is not."
+        )
+    # `inputs` is the field a reader edits. If it disagrees with `check_inputs`
+    # on a value they share, the gate is re-deriving from a copy the reader
+    # never sees — which is how the docstring's own attack kept passing.
+    for assertion in assertions:
+        declared = assertion.get("check_inputs") or {}
+        recorded = assertion.get("inputs")
+        if not isinstance(recorded, dict):
+            recorded = {}
+        shared = {v for v in declared.values() if isinstance(v, (int, float))}
+        listed = {v for v in recorded.values() if isinstance(v, (int, float))}
+        missing = shared - listed
+        if declared and recorded and missing:
+            problems.append(
+                f"{label}/{assertion.get('id', '?')}: check_inputs uses "
+                f"{sorted(missing)}, which appear nowhere in the `inputs` block "
+                "a reader edits. The two must agree, or the gate re-derives the "
+                "verdict from a copy nobody maintains."
             )
     return checked
 
@@ -126,56 +161,58 @@ def self_test():
 
     def probe(assertion):
         problems = []
-        check_spec({"assertions": [assertion]}, "probe", problems)
+        check_spec({"assertions": [assertion]}, "probe", problems, minimum=0)
         return problems
 
     cases.append(("a true interval containment passes", not probe(
         {"id": "a", "check": "interval-within",
-         "inputs": {"inner": [3.234, 3.366], "outer": [3.0, 3.6]}, "status": "PASS"})))
+         "check_inputs": {"inner": [3.234, 3.366], "outer": [3.0, 3.6]}, "status": "PASS"})))
     cases.append(("a false containment recorded PASS is caught", any(
         "does not follow" in p for p in probe(
             {"id": "a", "check": "interval-within",
-             "inputs": {"inner": [2.0, 4.0], "outer": [3.0, 3.6]}, "status": "PASS"}))))
+             "check_inputs": {"inner": [2.0, 4.0], "outer": [3.0, 3.6]}, "status": "PASS"}))))
     cases.append(("the auditor's A3 mutation is caught", any(
         "does not follow" in p for p in probe(
             {"id": "a3", "check": "at-least",
-             "inputs": {"have": 0.001, "need": 99.0}, "status": "PASS"}))))
+             "check_inputs": {"have": 0.001, "need": 99.0}, "status": "PASS"}))))
     cases.append(("a true at-most passes", not probe(
         {"id": "a", "check": "at-most",
-         "inputs": {"have": 0.3916, "limit": 0.5}, "status": "PASS"})))
+         "check_inputs": {"have": 0.3916, "limit": 0.5}, "status": "PASS"})))
     cases.append(("a false at-most recorded PASS is caught", any(
         "does not follow" in p for p in probe(
             {"id": "a", "check": "at-most",
-             "inputs": {"have": 9.0, "limit": 0.5}, "status": "PASS"}))))
+             "check_inputs": {"have": 9.0, "limit": 0.5}, "status": "PASS"}))))
     cases.append(("sum-at-most adds its parts", any(
         "does not follow" in p for p in probe(
             {"id": "a", "check": "sum-at-most",
-             "inputs": {"parts": [4.7, 4.7, 0.1], "limit": 9.0}, "status": "PASS"}))))
+             "check_inputs": {"parts": [4.7, 4.7, 0.1], "limit": 9.0}, "status": "PASS"}))))
     cases.append(("an assertion with no check key is reported", any(
         "declares no `check:`" in p for p in probe(
-            {"id": "a", "inputs": {}, "status": "PASS"}))))
+            {"id": "a", "check_inputs": {}, "status": "PASS"}))))
     cases.append(("an unknown relation is rejected, not assumed true", any(
         "unknown check" in p for p in probe(
-            {"id": "a", "check": "vibes", "inputs": {}, "status": "PASS"}))))
+            {"id": "a", "check": "vibes", "check_inputs": {}, "status": "PASS"}))))
     cases.append(("a recorded FAIL that really fails is consistent", not probe(
         {"id": "a", "check": "at-least",
-         "inputs": {"have": 1.0, "need": 2.0}, "status": "FAIL"})))
+         "check_inputs": {"have": 1.0, "need": 2.0}, "status": "FAIL"})))
 
+    # WIRING, over the real entry point. Eight assertions because main() applies
+    # MINIMUM_MECHANISED, and a wiring case that dodged the floor would not be
+    # driving the shipped path.
     import contextlib, io, tempfile
-    with tempfile.TemporaryDirectory() as tmp:
-        case = Path(tmp)
-        (case / "assertions.yaml").write_text(
-            "assertions:\n  - id: a\n    check: at-least\n"
-            "    inputs: {have: 0.001, need: 99.0}\n    status: PASS\n",
-            encoding="utf-8")
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            planted = main([str(case)])
-        (case / "assertions.yaml").write_text(
-            "assertions:\n  - id: a\n    check: at-least\n"
-            "    inputs: {have: 99.0, need: 0.001}\n    status: PASS\n",
-            encoding="utf-8")
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            clean = main([str(case)])
+
+    def drive(have, need):
+        body = "assertions:\n" + "".join(
+            f"  - id: a{i}\n    check: at-least\n"
+            f"    check_inputs: {{have: {have}, need: {need}}}\n    status: PASS\n"
+            for i in range(8))
+        with tempfile.TemporaryDirectory() as tmp:
+            case = Path(tmp)
+            (case / "assertions.yaml").write_text(body, encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                return main([str(case)])
+
+    planted, clean = drive(0.001, 99.0), drive(99.0, 0.001)
     cases.append(("main() exits 1 when a verdict does not follow", planted == 1))
     cases.append(("main() exits 0 when every verdict follows", clean == 0))
 

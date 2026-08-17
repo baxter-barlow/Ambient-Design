@@ -103,7 +103,15 @@ QUANTITY = re.compile(r"^\s*(?P<number>-?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*(?P<unit
 # tolerance stack is rarely wider, and this must not fight engineering. It
 # exists to catch a window that has stopped asserting anything at all.
 MAX_RELATIVE_WINDOW = 3.0
-MAX_ONE_SIDED_RATIO = 10.0
+# A one-sided bound is a SPEC LIMIT, not a tolerance: "ripple below 50 mV" on a
+# converter measuring 3.6 mV is a 14x margin and is exactly what good design
+# looks like, and "overshoot under 5%" against 0.048% is 100x. Holding those to
+# the two-sided ratio would have failed a healthy benchmark, which is how a
+# gate teaches people to widen its own thresholds. The number here is chosen to
+# catch absurdity — a limit six orders of magnitude away asserts nothing — and
+# nothing tighter, because anything tighter is a judgement about the design
+# rather than about the assertion.
+MAX_ONE_SIDED_RATIO = 1000.0
 
 SIGNIFICANT = re.compile(r"[1-9][0-9]*(?:\.[0-9]*)?|0\.0*[1-9][0-9]*")
 
@@ -255,12 +263,22 @@ def check_benchmark(case, spec, log_text, problems):
         # for a one-sided bound — because a legitimate tolerance stack is rarely
         # wider than that and this must not fight real engineering. It exists to
         # catch the window that has stopped asserting anything at all.
+        # The CENTRE the window must be proportionate to. Shape (a) states it
+        # as `expected:`; shape (b) has no `expected` scalar, so the measured
+        # value itself is the centre — which is the right reference anyway and
+        # is not author-controlled. Keying only on the scalar form meant this
+        # bound never applied to benchmark (b) at all: all five of its windows
+        # could be widened to [0.000001, 1000000] and pass.
         expected = assertion.get("expected")
+        centre = None
         if expected is not None and not isinstance(expected, dict):
             try:
                 centre = to_reported(expected, assertion, f"{label}.expected")
             except ValueError:
                 centre = None
+        if centre is None:
+            centre = value
+        if True:
             if centre is not None and centre != 0:
                 if low > float("-inf") and high < float("inf"):
                     span = (high - low) / abs(centre)
