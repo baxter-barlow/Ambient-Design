@@ -41,7 +41,50 @@ EXAMPLES = ROOT / "eval" / "examples"
 # AC5a's bar, as a Fraction so the boundary is exact. Duplicated from the
 # harness deliberately: a gate that imports the thing it checks cannot catch
 # that thing changing.
+def _wilson(successes: int, trials: int, z: float = 1.959963984540054) -> dict:
+    """Wilson score interval, implemented HERE on purpose.
+
+    A gate that imported eval/rhoform_eval/stats.py would be checking the
+    harness's arithmetic against itself. This is a second implementation, so a
+    record and the code that wrote it have to agree with something independent.
+    """
+    import math
+    p = successes / trials
+    denom = 1.0 + z * z / trials
+    centre = (p + z * z / (2 * trials)) / denom
+    half = z / denom * math.sqrt(p * (1 - p) / trials + z * z / (4 * trials * trials))
+    return {"low": max(0.0, centre - half), "high": min(1.0, centre + half)}
+
+
+def _fisher_lower_tail(a: int, b: int, c: int, d: int) -> float:
+    """P(arm A's success count is this low or lower), given the margins.
+
+    The SAME direction eval/rhoform_eval/stats.py documents and uses: the flip
+    criterion fires when Rhoform is worse than the baseline, so the harness
+    deliberately spends its whole significance budget on that tail. A checker
+    that imposed a two-sided test here would be failing correct records for
+    disagreeing with a test nobody ran -- which is what my first version did.
+
+    Independent implementation, for the same reason as _wilson.
+    """
+    from math import comb
+    n = a + b + c + d
+    row1, col1 = a + b, a + c
+    lo = max(0, col1 - (n - row1))
+    return min(1.0, sum(
+        (comb(row1, x) * comb(n - row1, col1 - x)) / comb(n, col1)
+        for x in range(lo, a + 1)))
+
+
 AC5A_THRESHOLD = Fraction(7, 10)
+
+# AC4's ceiling is a constant OF THE ACCEPTANCE CRITERION, not per-run data.
+# `limit` was read straight out of the record and compared only to `total`, so
+# the docstring's headline attack (total 64000 against limit 12000) was reopened
+# simply by moving the other number: an auditor recorded total=243058 against
+# limit=250000, carrying the exact skill_payload=243000 the schema's $comment
+# says the breakdown exists to make visible, and both gates passed it.
+A4_CONTEXT_LIMIT = 12000
 
 # AC5a reads "in >=7/10 independent trials". The rate rule generalises the
 # threshold to other n, which is right — but it generalised DOWNWARD too, and
@@ -94,6 +137,11 @@ def problems_for(record, label):
                 bad(f"a4_context_budget.breakdown sums to {sum(parts):g} but "
                     f"total is {total}. The parts do not account for the whole, "
                     "which is exactly how a payload migrates out of sight.")
+        if isinstance(limit, int) and limit != A4_CONTEXT_LIMIT:
+            bad(f"a4_context_budget.limit is {limit}, but AC4's ceiling is "
+                f"{A4_CONTEXT_LIMIT}. The ceiling is a property of the "
+                "acceptance criterion; a record that raises its own limit has "
+                "not passed A4, it has restated it.")
         if isinstance(total, int) and isinstance(limit, int):
             if isinstance(headroom, int) and headroom != limit - total:
                 bad(f"a4_context_budget.headroom is {headroom}, but limit - total "
@@ -202,6 +250,25 @@ def problems_for(record, label):
                 if isinstance(rate, (int, float)) and not (low <= rate <= high):
                     bad(f"ac5_gate.observed_rate {rate} is outside its own "
                         f"Wilson interval [{low}, {high}]")
+                # RECOMPUTED, not merely bracketed. Ordering, range and
+                # containment were the only constraints, so 7/10 could be
+                # recorded as observed_rate 0.99 inside [0.97, 1.0] -- a
+                # made-up rate inside a made-up interval, mutually consistent
+                # and both wrong.
+                if (isinstance(successes, int) and isinstance(trials, int)
+                        and trials > 0 and successes <= trials):
+                    want = _wilson(successes, trials)
+                    if abs(low - want["low"]) > 1e-6 or abs(high - want["high"]) > 1e-6:
+                        bad(f"ac5_gate.wilson_95 is [{low}, {high}], but the "
+                            f"95% Wilson interval for {successes}/{trials} is "
+                            f"[{want['low']:.6f}, {want['high']:.6f}]. An "
+                            "interval nobody recomputes is decoration.")
+        if (isinstance(successes, int) and isinstance(trials, int) and trials > 0
+                and successes <= trials):
+            rate = gate.get("observed_rate")
+            if isinstance(rate, (int, float)) and abs(rate - successes / trials) > 1e-9:
+                bad(f"ac5_gate.observed_rate is {rate}, but {successes}/{trials} "
+                    f"is {successes / trials:.6f}.")
 
     flip = record.get("flip_criterion")
     if isinstance(flip, dict):
@@ -234,6 +301,33 @@ def problems_for(record, label):
         # decision, and nothing related it to its own p-value.
         alpha = flip.get("alpha")
         p_value = flip.get("p_value")
+        # RECOMPUTED from the arms. Every clause below reads the p-value the
+        # record states, so a forged p buried a real difference (or invented
+        # one) with all of them agreeing. The unpaired two-sided Fisher exact
+        # is the conservative reading; a paired design records `paired: true`
+        # and is checked against its discordant counts elsewhere.
+        primary = flip.get("primary_arm")
+        baseline_name = flip.get("baseline_arm")
+        if (isinstance(p_value, (int, float)) and not flip.get("paired")
+                and isinstance(arms, dict)
+                and primary in arms and baseline_name in arms):
+            a_arm, b_arm = arms[primary], arms[baseline_name]
+            a_s, a_n = a_arm.get("successes"), _arm_count(a_arm)
+            b_s, b_n = b_arm.get("successes"), _arm_count(b_arm)
+            # Only on counts that can BE a 2x2 table. A sibling clause already
+            # reports successes > trials; recomputing on those numbers divides
+            # by a zero binomial instead of reporting anything.
+            if (all(isinstance(v, int) for v in (a_s, a_n, b_s, b_n))
+                    and a_n > 0 and b_n > 0
+                    and 0 <= a_s <= a_n and 0 <= b_s <= b_n):
+                want = _fisher_lower_tail(a_s, a_n - a_s, b_s, b_n - b_s)
+                if abs(p_value - want) > 1e-3:
+                    bad(f"flip_criterion.p_value is {p_value}, but the two-sided "
+                        f"lower-tail Fisher exact test on {a_s}/{a_n} against "
+                        f"{b_s}/{b_n} "
+                        f"gives {want:.4f}. Every verdict clause below reads the "
+                        "recorded p, so a p nobody recomputes decides the "
+                        "standalone-DSL question on its own.")
         if isinstance(p_value, (int, float)) and isinstance(alpha, (int, float)):
             significant = p_value <= alpha
             if verdict == "flip_criterion_met" and not significant:
@@ -330,6 +424,19 @@ def problems_for(record, label):
             bad(f"authoritative is true but {len(reasons)} non-authoritative "
                 f"reason(s) are recorded: {reasons}")
         model_kind = (record.get("model") or {}).get("kind")
+        # The header identities were never reconciled with the arms that
+        # supposedly produced them, so `model.kind: "anthropic"` over arms all
+        # recording `model_identity.kind: "replay"` validated and passed --
+        # exactly the "inconsistent forgery" the schema's $comment says schema
+        # validation catches. It does not; neither did this.
+        if isinstance(arms, dict) and arms:
+            stated = {(arm.get("model_identity") or {}).get("kind")
+                      for arm in arms.values() if isinstance(arm, dict)}
+            stated.discard(None)
+            if model_kind is not None and stated and model_kind not in stated:
+                bad(f"header model.kind is {model_kind!r} but no arm ran under "
+                    f"it (arms record {sorted(stated)}). An authoritative "
+                    "record cannot claim an identity none of its data has.")
         if model_kind not in LIVE_MODEL_KINDS:
             bad(f"authoritative is true but model kind is {model_kind!r}, which is "
                 f"not one of {sorted(LIVE_MODEL_KINDS)}")
@@ -369,13 +476,12 @@ def problems_for(record, label):
             "and are still compared. Recording the reading is necessary and not "
             "sufficient: AMB-119 is unsettled, and the two readings differ by a "
             "third of the repair budget.")
-    benches = {
-        (arm.get("config") or {}).get("benchmark")
-        for arm in arms.values() if isinstance(arm, dict)
-    } - {None}
-    if len(benches) > 1:
-        bad(f"arms were run against different benchmarks ({sorted(benches)}) and "
-            "are still compared")
+    # `config.benchmark` used to be read here. The harness writes
+    # `benchmark_id` (protocol.py, cli.py) and never `benchmark`, so this
+    # clause could only fire on a field nobody produces -- and the sibling
+    # check on `benchmark_id` already covers the real one. Reading a name the
+    # harness does not write is how three earlier clauses in this file came to
+    # be dead, so it is deleted rather than left looking like coverage.
     return out
 
 
@@ -542,8 +648,42 @@ def self_test():
         ("a significant result recorded as inconclusive is caught", hit(
             "buries the finding", lambda r:
                 r["flip_criterion"].update(verdict="inconclusive", p_value=0.001, alpha=0.05))),
-        ("a trials list disagreeing with trial_count is caught", hit(
-            "trial record(s)", lambda r: r["arms"][arm_name]["trials"].pop())),
+        # THE EIGHT CLAUSES an auditor found had no case at all. Each was
+        # verified to fire before its case was written, and each case was
+        # verified to fail with its clause neutralised.
+        ("successes disagreeing with the trials marked passed is caught", hit(
+            "trial record(s) are marked passed",
+            lambda r: r["arms"][arm_name].update(successes=99))),
+        ("outcomes.passed disagreeing with successes is caught", hit(
+            "outcomes", lambda r: r["arms"][arm_name]["outcomes"].update(passed=99))),
+        ("a passing gate with no Wilson interval is caught", hit(
+            "without recording its Wilson interval",
+            lambda r: r["ac5_gate"].pop("wilson_95", None))),
+        ("a flip criterion naming an unknown arm is caught", hit(
+            "which this record has no arm data for",
+            lambda r: r["flip_criterion"].update(primary_arm="ghost_arm"))),
+        ("rhoform_rate disagreeing with its arm is caught", hit(
+            "rhoform_rate", lambda r: r["flip_criterion"].update(rhoform_rate=0.123))),
+        ("flip_criterion_met while the primary arm BEAT the baseline is caught",
+         hit("which is not below it", lambda r: r["flip_criterion"].update(
+             verdict="flip_criterion_met", p_value=0.001, alpha=0.05))),
+        ("a McNemar result recorded on an unpaired run is caught", hit(
+            "a paired test", lambda r: r["flip_criterion"].update(
+                paired=False, test="mcnemar_exact_one_sided"))),
+        # THE FOUR FORGERY ROUTES round 5 found.
+        ("a record raising its own A4 ceiling is caught", hit(
+            "AC4's ceiling", lambda r: r["a4_context_budget"].update(
+                limit=250000, total=243058, headroom=6942, passed=True))),
+        ("a Wilson interval that is not the interval for its counts is caught",
+         hit("Wilson interval for", lambda r: r["ac5_gate"].update(
+             wilson_95={"low": 0.97, "high": 1.0}, observed_rate=0.99))),
+        ("an observed_rate that is not successes/trials is caught", hit(
+            "observed_rate is", lambda r: r["ac5_gate"].update(observed_rate=0.99))),
+        ("a header identity no arm ran under is caught", hit(
+            "no arm ran under it", lambda r: (
+                set_authoritative(r), r["model"].update(kind="anthropic")))),
+        ("a p-value the arms do not produce is caught", hit(
+            "lower-tail Fisher", lambda r: r["flip_criterion"].update(p_value=0.5))),
     ]
     # HONEST LIMIT. Two of the clauses above are MASKED rather than uncovered:
     # deleting the `adequate_power_threshold` branch, or the trials-list-length
