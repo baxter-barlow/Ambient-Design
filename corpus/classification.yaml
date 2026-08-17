@@ -24,7 +24,7 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:6fd690e4707efc7944b0bf72ed211d53bf18ce3445d7cf43ef55f997348ed640
+  decision_hash: sha256:27b5ef432ebed89157d7bb36649043f3595c7a0a02f46aa863f47ac26501250c
 
 entries:
 
@@ -49,6 +49,7 @@ entries:
   reason: d3-gap
   cites: ["syntax:flag"]
   gap_class: functional-class
+  gap_class_also: ["companion-requirement"]
   missing_path: function
   missing_fact: >-
     a part's functional class — that this diode is reverse-polarity protection — and whether a
@@ -66,6 +67,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role", "syntax:net_decl"]
   gap_class: companion-requirement
+  gap_class_also: ["pin-semantics"]
   missing_path: pins[].requires
   missing_fact: >-
     per-pin required external termination (an independent 5.1k Rd on each of CC1 and CC2), and
@@ -131,6 +133,7 @@ entries:
   reason: d3-gap
   cites: ["d3:modes[].draw", "d3:pins[].role"]
   gap_class: functional-class
+  gap_class_also: ["part-own-value"]
   missing_path: function
   missing_fact: >-
     functional part class (is this instance an undervoltage cutoff?), a cell's minimum discharge
@@ -141,14 +144,12 @@ entries:
     element" — but nothing tells a checker which instance is a cutoff part. Off-state drain is
     also not a V2 measurement: the v1 dynamic vocabulary has no state-of-charge or runtime kind,
     so the dynamic tier does not rescue it either.
-  residual_kind: fact-compound
-  residual_blocker: >-
-    functional class is one of three facts the check needs — a cell minimum discharge voltage and a notion of energy over time are the others — so adding `function` alone leaves it undecidable
 
 - id: BUG-0010
   verdict: out-of-scope
-  reason: d3-not-enumerated
+  reason: d3-gap
   cites: ["req:T5", "d3:pins[].recommended.voltage"]
+  gap_class: part-own-value
   missing_path: series_resistance
   missing_fact: >-
     a series element's resistance as a checker-reliable field. The value is real and unit-carrying
@@ -162,7 +163,6 @@ entries:
     problems settle it — the entry's failure is a DEGRADED fuse measured "over 1 Ohm", not a
     design-time value, and at nominal resistance the drop is inside spec, so the check as
     described would pass the buggy board.
-  carried_at: parameters
   residual_blocker: >-
     the failure is a DEGRADED fuse measured over 1 ohm; at nominal resistance the drop is inside spec, so no design-time check separates the two boards
   residual_kind: not-design-time
@@ -180,6 +180,8 @@ entries:
 - id: BUG-0012
   verdict: in-scope
   family: voltage-domain-crossing
+  at_risk: >-
+    reads a `voltage_domain` attribute the grammar makes optional, so a design under test that declares none silences the rule
   cites: ["req:T5", "syntax:net_attributes", "vocab:net_attribute.voltage_domain", "d3:pins[].role"]
   rationale: >-
     Purely a net assignment: the ESD array's `power_in` pin sits on the 3V3 LDO-output net while
@@ -292,6 +294,8 @@ entries:
 - id: BUG-0020
   verdict: in-scope
   family: erc-pin-role
+  at_risk: >-
+    both legs need directional roles on MCU UART pins that are defensibly transcribed `bidirectional`
   cites: ["req:T2", "vocab:pin_role.output", "vocab:pin_role.input", "d3:pins[].role"]
   rationale: >-
     Straight-through wiring produces two violations at once: the TX-TX net has two `output`
@@ -301,8 +305,9 @@ entries:
 
 - id: BUG-0021
   verdict: out-of-scope
-  reason: d3-not-enumerated
+  reason: d3-gap
   cites: ["d3:pins[].abs_max.voltage", "syntax:pin_decl"]
+  gap_class: internal-pull
   missing_path: pins[].internal_pull
   missing_fact: >-
     whether a GPIO has an internal pull-up, its strength, and whether that path defeats the pin's
@@ -313,7 +318,6 @@ entries:
     Whether the pin is 5 V-tolerant or not, the rule behaves identically on both. `pin_decl` is a
     name and a closed-vocabulary role with no configuration attribute, so the clamping path cannot
     be declared either.
-  carried_at: pins[].characteristics
   residual_blocker: >-
     the buggy and corrected artifacts are the same schematic, differing only in a pin-initialisation register value
   residual_kind: designs-identical
@@ -321,6 +325,8 @@ entries:
 - id: BUG-0022
   verdict: in-scope
   family: erc-pin-role
+  at_risk: >-
+    the SCL pin is a general-purpose STM32 GPIO, and this corpus itself records that such pins transcribe as `bidirectional`; roled that way rather than `open_drain`, the missing-pull-up rule is silent
   cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
   rationale: >-
     The push-pull setting is firmware, but the schematic-level defect the fix addresses is an I2C
@@ -358,6 +364,8 @@ entries:
 - id: BUG-0025
   verdict: in-scope
   family: abs-max-containment
+  at_risk: >-
+    the abs-max leg is independent, but the domain leg reads the optional `voltage_domain` attribute
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
     Two legs, and the second is unambiguous: the STM32's MOSI pin is not 5 V tolerant, so a 5 V
@@ -380,6 +388,8 @@ entries:
 - id: BUG-0027
   verdict: in-scope
   family: abs-max-containment
+  at_risk: >-
+    reads the optional `voltage_domain` attribute to know the net is 5 V
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
     The textbook case. A net declared `voltage_domain="5V"` carries the STM32's VDD pin, whose
@@ -404,6 +414,8 @@ entries:
 - id: BUG-0029
   verdict: in-scope
   family: erc-pin-role
+  at_risk: >-
+    FT232RL TEST is a reserved pin, and `nc` is a defensible transcription — the one role a checker exempts from both the undriven-input and single-pin-net rules
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
   rationale: >-
     The FT232RL's TEST pin must be tied to GND and the schematic leaves it uncommitted. That is
@@ -501,6 +513,9 @@ entries:
     the schematic at all or only in the parts fitted; on the assembly reading it fails the
     corpus's own inclusion rule 3. Out-of-scope on either reading, so the denominator is
     unaffected.
+  residual_kind: not-design-time
+  residual_blocker: >-
+    on the assembly reading the source leaves open, adding the field does not make this a candidate for in-scope but a candidate for RETIREMENT under corpus inclusion rule 3
 
 - id: BUG-0036
   verdict: in-scope
@@ -546,6 +561,8 @@ entries:
 - id: BUG-0040
   verdict: in-scope
   family: voltage-domain-crossing
+  at_risk: >-
+    same optional-attribute dependency as BUG-0012; these two are the whole `voltage-domain-crossing` family
   cites: ["req:T5", "vocab:net_attribute.voltage_domain", "syntax:net_attributes"]
   rationale: >-
     Connecting two power interfaces whose declared voltage ranges do not overlap is T5's
@@ -586,6 +603,7 @@ entries:
   reason: d3-gap
   cites: ["req:D1", "d3:pins[].role"]
   gap_class: functional-class
+  gap_class_also: ["companion-requirement"]
   missing_path: function
   missing_fact: >-
     functional part class (is this the adjustable or the fixed-output variant?) and the feedback
@@ -706,6 +724,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: strap-semantics
+  gap_class_also: ["companion-requirement"]
   missing_path: pins[].strap
   missing_fact: >-
     that a pin doubles as a strap whose required level at reset is constrained (RX_CLK/PHYAD2 must
@@ -718,8 +737,9 @@ entries:
 
 - id: BUG-0052
   verdict: out-of-scope
-  reason: d3-not-enumerated
+  reason: d3-gap
   cites: ["syntax:constraint", "nongoal:xy-coordinates"]
+  gap_class: part-own-value
   missing_path: load_capacitance
   missing_fact: >-
     a crystal's specified load capacitance CL as a checker-reliable field. It lives in
@@ -751,6 +771,9 @@ entries:
     observed failure report, so it has a required design and a violating one but no postmortem.
     Same missing field as BUG-0005 and BUG-0033; three independent entries on one row is the
     strongest single case in this classification for a specific D3 v1 addition.
+  residual_kind: not-a-postmortem
+  residual_blocker: >-
+    the entry states a datasheet requirement rather than reporting an observed failure, so adding the field would give a check with a violating design and no postmortem behind it
 
 - id: BUG-0054
   verdict: in-scope
@@ -848,6 +871,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: companion-requirement
+  gap_class_also: ["part-own-value"]
   missing_path: pins[].requires
   missing_fact: >-
     the compensation capacitor a part requires across a large feedback resistance, and the input

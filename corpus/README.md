@@ -249,45 +249,52 @@ AC2 gate: the static tier must catch **20 of 22** in-scope bugs (≥90%).
 
 | out-of-scope reason | count |
 |---|---|
-| `d3-gap` | 26 |
-| `d3-not-enumerated` | 3 |
+| `d3-gap` | 29 |
 | `dynamic-vocabulary` | 5 |
 | `not-expressible` | 2 |
 | `v1-non-goal` | 3 |
 
-**Margin.** 9 of 22 in-scope entries are flagged `at_risk` — verdicts whose catch is conditioned on an implementation choice, a **defensible alternative** part-record transcription, or an open-map fact. The defensibility test is what keeps this from covering everything: an I2C pin roled `open_drain` has no defensible alternative, while an AREF pin roled `passive` and an ESP32 record with no transmit mode both do.
+**Margin.** 16 of 22 in-scope entries are flagged `at_risk` — verdicts whose catch is conditioned on one of four things: an implementation choice; a **defensible alternative** part-record transcription; an open-map fact; or an attribute the frozen grammar makes optional, which the design under test is therefore not required to declare. The defensibility test is what keeps the second category from covering everything — a dedicated I2C peripheral pin roled `open_drain` has no defensible alternative, while a general-purpose GPIO roled `bidirectional`, an AREF pin roled `passive`, a reserved pin roled `nc` and a record with no transmit mode all do. The fourth category is a grammar fact: `net_decl ::= 'net' FREE_NAME net_attributes? ...` — a design that declares no `voltage_domain` silences every rule that reads one.
 
+- `BUG-0012` — reads a `voltage_domain` attribute the grammar makes optional, so a design under test that declares none silences the rule
 - `BUG-0019` — in-scope on the L9b undeclared-single-pin-net leg only; the fix adds a pull resistor, so a T2 rule keying on "no driver" fires on both versions
+- `BUG-0020` — both legs need directional roles on MCU UART pins that are defensibly transcribed `bidirectional`
+- `BUG-0022` — the SCL pin is a general-purpose STM32 GPIO, and this corpus itself records that such pins transcribe as `bidirectional`; roled that way rather than `open_drain`, the missing-pull-up rule is silent
 - `BUG-0023` — T10 fires only if the part record transcribes a transmit mode; D3 v0 has no pin-class mechanism and the example records populate only what the benchmarks use, so a record can inherit the designer's own omission
+- `BUG-0025` — the abs-max leg is independent, but the domain leg reads the optional `voltage_domain` attribute
 - `BUG-0026` — same L9b-only shape as BUG-0019
+- `BUG-0027` — reads the optional `voltage_domain` attribute to know the net is 5 V
+- `BUG-0029` — FT232RL TEST is a reserved pin, and `nc` is a defensible transcription — the one role a checker exempts from both the undriven-input and single-pin-net rules
 - `BUG-0030` — depends on the exposed pad being transcribed with a supply role AND `package.thermal_pad` being set; either omission silences the rule
+- `BUG-0040` — same optional-attribute dependency as BUG-0012; these two are the whole `voltage-domain-crossing` family
 - `BUG-0042` — in-scope on a generic "power_in pin with no capacitor to ground" rule; AC2 also demands zero spurious errors on the benchmarks, and narrowing the rule for precision loses this
 - `BUG-0054` — the abs-max bound is relative and its qualifying condition lives in `conditions`, an open map this gate now formally declares unreadable
 - `BUG-0055` — the floating-input leg is L9b-only like BUG-0019, but the abs-max leg is independent of it, which makes this the least exposed of the flagged entries
 - `BUG-0056` — same generic decoupling rule as BUG-0042, and lost with it
 - `BUG-0059` — in-scope only if AREF is transcribed with a driving role; recorded `passive`, the contention rule goes silent
 
-Lose all 9 and the tier catches at most 13 of 22, against a bar of 20: it **FAILS**. The margin is already committed, and AMB-61 should plan against that rather than discover it. Losing them also empties `current-budget` entirely, so the gate would stop testing that family at all — which no count above shows.
+This is an upper bound on exposure, not a prediction: the flags are not independent and most will resolve the favourable way. But if every one went against the checker the tier would catch 6 of 22 against a bar of 20, so the honest statement is that **the AC2 outcome is decided by part-record authoring and rule-implementation choices, not by this classification**. 16 of 22 verdicts are conditional; only 6 are unconditional, which is fewer than the bar. AMB-61 should resolve the flags deliberately rather than discover them. Losing them also empties `current-budget`, `voltage-domain-crossing` entirely, so the gate would stop testing those families at all — which no count above shows.
 
-The 26 `d3-gap` entries by missing fact. Each row is also the counterfactual: add that field and those entries become candidates for in-scope at the next `schema_version`.
+The 29 `d3-gap` entries by missing fact. Each row is also the counterfactual: add that field and those entries become candidates for in-scope at the next `schema_version`.
 
 | missing D3 fact | entries | with a residual blocker |
 |---|---|---|
-| `companion-requirement` — a requirement a part places on an external companion component | 11 | `BUG-0016` |
+| `companion-requirement` — a requirement a part places on an external companion component | 11 | `BUG-0016`, `BUG-0035`, `BUG-0053` |
 | `strap-semantics` — which pins latch at reset as configuration straps, and to what level | 6 | — |
-| `functional-class` — what a part IS — regulator, protection diode, undervoltage cutoff | 4 | `BUG-0008`, `BUG-0049` |
+| `functional-class` — what a part IS — regulator, protection diode, undervoltage cutoff | 4 | `BUG-0049` |
 | `bus-address` — the bus address a part presents, fixed or strap-selected | 2 | — |
+| `internal-pull` — a pin's internal pull-up or pull-down presence and strength | 2 | `BUG-0021`, `BUG-0032` |
+| `part-own-value` — a part's own defining value that no closed field enumerates | 2 | `BUG-0010`, `BUG-0052` |
 | `pin-semantics` — what a pin MEANS beyond its electrical role — which outputs it gates, its polarity | 2 | — |
-| `internal-pull` — a pin's internal pull-up or pull-down presence and strength | 1 | `BUG-0032` |
+
+Counted once but blocked by more than one missing fact, so the single row understates what each needs: `BUG-0002`, `BUG-0003`, `BUG-0008`, `BUG-0043`, `BUG-0051`, `BUG-0061`.
 
 Entries in the third column carry a blocker that survives adding the field, named in `classification.yaml`. For one of them the counterfactual is not merely weaker but inverted: adding the fact would make the generic rule flag the *corrected* design.
 
-The 3 `d3-not-enumerated` entries are a different claim and get a different counterfactual. The fact is already in D3 v0, so the fix is to promote a key out of an open map — but promotion is **necessary and not sufficient**: every one of these carries a further blocker, named per entry, which is why they are not counted with the gaps above.
+1 of those entries make a weaker claim than the rest: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. They are marked here rather than given their own reason code, because a code with one member costs more than it buys.
 
-| entry | carried at | what promotion still would not fix |
+| entry | carried at | further blocker, if any |
 |---|---|---|
-| `BUG-0010` | `parameters` | the failure is a DEGRADED fuse measured over 1 ohm; at nominal resistance the drop is inside spec, so no design-time check separates the two boards |
-| `BUG-0021` | `pins[].characteristics` | the buggy and corrected artifacts are the same schematic, differing only in a pin-initialisation register value |
 | `BUG-0052` | `parameters` | the root cause is that stray capacitance was ignored, and stray C is a layout quantity the DSL holds no coordinates for |
 
 <!-- /generated -->
@@ -316,12 +323,11 @@ reaches the question of whether a checker could read it — so it is published r
    vocabulary covers the measurement.
 5. **`dynamic-deferred`** — same, but the measurement is on V2's deferred list (phase/gain
    margin, SOA, THD/FFT, Monte Carlo), so v1 has no tier for it.
-6. **`d3-gap`**, or **`d3-not-enumerated`** — the check would be static, instant and
-   expressible, but the fact it must read is not available. The two codes split on *why*: no
-   field carries it at all, versus a field carries it inside an open map whose key spelling
-   nothing freezes. The second is the weaker claim and is kept separate so that it cannot
-   borrow the first one's counterfactual — promotion is necessary, and for every entry in that
-   class so far it has not been sufficient.
+6. **`d3-gap`** — the check would be static, instant and expressible, but the fact it must
+   read is not available. Entries whose fact is *present* in D3 but only behind a conventional
+   key in an open map carry `carried_at` naming that map, and are marked separately in the
+   generated table: for those the fix is a promotion rather than an addition, which is a weaker
+   claim and must not borrow the stronger one's counterfactual.
 7. **`in-scope`** — everything that survives, naming the check family and the capability it reads.
 
 Each out-of-scope code names a **pre-existing declared exclusion**, never a judgment invented
@@ -379,11 +385,13 @@ netlist; BUG-0010 because its failure is a *degraded* fuse measured over 1 ohm, 
 value; BUG-0052 because its root cause is precisely that stray capacitance was ignored, which a
 comparison over declared values reproduces rather than catches.
 
-The distinction the correction *does* buy is a sharper reason code. `d3-not-enumerated` marks
-the entries whose fact D3 v0 already carries, in an open map; each names that map in `carried_at`,
-which the gate resolves and requires to end in an open map, and each names the further blocker
-that survives promotion. So the published finding distinguishes "add a field" from "promote one",
-the machine checks which, and neither borrows the other's counterfactual.
+The distinction the correction *does* buy is a sharper claim. `carried_at` marks the entries
+whose fact D3 v0 already carries in an open map; the gate resolves it and requires it to end in
+an open map and to sit at the same scope as the fact it stands in for. So the published finding
+distinguishes "add a field" from "promote one", the machine checks which, and neither borrows the
+other counterfactual. This began as its own reason code and was collapsed back: once the residual
+kinds that empty a promotion were enforced, it had one member, and a code with one member costs
+more than it buys.
 
 **On the asymmetry between them.** Interpretation 1 judges the DSL at v1 while interpretation 2
 judges D3 at v0, and that looks inconsistent until you read where each comes from. AC2 says
@@ -418,12 +426,11 @@ single case in the set; stated precisely, two of those are postmortems and the t
 
 Caveats, because this is the part most likely to be quoted alone:
 
-- **`d3-not-enumerated` asks for a promotion, and promotion is not sufficient.** Those entries
-  name the open map their fact already lives in — for the internal-pull cases,
-  `pins[].characteristics`, which `parts/part-data.schema.json` documents with the example key
-  `pull_up_resistance`. Each also names a further blocker that survives the promotion, in the
-  generated table. The code exists because an earlier draft filed them with the true gaps and
-  handed them a counterfactual that was false for every one.
+- **A `carried_at` entry asks for a promotion, not an addition.** It names the open map its
+  fact already lives in — for the internal-pull cases, `pins[].characteristics`, which
+  `parts/part-data.schema.json` documents with the example key `pull_up_resistance`. The
+  distinction exists because an earlier draft filed these with the true gaps and handed them a
+  counterfactual that was false for every one.
 - **A missing field is not always a conservative absence.** For BUG-0049, recording the pin's role
   either way makes the generic contention rule flag the **corrected** design.
 
@@ -485,7 +492,7 @@ Recorded because publishing only the reversal that lowers the denominator would 
 | BUG-0057, BUG-0061 | `dynamic-vocabulary` re-keyed to `d3-gap` under the published discriminator | none |
 | BUG-0062 | re-keyed to `d3-gap`, then **reverted** — no datasheet states the mid-rail bias requirement, so step 6's test is not met | none, net |
 | BUG-0060 | kept `dynamic-vocabulary` against the author's `dynamic-deferred` | none |
-| BUG-0010, BUG-0021, BUG-0032, BUG-0052 | re-coded `d3-gap` to `d3-not-enumerated`; the fact is in D3, in an open map, and promotion alone would not fix any of them | none |
+| BUG-0010, BUG-0021, BUG-0032, BUG-0052 | re-coded to a promotion claim, then three of the four re-coded back when the residual that empties a promotion was enforced | none |
 | BUG-0047 | filed as an open-map value, corrected to `companion-requirement`: what the schema cannot say is that an external pull is required at all | none |
 
 ### How the freeze works

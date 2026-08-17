@@ -108,11 +108,7 @@ REASONS = {
     "dynamic-vocabulary": "needs time/frequency-domain behaviour; v1 catches it in the ngspice tier",
     "dynamic-deferred": "needs a measurement on V2's deferred list; v1 has no tier for it",
     "d3-gap": "static and expressible, but no checker-reliable D3 v0 field carries the fact",
-    "d3-not-enumerated": "the fact IS in D3 v0, in an open map, but only behind a conventional key spelling nothing freezes — a promotion, not an addition, and necessary rather than sufficient",
 }
-
-# The two D3 codes share all their machinery; only the counterfactual differs.
-D3_CODES = ("d3-gap", "d3-not-enumerated")
 
 # Reason and family codes each demand a citation from a particular space. A
 # verdict citing nothing relevant is the failure mode this table exists for:
@@ -124,7 +120,6 @@ REQUIRED_SPACE = {
     "dynamic-vocabulary": ("v2",),
     "dynamic-deferred": ("v2-deferred",),
     "d3-gap": (),  # carries `missing_path` instead; see check_entry
-    "d3-not-enumerated": (),  # carries `carried_at` as well
 }
 
 # `req:` and `ga:` are deliberately NOT here. Both are transcribed spaces, and
@@ -173,6 +168,7 @@ GAP_CLASSES = {
     "functional-class": "what a part IS — regulator, protection diode, undervoltage cutoff",
     "bus-address": "the bus address a part presents, fixed or strap-selected",
     "internal-pull": "a pin's internal pull-up or pull-down presence and strength",
+    "part-own-value": "a part's own defining value that no closed field enumerates",
     "pin-semantics": "what a pin MEANS beyond its electrical role — which outputs it gates, its polarity",
 }
 
@@ -201,12 +197,20 @@ RESIDUAL_KINDS = {
     "not-design-time": "the failure is not a property of the design as authored",
     "fact-undocumented": "the fact is in no source, so no field could carry it",
     "counterfactual-inverted": "adding the fact would make the generic rule flag the CORRECTED design",
-    "fact-compound": "the named field is one of several the check needs, so adding it alone is not enough",
+    "not-a-postmortem": "the entry states a requirement rather than reporting an observed failure, so there is no buggy board for any check to catch",
 }
 
 # A residual of this kind asserts the fact exists nowhere. `d3-not-enumerated`
 # asserts it exists in an open map. They cannot both be true.
-RESIDUAL_KIND_FORBIDDEN_ON = {"fact-undocumented": ("d3-not-enumerated",)}
+# Each of these says nothing a schema change reaches, so none can sit on an
+# entry that also claims the fix is a promotion. Keyed on `carried_at` rather
+# than on a reason code, since that is now what carries the promotion claim.
+RESIDUAL_KIND_EMPTIES_PROMOTION = (
+    "fact-undocumented",
+    "designs-identical",
+    "not-design-time",
+    "not-a-postmortem",
+)
 
 ID_PATTERN = re.compile(r"^BUG-\d{4}$")
 
@@ -423,6 +427,7 @@ def decision_hash(entries) -> str:
                 e.get("carried_at") or "",
                 e.get("residual_blocker") or "",
                 e.get("residual_kind") or "",
+                ",".join(e.get("gap_class_also") or ()),
             )
         )
         for e in entries
@@ -478,7 +483,7 @@ def check_entry(entry, resolvers, schema, problems):
 
     # Sufficiency: the citation must be of the kind the verdict needs.
     if verdict == "out-of-scope":
-        if reason in D3_CODES:
+        if reason == "d3-gap":
             if not (entry.get("missing_fact") or "").strip():
                 problems.append(
                     f"{entry_id}: reason `d3-gap` must name the missing fact in "
@@ -502,6 +507,24 @@ def check_entry(entry, resolvers, schema, problems):
                     "parts/part-data.schema.json, so the fact is not missing and "
                     "`d3-gap` is the wrong reason"
                 )
+            elif (
+                "." in missing_path
+                and not resolve_d3(missing_path.rsplit(".", 1)[0], schema)
+            ):
+                problems.append(
+                    f"{entry_id}: `missing_path` {missing_path!r} names no real place — "
+                    "its anchor does not resolve either, so this asserts a gap in a "
+                    "part of the schema that does not exist"
+                )
+            elif "." in missing_path and any(
+                seg in CHECKER_UNRELIABLE_D3
+                for seg in missing_path.rsplit(".", 1)[0].split(".")
+            ):
+                problems.append(
+                    f"{entry_id}: `missing_path` {missing_path!r} anchors inside an open "
+                    "map, so the fix would be a promotion — say so with `carried_at` "
+                    "rather than claiming the field is absent"
+                )
             elif checker_reliable(missing_path):
                 problems.append(
                     f"{entry_id}: `missing_path` {missing_path!r} is inside the "
@@ -510,21 +533,8 @@ def check_entry(entry, resolvers, schema, problems):
                 )
             carried_at = (entry.get("carried_at") or "").strip()
             gap_class = entry.get("gap_class") or ""
-            if reason == "d3-not-enumerated":
-                if gap_class:
-                    problems.append(
-                        f"{entry_id}: `gap_class` names a MISSING fact, so it does not "
-                        "apply here — for this code the fact is present, just not "
-                        "enumerated, and `carried_at` says where"
-                    )
-                if not carried_at:
-                    problems.append(
-                        f"{entry_id}: reason `d3-not-enumerated` must give "
-                        "`carried_at` — the open map the value already lives in. "
-                        "Without it this is indistinguishable from `d3-gap`, and the "
-                        "published finding would ask for a field D3 already has."
-                    )
-                elif not resolve_d3(carried_at, schema):
+            if carried_at:
+                if not resolve_d3(carried_at, schema):
                     problems.append(
                         f"{entry_id}: `carried_at` {carried_at!r} does not resolve, so "
                         "the value is not carried there and the class is wrong"
@@ -552,18 +562,7 @@ def check_entry(entry, resolvers, schema, problems):
                         f"{entry_id}: `missing_path` is per-pin but `carried_at` "
                         f"{carried_at!r} is not, so it does not carry that fact"
                     )
-                if not (entry.get("residual_blocker") or "").strip():
-                    problems.append(
-                        f"{entry_id}: `d3-not-enumerated` must state `residual_blocker` "
-                        "— promotion is necessary, and for every entry in this class so "
-                        "far it has not been sufficient. Saying which further thing "
-                        "blocks it is the point of separating this code."
-                    )
-            elif carried_at:
-                problems.append(
-                    f"{entry_id}: `carried_at` belongs only on a "
-                    "`d3-not-enumerated` entry"
-                )
+
             # A residual is OPTIONAL on a plain `d3-gap` and mandatory on a
             # promotion. Forbidding it on gaps was what left the gap table
             # asserting one counterfactual over rows it is false for — and, for
@@ -583,11 +582,14 @@ def check_entry(entry, resolvers, schema, problems):
                         f"{entry_id}: residual_kind {residual_kind!r} is not one of "
                         f"{sorted(RESIDUAL_KINDS)}"
                     )
-                elif reason in RESIDUAL_KIND_FORBIDDEN_ON.get(residual_kind, ()):
+                elif (
+                    residual_kind in RESIDUAL_KIND_EMPTIES_PROMOTION
+                    and entry.get("carried_at")
+                ):
                     problems.append(
-                        f"{entry_id}: residual_kind `{residual_kind}` says the fact is "
-                        f"in no source, but reason `{reason}` says it is in an open map "
-                        f"named by `carried_at`. Both cannot hold."
+                        f"{entry_id}: residual_kind `{residual_kind}` says no schema "
+                        "change reaches this, but `carried_at` claims the fix is a "
+                        "promotion. Both cannot hold — drop `carried_at`."
                     )
                 elif not has_residual:
                     problems.append(
@@ -602,7 +604,16 @@ def check_entry(entry, resolvers, schema, problems):
                         f"{entry_id}: residual_kind `v1-non-goal` must cite the non-goal "
                         "or ground-architecture exclusion it rests on"
                     )
-            if reason == "d3-gap" and gap_class not in GAP_CLASSES:
+            for extra in entry.get("gap_class_also") or []:
+                if extra not in GAP_CLASSES:
+                    problems.append(
+                        f"{entry_id}: gap_class_also {extra!r} is not a declared class"
+                    )
+                elif extra == gap_class:
+                    problems.append(
+                        f"{entry_id}: gap_class_also repeats `gap_class`"
+                    )
+            if gap_class not in GAP_CLASSES:
                 problems.append(
                     f"{entry_id}: gap_class {entry.get('gap_class')!r} is not one of "
                     f"{sorted(GAP_CLASSES)} — the published gap table is generated "
@@ -611,12 +622,11 @@ def check_entry(entry, resolvers, schema, problems):
         else:
             if entry.get("at_risk"):
                 problems.append(f"{entry_id}: `at_risk` annotates in-scope entries only")
-            for stray in ("gap_class", "missing_path", "carried_at", "residual_blocker",
-                          "residual_kind"):
+            for stray in ("gap_class", "gap_class_also", "missing_path", "carried_at",
+                          "residual_blocker", "residual_kind"):
                 if entry.get(stray):
                     problems.append(
-                        f"{entry_id}: `{stray}` belongs only on a D3 entry "
-                        f"({', '.join(D3_CODES)})"
+                        f"{entry_id}: `{stray}` belongs only on a `d3-gap` entry"
                     )
             required = REQUIRED_SPACE[reason]
             if required and not spaces_used & set(required):
@@ -624,7 +634,7 @@ def check_entry(entry, resolvers, schema, problems):
                     f"{entry_id}: reason {reason!r} must cite one of "
                     f"{sorted(required)}; cites {sorted(spaces_used) or 'nothing'}"
                 )
-        if entry.get("missing_fact") and reason not in D3_CODES:
+        if entry.get("missing_fact") and reason != "d3-gap":
             problems.append(f"{entry_id}: `missing_fact` only belongs on a D3 entry")
     else:
         required = FAMILY_REQUIRES.get(family, ())
@@ -689,11 +699,16 @@ def summary_block(entries) -> str:
     lines += [
         "",
         f"**Margin.** {len(at_risk)} of {len(in_scope)} in-scope entries are flagged "
-        "`at_risk` — verdicts whose catch is conditioned on an implementation choice, a "
-        "**defensible alternative** part-record transcription, or an open-map fact. The "
-        "defensibility test is what keeps this from covering everything: an I2C pin roled "
-        "`open_drain` has no defensible alternative, while an AREF pin roled `passive` and an "
-        "ESP32 record with no transmit mode both do.",
+        "`at_risk` — verdicts whose catch is conditioned on one of four things: an "
+        "implementation choice; a **defensible alternative** part-record transcription; an "
+        "open-map fact; or an attribute the frozen grammar makes optional, which the design "
+        "under test is therefore not required to declare. The defensibility test is what keeps "
+        "the second category from covering everything — a dedicated I2C peripheral pin roled "
+        "`open_drain` has no defensible alternative, while a general-purpose GPIO roled "
+        "`bidirectional`, an AREF pin roled `passive`, a reserved pin roled `nc` and a record "
+        "with no transmit mode all do. The fourth category is a grammar fact: `net_decl ::= "
+        "'net' FREE_NAME net_attributes? ...` — a design that declares no `voltage_domain` "
+        "silences every rule that reads one.",
         "",
     ]
     for entry in sorted(at_risk, key=lambda e: e["id"]):
@@ -708,9 +723,14 @@ def summary_block(entries) -> str:
         )
     else:
         tail = (
-            f"Lose all {len(at_risk)} and the tier catches at most {surviving} of "
-            f"{len(in_scope)}, against a bar of {must_catch}: it **FAILS**. The margin is "
-            "already committed, and AMB-61 should plan against that rather than discover it."
+            f"This is an upper bound on exposure, not a prediction: the flags are not "
+            f"independent and most will resolve the favourable way. But if every one went "
+            f"against the checker the tier would catch {surviving} of {len(in_scope)} "
+            f"against a bar of {must_catch}, so the honest statement is that **the AC2 "
+            f"outcome is decided by part-record authoring and rule-implementation choices, "
+            f"not by this classification**. {len(at_risk)} of {len(in_scope)} verdicts are "
+            f"conditional; only {surviving} are unconditional, which is fewer than the bar. "
+            "AMB-61 should resolve the flags deliberately rather than discover them."
         )
     emptied = sorted(
         {
@@ -756,6 +776,15 @@ def summary_block(entries) -> str:
                 lines.append(
                     f"| `{gap_class}` — {description} | {len(members)} | {note} |"
                 )
+        compound = sorted(e["id"] for e in gaps if e.get("gap_class_also"))
+        if compound:
+            lines += [
+                "",
+                "Counted once but blocked by more than one missing fact, so the single row "
+                "understates what each needs: "
+                + ", ".join(f"`{i}`" for i in compound)
+                + ".",
+            ]
         lines += [
             "",
             "Entries in the third column carry a blocker that survives adding the field, "
@@ -764,23 +793,22 @@ def summary_block(entries) -> str:
             "the *corrected* design.",
         ]
 
-    promotions = [e for e in out_scope if e.get("reason") == "d3-not-enumerated"]
+    promotions = [e for e in out_scope if e.get("carried_at")]
     if promotions:
         lines += [
             "",
-            f"The {len(promotions)} `d3-not-enumerated` entries are a different claim and "
-            "get a different counterfactual. The fact is already in D3 v0, so the fix is to "
-            "promote a key out of an open map — but promotion is **necessary and not "
-            "sufficient**: every one of these carries a further blocker, named per entry, "
-            "which is why they are not counted with the gaps above.",
+            f"{len(promotions)} of those entries make a weaker claim than the rest: the fact is "
+            "already in D3 v0, in an open map, so the fix is to **promote** a key rather than "
+            "add a field. They are marked here rather than given their own reason code, "
+            "because a code with one member costs more than it buys.",
             "",
-            "| entry | carried at | what promotion still would not fix |",
+            "| entry | carried at | further blocker, if any |",
             "|---|---|---|",
         ]
         for entry in sorted(promotions, key=lambda e: e["id"]):
             lines.append(
                 f"| `{entry['id']}` | `{entry.get('carried_at')}` | "
-                f"{entry.get('residual_blocker')} |"
+                f"{entry.get('residual_blocker') or '—'} |"
             )
     return "\n".join(lines)
 
@@ -865,8 +893,23 @@ def run(write: bool, bugs=None, classification=None, readme=None) -> int:
     if strays:
         problems.append(f"classified but not in the corpus: {', '.join(strays)}")
 
+    flagged = {b["id"]: b["review"] for b in corpus_bugs if b.get("review")}
     for entry in entries:
         check_entry(entry, resolvers, schema, problems)
+        # A `review:` flag on the corpus record is a residual by another name,
+        # in another file. Unjoined, an entry could be counted among the ones a
+        # schema change rescues while its own record says it may not survive
+        # review at all.
+        if (
+            entry.get("verdict") == "out-of-scope"
+            and entry["id"] in flagged
+            and not (entry.get("residual_blocker") or "").strip()
+        ):
+            problems.append(
+                f"{entry['id']}: corpus record carries `review: {flagged[entry['id']]}`, "
+                "so the published counterfactual may not hold for it. State a "
+                "`residual_blocker`, or move the flag if it does not bear on scope."
+            )
 
     # Freeze.
     committed = document.get("classification", {}).get("decision_hash")
@@ -977,13 +1020,12 @@ def self_test() -> int:
     }
 
     good_promo = {
-        "id": "BUG-0004", "verdict": "out-of-scope", "reason": "d3-not-enumerated",
+        "id": "BUG-0004", "verdict": "out-of-scope", "reason": "d3-gap",
         "cites": [], "rationale": "ok",
+        "gap_class": "internal-pull",
         "missing_fact": "the value behind a conventional key",
         "missing_path": "pins[].internal_pull",
         "carried_at": "pins[].characteristics",
-        "residual_blocker": "the designs are the same netlist either way",
-        "residual_kind": "designs-identical",
     }
 
     checks = [
@@ -1033,38 +1075,44 @@ def self_test() -> int:
          problems_for({**good_gap, "missing_path": "pins[].role"})),
         ("a d3-gap with an unknown gap_class is rejected",
          problems_for({**good_gap, "gap_class": "vibes"})),
-        ("a well-formed d3-not-enumerated entry passes", not problems_for(good_promo)),
-        ("d3-not-enumerated with no carried_at is rejected",
-         problems_for({**good_promo, "carried_at": ""})),
-        ("d3-not-enumerated whose carried_at does not resolve is rejected",
+        ("a well-formed promotion entry passes", not problems_for(good_promo)),
+        ("a promotion whose carried_at does not resolve is rejected",
          problems_for({**good_promo, "carried_at": "pins[].nope"})),
-        ("d3-not-enumerated whose carried_at is checker-reliable is rejected",
+        ("a promotion whose carried_at is checker-reliable is rejected",
          problems_for({**good_promo, "carried_at": "pins[].role"})),
-        ("d3-not-enumerated whose carried_at resolves but is not an open map is rejected",
+        ("a promotion whose carried_at is not an open map is rejected",
          problems_for({**good_promo, "carried_at": "notes"})),
-        ("d3-not-enumerated with no residual_blocker is rejected",
-         problems_for({**good_promo, "residual_blocker": ""})),
-        ("d3-not-enumerated carrying a gap_class is rejected",
-         problems_for({**good_promo, "gap_class": "strap-semantics"})),
-        ("carried_at on a plain d3-gap is rejected",
-         problems_for({**good_gap, "carried_at": "parameters"})),
+        ("a residual kind that empties the promotion contradicts carried_at",
+         problems_for({**good_promo, "residual_blocker": "x",
+                       "residual_kind": "designs-identical"})),
+        ("a missing_path whose anchor does not resolve is rejected",
+         problems_for({**good_gap, "missing_path": "nowhere.zz"})),
+        ("a missing_path anchored inside an open map is rejected",
+         problems_for({**good_gap, "missing_path": "pins[].characteristics.zz"})),
+        ("an unknown gap_class_also is rejected",
+         problems_for({**good_gap, "gap_class_also": ["vibes"]})),
+        ("a gap_class_also repeating gap_class is rejected",
+         problems_for({**good_gap, "gap_class_also": ["strap-semantics"]})),
+        ("a valid gap_class_also passes",
+         not problems_for({**good_gap, "gap_class_also": ["bus-address"]})),
         ("a residual_blocker on a plain d3-gap is allowed with a kind",
          not problems_for({**good_gap, "residual_blocker": "still blocked",
-                           "residual_kind": "fact-compound"})),
+                           "residual_kind": "counterfactual-inverted"})),
         ("a residual_blocker with no residual_kind is rejected",
          problems_for({**good_gap, "residual_blocker": "still blocked"})),
         ("an unknown residual_kind is rejected",
          problems_for({**good_gap, "residual_blocker": "x", "residual_kind": "vibes"})),
         ("a residual_kind with no residual_blocker is rejected",
-         problems_for({**good_gap, "residual_kind": "fact-compound"})),
+         problems_for({**good_gap, "residual_kind": "counterfactual-inverted"})),
         ("residual_kind v1-non-goal without a non-goal citation is rejected",
          problems_for({**good_gap, "residual_blocker": "x", "residual_kind": "v1-non-goal"})),
         ("residual_kind v1-non-goal citing a non-goal passes",
          not problems_for({**good_gap, "residual_blocker": "x",
                            "residual_kind": "v1-non-goal",
                            "cites": ["nongoal:xy-coordinates"]})),
-        ("fact-undocumented on a d3-not-enumerated entry is rejected",
-         problems_for({**good_promo, "residual_kind": "fact-undocumented"})),
+        ("fact-undocumented alongside carried_at is rejected",
+         problems_for({**good_promo, "residual_blocker": "x",
+                       "residual_kind": "fact-undocumented"})),
         ("a per-pin missing_path with a part-level carried_at is rejected",
          problems_for({**good_promo, "carried_at": "parameters"})),
         ("a d3 path reaching an open map through a reliable prefix is rejected",
@@ -1107,7 +1155,7 @@ def self_test() -> int:
     for field, value in (("gap_class", "bus-address"), ("missing_path", "pins[].other"),
                          ("at_risk", "narrowed"), ("carried_at", "parameters"),
                          ("residual_blocker", "still blocked"),
-                         ("residual_kind", "fact-compound")):
+                         ("residual_kind", "designs-identical")):
         moved = [dict(a[0]), {**a[1], field: value}]
         checks.append((f"changing {field} moves decision_hash",
                        decision_hash(a) != decision_hash(moved)))
