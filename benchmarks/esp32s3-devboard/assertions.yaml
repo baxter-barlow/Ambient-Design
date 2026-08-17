@@ -1,3 +1,12 @@
+# This benchmark has NO ngspice deck, and that is a decision, not an
+# omission: design.md sec. 9 gates it on the hand-computed T10 budget
+# plus A1-A10. Declared so `run-sim.sh` can tell a deliberate absence
+# from a deck somebody deleted.
+deck: null
+deck_absent_reason: >-
+  Power-tree and thermal margins are hand-computed and checked by the
+  bake-off anchor, not by simulation; there is no SPICE model for the
+  module.
 # Rhoform benchmark (c) — power-tree assertions. All inputs traceable to
 # power-tree.yaml; module data from ESP32-S3-WROOM-1 Datasheet v1.8 (tables
 # cited inline). These are the gating checks; no ngspice run is required.

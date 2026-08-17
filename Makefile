@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
+.PHONY: all check structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
 
 # Everything CI runs.
 all: check sim golden
@@ -11,13 +11,23 @@ all: check sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure schemas lint ir-hashes corpus bakeoff grammar eval-tests
+check: structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
 structure:
 	python3 tests/structure/check-retired-names.py --self-test
 	bash tests/structure/check-layout.sh
+
+# Toolchain pins: every version in toolchain/versions.yaml must appear in the
+# consumer that is supposed to use it, and every `uses:` in a workflow must be
+# a SHA the manifest pins. Without this the manifest was decoration — every pin
+# except ngspice's could be corrupted with `make all` still green, while
+# README.md called it "the single pinned-toolchain manifest every local run and
+# CI job resolves versions from". P5 determinism rests on it.
+pins:
+	python3 tests/toolchain/check-pins.py --self-test
+	python3 tests/toolchain/check-pins.py
 
 # Schema well-formedness and example validation across every declared
 # schema root (ir/, parts/). Requires the pinned jsonschema from
@@ -87,9 +97,14 @@ eval-tests:
 	cd eval && python3 -m rhoform_eval selftest
 	cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
 
-# ngspice benchmark decks with .meas assertion and time-budget checks.
-# Requires the ngspice version pinned in toolchain/versions.yaml.
+# ngspice benchmark decks: the decks run, and the numbers they produce land
+# inside the windows benchmarks/*/assertions.yaml declares. The second half is
+# what makes these "gate-load-bearing" (AMB-39) rather than decorative —
+# `assertions.yaml` was read by no code at all until check-assertions.py, so a
+# deck could be electrically destroyed and still pass. Requires the ngspice
+# version pinned in toolchain/versions.yaml. Self-test first, as everywhere.
 sim:
+	python3 tests/benchmarks/check-assertions.py --self-test
 	bash tests/benchmarks/run-sim.sh
 
 # Golden-file harness; exits 0 with "no cases" while tests/golden is empty.

@@ -48,13 +48,37 @@ if [ "$actual_banner" != "ngspice-$expected_version" ]; then
   fail_env "ngspice version mismatch: manifest pins ngspice-$expected_version, found ${actual_banner:-unknown}."
 fi
 
-deck_list=""
-if [ -d "$BENCH_DIR" ]; then
-  deck_list=$(find "$BENCH_DIR" -mindepth 2 -maxdepth 2 -type f -name 'netlist.cir' | LC_ALL=C sort)
+# Which benchmarks MUST have a deck, taken from each benchmark's own
+# `assertions.yaml: deck:` key rather than from a list kept here. Without this
+# the gate had no idea what it was supposed to run: deleting every deck printed
+# "nothing to run" and exited 0, and renaming one just made the run shorter.
+# `deck: null` is how benchmark (c) says it deliberately has none.
+expected_decks=""
+missing_decks=""
+for spec in "$BENCH_DIR"/*/assertions.yaml; do
+  [ -f "$spec" ] || continue
+  case_dir=$(dirname "$spec")
+  declared=$(grep -m1 -E '^deck:' "$spec" | sed -E 's/^deck:[[:space:]]*//' | tr -d '"')
+  case "$declared" in
+    '' )
+      fail_env "$(basename "$case_dir")/assertions.yaml declares no \`deck:\`; a benchmark must say whether it has one, so a deleted deck cannot look like a deliberate absence." ;;
+    null | ~ ) continue ;;
+  esac
+  expected_decks="$expected_decks$case_dir/$declared
+"
+  [ -f "$case_dir/$declared" ] || missing_decks="$missing_decks  $(basename "$case_dir")/$declared
+"
+done
+
+if [ -n "$missing_decks" ]; then
+  printf 'sim: FAIL: benchmark(s) declare a deck that does not exist:\n%s' "$missing_decks" >&2
+  exit 1
 fi
 
+deck_list=$(printf '%s' "$expected_decks" | LC_ALL=C sort)
+
 if [ -z "$deck_list" ]; then
-  printf 'sim: no benchmark decks under benchmarks/*/netlist.cir; nothing to run.\n'
+  printf 'sim: no benchmark declares a deck; nothing to run.\n'
   exit 0
 fi
 
@@ -136,6 +160,15 @@ while IFS= read -r deck; do
     fi
   done <<<"$meas_names"
   if [ "$missing" -ne 0 ]; then
+    failed=1
+    continue
+  fi
+
+  # THE VALUES, which is the part that was missing. Everything above proves
+  # the deck ran; `assertions.yaml` was read by no code in this repository, so
+  # a deck could be electrically destroyed — 6.1 Hz against a 0.932-1.051 Hz
+  # window — and still print PASS here.
+  if ! python3 "$SCRIPT_DIR/check-assertions.py" "$deck_dir" "$log"; then
     failed=1
     continue
   fi
