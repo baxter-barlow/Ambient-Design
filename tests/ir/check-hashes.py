@@ -192,7 +192,8 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
         return
 
     source_map = json.loads(source_map_path.read_text(encoding="utf-8"))
-    sm_rel = source_map_path.relative_to(ROOT)
+    sm_rel = (source_map_path.relative_to(ROOT)
+              if source_map_path.is_relative_to(ROOT) else source_map_path.name)
     if source_map.get("design_hash") != committed:
         problems.append(
             f"{sm_rel}: design_hash {source_map.get('design_hash')} does not "
@@ -334,6 +335,36 @@ def self_test() -> int:
                        any("canonicalizes to" in p for p in problems)))
         checks.append(("check_document reports a missing source map",
                        any("no paired source map" in p for p in problems)))
+
+        # The three legs a blind pass could delete with everything still green:
+        # the declared-profile check, the source-map design_hash comparison, and
+        # the files[].sha256 comparison. Each is driven here over a planted pair
+        # so its removal fails a case rather than reducing what is checked.
+        pair = Path(tmp) / "paired.ir.json"
+        pair.write_text(json.dumps(json.loads(text)), encoding="utf-8")
+        smap = pair.with_name("paired.sourcemap.json")
+        source_map = json.loads(
+            (IR_EXAMPLES / "blinker.sourcemap.json").read_text(encoding="utf-8"))
+        smap.write_text(json.dumps(source_map), encoding="utf-8")
+        problems, notes = [], []
+        check_document(pair, problems, notes)
+        checks.append(("a correctly paired document reports no problem", not problems))
+
+        wrong_profile = json.loads(text)
+        wrong_profile["header"]["canonical_form"] = "some-other-profile/9"
+        pair.write_text(json.dumps(wrong_profile), encoding="utf-8")
+        problems = []
+        check_document(pair, problems, [])
+        checks.append(("a document naming another canonical profile is caught",
+                       any("canonical_form" in p for p in problems)))
+
+        pair.write_text(json.dumps(json.loads(text)), encoding="utf-8")
+        drifted = dict(source_map, design_hash="sha256:" + "0" * 64)
+        smap.write_text(json.dumps(drifted), encoding="utf-8")
+        problems = []
+        check_document(pair, problems, [])
+        checks.append(("a source map whose design_hash disagrees is caught",
+                       bool(problems)))
 
     failed = 0
     for name, ok in checks:

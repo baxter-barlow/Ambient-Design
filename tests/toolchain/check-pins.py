@@ -44,6 +44,8 @@ DCO = ROOT / ".github/workflows/dco.yml"
 POLICY = ROOT / ".github/workflows/repository-policy.yml"
 MAKEFILE = ROOT / "Makefile"
 RUN_SIM = ROOT / "tests/benchmarks/run-sim.sh"
+EVAL_CLI = ROOT / "eval/rhoform_eval/cli.py"
+MEASURE = ROOT / "lang/bakeoff/measure.py"
 
 # pin path -> (how to spell it where it is used, files that must contain it).
 #
@@ -74,6 +76,16 @@ CONSUMERS = {
     # pulling the (multi-gigabyte) image. Export work that actually RUNS
     # kicad-cli is AMB-66's; a pin nobody has ever resolved is still decoration,
     # which is what these two were.
+    # The behavioural tokenizer pin. Both consumers READ the manifest rather
+    # than copying the digest, so the needle is the key they read, exactly as
+    # for ngspice.version. This pin was invisible to the gate until the walk
+    # became generic — which mattered, because the manifest says of it: "NEVER
+    # edit the probe corpus: changing it changes every fingerprint and silently
+    # invalidates every recorded pin."
+    ("evaluation", "tokenizer", "fingerprint"): (
+        lambda v: "fingerprint", [EVAL_CLI, MEASURE]),
+    ("evaluation", "tokenizer", "encoding"): (
+        lambda v: "encoding", [EVAL_CLI, MEASURE]),
     ("kicad", "series", "9.0"): (lambda v: v, [CHECKS]),
     ("kicad", "series", "10.0"): (lambda v: v, [CHECKS]),
 }
@@ -88,7 +100,7 @@ NOT_YET_CONSUMED = set()
 
 # The number of pin/consumer agreements a healthy tree has. Raise it when a pin
 # is added; lower it only in the same change that deliberately removes one.
-MINIMUM_AGREEMENTS = 13
+MINIMUM_AGREEMENTS = 15
 
 
 class GateUnavailable(Exception):
@@ -172,13 +184,47 @@ def declared_pins(manifest):
                 ("kicad", "series", str(entry["name"])),
                 f"{entry.get('image', '')}@{entry.get('digest', '')}",
             ))
-    simulation = dig(manifest, ("ci", "containers", "simulation")) or {}
-    if simulation.get("image") and simulation.get("digest"):
-        pins.append((
-            ("ci", "containers", "simulation"),
-            f"{simulation['image']}@{simulation['digest']}",
-        ))
+    for name, block in (dig(manifest, ("ci", "containers")) or {}).items():
+        if isinstance(block, dict) and block.get("image") and block.get("digest"):
+            pins.append((("ci", "containers", name),
+                         f"{block['image']}@{block['digest']}"))
+
+    # Anything the five shapes above did not reach. `declared_pins` used to
+    # enumerate only those, so a whole new manifest group — `ci.containers.export`,
+    # or the entire `evaluation:` block holding the tokenizer fingerprint — was
+    # not merely unlisted but INVISIBLE, and this file's docstring claims an
+    # unlisted pin is reported as unknown.
+    seen = {path for path, _ in pins}
+    for path, value in _leaves(manifest):
+        if path in seen or any(path[:len(p)] == p for p in seen):
+            continue
+        if path[-1] in IGNORED_LEAF_KEYS or not isinstance(value, (str, int, float)):
+            continue
+        pins.append((path, str(value)))
     return pins
+
+
+# Manifest leaves that are documentation rather than pins.
+IGNORED_LEAF_KEYS = frozenset({
+    "manifest_schema", "boundary", "name", "encoding", "provider", "probe_corpus",
+    "id", "sampling", "not_yet_consumed", "version_note",
+    # Always consumed as a composite `image@digest`, which the loops above
+    # already emit; re-emitting the halves would ask for a consumer of half a
+    # pin. `ref` likewise: actions are emitted whole.
+    "image", "digest", "ref",
+})
+
+
+def _leaves(node, path=()):
+    """Every scalar leaf in the manifest, as (path, value)."""
+    if isinstance(node, dict):
+        for key, sub in node.items():
+            yield from _leaves(sub, path + (str(key),))
+    elif isinstance(node, list):
+        for item in node:
+            yield from _leaves(item, path)
+    else:
+        yield path, node
 
 
 def check(manifest, read=None):
@@ -206,6 +252,12 @@ def check(manifest, read=None):
         # 2-tuple: always false, so `optional` was dead and the self-test case
         # naming it passed vacuously.
         if path[:2] == ("python", "packages") and path[2] in optional:
+            continue
+        # `optional_packages` are for live runs, not for any gate: the harness's
+        # own tests are stdlib-only and the Makefile says so. They are declared
+        # so a live run is reproducible, and requiring a gating consumer for
+        # them would force a fake one.
+        if path[:2] == ("python", "optional_packages"):
             continue
 
         spec = CONSUMERS.get(path)
