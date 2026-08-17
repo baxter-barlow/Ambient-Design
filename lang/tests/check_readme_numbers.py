@@ -96,7 +96,20 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # cell count, which is a floor tripping in place of the check it backstops. The self-test's floor was `reconciled >= 20`
 # against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
 # was dead because that slack always fired first.
-MINIMUM_DISTINCT_ROWS = 12
+# PER CATEGORY. One total let the token table detach from its locator on a
+# blank line -- taking six rows with it -- and be paid for by the T9 rows the
+# comment never counted. Every locator stops at the first non-table line, so
+# detaching a table silently removes it; the only thing that can notice is a
+# floor scoped to that table.
+MINIMUM_ROWS_BY_KIND = {
+    "blinker-555": 3,        # token-table rows for this design
+    "esp32s3-devboard": 3,   # ditto
+    "decision": 3,
+    "card": 3,
+    "t9": 6,
+    "lines": 3,
+}
+MINIMUM_DISTINCT_ROWS = sum(MINIMUM_ROWS_BY_KIND.values())
 # 6 rows x 3 rules, counted as DISTINCT (design, arm, rule) identities: six
 # copies of one correct row met a cell count of 18 while five real rows left
 # the document, which is the third recurrence of this exact defect here.
@@ -252,8 +265,12 @@ def token_problems(text, counts, problems, minimum=None):
     # but whose columns are thresholds rather than variants -- so the gate
     # compared a sweep saving against a token count and reported nonsense.
     all_lines = text.splitlines()
+    def _norm(line):
+        """Collapse whitespace and emphasis so a reflowed header still matches."""
+        return re.sub(r"[\s*`]+", "", line).lower()
+
     token_headers = [i for i, line in enumerate(all_lines)
-                     if line.startswith("| Design | Arm |") and "explicit" in line]
+                     if _norm(line).startswith("|design|arm|") and "explicit" in _norm(line)]
     if len(token_headers) > 1:
         problems.append(
             f"lang/README.md: publishes the token table {len(token_headers)} "
@@ -308,8 +325,8 @@ def token_problems(text, counts, problems, minimum=None):
     # gate compared 15/15 and 100% against token counts and reported nonsense.
     lines = all_lines
     decision_headers = [i for i, line in enumerate(lines)
-                        if line.startswith("| ") and "(a) blinker" in line
-                        and "card" in line]
+                        if line.startswith("| ") and "(a)blinker" in _norm(line)
+                        and "card" in _norm(line)]
     if len(decision_headers) > 1:
         problems.append(
             f"lang/README.md: publishes the decision table "
@@ -352,9 +369,11 @@ def token_problems(text, counts, problems, minimum=None):
     # THE CARD LINE, which is prose rather than a table. The docstring named it
     # as covered and `token_problems` parses table rows only, so all three of
     # its numbers were free.
+    # Tolerant of "and" and of bold, so a reworded second copy is still seen
+    # as a second copy rather than slipping past as prose.
     card_lines = list(re.finditer(
-        r"Language cards:\s*candidate_a\s+(\d+),\s*candidate_b\s+(\d+),"
-        r"\s*starlark\s+(\d+)", text))
+        r"Language cards:\s*\**candidate_a\**\s+(\d+),\s*\**candidate_b\**\s+(\d+),"
+        r"\s*(?:and\s+)?\**starlark\**\s+(\d+)", text))
     if len(card_lines) > 1:
         problems.append(
             f"lang/README.md: publishes the language-card line {len(card_lines)} "
@@ -389,13 +408,13 @@ def token_problems(text, counts, problems, minimum=None):
     t9_seen = set()
     t9_order = ["T9-1", "T9-2", "T9-3"]
     in_t9 = False
-    t9_headers = [l for l in all_lines if l.startswith("| Design | Arm | T9-1")]
+    t9_headers = [l for l in all_lines if _norm(l).startswith("|design|arm|t9-1")]
     if len(t9_headers) > 1:
         problems.append(
             f"lang/README.md: publishes the T9 table {len(t9_headers)} times; "
             "only the first is read, so the others are gated by nothing.")
     for line in all_lines:
-        if line.startswith("| Design | Arm | T9-1"):
+        if _norm(line).startswith("|design|arm|t9-1"):
             in_t9 = True
             # BY NAME. The rules were zipped to cells 2-4 positionally, so
             # swapping the T9-2 and T9-3 header labels re-attributed every
@@ -525,12 +544,23 @@ def token_problems(text, counts, problems, minimum=None):
             "lang/README.md: the AC1a line-count sentence is gone or reshaped, "
             "so its three numbers are checked by nothing.")
 
-    floor = MINIMUM_DISTINCT_ROWS if minimum is None else minimum
-    if len(rows_seen) < floor:
+    if minimum is None:
+        by_kind = {}
+        for row in rows_seen:
+            by_kind[row[0]] = by_kind.get(row[0], 0) + 1
+        for kind, want in sorted(MINIMUM_ROWS_BY_KIND.items()):
+            found = by_kind.get(kind, 0)
+            if found < want:
+                problems.append(
+                    f"lang/README.md: reconciled {found} {kind!r} row(s), below "
+                    f"the row floor of {want} for that table. Every locator here "
+                    "stops at the first non-table line, so a table detached by a "
+                    "stray blank line vanishes silently -- and one combined "
+                    "floor let the other tables pay for it.")
+    elif len(rows_seen) < minimum:
         problems.append(
-            f"lang/README.md: reconciled {len(rows_seen)} distinct (design, arm) "
-            f"row(s), below the row floor of {floor}. Counting CELLS let a "
-            "duplicated correct row pay for one that had stopped parsing.")
+            f"lang/README.md: reconciled {len(rows_seen)} distinct row(s), "
+            f"below the row floor of {minimum}.")
     return checked
 
 
