@@ -156,7 +156,7 @@ correctness proof; each needs a compiler check plus its own test, not a schema f
 python3 ../tests/schemas/validate-schemas.py   # validates ir/ with the pinned jsonschema
 ```
 
-Prefers `python3 -m jsonschema`-style validation when the `jsonschema` package is present, falls
+Uses `python3 -m jsonschema` (the pinned jsonschema) when the `jsonschema` package is present, falls
 back to `npx ajv-cli --spec=draft2020`, and degrades (with a distinct non-zero exit code) to
 well-formedness checking if neither validator is available — degraded coverage is reported,
 never hidden.
@@ -186,7 +186,7 @@ above, because JSON Schema cannot detect either one.
 Note on the examples: they are hand-written illustrations tracking the fixed benchmark (a) design
 (RA 100 k 1 %, RB 680 k 1 %, CT 1 µF 5 %, RL 560 Ω 1 %, CONT bypass 10 nF, assertion windows from
 `benchmarks/blinker-555/assertions.yaml`). `/mh1` and `/tp_out` are board-side extras beyond that BOM and are
-both `exclude_from_bom`. `design_hash` is genuine — it is the sha256 of this file's bytes with the
+both `exclude_from_bom`. `design_hash` is genuine: it is the sha256 of this document's `rhoform-canonical-json/1` serialization with the `design_hash` value blanked (see the profile section above), so the pair binding is real and recheckable with `python3 tests/ir/check-hashes.py`. Do NOT recompute it from the file's raw bytes — that was the old rule, it is not what the schema says, and it is why two conforming implementations disagreed.
 `design_hash` value blanked, per the schema rule, and the source map carries the same value, so
 the pair binding is real and recheckable:
 
