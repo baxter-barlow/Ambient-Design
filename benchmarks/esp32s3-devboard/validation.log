@@ -1,0 +1,144 @@
+Rhoform benchmark (c) (ESP32-S3 devboard) — power-tree/assertion validation log
+
+COMMITTED 2026-08-17T06:43:41Z under AMB-123 (M0 completion audit). Until then this file
+was untracked: `.gitignore`'s `*.log` swallowed it while design.md and
+assertions.yaml cited it as evidence. Unlike its four siblings the analysis
+below is hand-computed, not captured tool output, so it is carried forward
+as written; only the project's former name in this first line has changed
+(AMB-122). Every figure in it was re-derived independently during the AMB-123
+audit and agreed to the quoted digit.
+
+This benchmark has no ngspice deck by design (design.md sec. 9), which
+assertions.yaml now declares as `deck: null` so a deleted deck cannot look
+like a deliberate absence.
+
+Note on history: no validation.log existed for this deliverable before the
+2026-08-15 fix round. The original 2026-08-14 validation evidence was embedded
+inline in power-tree.yaml (summary_per_mode, voltage_at_ldo_input) and
+assertions.yaml only. Nothing below reconstructs or backfills a prior run.
+
+=== Fix round, 2026-08-15 ===
+Host: macOS (Darwin 25.5.0). No ngspice run required for this benchmark by
+design (design.md sec. 9): the gate is the hand-computed T10 budget plus
+assertions A1-A10.
+
+Review findings addressed:
+1. MUST-FIX: the claim "dropout 500 mV max at 1 A" for the AP7361C was not a
+   datasheet figure. Verified against Diodes AP7361C datasheet DS37274
+   Rev. 5-2 (Oct 2020), downloaded from
+   https://www.diodes.com/assets/Datasheets/AP7361C.pdf and text-extracted:
+   - EC table, VDROPOUT, IOUT = 1 A, 2.6V<=VOUT<=3.3V row: 340 mV TYP,
+     max column is "-" (no max specified). Features page quotes
+     "360mV at 1A Typical" for 3.3 V.
+   - Restated in design.md sec. 4, power-tree.yaml (U2_ldo.dropout_v) and
+     assertions.yaml A4 as: 340 mV typ (datasheet); 0.50 V/A explicitly
+     labeled a conservative in-house guardband assumption, not vendor data.
+   - A4 recomputed under both bases at i_load = 0.3917 A,
+     v_ldo_in = 3.819 V, vout_max = 3.366 V:
+       datasheet typ:      vdo = 0.34 x 0.3917 = 0.133 V -> margin +0.320 V
+       in-house guardband: vdo = 0.50 x 0.3917 = 0.196 V -> margin +0.257 V
+     A4 PASS under both rows.
+2. Advisory: A5 now cites the datasheet SOT-223 theta_JA: same DS37274
+   Rev. 5-2 thermal table, SOT223 = 110 C/W (FR-4, minimum recommended pad
+   layout, still air; table note 9). Added row at 110 C/W:
+     P_worst = (4.902-3.234) x 0.3917 + 4.902 x 60e-6 = 0.654 W
+     Tj = 50 + 0.654 x 110 = 121.9 C  -> +3.1 C to the 125 C design gate.
+   121.9 C < 125 C at every stated condition, so A5 remains PASS, but is now
+   marked "PASS (layout-dependent)": the +34.5 C margin requires the assumed
+   62 C/W (~1 in^2 pour, AN1028); at datasheet minimum-pad theta_JA the
+   headroom is only 3.1 C. Datasheet operating Tj range is -40..150 C and
+   thermal shutdown ~150 C; 125 C is the design's own gate.
+3. Advisory: power-tree.yaml usb_host now documents the 500 mA budget
+   assumption: Type-C default-power source (>= 500 mA without enumeration at
+   default Rp); the USB 2.0 100 mA pre-enumeration/legacy-host allocation is
+   declared out of scope, with rationale (no PD/BC1.2 sensing, no throttling
+   path; Wi-Fi TX peak ~395 mA cannot fit 100 mA; firmware note for strictly
+   compliant legacy hosts).
+
+Arithmetic re-check (python3 script, run 2026-08-15): 17/17 checks PASS --
+load sums (wifi_tx_peak typ/worst), A2 VBUS sum 0.39491 A and +105.1 mA
+margin, voltage propagation worst_min 3.819 V (computed 3.8184, rounding
+noted), A4 both dropout rows, A5 P/Tj at 62 and 110 C/W (typ and worst),
+A6 +205 mA. No assertion window was widened; no status changed except
+A5 PASS -> PASS (layout-dependent), which narrows rather than weakens the
+claim.
+
+Remaining stated assumptions (unchanged, still flagged in-file): SS34 Vf at
+0.4 A, PTC initial-resistance range, 62 C/W pour-dependent theta_JA target.
+
+=== Fix round 2 (re-review response), 2026-08-15 ===
+Nothing above is retracted or rewritten; the round-1 numbers that this round
+corrects are left in place so the history reads honestly. Where round 1 and
+this section disagree, THIS section supersedes.
+
+Primary-source verification (not taken from round 1's notes):
+- Datasheet re-checked directly from the local PDF, Diodes AP7361C
+  DS37274 Rev. 5 - 2, October 2020, sha256
+  9b64f49c5975b2baf2360248a75212599bde8bf083d315d936e4f1c93b2e1f92.
+  * VDROPOUT, IOUT = 1 A, 2.6V<=VOUT<=3.3V: min "-", TYP 340, max "-" (mV).
+    No max column value exists. Features page: "Very Low Dropout Voltage
+    (3.3V): 360mV at 1A Typical". CONFIRMS round 1; the original
+    "500 mV max at 1 A" remains a fabrication and is gone from the files.
+  * theta_JA, SOT223 (Note 9): 110 C/W typ. CONFIRMS round 1's value.
+  * TJ operating range -40 to +150 C; TSHDN 150 C typ, hysteresis 20 C;
+    PD(SOT223) 1100 mW. All as cited.
+- ESP32-S3-WROOM-1 datasheet spot-check: 355 mA @ 802.11b 1 Mbps 20.5 dBm
+  and 8 uA deep-sleep (RTC mem + RTC periph powered) both confirmed.
+
+Corrections made THIS round (all found by re-running the arithmetic, all
+were errors in the optimistic direction or unsupported attributions):
+1. theta_JA attribution overstated. Note 9 for SOT-223 reads only "mounted
+   on FR-4 substrate PC board, with minimum recommended pad layout" -- it
+   states NO airflow condition and NO board size. Round 1 called it "still
+   air" (the review advisory's wording); that phrase is not in the
+   datasheet. Removed from design.md and assertions.yaml A5.
+2. V_ldo_in worst_min was written 3.819 V; exact value is 3.81834 V, which
+   rounds to 3.818 V. Round 1 logged this as "rounding noted" and kept the
+   favorable digit. Corrected to 3.818 V in power-tree.yaml and A4.
+3. A4 datasheet-typ margin followed from (2): +0.320 V -> +0.319 V
+   (exact 0.31920). The guardband row is unchanged at +0.257 V
+   (exact 0.25654). A4 still PASSes under both bases.
+4. A4 used i_load = 0.3917 A; the actual LDO OUTPUT current at
+   wifi_tx_peak worst is 0.3916 A (0.391601; the 60 uA Iq flows Vin->GND
+   and is not output current). Corrected, and i_load_a is now an explicit
+   input field rather than an unexplained constant.
+5. V_ldo_in max was written 4.902 V (truncated); exact 4.90261 -> 4.903 V.
+   Corrected in power-tree.yaml and A5. P and Tj are unchanged to the
+   quoted precision (0.654 W; 90.5 C at 62 C/W; 121.9 C at 110 C/W).
+6. A4 secondary row usbc_min_4p75_guardband: 4.335 - 3.562 = 0.77355,
+   which rounds to +0.774 V, not +0.773 V. Corrected, and the row is now
+   labelled as mixing usbc-min input voltage with worst-current required
+   V_in (conservative, not self-consistent).
+7. A5 caveat now states the breach condition explicitly: at the 110 C/W
+   minimum-pad figure, Ta > 53.1 C exceeds the 125 C gate
+   (Ta_max = 125 - 0.654 x 110 = 53.09 C); at 62 C/W, Ta_max = 84.5 C.
+   NOTE: 53.1 C was itself wrong in my first draft of this edit (52.8 C)
+   and was corrected after computing it. A5 stays PASS (layout-dependent):
+   121.9 C < 125 C at every stated condition.
+
+Re-run: python3 <scratchpad>/fixround2-verify.py   [scratchpad =
+/private/tmp/claude-501/-Users-baxterbarlow-Ambient-Labs-Agentic-Electronic-
+Design/05be88fa-df1d-4e4e-adf9-9b518b6f8ffa/scratchpad]
+(independent re-derivation from primitive inputs, NOT a re-use of round 1's
+script), 2026-08-15, python3 on macOS Darwin 25.5.0. Raw output in
+scratchpad/fixround2-out.log.
+Result: 34 checks, 31 PASS / 3 FAIL. The 3 FAILs are expected and are not
+open defects:
+  - "V_ldo_in worst (as-written 3.819)" and "V_ldo_in max (as-written
+    4.902)" are deliberate paired assertions that fail against the OLD
+    values and pass against the corrected 3.818 / 4.903. They are kept in
+    the script as regression evidence for corrections 2 and 5.
+  - "idle max vbus": computed 0.112310 A vs written 112.3e-3; a
+    tolerance-band artifact (1e-5 vs a 5e-6 band), not a disagreement.
+    112.31 mA correctly rounds to the quoted 112.3 mA.
+No assertion window was widened, no gate loosened, and no status was
+changed this round. A1-A3 and A6-A10 are untouched and still PASS.
+
+Both YAML files re-parsed clean (python3 yaml.safe_load) after editing.
+
+Remaining stated assumptions (unchanged, still flagged in-file, still NOT
+vendor-verified): SS34 Vf = 0.40 V at 0.4 A; PTC initial-resistance range
+[0.07, 0.35] Ohm; 62 C/W pour-dependent theta_JA target. The AP2112K
+"~250 C/W" and AMS1117 "1.1-1.3 V dropout" asides in design.md sec. 4 are
+rejected-alternative color and were NOT verified against those datasheets
+this round; they should be sourced or dropped before the design is frozen.

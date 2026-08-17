@@ -113,25 +113,57 @@ done
 # than as embedded Python here - the same shape as the part linter and the IR
 # hash gate, and for the same reason: a check that silently stopped firing
 # must fail loudly instead of reporting a clean sweep.
-brand_check="scanned"
+# It used to print WARN and exit 0 when git or python3 was missing, which is
+# the same defect the sibling gates were written to avoid: an unavailable gate
+# reported as a pass. AGENTS.md is explicit, and so is this script's own
+# header. It exits 2 now.
 if ! command -v git >/dev/null 2>&1 || [ "$json_parser" != "python3" ]; then
-  brand_check="DEFERRED (needs python3 and git)"
-  printf 'WARN: retired-name scan %s; it did not run.\n' "$brand_check" >&2
-else
-  python3 "$SCRIPT_DIR/check-retired-names.py" --self-test >/dev/null \
-    || fail "the retired-name scan's own self-test failed"
-  python3 "$SCRIPT_DIR/check-retired-names.py" >/dev/null || exit 1
+  printf 'FAIL: the retired-name scan needs python3 and git, and neither is optional; an unavailable gate is not a pass.\n' >&2
+  exit 2
+fi
+python3 "$SCRIPT_DIR/check-retired-names.py" --self-test >/dev/null \
+  || fail "the retired-name scan's own self-test failed"
+python3 "$SCRIPT_DIR/check-retired-names.py" >/dev/null || exit 1
+
+# The toolchain manifest must parse as YAML. This used to be "deferred to CI,
+# where it always runs" — nothing enforced "always runs", and with PyYAML
+# absent the gate printed PASS having parsed nothing. Deleting the pip step in
+# checks.yml would have switched it off silently.
+if ! python3 -c 'import yaml' 2>/dev/null; then
+  printf 'FAIL: PyYAML is required to parse toolchain/versions.yaml; install the pin (python3 -m pip install pyyaml==6.0.2). An unavailable gate is not a pass.\n' >&2
+  exit 2
+fi
+python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' \
+  "$ROOT/toolchain/versions.yaml" 2>/dev/null \
+  || fail "toolchain/versions.yaml does not parse as YAML"
+
+# Evidence files must be IN the repository. `.gitignore`'s `*.log` was written
+# for ngspice scratch output and silently swallowed five `validation.log` files
+# that nine tracked documents cite as committed evidence — including the one
+# carrying a retraction of fabricated evidence — plus the golden harness's
+# tamper-evidence ledger. `git add` on an ignored path does nothing unless
+# forced, so nothing warned at commit time. This is the recurrence guard.
+untracked_evidence=""
+while IFS= read -r evidence; do
+  [ -n "$evidence" ] || continue
+  rel=${evidence#"$ROOT"/}
+  git -C "$ROOT" ls-files --error-unmatch "$rel" >/dev/null 2>&1 \
+    || untracked_evidence="$untracked_evidence  $rel
+"
+done < <(find "$ROOT" -type f \( -name 'validation.log' -o -name 'UPDATES.log' \) \
+           -not -path "$ROOT/.git/*" -not -path "$ROOT/.claude/*" | LC_ALL=C sort)
+if [ -n "$untracked_evidence" ]; then
+  printf 'FAIL: evidence file(s) exist on disk but are not tracked:\n%s' "$untracked_evidence" >&2
+  printf 'These are deliberately authored deliverables, not scratch output. Track them, or the claims that cite them are unverifiable by anyone but their author.\n' >&2
+  exit 1
 fi
 
-# The toolchain manifest must parse as YAML when PyYAML is available.
-# Without PyYAML the deep parse is deferred to CI, where it always runs.
-yaml_check="deferred (PyYAML unavailable)"
-if [ "$json_parser" = "python3" ] && python3 -c 'import yaml' 2>/dev/null; then
-  python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1], encoding="utf-8"))' \
-    "$ROOT/toolchain/versions.yaml" 2>/dev/null \
-    || fail "toolchain/versions.yaml does not parse as YAML"
-  yaml_check="parsed"
-fi
+# Floor assertions on the counts. Every enumeration above uses `done < <(find
+# ...)`, and a failing process substitution does not propagate under `set -e`:
+# with `find` off PATH the gate printed "0 root Markdown files, 0 JSON files"
+# and exited 0. A self-reported statistic is not an assertion.
+[ "$md_count" -ge 5 ] || fail "counted $md_count root Markdown files; expected at least 5, so the enumeration did not run"
+[ "$json_count" -ge 50 ] || fail "counted $json_count JSON files under [$JSON_ROOTS]; expected at least 50, so the enumeration did not run"
 
-printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s, retired-name scan %s).\n' \
-  "$md_count" "$json_count" "$JSON_ROOTS" "$yaml_check" "$brand_check"
+printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml parsed, retired-name scan scanned, evidence files tracked).\n' \
+  "$md_count" "$json_count" "$JSON_ROOTS"

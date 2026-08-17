@@ -1,0 +1,25 @@
+Rhoform AC2 corpus — validation evidence.
+
+REGENERATED 2026-08-17T06:43:24Z under AMB-123 (M0 completion audit). Until then this file
+was untracked: `.gitignore`'s `*.log` swallowed it while tracked documents
+cited it as committed evidence. It is captured output from a run made now,
+against this tree — the previous contents described a pre-rename tree and, for
+the corpus, a 63-entry population that is now 61.
+
+Command: python3 tests/corpus/check-classification.py --self-test
+corpus-classification: self-test PASS: 82 checks.
+exit=0
+
+Command: python3 tests/corpus/check-classification.py
+corpus-classification: unverified: citation spaces ga, ga-excluded, nongoal, req, v2-deferred resolve against lists transcribed from Notion specifications, not against the documents themselves — this gate runs offline.
+corpus-classification: PASS: 61 entries classified exactly once, 22 in scope, every citation resolves, decision_hash matches, populations published.
+exit=0
+
+Coverage NOT provided by this run, stated rather than hidden:
+  - The corpus file itself (corpus/bugs.yaml) is checked by
+    tests/corpus/check-corpus.py as of AMB-123; before that nothing
+    validated it at all and its collection-phase log named a script
+    (check_corpus.py) that was never committed.
+  - Citation spaces ga, ga-excluded, nongoal, req and v2-deferred are
+    transcribed from Notion specifications, not resolved against them;
+    the gate reports this on every run.

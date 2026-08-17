@@ -166,6 +166,45 @@ jobs:
         # producing results for a run that never happened.
         run: cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
 
+  toolchain-pins:
+    name: Toolchain pins
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: python3 -m pip install PyYAML==6.0.2
+      - name: Self-test the pin gate
+        run: python3 tests/toolchain/check-pins.py --self-test
+      - name: Every pin agrees with its consumer
+        run: python3 tests/toolchain/check-pins.py
+      - name: Resolve the pinned KiCad digests
+        # AMB-28's criterion is "pinned kicad/kicad + ngspice Docker images in
+        # CI". The ngspice half has been real since day one; the kicad half was
+        # two digests nothing had ever resolved. `manifest inspect` proves the
+        # digest exists and is what the tag points at, WITHOUT pulling several
+        # gigabytes on every PR — running kicad-cli against real exports is
+        # AMB-66's work, not this criterion's.
+        #
+        # These two lines are also the consumer that tests/toolchain/check-pins.py
+        # requires, so a manifest edit that is not reflected here fails offline
+        # before this job ever runs.
+        run: |
+          set -euo pipefail
+          for ref in \
+            kicad/kicad:9.0.9@sha256:e638b79b0321f29395a5b783e94bb9f3c73303e8da15da27b8f5cb4b67a37729 \
+            kicad/kicad:10.0.5@sha256:182c8005cb775a2c448a4c18681d489f1ff472a761885eba3e08b07e3c0564de
+          do
+            echo "resolving $ref"
+            docker manifest inspect "$ref" > /dev/null
+          done
+          echo "both pinned KiCad digests resolve."
+
   benchmarks-sim:
     name: Benchmark simulation
     runs-on: ubuntu-24.04
@@ -186,7 +225,18 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends ngspice=46+ds-1
           ngspice --version | head -n 5
-      - name: Run benchmark decks
+      - name: Install Python and PyYAML for the assertion check
+        # tests/benchmarks/check-assertions.py reads benchmarks/*/assertions.yaml.
+        # Installed explicitly rather than relied on: the checker exits 2 without
+        # PyYAML (an unavailable gate is not a pass), so a missing dependency
+        # here fails the job loudly instead of skipping the value comparison.
+        # Keep in sync with toolchain/versions.yaml (python.packages.pyyaml).
+        run: |
+          apt-get install -y --no-install-recommends python3 python3-yaml
+          python3 -c "import yaml, sys; print('python', sys.version.split()[0], 'PyYAML', yaml.__version__)"
+      - name: Self-test the assertion checker
+        run: python3 tests/benchmarks/check-assertions.py --self-test
+      - name: Run benchmark decks and check their assertion windows
         run: bash tests/benchmarks/run-sim.sh
 
   golden:

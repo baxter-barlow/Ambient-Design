@@ -1,0 +1,96 @@
+Rhoform benchmark (a) — validation evidence.
+
+REGENERATED 2026-08-17T06:43:00Z under AMB-123 (M0 completion audit). This file and its four
+siblings existed only on the authoring machine until then: `.gitignore`'s
+`*.log` was written for ngspice scratch output and silently swallowed every
+one, while nine tracked documents cited them as committed evidence. `git add`
+on an ignored path does nothing unless forced, so nothing ever warned.
+
+The previous contents were NOT carried forward verbatim. They recorded runs of
+a pre-rename tree, carrying the project's former name, against decks that
+have since changed, so
+republishing them would have shipped a transcript that does not describe the
+code in this commit. Everything below is captured output from a run made now,
+against this tree.
+
+Simulator: ** ngspice-46 : Circuit level simulation program
+Command:   ngspice -b netlist.cir
+Assertions: tests/benchmarks/check-assertions.py compares every .meas result
+           against the window declared in assertions.yaml. That comparison did
+           not exist until AMB-123 either — assertions.yaml was read by no code
+           in the repository, so these numbers were recorded and never checked.
+
+----- begin verbatim ngspice stdout+stderr -----
+
+Note: No compatibility mode selected!
+
+
+Circuit: * rhoform benchmark (a): 9v 555 led blinker, ~1 hz astable
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+Using SPARSE 1.3 as Direct Linear Solver
+
+Initial Transient Solution
+--------------------------
+
+Node                                   Voltage
+----                                   -------
+vcc                                          0
+cont                                         0
+xu1.ref13                                    0
+xu1.s                                      0.5
+nct                                          0
+xu1.rth                                    0.5
+xu1.rrs                                      1
+xu1.r                                        1
+xu1.q                                 0.583118
+xu1.oint                             0.0633891
+out                                   0.063389
+xu1.qb                                0.416882
+disch                                        0
+nled                                 0.0633855
+nks                                          0
+b.xu1.bqb#branch                             0
+b.xu1.bout#branch                 -6.33861e-09
+b.xu1.bres#branch                            0
+b.xu1.brst#branch                            0
+b.xu1.bthr#branch                            0
+b.xu1.bset#branch                            0
+vsled#branch                       6.33861e-09
+vcc#branch                                   0
+
+
+No. of Data Rows : 50360
+
+  Measurements for Transient Analysis
+
+t_period            =  1.01191e+00 targ=  3.35355e+00 trig=  2.34164e+00
+t_on                =  5.40895e-01 targ=  2.88254e+00 trig=  2.34164e+00
+f_osc               =  9.88234e-01
+duty_pct            =  5.34530e+01
+i_led_on            =  9.25678e-03 at=  2.34169e+00
+v_out_high          =  7.19860e+00 at=  2.34169e+00
+
+
+Total analysis time (seconds) = 0.224812
+
+Total elapsed time (seconds) = 0.232 
+
+Total DRAM available = 18432.000 MB.
+DRAM currently available =  325.672 MB.
+Maximum ngspice program size =   11.250 MB.
+Current ngspice program size =   11.250 MB.
+----- end verbatim ngspice stdout+stderr -----
+
+=== .meas results ===
+t_period            =  1.01191e+00 targ=  3.35355e+00 trig=  2.34164e+00
+t_on                =  5.40895e-01 targ=  2.88254e+00 trig=  2.34164e+00
+f_osc               =  9.88234e-01
+duty_pct            =  5.34530e+01
+i_led_on            =  9.25678e-03 at=  2.34169e+00
+v_out_high          =  7.19860e+00 at=  2.34169e+00
+
+=== assertion windows ===
+sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows.
+exit=0

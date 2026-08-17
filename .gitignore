@@ -35,6 +35,23 @@ dist/
 .rhoform-build/
 *.raw
 *.log
+# ...but NOT the evidence files, which are deliberately authored deliverables
+# that happen to end in `.log`. `*.log` was written for ngspice scratch output
+# and silently swallowed all of them: five `validation.log` files that nine
+# tracked documents cite as committed evidence — including `ir/validation.log`,
+# which carries a retraction of fabricated evidence — plus the golden harness's
+# tamper-evidence ledger, whose own README calls an unledgered golden change an
+# error. `git add` on an ignored path does nothing unless forced, so nothing
+# ever warned. tests/structure/check-layout.sh now fails if one of these exists
+# untracked, so the exclusion cannot come back by accident.
+!**/validation.log
+!tests/golden/UPDATES.log
+
+# Transient agent worktrees. The negations below deliberately version
+# `.agents/` and `.claude/skills/`; they also un-ignored this, so a stale
+# worktree sat untracked in every `git status` and was one `git add -A` from
+# being committed as a second copy of the repository.
+.claude/worktrees/
 
 # Cross-agent configuration is intentionally versioned. These negations
 # override common user-global ignores for Claude and agent configuration.

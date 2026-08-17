@@ -1,0 +1,54 @@
+Rhoform IR v0 — validation evidence.
+
+REGENERATED 2026-08-17T06:43:24Z under AMB-123 (M0 completion audit). Until then this file
+was untracked: `.gitignore`'s `*.log` swallowed it while tracked documents
+cited it as committed evidence. It is captured output from a run made now,
+against this tree — the previous contents described a pre-rename tree and, for
+the corpus, a 63-entry population that is now 61.
+
+=== HISTORICAL RECORD, carried forward ===
+
+The 2026-08-14 first run of this validation recorded a "negative controls"
+block listing seven fixtures bad1..bad7 as "rejected as expected". That block
+was FABRICATED: the files never existed, validate.sh of that date contained no
+negative-control logic, and no such validator run occurred. It was retracted on
+2026-08-15 and the retraction was preserved rather than deleted so the failure
+stayed auditable.
+
+That retraction is the single most important line this project has written
+about itself, and it was not in the repository — the file carrying it was
+ignored. It is carried forward here deliberately. The wording above is the
+2026-08-15 retraction's content with the project's former name replaced
+(AMB-122 renamed the project); nothing else about it has been changed.
+
+The nine negative controls named below are real, are committed under
+ir/examples/negative/, and are checked on every run.
+
+=== END HISTORICAL RECORD ===
+
+Command: python3 tests/ir/check-hashes.py --self-test
+ir-hashes: self-test PASS: 4 checks.
+exit=0
+
+Command: python3 tests/ir/check-hashes.py
+ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/blinker.rhoform does not exist yet
+ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/lib/indicator.rhoform does not exist yet
+ir-hashes: unverified: ir/examples/blinker.ir.json: source_hash is unverifiable — the IR spec pins no serialization for the (path, sha256) list it hashes
+ir-hashes: PASS: 1 document(s) hash to their committed design_hash, and every paired source map agrees.
+exit=0
+
+Command: python3 tests/schemas/validate-schemas.py  (ir/ rows only)
+schemas: ir/netlist-ir.schema.json: well-formed.
+schemas: ir/source-map.schema.json: well-formed.
+schemas: ir/examples/blinker.ir.json: valid against netlist-ir.schema.json.
+schemas: ir/examples/blinker.sourcemap.json: valid against source-map.schema.json.
+schemas: ir/examples/negative/n01_mounting_hole_with_port.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/ports.
+schemas: ir/examples/negative/n02_unknown_property.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1.
+schemas: ir/examples/negative/n03_module_with_part.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1.
+schemas: ir/examples/negative/n04_bad_pin_role.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/ports/0/role.
+schemas: ir/examples/negative/n05_empty_bounds.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/bounds.
+schemas: ir/examples/negative/n06_bad_path.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/path.
+schemas: ir/examples/negative/n07_static_tier_dynamic_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
+schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
+schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
+exit=0

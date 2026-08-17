@@ -4,11 +4,13 @@
 # settle window: 2 s (V3 ramped-supply fixture; first high phase ~0.86 s
 # is startup, excluded). Validation run: ngspice-46, see validation.log.
 
+deck: netlist.cir
 settle_window_s: 2.0
 analysis: tran 100us 5s
 
 assertions:
   - name: osc_period
+    meas_id: t_period
     signal: v(out)
     kind: trig_targ            # one .meas: RISE=1 -> RISE=2, VAL=3.7 V, TD=2 s
     expected: 1.012 s
@@ -17,6 +19,7 @@ assertions:
     verdict: PASS
 
   - name: osc_frequency
+    meas_id: f_osc
     signal: v(out)
     kind: derived_param        # 1/t_period from the trig_targ period meas
     expected: 0.988 Hz         # exact ln2 form; 1.44/((RA+2RB)C) = 0.986 Hz
@@ -25,6 +28,7 @@ assertions:
     verdict: PASS
 
   - name: duty_cycle_high
+    meas_id: duty_pct
     signal: v(out)
     kind: derived_param        # 100*t_on/t_period; t_on is one trig_targ meas
                                #   (RISE=1 -> FALL=1, VAL=3.7 V, TD=2 s)
@@ -34,6 +38,8 @@ assertions:
     verdict: PASS
 
   - name: led_on_current
+    meas_id: i_led_on
+    reported_unit: A
     signal: i(VSLED)
     kind: envelope_max         # MAX over the settled window 2..5 s
     expected: 9.5 mA
@@ -42,6 +48,7 @@ assertions:
     verdict: PASS
 
   - name: out_high_level
+    meas_id: v_out_high
     signal: v(out)
     kind: envelope_max         # supplementary sanity check, MAX over 2..5 s
     expected: 7.2 V            # Vcc - 1.7 V minus 12-ohm output-stage drop
