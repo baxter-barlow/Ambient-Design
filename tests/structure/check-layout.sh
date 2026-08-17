@@ -192,6 +192,13 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
   # escape by indenting the line by one space or deleting it outright, and the
   # `[ -n "$quoted" ]` guard then failed OPEN -- in a script whose own comment
   # says a self-reported statistic is not an assertion.
+  matches=$(grep -c "$prefix: PASS" "$evidence" || true)
+  if [ "$matches" -gt 1 ]; then
+    printf 'FAIL: %s carries %s "%s: PASS" lines. Only the first is read, so a\n' \
+      "${pair%%:*}" "$matches" "$prefix" >&2
+    printf 'stale copy appended below a fresh one would be unread.\n' >&2
+    exit 1
+  fi
   quoted=$(grep -m1 "$prefix: PASS" "$evidence" | sed 's/^[[:space:]]*//' || true)
   if [ -z "$quoted" ]; then
     printf 'FAIL: %s carries no "%s: PASS" line to compare.\n' "${pair%%:*}" "$prefix" >&2
@@ -200,6 +207,12 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
   fi
   transcripts_checked=$((transcripts_checked + 1))
   if [ -n "$fresh_self" ]; then
+    self_matches=$(grep -c "$prefix: self-test PASS" "$evidence" || true)
+    if [ "$self_matches" -gt 1 ]; then
+      printf 'FAIL: %s carries %s "%s: self-test PASS" lines; only the first is read.\n' \
+        "${pair%%:*}" "$self_matches" "$prefix" >&2
+      exit 1
+    fi
     quoted_self=$(grep -m1 "$prefix: self-test PASS" "$evidence" \
                   | sed 's/^[[:space:]]*//' || true)
     if [ -n "$quoted_self" ] && [ "$quoted_self" != "$fresh_self" ]; then
@@ -208,7 +221,12 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
       printf '  file: %s\n  now:  %s\n' "$quoted_self" "$fresh_self" >&2
       exit 1
     fi
-    [ -n "$quoted_self" ] && transcripts_checked=$((transcripts_checked + 1))
+    if [ -z "$quoted_self" ]; then
+      printf 'FAIL: %s carries no "%s: self-test PASS" line to compare.\n' \
+        "${pair%%:*}" "$prefix" >&2
+      exit 1
+    fi
+    transcripts_checked=$((transcripts_checked + 1))
   fi
   if [ "$quoted" != "$fresh" ]; then
     printf 'FAIL: %s quotes a summary the gate no longer prints:\n' "${pair%%:*}" >&2

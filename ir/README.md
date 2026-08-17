@@ -191,7 +191,8 @@ cases you might expect here are deliberately absent: they belong to the compiler
 above, because JSON Schema cannot detect either one.
 
 Note on the examples: they are hand-written illustrations tracking the fixed benchmark (a) design
-(RA 100 k 1 %, RB 680 k 1 %, CT 1 µF 5 %, RL 560 Ω 1 %, CONT bypass 10 nF, assertion windows from
+(RA 100 k 1 %, RB 680 k 1 %, CT 1 µF 5 %, RL 560 Ω 1 %, CONT bypass 10 nF
+on pin 5, VCC bypass 100 nF on pin 8, assertion windows from
 `benchmarks/blinker-555/assertions.yaml`). `/mh1` and `/tp_out` are board-side extras beyond that BOM and are
 both `exclude_from_bom`. `design_hash` is genuine: it is the sha256 of this document's `rhoform-canonical-json/1` serialization with the `design_hash` value blanked (see the profile section above), so the pair binding is real and recheckable with `python3 tests/ir/check-hashes.py`. Do NOT recompute it from the file's raw bytes — that was the old rule, it is not what the schema says, and it is why two conforming implementations disagreed.
 Recompute it with the gate's own canonicaliser -- not with a regex over the

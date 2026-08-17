@@ -35,6 +35,7 @@ Exit codes: 0 pass, 1 a table disagrees with its assertions, 2 environment.
     python3 tests/benchmarks/check-design-docs.py <benchmark-dir>...
 """
 
+import pathlib
 import re
 import sys
 from pathlib import Path
@@ -335,12 +336,17 @@ def self_test():
         result_rows(agreeing.replace("| PASS |", "| passenger count |"))))
     # THE MODEL/IR LEG, which had no case at all -- emptying MODEL_LINKS left
     # the self-test green and the gate reporting 0 windows.
-    cases.append(("the model/IR window leg reconciles the real artifacts", (
-        lambda ps: not ps and MODEL_LINKS and MINIMUM_MODEL_WINDOWS == 4)(
-            [] if model_problems([]) >= MINIMUM_MODEL_WINDOWS else ["short"])))
-    cases.append(("MODEL_LINKS still names the blinker model and its IR",
-                  {p.name for _, p, q in MODEL_LINKS for p, q in [(p, q)]} ==
-                  {"blinker-555.design.json"}))
+    cases.append(("the model/IR window leg reconciles the real artifacts",
+                  model_problems([]) >= MINIMUM_MODEL_WINDOWS))
+    cases.append(("MODEL_LINKS names the blinker model AND its IR",
+                  {(m.name, i.name) for _, m, i in MODEL_LINKS} ==
+                  {("blinker-555.design.json", "blinker.ir.json")}))
+    # A PLANTED WRONG WINDOW. The leg was pinned only by a count, and the count
+    # survives the reporting branch being deleted -- so both directions of the
+    # comparison could be cut with `--self-test` green.
+    cases.append(("a model window disagreeing with its benchmark is caught",
+                  any("must be the same numbers" in p
+                      for p in _planted_window_problems())))
     cases.append(("every REQUIRED benchmark is actually reached",
                   set(REQUIRED) == {"blinker-555", "buck-3v3"}))
 
@@ -491,6 +497,28 @@ def line_count_problems(problems):
                 f"{name}/design.md: reconciled {len(seen)} of 3 AC1a line "
                 "counts; a row that stops parsing also stops being checked.")
     return checked
+
+
+def _planted_window_problems():
+    """Drive model_problems over a copy of the IR with a superseded window."""
+    import json, tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        ir = json.loads((ROOT / "ir" / "examples" / "blinker.ir.json").read_text(
+            encoding="utf-8"))
+        for assertion in ir.get("assertions") or []:
+            if assertion.get("measurement") == "duty_cycle":
+                assertion["bounds"]["min"] = 0.524
+                assertion["bounds"]["max"] = 0.544
+        planted = pathlib.Path(tmp) / "planted.ir.json"
+        planted.write_text(json.dumps(ir), encoding="utf-8")
+        saved = MODEL_LINKS[0]
+        globals()["MODEL_LINKS"] = ((saved[0], saved[1], planted),)
+        try:
+            problems = []
+            model_problems(problems)
+            return problems
+        finally:
+            globals()["MODEL_LINKS"] = (saved,)
 
 
 def main(argv):
