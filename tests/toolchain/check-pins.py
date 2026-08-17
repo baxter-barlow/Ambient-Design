@@ -383,17 +383,22 @@ def check(manifest, read=None):
                 try:
                     TiktokenTokenizer(str(encoding), str(pinned))
                 except PinnedTokenizerError as exc:
-                    if "not installed" in str(exc):
-                        READ_BY_KEY.append(
-                            "evaluation.tokenizer.fingerprint (tiktoken is an "
-                            "optional pin and is absent; install it to verify "
-                            "the fingerprint behaviourally)"
-                        )
-                    else:
+                    # A MISMATCH is a real finding; anything else about LOADING
+                    # is not. My previous fix special-cased only "not
+                    # installed", so tiktoken present with a cold cache and no
+                    # network still turned `make all` red — and with network it
+                    # silently fetched 3.6 MB inside a gate that must run
+                    # offline. Only the mismatch text is a finding now.
+                    if "does not match its pin" in str(exc):
                         problems.append(
                             "evaluation.tokenizer.fingerprint: the pinned "
                             f"encoding {encoding!r} does not reproduce the "
                             f"pinned fingerprint: {exc}"
+                        )
+                    else:
+                        READ_BY_KEY.append(
+                            f"evaluation.tokenizer.fingerprint (not verifiable "
+                            f"here: {exc})"
                         )
                 except Exception as exc:
                     READ_BY_KEY.append(

@@ -116,7 +116,7 @@ MAX_RELATIVE_WINDOW = 3.0
 # catch absurdity — a limit six orders of magnitude away asserts nothing — and
 # nothing tighter, because anything tighter is a judgement about the design
 # rather than about the assertion.
-MAX_ONE_SIDED_RATIO = 1000.0
+MAX_ONE_SIDED_RATIO = 200.0
 
 SIGNIFICANT = re.compile(r"[1-9][0-9]*(?:\.[0-9]*)?|0\.0*[1-9][0-9]*")
 
@@ -274,21 +274,12 @@ def check_benchmark(case, spec, log_text, problems, minimum=None):
         # for a one-sided bound — because a legitimate tolerance stack is rarely
         # wider than that and this must not fight real engineering. It exists to
         # catch the window that has stopped asserting anything at all.
-        # The CENTRE the window must be proportionate to. Shape (a) states it
-        # as `expected:`; shape (b) has no `expected` scalar, so the measured
-        # value itself is the centre — which is the right reference anyway and
-        # is not author-controlled. Keying only on the scalar form meant this
-        # bound never applied to benchmark (b) at all: all five of its windows
-        # could be widened to [0.000001, 1000000] and pass.
-        expected = assertion.get("expected")
-        centre = None
-        if expected is not None and not isinstance(expected, dict):
-            try:
-                centre = to_reported(expected, assertion, f"{label}.expected")
-            except ValueError:
-                centre = None
-        if centre is None:
-            centre = value
+        # THE MEASURED VALUE, always. It used to be `expected:` for shape (a),
+        # which the same author writes in the same file — so a coordinated edit
+        # to deck, window and expected passed, which is the exact attack this
+        # docstring says the guard exists to catch. The run's own output is the
+        # only centre not under the author's control.
+        centre = value
         if True:
             if centre is not None and centre != 0:
                 if low > float("-inf") and high < float("inf"):
@@ -398,6 +389,22 @@ def main(argv):
     return 0
 
 
+def _floor_probe():
+    """Drive check_benchmark with the SHIPPED floor, not the probes' minimum=0.
+
+    MINIMUM_ASSERTIONS had no case either: deleting it left 17/17 green. The
+    probes all pass minimum=0 by design, so a case using `run` could never
+    reach the floor -- which is how three floors in this repository ended up
+    tripping their own fixtures instead of being tested.
+    """
+    problems = []
+    check_benchmark("case", {"assertions": [
+        {"name": "osc_period", "meas_id": "t_period",
+         "window": ["0.952 s", "1.073 s"], "measured": "1.01191 s"}]},
+        "t_period   =  1.01191e+00\n", problems)
+    return problems
+
+
 def self_test():
     """Prove each rejection fires. A checker nobody has watched fail is prose."""
     log = "t_period   =  1.01191e+00\nf_osc      =   failed\ni_led_on   =  9.25678e-03\n"
@@ -456,6 +463,25 @@ def self_test():
         ("a min-only bound has an open top", bounds_of(
             {"expected": {"min": 0.85, "unit": "ratio"}}, "x")[1] == float("inf")),
     ]
+
+    # THE WIDTH GUARD, which had no case at all: deleting the entire block left
+    # 17/17 green, so nothing stopped a window from asserting nothing. The
+    # one-sided ratio was 1000x, which let a 3.5 V bound stand against a 3.6 mV
+    # ripple; the loosest bound any shipped benchmark needs is 107x.
+    cases.append(("a two-sided window far wider than its value is caught", any(
+        "spans" in p for p in run({"assertions": [
+            {"name": "osc_period", "meas_id": "t_period",
+             "window": ["0.001 s", "9.8 s"], "measured": "1.01191 s"}]}))))
+    cases.append(("a one-sided max with absurd slack is caught", any(
+        "cannot fail" in p for p in run({"assertions": [
+            {"name": "osc_period", "meas_id": "t_period",
+             "expected": {"max": 500.0, "unit": "s"}, "measured": 1.01191}]}))))
+    cases.append(("a one-sided min far BELOW its value is caught", any(
+        "cannot fail" in p for p in run({"assertions": [
+            {"name": "osc_period", "meas_id": "t_period",
+             "expected": {"min": 0.001, "unit": "s"}, "measured": 1.01191}]}))))
+    cases.append(("the assertion floor fires on a one-assertion benchmark", any(
+        "floor" in p for p in _floor_probe())))
 
     # WIRING, as above: main() must turn a finding into a non-zero exit. This
     # drives the real entry point over a benchmark directory whose deck output

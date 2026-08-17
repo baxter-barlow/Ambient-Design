@@ -67,8 +67,18 @@ def _record():
     thr = ch["THRES"]["threshold_voltage_level"]
     trg = ch["TRIG"]["trigger_voltage_level"]
     spec_vcc = thr["conditions"]["vcc"]["typ"]
+    # BOTH timing-node currents. TRIG and THRES are the same node in an
+    # astable, so both load the capacitor; the model read only THRES and the
+    # docstring claimed it covered "bias current". TRIG's max is specified at
+    # `vtrig: 0 V` -- an operating point the timing node never sits at while
+    # oscillating -- so the record does NOT bound TRIG at the relevant point.
+    # That is reported, not silently dropped: see `unbounded` below.
+    trig_i = ch["TRIG"]["input_current"]
+    trig_at = (trig_i.get("conditions") or {}).get("vtrig", {})
     return {
         "ib_max": ch["THRES"]["input_current"]["max"] * 1e-9,
+        "trig_i_max": trig_i["max"] * 1e-6,
+        "trig_conditions": trig_at,
         # As a multiple of the nominal 2/3 and 1/3 ratios. The tighter of the
         # two bounds the common divider scale, since one divider produces both.
         "k_lo": max(thr["min"] / spec_vcc / (2 / 3), trg["min"] / spec_vcc / (1 / 3)),
@@ -131,38 +141,73 @@ def main(argv):
         print(f"  period    {f['period'][0]:8.4f} .. {f['period'][1]:8.4f} s")
         print(f"  frequency {f['frequency'][0]:8.4f} .. {f['frequency'][1]:8.4f} Hz")
 
+    r = _record()
+    print(f"\nTHRES input_current.max = {r['ib_max']*1e9:.0f} nA, modelled.")
+    print(f"TRIG  input_current.max = {r['trig_i_max']*1e6:.1f} uA at "
+          f"{r['trig_conditions']}, NOT modelled: TRIG and THRES are the same\n"
+          "  node in an astable, but that figure is specified at a trigger\n"
+          "  voltage the timing node never sits at while oscillating, so the\n"
+          "  record does not bound this current at the operating point. The\n"
+          "  bands below are therefore bounds on the MODEL, not on the part.")
+
     if "--check" not in argv:
         return 0
 
-    # The gated windows must CONTAIN the typical model and must NOT claim to
-    # contain the guaranteed one — the second half is what stops a narrow window
-    # being read as a statement about the part.
-    import re
-    text = ASSERTIONS.read_text(encoding="utf-8")
+    # THE GATED WINDOWS, checked in BOTH directions. Previously this read the
+    # file with re.search over raw text: it matched YAML comments, took only the
+    # first match per unit, and so a decoy comment above the real window let
+    # `[10.0 %, 11.0 %]` pass. It also implemented only half of what this
+    # comment claimed -- the "must not claim to contain the guaranteed band"
+    # half did not exist, so `[0.0 %, 160.0 %]`, a range a duty cycle cannot
+    # leave, passed. Both halves are here now, over parsed YAML keyed by
+    # assertion name.
     problems = []
-    typ = _fmt(m["typical"])
-    for key, pattern, unit in (
-        ("duty", r"window: \[([\d.]+) %, ([\d.]+) %\]", "%"),
-        ("period", r"window: \[([\d.]+) s, ([\d.]+) s\]", "s"),
-        ("frequency", r"window: \[([\d.]+) Hz, ([\d.]+) Hz\]", "Hz"),
+    try:
+        import yaml
+    except ImportError as exc:
+        print(f"derive-555: UNAVAILABLE: PyYAML is required: {exc}", file=sys.stderr)
+        return 2
+    spec = yaml.safe_load(ASSERTIONS.read_text(encoding="utf-8"))
+    by_name = {a.get("name"): a for a in (spec.get("assertions") or [])}
+    typ, gtd = _fmt(m["typical"]), _fmt(m["guaranteed"])
+    for key, name, unit in (
+        ("duty", "duty_cycle_high", "%"),
+        ("period", "osc_period", "s"),
+        ("frequency", "osc_frequency", "Hz"),
     ):
-        found = re.search(pattern, text)
-        if not found:
-            problems.append(f"no {key} window found in {ASSERTIONS.name}")
+        assertion = by_name.get(name)
+        if assertion is None:
+            problems.append(f"{ASSERTIONS.name} declares no assertion named {name!r}")
             continue
-        lo, hi = float(found.group(1)), float(found.group(2))
+        raw = assertion.get("window")
+        if not isinstance(raw, list) or len(raw) != 2:
+            problems.append(f"{name}: no two-element `window:`")
+            continue
+        try:
+            lo, hi = (float(str(v).split()[0]) for v in raw)
+        except ValueError:
+            problems.append(f"{name}: window {raw!r} is not two numbers")
+            continue
         want_lo, want_hi = typ[key]
         if lo > want_lo or hi < want_hi:
             problems.append(
                 f"{key} window [{lo}, {hi}] {unit} does not contain the typical "
                 f"model [{want_lo:.4f}, {want_hi:.4f}]; the deck measures that "
-                "model, so a window excluding it fails on a healthy board"
-            )
+                "model, so a window excluding it fails on a healthy board")
+        # TOO WIDE is the direction that actually matters: a window wider than
+        # the guaranteed band asserts less than the datasheet already
+        # guarantees, so it can never fail on any conforming part.
+        g_lo, g_hi = gtd[key]
+        if lo < g_lo and hi > g_hi:
+            problems.append(
+                f"{key} window [{lo}, {hi}] {unit} is wider than the guaranteed "
+                f"band [{g_lo:.4f}, {g_hi:.4f}]; every conforming part passes it, "
+                "so it gates nothing")
     if problems:
         for problem in problems:
             print(f"derive-555: FAIL: {problem}", file=sys.stderr)
         return 1
-    print("\nderive-555: PASS: every gated window contains the typical model.")
+    print("\nderive-555: PASS: 3 window(s) contain the typical model and\n            are narrower than the guaranteed band.")
     return 0
 
 
