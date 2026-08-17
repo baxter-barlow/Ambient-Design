@@ -73,12 +73,12 @@ i_led_on            =  9.25678e-03 at=  2.34169e+00
 v_out_high          =  7.19860e+00 at=  2.34169e+00
 
 
-Total analysis time (seconds) = 0.233259
+Total analysis time (seconds) = 0.226998
 
-Total elapsed time (seconds) = 0.241 
+Total elapsed time (seconds) = 0.233 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available = 1097.172 MB.
+DRAM currently available =  467.328 MB.
 Maximum ngspice program size =   11.250 MB.
 Current ngspice program size =   11.250 MB.
 ----- end verbatim ngspice stdout+stderr -----
@@ -94,12 +94,3 @@ v_out_high          =  7.19860e+00 at=  2.34169e+00
 === assertion windows ===
 sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows.
 exit=0
-
-=== changes in this run (AMB-123) ===
-CBYP 100 nF VCC bypass added; the design had no supply decoupling.
-Duty window corrected from [52.4, 54.4] to [51.2, 55.6] %: the old one
-omitted the timing-pin bias-current term, which scales with R and so was
-multiplied tenfold by the 10k/68k -> 100k/680k rescale, putting the
-NE555's own 0.25 uA datasheet corner outside the declared window. The
-deck cannot measure this -- Bset/Bthr draw zero input current -- so the
-simulated 53.45 % is the Ib = 0 row and always will be. See design.md.

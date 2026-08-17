@@ -73,45 +73,45 @@ vrmp#branch                                  0
 vr#branch                                    0
 
 
-No. of Data Rows : 88778
+No. of Data Rows : 1265047
 
   Measurements for Transient Analysis
 
-vout_avg            =  3.32796e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  7.08996e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  5.20003e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.19146e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.68412e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.29453e-01
-vout_pre            =  3.32793e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.33165e+00 at=  8.85184e-04
-overshoot_pct       =  1.11646e-01
-t_reenter           =   1.51602e-03
-t_settle_us         =  1.60234e+01
+vout_avg            =  3.32800e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.63541e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.87191e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.19151e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.68424e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.29462e-01
+vout_pre            =  3.32799e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.32958e+00 at=  1.03718e-03
+overshoot_pct       =  4.77082e-02
+t_reenter           =   1.51690e-03
+t_settle_us         =  1.68960e+01
 
 
-Total analysis time (seconds) = 0.358098
+Total analysis time (seconds) = 4.84339
 
-Total elapsed time (seconds) = 0.365 
+Total elapsed time (seconds) = 4.873 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available =  325.672 MB.
-Maximum ngspice program size =   14.734 MB.
-Current ngspice program size =   14.734 MB.
+DRAM currently available =  449.375 MB.
+Maximum ngspice program size =   96.844 MB.
+Current ngspice program size =   96.844 MB.
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===
-vout_avg            =  3.32796e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  7.08996e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  5.20003e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.19146e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.68412e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.29453e-01
-vout_pre            =  3.32793e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.33165e+00 at=  8.85184e-04
-overshoot_pct       =  1.11646e-01
-t_reenter           =   1.51602e-03
-t_settle_us         =  1.60234e+01
+vout_avg            =  3.32800e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.63541e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.87191e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.19151e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.68424e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.29462e-01
+vout_pre            =  3.32799e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.32958e+00 at=  1.03718e-03
+overshoot_pct       =  4.77082e-02
+t_reenter           =   1.51690e-03
+t_settle_us         =  1.68960e+01
 
 === assertion windows ===
 sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows.
