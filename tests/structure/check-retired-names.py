@@ -34,6 +34,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from pathlib import Path as pathlib_Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,8 +58,19 @@ PROJECT = re.compile(r"aed", re.I)
 NICKNAME_IN_TEXT = re.compile(
     r"\bael:[A-Za-z0-9_.\-]"                                    # a reference
     # No leading \b: the key is often a SUFFIX, as in `HOUSE_LIBRARY = "ael"`.
-    r"|(?:name|nickname|library|lib)\s*[:=]\s*[\"']?ael[\"']?(?![A-Za-z0-9_])"
-    r"|\(\s*name\s+[\"']?ael[\"']?\s*\)"                        # an s-expression
+    # The cost is that any identifier ENDING in one of these words counts, so
+    # `filename: ael` and `The vendor library: AEL is not ours.` both hit. That
+    # is the accepted side of the trade: putting \b back reintroduces the
+    # `HOUSE_LIBRARY` miss, and a false positive on prose is a sentence to
+    # rephrase while a miss is a collision that ships. Pinned by self-test.
+    # `s?` and the optional bracket carry the JSON array form
+    # `"pinned_footprint_libs": ["ael"]` that KiCad writes into .kicad_pro.
+    r"|(?:name|nickname|library|lib)s?[\"']?\s*[:=]\s*\[?\s*[\"']?ael[\"']?(?![A-Za-z0-9_])"
+    # The s-expression form takes the SAME key set as the assignment form
+    # above. Hard-coding `name` here left a seam: `(lib "ael")` uses a key the
+    # other alternative knew about and a separator this one required, so
+    # KiCad's own `libsource` and `libpart` netlist output fell between them.
+    r"|\(\s*(?:name|nickname|library|lib)\s+[\"']?ael[\"']?\s*\)"
     r"|\bael\.(?:pretty|kicad_sym|kicad_mod)\b",                # a library artefact
     re.I,
 )
@@ -130,13 +142,16 @@ def scan_files(files) -> list[str]:
 
 
 def scan_repository() -> list[str]:
+    """Read the tracked tree and hand every file to `scan_files`.
+
+    This deliberately owns NO matching or exemption logic of its own. It used
+    to carry a second copy of the exemption loop, so gutting that copy left the
+    self-test green at 34/34 while the real sweep reported nothing — the kill
+    switch simply moved one layer down from the constant to the loop reading
+    it. Reading is the only thing that happens here.
+    """
     hits: list[str] = []
     for rel in tracked_files():
-        if rel in EXEMPT_FILES:
-            continue
-        path_hit = scan_path(rel)
-        if path_hit:
-            hits.append(path_hit)
         full = ROOT / rel
         try:
             text = full.read_text(encoding="utf-8")
@@ -146,16 +161,22 @@ def scan_repository() -> list[str]:
             continue
         except UnicodeDecodeError:
             # A binary carrying the name is still the name; reporting beats
-            # silence, which is the same bug as not looking at paths.
-            hits.append(f"{rel}  (binary, not scanned)")
+            # silence, which is the same bug as not looking at paths. The
+            # empty text still gets the PATH checked, which is how a binary at
+            # `eval/aed_eval/x.bin` yields both findings.
+            hits.extend(scan_files([(rel, "")]))
+            if rel not in EXEMPT_FILES:
+                hits.append(f"{rel}  (binary, not scanned)")
             continue
         except OSError as exc:
             # Reported as a finding so the scan COMPLETES and still lists the
             # real hits elsewhere; raising aborted it and turned a diagnosable
             # failure into a bare non-zero exit.
-            hits.append(f"{rel}  (unreadable: {exc.strerror}, not scanned)")
+            hits.extend(scan_files([(rel, "")]))
+            if rel not in EXEMPT_FILES:
+                hits.append(f"{rel}  (unreadable: {exc.strerror}, not scanned)")
             continue
-        hits.extend(scan_text(rel, text))
+        hits.extend(scan_files([(rel, text)]))
     return hits
 
 
@@ -179,6 +200,23 @@ def self_test() -> int:
         ("(lib (name 'ael')(uri 'x'))", True),
         ('(uri "${KIPRJMOD}/ael.pretty")', True),
         ("nickname = 'AEL'", True),
+        # KiCad's own netlist output. These fell in a seam between the
+        # assignment form (which knew `lib` but demanded `:` or `=`) and the
+        # s-expression form (which allowed whitespace but only knew `name`) —
+        # and they are precisely what the golden-file corpus will contain.
+        ('(libsource (lib "ael") (part "R") (description ""))', True),
+        ('(libpart (lib "ael") (part "R_0402")', True),
+        ('  "pinned_footprint_libs": ["ael"],', True),
+        ('  "pinned_symbol_libs": ["ael"]', True),
+        # The accepted cost of dropping \b from the key group: any identifier
+        # ENDING in a key word counts. Pinned so the trade is on the record
+        # rather than rediscovered — restoring \b would miss HOUSE_LIBRARY.
+        ("filename: ael", True),
+        ("The vendor library: AEL is not ours.", True),
+        # And the current prefix must never fire, in any of these shapes.
+        ('(libsource (lib "rho") (part "R"))', False),
+        ('  "pinned_footprint_libs": ["rho"],', False),
+        ("HOUSE_LIBRARY = 'rho'", False),
         ("python3 -m aed_eval replay", True),
         ("the .aed-cache directory", True),
         # Prose about Keysight's language must survive: this repository has to
@@ -233,7 +271,36 @@ def self_test() -> int:
         ),
     ]
 
+    # And the READING layer, over a real temporary tree. Everything above
+    # drives `scan_files` directly, so gutting `scan_repository`'s one
+    # delegating line left the suite green and the sweep dead — the kill
+    # switch kept moving down a layer as each one above it got covered. This
+    # is the bottom: it plants a hit on disk and asserts the shipped entry
+    # point finds it.
+    import tempfile
+
+    global ROOT
+    real_root, real_tracked = ROOT, tracked_files
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            ROOT = pathlib_Path(tmp)
+            (ROOT / "clean.md").write_text("nothing here\n", encoding="utf-8")
+            (ROOT / "dirty.md").write_text(
+                '"footprint_ref": "ael:DIP-8_W7.62mm"\n', encoding="utf-8"
+            )
+            globals()["tracked_files"] = lambda: ["clean.md", "dirty.md"]
+            found = scan_repository()
+            wiring_cases = [
+                ("scan_repository finds a planted hit", found == ["dirty.md:1"]),
+            ]
+    finally:
+        ROOT = real_root
+        globals()["tracked_files"] = real_tracked
+
     failures = 0
+    for name, ok in wiring_cases:
+        failures += 0 if ok else 1
+        print(f"{'ok  ' if ok else 'FAIL'} wiring      {name}")
     for name, ok in exemption_cases:
         failures += 0 if ok else 1
         print(f"{'ok  ' if ok else 'FAIL'} exempt      {name}")
@@ -253,7 +320,7 @@ def self_test() -> int:
         return 1
     print(
         f"retired-names: self-test PASS: "
-        f"{len(text_cases) + len(path_cases) + len(exemption_cases)} cases."
+        f"{len(text_cases) + len(path_cases) + len(exemption_cases) + len(wiring_cases)} cases."
     )
     return 0
 
