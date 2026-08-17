@@ -34,7 +34,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from pathlib import Path as pathlib_Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -283,7 +282,7 @@ def self_test() -> int:
     real_root, real_tracked = ROOT, tracked_files
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            ROOT = pathlib_Path(tmp)
+            ROOT = Path(tmp)
             (ROOT / "clean.md").write_text("nothing here\n", encoding="utf-8")
             (ROOT / "dirty.md").write_text(
                 '"footprint_ref": "ael:DIP-8_W7.62mm"\n', encoding="utf-8"
