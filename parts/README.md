@@ -85,14 +85,14 @@ v0 would push real data into free text where no checker can see it.
 
 **Interoperates with the datasheet pipeline by construction.** The
 `license_class` vocabulary, the `origin` restriction, and the two-level
-`byte_sha256` / `content_hash` identity are taken from the AED
+`byte_sha256` / `content_hash` identity are taken from the Rhoform
 datasheet-knowledge pipeline, which is the upstream producer of these
 records. Two consequences are deliberate: `restricted-nda` is absent from the
 enum and `distributor-*` is absent from `origin`, so both red lines are
 unrepresentable here rather than merely forbidden by policy.
 
 *Integration note:* the pipeline emits bare hex digests; this schema requires
-the `sha256:`-prefixed spelling used elsewhere in AED (the IR's `design_hash`
+the `sha256:`-prefixed spelling used elsewhere in Rhoform (the IR's `design_hash`
 and `source_hash`). The writer that turns pipeline `SourceRecord`s into part
 records adds the prefix.
 

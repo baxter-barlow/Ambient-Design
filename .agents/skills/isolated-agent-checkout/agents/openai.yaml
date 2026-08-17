@@ -1,4 +1,4 @@
 interface:
   display_name: "Isolated Agent Checkout"
   short_description: "Prepare a collision-safe agent checkout"
-  default_prompt: "Use $isolated-agent-checkout to prepare a private checkout for this AED issue."
+  default_prompt: "Use $isolated-agent-checkout to prepare a private checkout for this Rhoform issue."

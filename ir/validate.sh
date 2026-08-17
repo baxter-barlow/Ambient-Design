@@ -1,5 +1,5 @@
 #!/bin/sh
-# Validate the AED IR v0 example documents against their schemas.
+# Validate the Rhoform IR v0 example documents against their schemas.
 #
 # Two kinds of case are run:
 #   POSITIVE  examples/blinker.ir.json + examples/blinker.sourcemap.json must VALIDATE.
@@ -56,7 +56,7 @@ wellformed() {
   done
 }
 
-echo "== AED IR v0 validation =="
+echo "== Rhoform IR v0 validation =="
 date -u +"run (UTC): %Y-%m-%dT%H:%M:%SZ"
 echo "negative controls found: $n_ir_neg IR, $n_sm_neg source-map"
 

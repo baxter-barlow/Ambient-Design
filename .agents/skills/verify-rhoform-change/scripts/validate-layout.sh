@@ -10,7 +10,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd -P)
 CANONICAL_SKILLS="$PROJECT_ROOT/.agents/skills"
 CLAUDE_SKILLS="$PROJECT_ROOT/.claude/skills"
-SKILLS="claim-linear-work isolated-agent-checkout verify-aed-change release-evidence"
+SKILLS="claim-linear-work isolated-agent-checkout verify-rhoform-change release-evidence"
 
 [ -f "$PROJECT_ROOT/AGENTS.md" ] || fail "AGENTS.md is missing"
 [ -f "$PROJECT_ROOT/CLAUDE.md" ] || fail "CLAUDE.md is missing"
@@ -63,4 +63,4 @@ for claude_entry in "$CLAUDE_SKILLS"/*; do
   esac
 done
 
-printf 'PASS: AED agent layout is structurally valid (%s AGENTS.md lines, %s skills).\n' "$agents_lines" "$(printf '%s\n' $SKILLS | wc -l | tr -d ' ')"
+printf 'PASS: Rhoform agent layout is structurally valid (%s AGENTS.md lines, %s skills).\n' "$agents_lines" "$(printf '%s\n' $SKILLS | wc -l | tr -d ' ')"

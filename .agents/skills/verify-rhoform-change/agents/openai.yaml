@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verify Rhoform Change"
+  short_description: "Select and run evidence-based Rhoform checks"
+  default_prompt: "Use $verify-rhoform-change to verify this Rhoform change and report the evidence."

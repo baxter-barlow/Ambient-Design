@@ -148,12 +148,12 @@ class Layout(unittest.TestCase):
     def test_tab_is_rejected(self):
         with self.assertRaises(ParseFailure) as caught:
             tokenize("module M:\n\tx = 1\n")
-        self.assertTrue(any(d.code == "AEDX0002" for d in caught.exception.diagnostics))
+        self.assertTrue(any(d.code == "RHOX0002" for d in caught.exception.diagnostics))
 
     def test_non_ascii_is_rejected(self):
         with self.assertRaises(ParseFailure) as caught:
             tokenize("module M:\n    x = 3.3V \u00b1 5%\n")
-        self.assertTrue(any(d.code == "AEDX0001" for d in caught.exception.diagnostics))
+        self.assertTrue(any(d.code == "RHOX0001" for d in caught.exception.diagnostics))
 
     def test_blank_and_comment_lines_carry_no_layout(self):
         kinds = [t.kind for t in tokenize("module M:\n    a\n\n# note\n    b\n")]
@@ -167,7 +167,7 @@ class Layout(unittest.TestCase):
         with self.assertRaises(ParseFailure) as caught:
             tokenize("a = f(1\nb = 2\nc = 3\nd = 4\n")
         diagnostic = next(
-            d for d in caught.exception.diagnostics if d.code == "AEDX0007"
+            d for d in caught.exception.diagnostics if d.code == "RHOX0007"
         )
         self.assertEqual(diagnostic.span.line, 1)
 
@@ -392,7 +392,7 @@ class Inference(unittest.TestCase):
 
     def test_unknown_definition_is_an_error_not_an_empty_component(self):
         with self.assertRaises(library.LibraryError):
-            library.lookup("aed.lib.passive.Resistorr")
+            library.lookup("rhoform.lib.passive.Resistorr")
 
     def test_constraint_inference_does_not_invent_constraints(self):
         """The bug this rule was rewritten for.
@@ -551,12 +551,12 @@ class StarlarkRestrictions(unittest.TestCase):
         builder and its handles.
         """
         failure = self._reject("leak = '{0.__class__}'.format(1)\n")
-        self.assertTrue(any(d.code == "AEDS0309" for d in failure.diagnostics))
+        self.assertTrue(any(d.code == "RHOS0309" for d in failure.diagnostics))
 
     def test_an_ordinary_method_call_is_a_diagnostic_not_a_crash(self):
         """It used to raise a bare TypeError out of parse().
 
-        eval/aed_eval/protocol.py calls the gate with no handler around it, so
+        eval/rhoform_eval/protocol.py calls the gate with no handler around it, so
         that exception did not become a scored failure — it aborted the whole
         AC5 run and discarded every trial in it.
         """
@@ -572,7 +572,7 @@ class StarlarkRestrictions(unittest.TestCase):
     def test_a_huge_range_is_rejected(self):
         """The step budget counts node visits; 14 of them allocated 1.25 GB."""
         failure = self._reject("big = range(5000000)\n")
-        self.assertTrue(any(d.code == "AEDS0321" for d in failure.diagnostics))
+        self.assertTrue(any(d.code == "RHOS0321" for d in failure.diagnostics))
 
     def test_a_huge_string_is_rejected(self):
         self._reject("s = 'x' * 99999999\n")
@@ -597,7 +597,7 @@ class StarlarkRestrictions(unittest.TestCase):
                 "DESIGN = design(M)\n"
             )
         self.assertTrue(
-            any(d.code in ("AEDS0320", "AEDS0105") for d in caught.exception.diagnostics),
+            any(d.code in ("RHOS0320", "RHOS0105") for d in caught.exception.diagnostics),
             [d.code for d in caught.exception.diagnostics],
         )
 
@@ -607,7 +607,7 @@ class StarlarkRestrictions(unittest.TestCase):
                 "def nope(f):\n    return f\n\n@nope\ndef M(m):\n"
                 "    m.port('p', 'passive')\n\nDESIGN = design(M)\n"
             )
-        self.assertTrue(any(d.code == "AEDS0106" for d in caught.exception.diagnostics))
+        self.assertTrue(any(d.code == "RHOS0106" for d in caught.exception.diagnostics))
 
     def test_default_arguments_are_rejected(self):
         with self.assertRaises(ParseFailure):
@@ -636,7 +636,7 @@ class StarlarkRestrictions(unittest.TestCase):
             "    for i in range(4):\n"
             "        if i % 2 == 0:\n"
             "            r = m.part('r' + str(i // 2 + 1), "
-            "'aed.lib.passive.Resistor', resistance='1kohm')\n"
+            "'rhoform.lib.passive.Resistor', resistance='1kohm')\n"
             "            r.pins(('a', 'passive'), ('b', 'passive'))\n"
             "            r.part(package='0402', resistance='1kohm')\n"
             "    m.net('N', 'r1.a', 'r2.a')\n"
@@ -651,7 +651,7 @@ class StarlarkRestrictions(unittest.TestCase):
             "def M(m):\n"
             "    m.port('p', 'passive')\n"
             "    for name in ['r1', 'r2']:\n"
-            "        r = m.part(name, 'aed.lib.passive.Resistor', resistance='1kohm')\n"
+            "        r = m.part(name, 'rhoform.lib.passive.Resistor', resistance='1kohm')\n"
             "        r.pins(('a', 'passive'), ('b', 'passive'))\n"
             "        r.part(package='0402', resistance='1kohm')\n"
             "    m.net('N', 'r1.a', 'r2.a')\n"
@@ -721,9 +721,9 @@ class ReservedWords(unittest.TestCase):
 
     SOURCES = {
         "candidate_a": '#pragma rhoform-syntax 0.1\n\nmodule M:\n'
-        "    signal = new aed.lib.passive.Resistor\n",
+        "    signal = new rhoform.lib.passive.Resistor\n",
         "candidate_b": '#pragma rhoform-syntax 0.1\n\nmodule M:\n'
-        "    net = new aed.lib.passive.Resistor(resistance = 1kohm)\n",
+        "    net = new rhoform.lib.passive.Resistor(resistance = 1kohm)\n",
     }
 
     def test_reserved_word_as_an_instance_name_is_named_as_such(self):
@@ -846,7 +846,7 @@ class CoverageProbe(unittest.TestCase):
         # An L9 flag that CONTRADICTS the library: a test point kept in the BOM.
         self.assertEqual(instances["tp1"].hardware_kind, "test_point")
         self.assertFalse(instances["tp1"].exclude_from_bom)
-        self.assertTrue(library.lookup("aed.lib.mech.TestPoint").exclude_from_bom)
+        self.assertTrue(library.lookup("rhoform.lib.mech.TestPoint").exclude_from_bom)
 
         # A single-endpoint net — L9b, and unspellable in all three arms until
         # this probe existed.
@@ -932,7 +932,7 @@ class NamespaceRules(unittest.TestCase):
             '#pragma rhoform-syntax 0.1\n\n'
             "module Leg:\n"
             "    port vin power_in\n"
-            "    r = new aed.lib.passive.Resistor\n"
+            "    r = new rhoform.lib.passive.Resistor\n"
             "    r.resistance = 1kohm\n"
             "    r.part = abstract\n"
             "    r.part.resistance = 1kohm\n"
@@ -1042,7 +1042,7 @@ class Columnar(unittest.TestCase):
         source = (
             '#pragma rhoform-syntax 0.1\n\n'
             "module M:\n"
-            "    table aed.lib.passive.Resistor part abstract (resistance):\n"
+            "    table rhoform.lib.passive.Resistor part abstract (resistance):\n"
             "        r1  1kohm\n"
             "        r2  1kohm\n"
             "    net N:\n"
@@ -1060,7 +1060,7 @@ class Columnar(unittest.TestCase):
         source = (
             '#pragma rhoform-syntax 0.1\n\n'
             "module M:\n"
-            "    table aed.lib.passive.Resistor part abstract (resistance):\n"
+            "    table rhoform.lib.passive.Resistor part abstract (resistance):\n"
             "        r1  1kohm\n"
             "        r2  1kohm  2kohm\n"
             "        r3  1kohm\n"

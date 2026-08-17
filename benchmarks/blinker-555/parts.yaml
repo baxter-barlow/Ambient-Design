@@ -1,5 +1,5 @@
-# AED benchmark (a): 9V 555 LED blinker - bill of materials
-# MPNs are illustrative, not resolver output; the AED part resolver
+# Rhoform benchmark (a): 9V 555 LED blinker - bill of materials
+# MPNs are illustrative, not resolver output; the Rhoform part resolver
 # re-resolves against the datasheet DB. Verification status (2026-08-15):
 # CT (B32529C0105J000), RA (MFR-25FBF52-100K), and RB (MFR-25FTE52-680K)
 # were verified against current Digi-Key/TME/TDK listings during the fix

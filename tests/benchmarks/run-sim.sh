@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Runs every benchmark deck (benchmarks/*/netlist.cir) through ngspice in
-# batch mode and enforces the AED dynamic-check contract:
+# batch mode and enforces the Rhoform dynamic-check contract:
 #   - the installed ngspice major version matches toolchain/versions.yaml;
 #   - each deck declares at least one .meas assertion (a benchmark that
 #     measures nothing cannot gate anything);

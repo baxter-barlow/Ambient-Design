@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate AED JSON Schemas and their examples.
+"""Validate Rhoform JSON Schemas and their examples.
 
 Contract, applied independently to every root declared in SCHEMA_ROOTS:
   - every <root>/**/*.schema.json (outside <root>/examples/) must parse as

@@ -123,9 +123,17 @@ def self_test() -> int:
     committed = json.loads(text)["header"]["design_hash"]
     checks.append(("the committed example verifies", genuine == committed))
 
-    mutated = text.replace("aed.lib.", "rhoform.lib.", 1)
+    # A stand-in for the edit a rename performs. Deliberately NOT spelled as
+    # one of the project's own names: the AED -> Rhoform rename rewrote this
+    # line into `replace("rhoform.lib.", "rhoform.lib.")`, a no-op, which
+    # would have left the check asserting that an unchanged document hashes
+    # differently from itself. The gate caught its own tooling, which is the
+    # argument for having it.
+    mutated = text.replace("rhoform.lib.", "elsewhere.lib.", 1)
+    if mutated == text:
+        raise AssertionError("the self-test mutation no longer changes anything")
     checks.append(
-        ("a renamed definition moves the hash", design_hash_of(mutated) != genuine)
+        ("a changed definition moves the hash", design_hash_of(mutated) != genuine)
     )
 
     # And the blanking rule itself: two documents differing ONLY in the

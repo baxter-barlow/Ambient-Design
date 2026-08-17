@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO_ROOT / "eval"))
 
 
 def _harness():
-    from aed_eval.gates import CallableGate, CompositeGate, Diagnostic, GateResult
+    from rhoform_eval.gates import CallableGate, CompositeGate, Diagnostic, GateResult
 
     return CallableGate, CompositeGate, Diagnostic, GateResult
 
@@ -153,7 +153,7 @@ def trial_config(design_id: str, arm: Arm, variant: str = "inferred"):
     at the strict reading and stated in the record; AMB-119 is open on which
     reading AC5 actually means.
     """
-    from aed_eval.protocol import TrialConfig
+    from rhoform_eval.protocol import TrialConfig
 
     return TrialConfig(
         benchmark_id=f"{design_id}:{arm.key}:{variant}",

@@ -1,6 +1,6 @@
-# AED Netlist IR v0
+# Rhoform Netlist IR v0
 
-The IR is the single, versioned JSON artifact between the AED language and **all** backends
+The IR is the single, versioned JSON artifact between the Rhoform language and **all** backends
 (requirement I4). The compiler elaborates DSL source into one `*.ir.json` document plus one
 `*.sourcemap.json` sidecar; every downstream tool reads those two files and nothing else.
 
@@ -26,8 +26,8 @@ Files here:
 - Schema files are immutable per version: `netlist-ir.schema.json` here *is* version 0. A bump
   adds a new schema file; old ones are never edited in place.
 - **No external stability promise in v1.0 (P7).** The IR is inspectable — plain JSON, every field
-  described in-schema — but it is an *internal* contract between AED's own language front end and
-  AED's own backends. Third-party tools that parse it do so at their own risk until a future
+  described in-schema — but it is an *internal* contract between Rhoform's own language front end and
+  Rhoform's own backends. Third-party tools that parse it do so at their own risk until a future
   release explicitly declares a stable IR. Do not build migration tooling, compatibility shims,
   or deprecation windows for v0; refusal-on-mismatch is the whole policy.
 - `header.language_version` records the DSL definition the source was compiled under; it versions
@@ -63,7 +63,7 @@ identity → declaration span + instantiation trace, innermost first. Because el
 one source line into many instances, replicated entities share a declaration span but carry
 distinct traces.
 
-**Diagnostic-anchor rule:** every diagnostic emitted by any AED tool — static checks, ngspice
+**Diagnostic-anchor rule:** every diagnostic emitted by any Rhoform tool — static checks, ngspice
 `.meas` assertion failures, KiCad export divergence — references an IR identity (path or net
 name), never a raw file position. Renderers resolve identity → spans through the map. That keeps
 diagnostics stable under source reformatting and gives every failure both a definition site and
@@ -166,9 +166,9 @@ the pair binding is real and recheckable:
 
 ```sh
 python3 -c 'import hashlib,re;q=chr(34);t=open("examples/blinker.ir.json").read();b=re.sub("("+q+"design_hash"+q+": )"+q+"[^"+q+"]*"+q,lambda m:m.group(1)+q+q,t,count=1);print("sha256:"+hashlib.sha256(b.encode()).hexdigest())'
-# -> sha256:8c500aaf8dc8a24ebdef92c23f775936f5d4d3685a064f88ff9a727e0a589eb4
+# -> sha256:107d254be3844d52eb1425193d1af86fd597b461e754b59cf9ae77528043a345
 ```
 
 `source_hash`, the source-map file digests, and all byte/line offsets remain shape-valid
-placeholders: no `.aed` source files exist yet, so there is nothing to hash or index. The compiler
+placeholders: no `.rhoform` source files exist yet, so there is nothing to hash or index. The compiler
 is what will make those honest.

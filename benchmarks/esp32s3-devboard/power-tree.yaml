@@ -1,4 +1,4 @@
-# AED benchmark (c) — D2-style power tree. Hand-computed T10 current budget;
+# Rhoform benchmark (c) — D2-style power tree. Hand-computed T10 current budget;
 # this file is also the future load-equivalent-stub input (each load below
 # becomes a per-mode current sink; digital ICs are NOT otherwise simulated).
 # Module currents: ESP32-S3-WROOM-1 & WROOM-1U Datasheet v1.8, Tables 6-2,

@@ -16,8 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aed_eval import stats  # noqa: E402
-from aed_eval.gates import (  # noqa: E402
+from rhoform_eval import stats  # noqa: E402
+from rhoform_eval.gates import (  # noqa: E402
     CallableGate,
     CommandGate,
     CompositeGate,
@@ -25,7 +25,7 @@ from aed_eval.gates import (  # noqa: E402
     GateResult,
     ReplayGate,
 )
-from aed_eval.models import (  # noqa: E402
+from rhoform_eval.models import (  # noqa: E402
     HarnessIntegrityError,
     ModelResponse,
     ReplayClient,
@@ -35,7 +35,7 @@ from aed_eval.models import (  # noqa: E402
     Usage,
     request_digest,
 )
-from aed_eval.protocol import (  # noqa: E402
+from rhoform_eval.protocol import (  # noqa: E402
     TrialConfig,
     build_repair_message,
     extract_source,
@@ -44,8 +44,8 @@ from aed_eval.protocol import (  # noqa: E402
     run_arm,
     run_trial,
 )
-from aed_eval.results import build_run_record  # noqa: E402
-from aed_eval.tokenizer import (  # noqa: E402
+from rhoform_eval.results import build_run_record  # noqa: E402
+from rhoform_eval.tokenizer import (  # noqa: E402
     PinnedTokenizerError,
     StubTokenizer,
     a4_context_budget,
@@ -180,7 +180,7 @@ class TestInputValidation(unittest.TestCase):
     def test_flip_verdict_rejects_more_discordant_pairs_than_trials(self):
         with self.assertRaises(ValueError):
             stats.flip_verdict(
-                5, 10, 5, 10, discordant_aed_only=8, discordant_baseline_only=7
+                5, 10, 5, 10, discordant_rhoform_only=8, discordant_baseline_only=7
             )
 
     def test_wilson_rejects_out_of_range_successes(self):
@@ -214,7 +214,7 @@ class TestInputValidation(unittest.TestCase):
 class TestSourceExtraction(unittest.TestCase):
     def test_takes_the_last_fenced_block(self):
         """Models quote the broken snippet before giving the fix."""
-        text = "The error was here:\n```aed\nBROKEN\n```\nCorrected:\n```aed\nFIXED\n```"
+        text = "The error was here:\n```rhoform\nBROKEN\n```\nCorrected:\n```rhoform\nFIXED\n```"
         self.assertEqual(extract_source(text), "FIXED")
 
     def test_no_fence_is_a_failure_not_a_fallback(self):
@@ -229,11 +229,11 @@ class TestRepairMessage(unittest.TestCase):
         gate = GateResult(
             passed=False,
             diagnostics=[
-                Diagnostic("AED0201", "bad arg", {"line": 3, "column": 22}, {"severity": "error"})
+                Diagnostic("RHO0201", "bad arg", {"line": 3, "column": 22}, {"severity": "error"})
             ],
         )
         msg = build_repair_message(gate)
-        self.assertIn("AED0201", msg)
+        self.assertIn("RHO0201", msg)
         self.assertIn("line 3", msg)
 
     def test_params_render_deterministically(self):
@@ -366,7 +366,7 @@ class TestBrokenInstrumentPropagates(unittest.TestCase):
 class TestTruncatedEmission(unittest.TestCase):
     def test_unterminated_fence_is_detected(self):
         """A truncated reply usually still quotes the broken snippet."""
-        text = "The bug was:\n```aed\nBROKEN\n```\nFixed:\n```aed\nGOOD but cut off"
+        text = "The bug was:\n```rhoform\nBROKEN\n```\nFixed:\n```rhoform\nGOOD but cut off"
         self.assertTrue(unterminated_fence(text))
         # extract_source itself does NOT judge truncation: it would have
         # discarded legitimate designs containing a fence marker.
@@ -384,7 +384,7 @@ class TestTruncatedEmission(unittest.TestCase):
         class Truncated:
             def complete(self, system, messages):
                 return ModelResponse(
-                    text="Here is the file I am fixing:\n```aed\nBROKEN\n```\nNow the corrected",
+                    text="Here is the file I am fixing:\n```rhoform\nBROKEN\n```\nNow the corrected",
                     usage=Usage(100, 50),
                     stop_reason="max_tokens",
                     model="scripted",
@@ -413,7 +413,7 @@ class TestTruncationDoesNotEatGoodEmissions(unittest.TestCase):
         class Weird:
             def complete(self, system, messages):
                 return ModelResponse(
-                    text="```aed\nmodule M:\n    note = \"```\"\n```",
+                    text="```rhoform\nmodule M:\n    note = \"```\"\n```",
                     usage=Usage(10, 10),
                     stop_reason="end_turn",
                     model="scripted",
@@ -430,7 +430,7 @@ class TestTruncationDoesNotEatGoodEmissions(unittest.TestCase):
         class NoStop:
             def complete(self, system, messages):
                 return ModelResponse(
-                    text="Fixing:\n```aed\nBROKEN\n```\nNow:\n```aed\ncut off",
+                    text="Fixing:\n```rhoform\nBROKEN\n```\nNow:\n```rhoform\ncut off",
                     usage=Usage(10, 10), stop_reason=None, model="scripted",
                 )
 
@@ -446,7 +446,7 @@ class TestTruncationDoesNotEatGoodEmissions(unittest.TestCase):
 
         class Truncated:
             def complete(self, system, messages):
-                return ModelResponse(text="```aed\nX\n```", usage=Usage(10, 10),
+                return ModelResponse(text="```rhoform\nX\n```", usage=Usage(10, 10),
                                      stop_reason="max_tokens", model="s")
 
             def identity(self):
@@ -461,7 +461,7 @@ class TestPairedPowerMatchesPairedTest(unittest.TestCase):
     def test_paired_verdict_does_not_borrow_unpaired_power(self):
         """Certifying a McNemar result with Fisher's power is incoherent."""
         paired = stats.flip_verdict(
-            6, 20, 12, 20, discordant_aed_only=2, discordant_baseline_only=8,
+            6, 20, 12, 20, discordant_rhoform_only=2, discordant_baseline_only=8,
             minimum_effect_of_interest=(0.6, 0.9),
         )
         unpaired = stats.flip_verdict(6, 20, 12, 20, minimum_effect_of_interest=(0.6, 0.9))

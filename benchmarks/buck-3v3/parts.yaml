@@ -1,4 +1,4 @@
-# AED benchmark b: 3.3V/2A synchronous buck -- power stage + control BOM
+# Rhoform benchmark b: 3.3V/2A synchronous buck -- power stage + control BOM
 # MPNs are examples establishing that the design is buildable with real,
 # in-production parts at the stated margins; the benchmark itself is
 # exercised through the behavioral deck (netlist.cir).

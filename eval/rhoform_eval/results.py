@@ -126,11 +126,11 @@ def build_run_record(
                 a_only, b_only = pair_discordance(arm, base)
                 paired = (a_only, b_only)
             record["flip_criterion"] = stats.flip_verdict(
-                aed_successes=arm["successes"],
-                aed_trials=arm["trial_count"],
+                rhoform_successes=arm["successes"],
+                rhoform_trials=arm["trial_count"],
                 baseline_successes=base["successes"],
                 baseline_trials=base["trial_count"],
-                discordant_aed_only=paired[0],
+                discordant_rhoform_only=paired[0],
                 discordant_baseline_only=paired[1],
                 alpha=alpha,
                 minimum_effect_of_interest=minimum_effect_of_interest,

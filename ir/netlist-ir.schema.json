@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ambient.science/aed/schemas/netlist-ir/0.schema.json",
-  "title": "AED Netlist IR v0",
-  "description": "Versioned JSON intermediate representation of a fully elaborated AED design. This is the single artifact consumed by ALL backends (KiCad export, SPICE emission, rendering, BOM, diagnostics). It is inspectable and versioned, but carries NO external stability promise in v1.0 (requirement P7): only AED's own toolchain may depend on its shape. The document is a canonical serialization: object keys in the fixed order given by this schema, arrays sorted as described on each field, UTF-8, no wall-clock timestamps or host-specific data anywhere (determinism contract). Extension points are restricted to properties matching ^x_ where explicitly allowed.",
+  "$id": "https://ambient.science/rhoform/schemas/netlist-ir/0.schema.json",
+  "title": "Rhoform Netlist IR v0",
+  "description": "Versioned JSON intermediate representation of a fully elaborated Rhoform design. This is the single artifact consumed by ALL backends (KiCad export, SPICE emission, rendering, BOM, diagnostics). It is inspectable and versioned, but carries NO external stability promise in v1.0 (requirement P7): only Rhoform's own toolchain may depend on its shape. The document is a canonical serialization: object keys in the fixed order given by this schema, arrays sorted as described on each field, UTF-8, no wall-clock timestamps or host-specific data anywhere (determinism contract). Extension points are restricted to properties matching ^x_ where explicitly allowed.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {
@@ -54,7 +54,7 @@
         "language_version": {
           "type": "string",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$",
-          "description": "Semantic version of the AED DSL language definition that the source was compiled under."
+          "description": "Semantic version of the Rhoform DSL language definition that the source was compiled under."
         },
         "design_name": {
           "type": "string",
@@ -81,7 +81,7 @@
             "name": {
               "type": "string",
               "minLength": 1,
-              "description": "Compiler/elaborator executable name, e.g. \"aedc\"."
+              "description": "Compiler/elaborator executable name, e.g. \"rhoformc\"."
             },
             "version": {
               "type": "string",
@@ -93,7 +93,7 @@
         "canonical_form": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the canonical-serialization profile used to write and hash this document, e.g. \"aed-canonical-json/1\" (key order per schema, sorted arrays, LF line endings, UTF-8, no insignificant whitespace variance)."
+          "description": "Identifier of the canonical-serialization profile used to write and hash this document, e.g. \"rhoform-canonical-json/1\" (key order per schema, sorted arrays, LF line endings, UTF-8, no insignificant whitespace variance)."
         }
       }
     },
@@ -278,7 +278,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
-          "description": "Fully qualified name of the DSL module/component definition this instance elaborates, e.g. \"aed.lib.passive.Resistor\"."
+          "description": "Fully qualified name of the DSL module/component definition this instance elaborates, e.g. \"rhoform.lib.passive.Resistor\"."
         },
         "parameters": {
           "type": "object",

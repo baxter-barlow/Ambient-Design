@@ -2,7 +2,7 @@
 
 AC5a states the bar as: a pinned frontier model, given ONLY the <=12K-token
 A4 context, produces design (a) passing compile/type-check/export "within
-<=3 repair iterations (1 iteration = one write + one `aed check`) and <=150K
+<=3 repair iterations (1 iteration = one write + one `rhoform check`) and <=150K
 tokens, in >=7/10 independent trials".
 
 A SPEC AMBIGUITY THIS MODULE MAKES EXPLICIT RATHER THAN GUESSES AT.
@@ -91,7 +91,7 @@ class TrialConfig:
     max_iterations: int = 3
     iteration_semantics: str = "total_write_check_cycles"
     token_budget: int = 150_000
-    source_filename: str = "design.aed"
+    source_filename: str = "design.rhoform"
 
     def __post_init__(self):
         if self.iteration_semantics not in ITERATION_SEMANTICS:

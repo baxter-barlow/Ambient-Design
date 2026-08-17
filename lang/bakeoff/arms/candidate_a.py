@@ -1,6 +1,6 @@
 """Candidate A — `statement`: one fact per statement, atopile-faithful.
 
-    r_a = new aed.lib.passive.Resistor
+    r_a = new rhoform.lib.passive.Resistor
     r_a.resistance = 100kohm +/- 1%
     r_a.part.package = "axial_0207"
     signal VCC
@@ -54,7 +54,7 @@ from .shared import (
 
 KEY = "candidate_a"
 TITLE = "A - statement"
-CODE_PREFIX = "AEDA"
+CODE_PREFIX = "RHOA"
 FLAGS = ("dnp", "exclude_from_bom", "board_only")
 # The L9 flags T9-3 infers. `dnp` is NOT one of them: it is never inferred
 # from the library, so writing it must not count as "the source stated its
@@ -527,7 +527,7 @@ def language_card() -> str:
 
 
 _LANGUAGE_CARD = '''\
-# AED candidate A - language card
+# Rhoform candidate A - language card
 
 Declarative electronics design. One fact per statement. ASCII only.
 Blocks are opened by `:` and delimited by 4-space indentation.
@@ -545,7 +545,7 @@ interface port that the enclosing design connects to.
 
 ## Instances
 
-    r_a = new aed.lib.passive.Resistor
+    r_a = new rhoform.lib.passive.Resistor
     r_a.resistance = 100kohm +/- 1%
     r_a.part.package = "axial_0207"
 
@@ -612,7 +612,7 @@ None of these may be used as an instance, net or module name.
 
 ## Tables
 
-    table aed.lib.passive.Capacitor part abstract (capacitance, part.package):
+    table rhoform.lib.passive.Capacitor part abstract (capacitance, part.package):
         c12  100nF +/- 10%  "0402"
         c13  100nF +/- 10%  "0402"
         c14  100nF +/- 10%  "0402"

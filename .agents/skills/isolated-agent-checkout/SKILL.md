@@ -1,6 +1,6 @@
 ---
 name: isolated-agent-checkout
-description: Prepare and audit a private Git clone, branch, caches, build outputs, databases, and ports for one AED agent. Use before concurrent implementation, risky verification, integration rehearsal, or review whenever another agent may be active or a shared checkout could cause filesystem or Git collisions.
+description: Prepare and audit a private Git clone, branch, caches, build outputs, databases, and ports for one Rhoform agent. Use before concurrent implementation, risky verification, integration rehearsal, or review whenever another agent may be active or a shared checkout could cause filesystem or Git collisions.
 ---
 
 # Isolated Agent Checkout
@@ -37,7 +37,7 @@ Give the agent private values for every writable runtime surface:
 
 - dependency environment and package cache;
 - compiler/build/test output;
-- generated AED/KiCad/SPICE artifacts;
+- generated Rhoform/KiCad/SPICE artifacts;
 - temporary directory and test fixtures;
 - database or state files;
 - service ports and sockets;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ambient.science/aed/schemas/eval-run-result/0.schema.json",
-  "title": "AED evaluation run record v0",
+  "$id": "https://ambient.science/rhoform/schemas/eval-run-result/0.schema.json",
+  "title": "Rhoform evaluation run record v0",
   "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence \u2014 which matters because the repository ships exactly such a fixture for offline testing.",
   "type": "object",
   "additionalProperties": true,
@@ -342,7 +342,7 @@
           "exclusiveMinimum": 0,
           "maximum": 1
         },
-        "aed_rate": {
+        "rhoform_rate": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
@@ -364,7 +364,7 @@
             "minimum": 0,
             "maximum": 1
           },
-          "description": "The (aed_rate, baseline_rate) difference declared worth detecting, chosen BEFORE the run. Choosing it afterwards is choosing the standard that gives the answer you already saw."
+          "description": "The (rhoform_rate, baseline_rate) difference declared worth detecting, chosen BEFORE the run. Choosing it afterwards is choosing the standard that gives the answer you already saw."
         },
         "power_against_declared_effect": {
           "type": [

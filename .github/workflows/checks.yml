@@ -1,6 +1,6 @@
 name: Checks
 
-# Repository gates for AED. Every job is a thin wrapper over a versioned
+# Repository gates for Rhoform. Every job is a thin wrapper over a versioned
 # script under tests/ so CI and local `make` runs execute identical logic.
 # All pins (actions, containers, packages) are recorded with rationale in
 # toolchain/versions.yaml; keep the two files in sync in the same change.
@@ -145,13 +145,13 @@ jobs:
         # by a dependency resolution problem.
         run: python3 -m unittest discover -s eval/tests -t eval
       - name: Verify statistics against closed-form values
-        run: cd eval && python3 -m aed_eval selftest
+        run: cd eval && python3 -m rhoform_eval selftest
       - name: Replay the recorded transcript end to end
         # Exercises the whole protocol offline with no API key and no spend.
         # The transcript carries per-turn request digests, so a change to
         # the prompt or the protocol fails here instead of silently
         # producing results for a run that never happened.
-        run: cd eval && python3 -m aed_eval replay --transcript fixtures/demo-replay.json --allow-stub
+        run: cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
 
   benchmarks-sim:
     name: Benchmark simulation

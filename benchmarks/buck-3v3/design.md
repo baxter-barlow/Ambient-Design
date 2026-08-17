@@ -1,4 +1,4 @@
-# AED benchmark b: 3.3 V / 2 A synchronous buck reference design
+# Rhoform benchmark b: 3.3 V / 2 A synchronous buck reference design
 
 Requirements: AC1b, AC3. Every dynamic assertion runs green on stock ngspice
 with an original behavioral switching model, rung 0, total runtime well under

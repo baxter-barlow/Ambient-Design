@@ -5,7 +5,7 @@ The transcript is NOT hand-written. A hand-written one would drift from the
 protocol the moment either changed, and the request digests it carries would
 be fiction. This drives the real protocol with a scripted model, captures
 what the protocol actually asked for, and writes that out — so the recording
-is correct by construction and `aed_eval replay` reproduces it exactly.
+is correct by construction and `rhoform_eval replay` reproduces it exactly.
 
 The scenario is synthetic but shaped like a real bake-off arm: two arms over
 a shared seed set, a mix of first-shot passes and repair-loop recoveries, one
@@ -22,9 +22,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from aed_eval.gates import Diagnostic, GateResult  # noqa: E402
-from aed_eval.models import ModelResponse, Usage, request_digest  # noqa: E402
-from aed_eval.protocol import TrialConfig, run_trial  # noqa: E402
+from rhoform_eval.gates import Diagnostic, GateResult  # noqa: E402
+from rhoform_eval.models import ModelResponse, Usage, request_digest  # noqa: E402
+from rhoform_eval.protocol import TrialConfig, run_trial  # noqa: E402
 
 SEEDS = list(range(1, 11))
 
@@ -55,13 +55,13 @@ BAD_SOURCE = """module Blinker:
 
 FAIL_DIAGS = [
     Diagnostic(
-        code="AED0201",
+        code="RHO0201",
         message="positional argument to component constructor; parameters are named",
         span={"line": 3, "column": 22},
         params={"severity": "error", "parameter": "resistance"},
     ),
     Diagnostic(
-        code="AED0410",
+        code="RHO0410",
         message="assertion uses '==' on a dimensioned quantity; use a tolerance interval",
         span={"line": 4, "column": 5},
         params={"severity": "error", "suggested": "within ... to ..."},
@@ -80,14 +80,14 @@ def scripted_arm(pass_seeds, first_shot_seeds, no_fence_seeds):
             steps.append(("Here is the design, described in prose only.", None))
         if seed in pass_seeds:
             if seed in first_shot_seeds and seed not in no_fence_seeds:
-                steps.append((f"```aed\n{GOOD_SOURCE}```", True))
+                steps.append((f"```rhoform\n{GOOD_SOURCE}```", True))
             else:
-                steps.append((f"```aed\n{BAD_SOURCE}```", False))
-                steps.append((f"```aed\n{GOOD_SOURCE}```", True))
+                steps.append((f"```rhoform\n{BAD_SOURCE}```", False))
+                steps.append((f"```rhoform\n{GOOD_SOURCE}```", True))
         else:
-            steps.append((f"```aed\n{BAD_SOURCE}```", False))
-            steps.append((f"```aed\n{BAD_SOURCE}```", False))
-            steps.append((f"```aed\n{BAD_SOURCE}```", False))
+            steps.append((f"```rhoform\n{BAD_SOURCE}```", False))
+            steps.append((f"```rhoform\n{BAD_SOURCE}```", False))
+            steps.append((f"```rhoform\n{BAD_SOURCE}```", False))
         return steps
 
     return {seed: script_for(seed) for seed in SEEDS}

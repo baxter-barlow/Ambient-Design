@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lint AED part-data (D3) records for invariants JSON Schema cannot express.
+"""Lint Rhoform part-data (D3) records for invariants JSON Schema cannot express.
 
 The schema in part-data.schema.json checks SHAPE. A meaningful part record
 also has to be internally consistent, and several of those consistency

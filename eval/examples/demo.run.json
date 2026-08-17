@@ -98,8 +98,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -133,8 +133,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -168,8 +168,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -203,8 +203,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -248,7 +248,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -261,7 +261,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -283,8 +283,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -308,8 +308,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -335,7 +335,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -348,7 +348,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -370,8 +370,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -395,8 +395,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -422,7 +422,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -435,7 +435,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -457,8 +457,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -482,8 +482,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -509,7 +509,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -522,7 +522,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -544,8 +544,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -569,8 +569,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -596,7 +596,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -609,7 +609,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -631,8 +631,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -648,7 +648,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -661,7 +661,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -683,8 +683,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -700,7 +700,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -713,7 +713,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -735,8 +735,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -762,7 +762,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -775,7 +775,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -797,8 +797,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -814,7 +814,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -827,7 +827,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -849,8 +849,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -866,7 +866,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -879,7 +879,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -901,8 +901,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -984,8 +984,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1019,8 +1019,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1046,7 +1046,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1059,7 +1059,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1081,8 +1081,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1106,8 +1106,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1133,7 +1133,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1146,7 +1146,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1168,8 +1168,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1193,8 +1193,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1220,7 +1220,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1233,7 +1233,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1255,8 +1255,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1280,8 +1280,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1307,7 +1307,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1320,7 +1320,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1342,8 +1342,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1367,8 +1367,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 222,
-                "text_sha256": "sha256:9f7176462ccc9c16c5f4d23478aa93fcee066cb63c7160b25fafbf6b26b3639a",
+                "text_chars": 226,
+                "text_sha256": "sha256:0ac89dd7341182e25291aa08234fb36c84112f42ac6c9a8b12c84a7883d582d6",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1394,7 +1394,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1407,7 +1407,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1429,8 +1429,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1446,7 +1446,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1459,7 +1459,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1481,8 +1481,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1498,7 +1498,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1511,7 +1511,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1533,8 +1533,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -1560,7 +1560,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1573,7 +1573,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1595,8 +1595,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1612,7 +1612,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1625,7 +1625,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1647,8 +1647,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1664,7 +1664,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1677,7 +1677,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1699,8 +1699,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -1726,7 +1726,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1739,7 +1739,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1761,8 +1761,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1778,7 +1778,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1791,7 +1791,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1813,8 +1813,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1830,7 +1830,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1843,7 +1843,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1865,8 +1865,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -1892,7 +1892,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1905,7 +1905,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1927,8 +1927,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 1800,
                   "output_tokens": 320,
@@ -1944,7 +1944,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1957,7 +1957,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1979,8 +1979,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2200,
                   "output_tokens": 320,
@@ -1996,7 +1996,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -2009,7 +2009,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -2031,8 +2031,8 @@
               "response": {
                 "model": "scripted-demo-model",
                 "stop_reason": "end_turn",
-                "text_chars": 112,
-                "text_sha256": "sha256:1ee6e7021d935c29995c72b793a5ff0d70a41cf2892425bb2ae054ac596346b7",
+                "text_chars": 116,
+                "text_sha256": "sha256:9af3ef59f184073417592560a35bc34f96233a87999f07472f8b667d33abf0db",
                 "usage": {
                   "input_tokens": 2600,
                   "output_tokens": 320,
@@ -2054,7 +2054,6 @@
   "authoritative": false,
   "flip_criterion": {
     "adequate_power_threshold": 0.8,
-    "aed_rate": 0.8,
     "alpha": 0.05,
     "baseline_arm": "starlark_baseline",
     "baseline_rate": 0.6,
@@ -2066,6 +2065,7 @@
     "power_against_declared_effect": null,
     "power_against_observed_effect": 0.001110000311551918,
     "primary_arm": "grammar_a",
+    "rhoform_rate": 0.8,
     "test": "fisher_exact_one_sided",
     "verdict": "inconclusive"
   },
@@ -2095,7 +2095,7 @@
   "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
   "purpose": "harness demonstration and offline regression fixture",
   "record_schema_version": 0,
-  "recorded_at": "2026-08-15T07:18:42Z",
+  "recorded_at": "2026-08-17T01:20:37Z",
   "run_id": "demo-replay-0",
   "tokenizer": {
     "fingerprint": "sha256:d2391615e95588b2b6e5e447c5d2989aad086c77607a453890b4731345fbb48d",

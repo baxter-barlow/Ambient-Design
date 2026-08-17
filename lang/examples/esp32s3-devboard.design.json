@@ -81,7 +81,7 @@
         {
           "name": "c1",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "4.7uF +/- 10%"
@@ -121,7 +121,7 @@
         {
           "name": "c10",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "1uF +/- 10%"
@@ -161,7 +161,7 @@
         {
           "name": "c11",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -201,7 +201,7 @@
         {
           "name": "c12",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -241,7 +241,7 @@
         {
           "name": "c13",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -281,7 +281,7 @@
         {
           "name": "c14",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -321,7 +321,7 @@
         {
           "name": "c15",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -361,7 +361,7 @@
         {
           "name": "c16",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "10uF +/- 10%"
@@ -401,7 +401,7 @@
         {
           "name": "c17",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "10uF +/- 10%"
@@ -441,7 +441,7 @@
         {
           "name": "c18",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "4.7nF +/- 10%"
@@ -481,7 +481,7 @@
         {
           "name": "c19",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "22uF +/- 20%"
@@ -521,7 +521,7 @@
         {
           "name": "c2",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -561,7 +561,7 @@
         {
           "name": "c3",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "4.7uF +/- 10%"
@@ -601,7 +601,7 @@
         {
           "name": "c4",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "22uF +/- 20%"
@@ -641,7 +641,7 @@
         {
           "name": "c5",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -681,7 +681,7 @@
         {
           "name": "c6",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "22uF +/- 20%"
@@ -721,7 +721,7 @@
         {
           "name": "c7",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "10uF +/- 10%"
@@ -761,7 +761,7 @@
         {
           "name": "c8",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "1uF +/- 10%"
@@ -801,7 +801,7 @@
         {
           "name": "c9",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": {
             "capacitance": {
               "q": "100nF +/- 10%"
@@ -841,7 +841,7 @@
         {
           "name": "d1",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.SchottkyDiode",
+          "definition": "rhoform.lib.semiconductor.SchottkyDiode",
           "parameters": {
             "reverse_voltage": {
               "q": "40V"
@@ -875,7 +875,7 @@
         {
           "name": "d2",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.UsbEsdArray",
+          "definition": "rhoform.lib.semiconductor.UsbEsdArray",
           "ports": [
             {
               "name": "dm",
@@ -909,7 +909,7 @@
         {
           "name": "d3",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.TvsDiode",
+          "definition": "rhoform.lib.semiconductor.TvsDiode",
           "parameters": {
             "standoff_voltage": {
               "q": "5V"
@@ -940,7 +940,7 @@
         {
           "name": "d4",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.Led",
+          "definition": "rhoform.lib.semiconductor.Led",
           "parameters": {
             "color": {
               "s": "red"
@@ -974,7 +974,7 @@
         {
           "name": "d5",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.Led",
+          "definition": "rhoform.lib.semiconductor.Led",
           "parameters": {
             "color": {
               "s": "green"
@@ -1008,7 +1008,7 @@
         {
           "name": "f1",
           "kind": "component",
-          "definition": "aed.lib.passive.PtcFuse",
+          "definition": "rhoform.lib.passive.PtcFuse",
           "parameters": {
             "hold_current": {
               "q": "0.75A"
@@ -1042,7 +1042,7 @@
         {
           "name": "fb1",
           "kind": "component",
-          "definition": "aed.lib.passive.FerriteBead",
+          "definition": "rhoform.lib.passive.FerriteBead",
           "parameters": {
             "impedance": {
               "q": "600ohm"
@@ -1073,7 +1073,7 @@
         {
           "name": "h1",
           "kind": "component",
-          "definition": "aed.lib.mech.GroundedMountingHole",
+          "definition": "rhoform.lib.mech.GroundedMountingHole",
           "parameters": {
             "diameter": {
               "q": "3.2mm"
@@ -1091,7 +1091,7 @@
         {
           "name": "h2",
           "kind": "component",
-          "definition": "aed.lib.mech.MountingHole",
+          "definition": "rhoform.lib.mech.MountingHole",
           "parameters": {
             "diameter": {
               "q": "3.2mm"
@@ -1105,7 +1105,7 @@
         {
           "name": "h3",
           "kind": "component",
-          "definition": "aed.lib.mech.MountingHole",
+          "definition": "rhoform.lib.mech.MountingHole",
           "parameters": {
             "diameter": {
               "q": "3.2mm"
@@ -1119,7 +1119,7 @@
         {
           "name": "h4",
           "kind": "component",
-          "definition": "aed.lib.mech.MountingHole",
+          "definition": "rhoform.lib.mech.MountingHole",
           "parameters": {
             "diameter": {
               "q": "3.2mm"
@@ -1133,7 +1133,7 @@
         {
           "name": "j1",
           "kind": "component",
-          "definition": "aed.lib.connector.UsbCReceptacle16",
+          "definition": "rhoform.lib.connector.UsbCReceptacle16",
           "ports": [
             {
               "name": "cc1",
@@ -1179,7 +1179,7 @@
         {
           "name": "j2",
           "kind": "component",
-          "definition": "aed.lib.connector.PinHeader1x20",
+          "definition": "rhoform.lib.connector.PinHeader1x20",
           "ports": [
             {
               "name": "p1",
@@ -1277,7 +1277,7 @@
         {
           "name": "j3",
           "kind": "component",
-          "definition": "aed.lib.connector.PinHeader1x20",
+          "definition": "rhoform.lib.connector.PinHeader1x20",
           "ports": [
             {
               "name": "p1",
@@ -1375,7 +1375,7 @@
         {
           "name": "j4",
           "kind": "component",
-          "definition": "aed.lib.connector.PinHeader1x6",
+          "definition": "rhoform.lib.connector.PinHeader1x6",
           "ports": [
             {
               "name": "p1",
@@ -1418,7 +1418,7 @@
         {
           "name": "j5",
           "kind": "component",
-          "definition": "aed.lib.connector.PinHeader1x2",
+          "definition": "rhoform.lib.connector.PinHeader1x2",
           "ports": [
             {
               "name": "p1",
@@ -1444,7 +1444,7 @@
         {
           "name": "jp1",
           "kind": "component",
-          "definition": "aed.lib.connector.Shunt2",
+          "definition": "rhoform.lib.connector.Shunt2",
           "ports": [
             {
               "name": "a",
@@ -1470,7 +1470,7 @@
         {
           "name": "r1",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "5.1kohm +/- 1%"
@@ -1504,7 +1504,7 @@
         {
           "name": "r10",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%"
@@ -1539,7 +1539,7 @@
         {
           "name": "r11",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "0ohm +/- 5%"
@@ -1573,7 +1573,7 @@
         {
           "name": "r12",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "0ohm +/- 5%"
@@ -1607,7 +1607,7 @@
         {
           "name": "r2",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "5.1kohm +/- 1%"
@@ -1641,7 +1641,7 @@
         {
           "name": "r3",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%"
@@ -1675,7 +1675,7 @@
         {
           "name": "r4",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%"
@@ -1709,7 +1709,7 @@
         {
           "name": "r5",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%"
@@ -1743,7 +1743,7 @@
         {
           "name": "r6",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%"
@@ -1778,7 +1778,7 @@
         {
           "name": "r7",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "1kohm +/- 1%"
@@ -1812,7 +1812,7 @@
         {
           "name": "r8",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "1kohm +/- 1%"
@@ -1846,7 +1846,7 @@
         {
           "name": "r9",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "1Mohm +/- 1%"
@@ -1880,7 +1880,7 @@
         {
           "name": "sw1",
           "kind": "component",
-          "definition": "aed.lib.switch.TactileSwitch",
+          "definition": "rhoform.lib.switch.TactileSwitch",
           "ports": [
             {
               "name": "a",
@@ -1906,7 +1906,7 @@
         {
           "name": "sw2",
           "kind": "component",
-          "definition": "aed.lib.switch.TactileSwitch",
+          "definition": "rhoform.lib.switch.TactileSwitch",
           "ports": [
             {
               "name": "a",
@@ -1932,7 +1932,7 @@
         {
           "name": "tp1",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -1956,7 +1956,7 @@
         {
           "name": "tp2",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -1980,7 +1980,7 @@
         {
           "name": "tp3",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2004,7 +2004,7 @@
         {
           "name": "tp4",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2028,7 +2028,7 @@
         {
           "name": "tp5",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2052,7 +2052,7 @@
         {
           "name": "tp6",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2076,7 +2076,7 @@
         {
           "name": "tp7",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2100,7 +2100,7 @@
         {
           "name": "tp8",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [
             {
               "name": "p",
@@ -2124,7 +2124,7 @@
         {
           "name": "u1",
           "kind": "component",
-          "definition": "aed.lib.module.Esp32S3Wroom1",
+          "definition": "rhoform.lib.module.Esp32S3Wroom1",
           "ports": [
             {
               "name": "en",
@@ -2298,7 +2298,7 @@
         {
           "name": "u2",
           "kind": "component",
-          "definition": "aed.lib.regulator.LinearRegulator",
+          "definition": "rhoform.lib.regulator.LinearRegulator",
           "parameters": {
             "output_voltage": {
               "q": "3.3V"

@@ -18,7 +18,7 @@
         {
           "name": "r2",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": { "resistance": { "q": "220ohm" } },
           "ports": [
             { "name": "a", "role": "passive" },
@@ -43,7 +43,7 @@
         {
           "name": "c1",
           "kind": "component",
-          "definition": "aed.lib.passive.Capacitor",
+          "definition": "rhoform.lib.passive.Capacitor",
           "parameters": { "capacitance": { "q": "4.7uF +/- 0.5uF" } },
           "ports": [
             { "name": "a", "role": "passive" },
@@ -60,7 +60,7 @@
         {
           "name": "d1",
           "kind": "component",
-          "definition": "aed.lib.semiconductor.Led",
+          "definition": "rhoform.lib.semiconductor.Led",
           "parameters": {
             "color": { "s": "amber" },
             "forward_voltage": { "q": "2.0V (1.8V to 2.4V)" }
@@ -77,7 +77,7 @@
         {
           "name": "j1",
           "kind": "component",
-          "definition": "aed.lib.connector.PinHeader1x2",
+          "definition": "rhoform.lib.connector.PinHeader1x2",
           "ports": [
             { "name": "p1", "role": "passive" },
             { "name": "p2", "role": "passive" }
@@ -87,7 +87,7 @@
         {
           "name": "k1",
           "kind": "component",
-          "definition": "aed.lib.switch.TactileSwitch",
+          "definition": "rhoform.lib.switch.TactileSwitch",
           "ports": [
             { "name": "a", "role": "passive" },
             { "name": "b", "role": "passive" }
@@ -104,7 +104,7 @@
         {
           "name": "mh1",
           "kind": "component",
-          "definition": "aed.lib.mech.MountingHole",
+          "definition": "rhoform.lib.mech.MountingHole",
           "ports": [],
           "hardware_kind": "mounting_hole",
           "exclude_from_bom": true,
@@ -113,7 +113,7 @@
         {
           "name": "r1",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": { "resistance": { "q": "1kohm +/- 1%" } },
           "ports": [
             { "name": "a", "role": "passive" },
@@ -127,14 +127,14 @@
         {
           "name": "tp1",
           "kind": "component",
-          "definition": "aed.lib.mech.TestPoint",
+          "definition": "rhoform.lib.mech.TestPoint",
           "ports": [{ "name": "p", "role": "passive" }],
           "hardware_kind": "test_point"
         },
         {
           "name": "u1",
           "kind": "component",
-          "definition": "aed.lib.timer.Ne555",
+          "definition": "rhoform.lib.timer.Ne555",
           "parameters": { "window": { "q": "3.0V to 3.6V" } },
           "ports": [
             { "name": "ctl", "role": "passive", "pin_numbers": ["5"] },

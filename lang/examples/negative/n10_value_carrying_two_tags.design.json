@@ -12,7 +12,7 @@
         {
           "name": "r1",
           "kind": "component",
-          "definition": "aed.lib.passive.Resistor",
+          "definition": "rhoform.lib.passive.Resistor",
           "parameters": {
             "resistance": {
               "q": "10kohm +/- 1%",
