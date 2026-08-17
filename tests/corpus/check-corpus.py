@@ -309,6 +309,25 @@ def self_test():
                 + [dict(entry(99), id="BUG-0009")])))),
     ]
 
+
+    # WIRING. Everything above drives the check function directly; nothing
+    # proved `main()` turns a finding into a non-zero EXIT. Replacing
+    # `if problems:` with `if False:` left this self-test green AND the live
+    # gate green over data with real defects planted in it.
+    import contextlib as _ctx, io as _io
+    _real = check
+    try:
+        globals()["check"] = lambda *_a, **_k: ["planted"]
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted = main([])
+        globals()["check"] = lambda *_a, **_k: []
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _clean = main([])
+    finally:
+        globals()["check"] = _real
+    cases.append(("main() exits non-zero when a problem is found", _planted == 1))
+    cases.append(("main() exits zero when none is", _clean == 0))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1
