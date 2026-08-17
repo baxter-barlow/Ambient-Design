@@ -788,7 +788,16 @@ def main(argv):
             live_jobs += 1
             for step in (job.get("steps") or []):
                 if isinstance(step, dict) and step.get("run"):
-                    workflow_text += "\n" + str(step["run"])
+                    # STRIP COMMENTS. A substring match over the raw run text
+                    # was satisfied by `true  # was: python3 .../gate.py` --
+                    # the command commented out and the gate still passing. I
+                    # found that by attacking my own check an hour after
+                    # writing it; it is the same substring-instead-of-property
+                    # mistake this file has now made three times.
+                    for line in str(step["run"]).splitlines():
+                        stripped = line.split("#", 1)[0].strip()
+                        if stripped:
+                            workflow_text += "\n" + stripped
     for command in REQUIRED_CI_COMMANDS:
         if command not in workflow_text:
             missing_jobs.append(
