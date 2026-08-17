@@ -303,6 +303,15 @@ def lint(doc, label, unchecked=None):
         limits_abs, limits_rec = pin.get("abs_max") or {}, pin.get("recommended") or {}
         for quantity in ("voltage", "current"):
             a, r = limits_abs.get(quantity), limits_rec.get(quantity)
+            if isinstance(r, dict) and not isinstance(a, dict):
+                # A recommended window with NO absolute maximum to contain it.
+                # This was `continue`d silently, so the shipped AP7361C accepted
+                # a recommended current of -1000 A on a 1 A part. Same rule as
+                # the relative-bound case: reported, never skipped.
+                cannot_check("L12", f"pin {pin.get('name')!r}: recommended "
+                                    f"{quantity} has no abs_max {quantity} to be "
+                                    "contained by, so nothing bounds it")
+                continue
             if not (isinstance(a, dict) and isinstance(r, dict)):
                 continue
             # Never compare across units. Millivolts against volts would
@@ -468,6 +477,14 @@ def self_test():
         ("L11", "nested citation into a pin subtree with no target", mutate(lambda d: set_provenance_key(d, "/pins/0/role"))),
         ("L9", "peak below the guaranteed minimum", mutate(lambda d: d["modes"][0]["draw"][0]["current"].update({"peak": 0.5}))),
         ("L12", "recommended voltage above the absolute maximum", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "V", "min": -0.5, "max": 7}}, "recommended": {"voltage": {"unit": "V", "min": 2, "typ": 5, "max": 9}}}))),
+        # BRANCH-level cases. Disabling a whole check ID was caught; deleting an
+        # individual clause inside one was not, for 8 of 10 clauses tried. Each
+        # of these targets a clause that survived deletion.
+        ("L7", "duplicate pin NAMES", mutate(lambda d: d["pins"][1].__setitem__("name", d["pins"][0]["name"]))),
+        ("L12", "containment across different units", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "mV", "min": -500, "max": 7000}}, "recommended": {"voltage": {"unit": "V", "min": 2, "typ": 5, "max": 6}}}))),
+        ("L5", "pin declares a unit while units[] is absent", mutate(lambda d: (d.pop("units"), d.pop("shared_pins", None)))),
+        ("L8", "modes[] out of sort order", mutate(lambda d: d["modes"].insert(0, dict(d["modes"][0], id="zzz_last_by_id")))),
+        ("L8", "sources[] out of sort order", mutate(lambda d: d["sources"].append(dict(d["sources"][0], source_id="aaa-first")))),
         ("L12", "recommended voltage below the absolute minimum", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "V", "min": 0, "max": 7}}, "recommended": {"voltage": {"unit": "V", "min": -3, "max": 5}}}))),
         ("L13", "physical designators out of ascending order", mutate(lambda d: d["pins"][0].__setitem__("numbers", ["9", "3"]))),
     ]
@@ -479,6 +496,31 @@ def self_test():
             print(f"self-test ok:   {check} fires on {description}")
         else:
             print(f"self-test FAIL: {check} did NOT fire on {description}")
+            failures += 1
+
+    # The UNCHECKED channel, which the `cases` loop above cannot see because it
+    # only asks whether a PROBLEM was produced. Its two branches were deletable
+    # with the self-test green — and they are the ones that keep L12's coverage
+    # honest, so losing them silently would restore the exact gap the channel
+    # was added to close.
+    for description, mutation, fragment in (
+        ("a relative abs_max bound",
+         lambda d: d["pins"][5].update({
+             "abs_max": {"voltage": {"unit": "V", "min": -0.5,
+                                     "max": {"reference": "VCC", "offset": 0.3}}},
+             "recommended": {"voltage": {"unit": "V", "min": 2, "typ": 5, "max": 6}}}),
+         "relative bound"),
+        ("a recommended window with no abs_max sibling",
+         lambda d: d["pins"][5].update({
+             "recommended": {"current": {"unit": "A", "min": -1000, "max": 0}}}),
+         "no abs_max"),
+    ):
+        notes = []
+        lint(mutate(mutation), "probe", notes)
+        if any(fragment in note for note in notes):
+            print(f"self-test ok:   L12 reports {description} as unchecked")
+        else:
+            print(f"self-test FAIL: L12 did NOT report {description} as unchecked")
             failures += 1
 
     if failures:
