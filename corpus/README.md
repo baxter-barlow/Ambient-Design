@@ -233,15 +233,15 @@ deterministic rule reading only the frozen inputs can tell it from the corrected
 
 | population | count | share |
 |---|---|---|
-| **in-scope** (static-tier domain, expressible in the v1 DSL) | 22 | 36% |
-| **out-of-scope** | 39 | 64% |
+| **in-scope** (static-tier domain, expressible in the v1 DSL) | 21 | 34% |
+| **out-of-scope** | 40 | 66% |
 | total | 61 | |
 
-AC2 gate: the static tier must catch **20 of 22** in-scope bugs (≥90%).
+AC2 gate: the static tier must catch **19 of 21** in-scope bugs (≥90%).
 
 | in-scope check family | count |
 |---|---|
-| `abs-max-containment` | 4 |
+| `abs-max-containment` | 3 |
 | `current-budget` | 1 |
 | `erc-pin-role` | 12 |
 | `net-topology` | 3 |
@@ -249,12 +249,12 @@ AC2 gate: the static tier must catch **20 of 22** in-scope bugs (≥90%).
 
 | out-of-scope reason | count |
 |---|---|
-| `d3-gap` | 29 |
+| `d3-gap` | 30 |
 | `dynamic-vocabulary` | 5 |
 | `not-expressible` | 2 |
 | `v1-non-goal` | 3 |
 
-**Margin.** 17 of 22 in-scope entries are flagged `at_risk` — verdicts whose catch is conditioned on one of four things: an implementation choice; a **defensible alternative** part-record transcription; an open-map fact; or an attribute the frozen grammar makes optional, which the design under test is therefore not required to declare. The defensibility test is what keeps the second category from covering everything — a dedicated I2C peripheral pin roled `open_drain` has no defensible alternative, while a general-purpose GPIO roled `bidirectional`, an AREF pin roled `passive`, a reserved pin roled `nc` and a record with no transmit mode all do. The fourth category is a grammar fact: `net_decl ::= 'net' FREE_NAME net_attributes? ...` — a design that declares no `voltage_domain` silences every rule that reads one.
+**Margin.** 16 of 21 in-scope entries are flagged `at_risk` — verdicts whose catch is conditioned on one of four things: an implementation choice; a **defensible alternative** part-record transcription; an open-map fact; or an attribute the frozen grammar makes optional, which the design under test is therefore not required to declare. The defensibility test is what keeps the second category from covering everything — a dedicated I2C peripheral pin roled `open_drain` has no defensible alternative, while a general-purpose GPIO roled `bidirectional`, an AREF pin roled `passive`, a reserved pin roled `nc` and a record with no transmit mode all do. The fourth category is a grammar fact: `net_decl ::= 'net' FREE_NAME net_attributes? ...` — a design that declares no `voltage_domain` silences every rule that reads one.
 
 - `BUG-0012` — reads a `voltage_domain` attribute the grammar makes optional, so a design under test that declares none silences the rule
 - `BUG-0018` — the corpus does not record whether these SDA/SCL pins are a dedicated I2C peripheral or general-purpose GPIO; on the GPIO reading `bidirectional` is a defensible transcription and the open-drain rule is silent, exactly as for BUG-0022
@@ -269,44 +269,44 @@ AC2 gate: the static tier must catch **20 of 22** in-scope bugs (≥90%).
 - `BUG-0030` — depends on the exposed pad being transcribed with a supply role AND `package.thermal_pad` being set; either omission silences the rule
 - `BUG-0040` — same optional-attribute dependency as BUG-0012; these two are the whole `voltage-domain-crossing` family
 - `BUG-0042` — in-scope on a generic "power_in pin with no capacitor to ground" rule; AC2 also demands zero spurious errors on the benchmarks, and narrowing the rule for precision loses this
-- `BUG-0054` — the abs-max bound is relative and its qualifying condition lives in `conditions`, an open map this gate now formally declares unreadable
 - `BUG-0055` — the floating-input leg is L9b-only like BUG-0019, but the abs-max leg is independent of it, which makes this the least exposed of the flagged entries
 - `BUG-0056` — same generic decoupling rule as BUG-0042, and lost with it
 - `BUG-0059` — in-scope only if AREF is transcribed with a driving role; recorded `passive`, the contention rule goes silent
 
-17 of 22 verdicts are conditional and only 5 are unconditional, which is fewer than the bar of 20. So **the AC2 outcome is decided by part-record authoring and rule-implementation choices, not by this classification**. The flags are not independent, though: counting them as 17 separate risks would overstate the exposure and bury the actionable part. They are a handful of decisions. Losing them also empties `current-budget` and `voltage-domain-crossing` entirely, so the gate would stop testing those families at all — which no count above shows.
+16 of 21 verdicts are conditional and only 5 are unconditional, which is fewer than the bar of 19. So **the AC2 outcome is decided by part-record authoring and rule-implementation choices, not by this classification**. The flags are not independent, though: counting them as 16 separate risks would overstate the exposure and bury the actionable part. They are a handful of decisions. Losing them also empties `current-budget` and `voltage-domain-crossing` entirely, so the gate would stop testing those families at all — which no count above shows.
 
 | decision | entries | caught if it goes the wrong way | verdict |
 |---|---|---|---|
-| **`part-record`** — one individual part-record authoring call; unlike the others, these are independent of each other | `BUG-0023`, `BUG-0029`, `BUG-0030`, `BUG-0054`, `BUG-0059` | 17 of 22 | **fails** (but any 3 of them fails) |
-| **`domain-attributes`** — the designs under test declare `voltage_domain`, which the grammar makes optional | `BUG-0012`, `BUG-0025`, `BUG-0027`, `BUG-0040` | 18 of 22 | **fails** |
-| **`gpio-roles`** — MCU general-purpose pins are transcribed with directional or open-drain roles | `BUG-0018`, `BUG-0020`, `BUG-0022` | 19 of 22 | **fails** |
-| **`l9b-leg`** — the L9b undeclared-single-pin-net leg is implemented, not only the T2 no-driver leg | `BUG-0019`, `BUG-0026`, `BUG-0055` | 19 of 22 | **fails** |
-| **`decoupling-rule`** — the generic decoupling rule survives the zero-spurious-errors precision pass | `BUG-0042`, `BUG-0056` | 20 of 22 | passes, with nothing to spare |
+| **`domain-attributes`** — the designs under test declare `voltage_domain`, which the grammar makes optional | `BUG-0012`, `BUG-0025` (survives; a second leg is independent), `BUG-0027`, `BUG-0040` | 18 of 21 | **fails** |
+| **`part-record`** — one individual part-record authoring call; unlike the others, these are independent of each other | `BUG-0023`, `BUG-0029`, `BUG-0030`, `BUG-0059` | 17 of 21 | **fails** (but any 3 of them fails) |
+| **`gpio-roles`** — MCU general-purpose pins are transcribed with directional or open-drain roles | `BUG-0018`, `BUG-0020`, `BUG-0022` | 18 of 21 | **fails** |
+| **`l9b-leg`** — the L9b undeclared-single-pin-net leg is implemented, not only the T2 no-driver leg | `BUG-0019`, `BUG-0026`, `BUG-0055` (survives; a second leg is independent) | 19 of 21 | passes, with nothing to spare |
+| **`decoupling-rule`** — the generic decoupling rule survives the zero-spurious-errors precision pass | `BUG-0042`, `BUG-0056` | 19 of 21 | passes, with nothing to spare |
 
-`part-record`, `domain-attributes`, `gpio-roles`, `l9b-leg` are each a single point of failure for AC2 on their own, and the groups that pass alone do not survive being combined. Settling those is worth more to AMB-61 than any amount of checker tuning.
+`domain-attributes`, `part-record`, `gpio-roles` are each a single point of failure for AC2 on their own, and the groups that pass alone do not survive being combined. Settling those is worth more to AMB-61 than any amount of checker tuning.
 
-The 29 `d3-gap` entries by missing fact. Each row is also the counterfactual: add that field and those entries become candidates for in-scope at the next `schema_version`.
+The 30 `d3-gap` entries by missing fact. Each row is also the counterfactual: add that field and those entries become candidates for in-scope at the next `schema_version`.
 
 | missing D3 fact | entries | with a residual blocker |
 |---|---|---|
 | `companion-requirement` — a requirement a part places on an external companion component | 12 | `BUG-0016`, `BUG-0035`, `BUG-0049`, `BUG-0053` |
 | `strap-semantics` — which pins latch at reset as configuration straps, and to what level | 6 | — |
 | `functional-class` — what a part IS — regulator, protection diode, undervoltage cutoff | 3 | — |
+| `pin-semantics` — what a pin MEANS beyond its electrical role — which outputs it gates, its polarity | 3 | — |
 | `bus-address` — the bus address a part presents, fixed or strap-selected | 2 | — |
 | `internal-pull` — a pin's internal pull-up or pull-down presence and strength | 2 | `BUG-0021`, `BUG-0032` |
 | `part-own-value` — a part's own defining value that no closed field enumerates | 2 | `BUG-0010`, `BUG-0052` |
-| `pin-semantics` — what a pin MEANS beyond its electrical role — which outputs it gates, its polarity | 2 | — |
 
 Counted once but blocked by more than one missing fact, so the single row understates what each needs: `BUG-0002`, `BUG-0003`, `BUG-0008`, `BUG-0016`, `BUG-0043`, `BUG-0049`, `BUG-0051`, `BUG-0061`.
 
 Entries in the third column carry a blocker that survives adding the field, named in `classification.yaml`. For one of them the counterfactual is not merely weaker but inverted: adding the fact would make the generic rule flag the *corrected* design.
 
-1 entry makes a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code, because a code with one member costs more than it buys.
+2 of those entries make a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code, because a code with one member costs more than it buys.
 
 | entry | carried at | further blocker, if any |
 |---|---|---|
 | `BUG-0052` | `parameters` | the root cause is that stray capacitance was ignored, and stray C is a layout quantity the DSL holds no coordinates for |
+| `BUG-0054` | `pins[].abs_max.voltage.conditions` | — |
 
 <!-- /generated -->
 

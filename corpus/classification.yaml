@@ -27,8 +27,8 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:6ee6e22657971c0d5f738ea9953aa4377f4de48b8fd5a7a6e1cb9b8a0c20407f
-  corpus_hash: sha256:4ebc12f2beb5f81002a33bff166cf714c96916783c5c5be77fee35c328b5eb1d
+  decision_hash: sha256:8950480b0aaf3158001ec5311cb38f05a400bb4baa68fc9b4cd8ce984dccb0da
+  corpus_hash: sha256:7a0dee1f684de095e7532888ca7c53ea6e16c25e628bab5d636b39c2e06b9941
 
 entries:
 
@@ -388,6 +388,7 @@ entries:
   family: abs-max-containment
   at_risk: >-
     the abs-max leg is independent, but the domain leg reads the optional `voltage_domain` attribute
+  at_risk_survives_group: true
   at_risk_group: domain-attributes
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
@@ -813,24 +814,37 @@ entries:
     the entry states a datasheet requirement rather than reporting an observed failure, so adding the field would give a check with a violating design and no postmortem behind it
 
 - id: BUG-0054
-  verdict: in-scope
-  family: abs-max-containment
-  at_risk: >-
-    the abs-max bound is relative and its qualifying condition lives in `conditions`, an open map this gate now formally declares unreadable
-  at_risk_group: part-record
-  cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].abs_max.voltage"]
+  gap_class: pin-semantics
+  carried_at: pins[].abs_max.voltage.conditions
+  missing_path: pins[].conditional_limits
+  compound: single-class
+  missing_fact: >-
+    which of a pin's several conditional absolute-maximum rows applies in a
+    given supply state. PinLimits holds exactly one voltage Measure per pin, so
+    a record must pick one row; the CP2109 publishes VBUS abs-max as VDD+3.6 V
+    qualified by "VDD not powered", a qualification expressible only as an open
+    `conditions` key.
   rationale: >-
-    The VBUS abs-max is stated relative to the supply (VDD + 3.6 V with VDD unpowered), and D3's
-    `Bound` is deliberately either a number or a {reference, factor, offset} triple, so this
-    schema can hold it — a case where v0's design specifically enables the catch. Tying 5 V
-    straight to VBUS breaks containment; the corrected design interposes the 47k/24k divider. The
-    qualifying condition itself lives in the open `conditions` map, which is the one soft spot.
+    Reclassified from in-scope under AMB-123. Its own at_risk already said "the
+    qualifying condition lives in `conditions`, an open map this gate now
+    formally declares unreadable", and the in-scope test is conjunctive: (B)
+    requires a rule reading only frozen inputs to separate the buggy design from
+    the corrected one. It cannot. With VDD declared at 3.3 V the relative bound
+    evaluates to 6.9 V and the buggy board's 5 V on VBUS is contained, so the
+    rule does not fire; the violation exists only in the VDD = 0 state, which
+    the frozen syntax has no construct for. Keeping it in scope applied the
+    open-map rule less strictly here than the same rubric applied to BUG-0002,
+    BUG-0010 and BUG-0052, whose in-scope flips were reverted for it.
 
 - id: BUG-0055
   verdict: in-scope
   family: erc-pin-role
   at_risk: >-
     the floating-input leg is L9b-only like BUG-0019, but the abs-max leg is independent of it, which makes this the least exposed of the flagged entries
+  at_risk_survives_group: true
   at_risk_group: l9b-leg
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl", "d3:pins[].abs_max.voltage"]
   rationale: >-

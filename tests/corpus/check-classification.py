@@ -475,6 +475,7 @@ def decision_hash(entries) -> str:
                 e.get("missing_path") or "",
                 e.get("at_risk") or "",
                 e.get("at_risk_group") or "",
+                "survives" if e.get("at_risk_survives_group") else "",
                 e.get("carried_at") or "",
                 e.get("residual_blocker") or "",
                 e.get("residual_kind") or "",
@@ -511,9 +512,24 @@ def corpus_hash(bugs) -> str:
     """
     lines = sorted(
         json.dumps(
-            [b.get("id", ""), b.get("title", ""), (b.get("source") or {}).get("url", ""),
+            [b.get("id", ""), b.get("title", ""),
+             (b.get("source") or {}).get("url", ""),
+             # PROVENANCE, which was outside both hashes: 3 KB of it could be
+             # deleted with every gate green. `kind` is the sole input to
+             # AMB-35's "majority externally sourced" criterion and could be
+             # walked from 100% to 51%; `additional_urls` is the surviving
+             # provenance of all 15 dedup merges, and carries the re-check
+             # evidence for three of the five corrected entries; `review` is
+             # read by this gate itself to REQUIRE a residual_blocker, so
+             # deleting the flag switched off the gate's own obligation; and
+             # `correction_note` is the record that an entry was re-fetched,
+             # which corpus/README.md calls part of the evidence.
+             (b.get("source") or {}).get("kind", ""),
+             sorted((b.get("source") or {}).get("additional_urls") or ()),
              b.get("symptom", ""), b.get("root_cause", ""), b.get("category", ""),
-             b.get("class", ""), b.get("evidence", "")],
+             b.get("class", ""), b.get("evidence", ""),
+             b.get("collected", ""), b.get("review", ""),
+             b.get("corrected", ""), b.get("correction_note", "")],
             ensure_ascii=True, sort_keys=True,
         )
         for b in bugs
@@ -760,6 +776,16 @@ def check_entry(entry, resolvers, schema, problems):
         at_risk = entry.get("at_risk")
         if at_risk is not None and not str(at_risk).strip():
             problems.append(f"{entry_id}: `at_risk` is present but empty")
+        # An entry can be conditional on a group's decision and still be caught
+        # if it goes the wrong way, when a SECOND independent leg reaches it.
+        # BUG-0025 ("the abs-max leg is independent, but the domain leg reads
+        # the optional voltage_domain attribute") and BUG-0055 ("the abs-max leg
+        # is independent of it, which makes this the least exposed") both say so
+        # in prose, and the generated margin table counted them as lost anyway —
+        # publishing "l9b-leg is a single point of failure" against the
+        # classification's own annotations.
+        if entry.get("at_risk_survives_group") and not at_risk:
+            problems.append(f"{entry_id}: `at_risk_survives_group` without `at_risk`")
         group = entry.get("at_risk_group")
         if at_risk and group not in AT_RISK_GROUPS:
             problems.append(
@@ -885,13 +911,16 @@ def summary_block(entries) -> str:
     if at_risk:
         groups = {}
         for entry in at_risk:
-            groups.setdefault(entry.get("at_risk_group"), []).append(entry["id"])
+            groups.setdefault(entry.get("at_risk_group"), []).append(
+                (entry["id"], bool(entry.get("at_risk_survives_group"))))
         lines += ["", "| decision | entries | caught if it goes the wrong way | verdict |",
                   "|---|---|---|---|"]
         alone_fails = []
         for key in sorted(groups, key=lambda k: (-len(groups[k]), k)):
             members = sorted(groups[key])
-            left = len(in_scope) - len(members)
+            # Only entries the decision actually LOSES count against the margin.
+            lost = [m for m in members if not m[1]]
+            left = len(in_scope) - len(lost)
             if left < must_catch:
                 alone_fails.append(key)
                 outcome = "**fails**"
@@ -904,7 +933,9 @@ def summary_block(entries) -> str:
                 outcome += f" (but any {tolerable + 1} of them fails)"
             lines.append(
                 f"| **`{key}`** — {AT_RISK_GROUPS.get(key, '?')} | "
-                + ", ".join(f"`{i}`" for i in members)
+                + ", ".join(
+                    f"`{i}`" + (" (survives; a second leg is independent)" if s else "")
+                    for i, s in members)
                 + f" | {left} of {len(in_scope)} | {outcome} |"
             )
         if alone_fails:
