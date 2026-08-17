@@ -39,6 +39,12 @@ parts:
     mpn: KEMET C0805C103K5RACTU
     role: CONT (pin 5) bypass of the internal 2/3 divider tap
 
+  - ref: CBYP
+    value: 100nF 10% 50V X7R
+    package: "0805"
+    mpn: KEMET C0805C104K5RACTU
+    role: VCC (pin 8) supply bypass
+
   - ref: RL
     value: 560R 1% 0.25W
     package: axial 0207 (0805 alt)

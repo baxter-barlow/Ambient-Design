@@ -156,3 +156,67 @@ design blinker_555 {
   assert duty(U1.OUT) in 52.4%..54.4%   after 2s
 }
 ```
+
+## Duty-cycle window: why it is +/-2.2 points and not +/-1.0
+
+The window was `[52.4 %, 54.4 %]`, derived from comparator-threshold ratio
+error, discharge-transistor Ron and finite edge shape. That derivation omits the
+term that dominates at these impedances: the timing-pin **bias current**.
+
+Both THRES and TRIG bias currents act on the shared timing node, so with a net
+bias `Ib` the exact half-periods are
+
+    t_high = (RA+RB)*C * ln[ (Vcc - Ib*(RA+RB) - Vcc/3) / (Vcc - Ib*(RA+RB) - 2Vcc/3) ]
+    t_low  =      RB*C * ln[ (2Vcc/3 + Ib*RB) / (Vcc/3 + Ib*RB) ]
+
+The `Ib*R` products scale with **R**, not with the RC product. The 2026-08-15
+fix round rescaled `RA 10k -> 100k`, `RB 68k -> 680k`, `CT 10uF -> 1uF` and
+recorded that this left "the ~1 Hz target, duty ratio, and all tolerance windows
+unchanged" because the RC products are identical. The frequency claim is right;
+the duty claim is not. The rescale multiplied the bias term by ten.
+
+At the shipped values (RA 100k, RB 680k, C 1uF, Vcc 9 V):
+
+| Ib | duty |
+|---|---|
+| -0.25 uA | 51.241 % |
+| -0.10 uA | 52.551 % |
+| 0 (the macromodel) | 53.425 % |
+| +0.10 uA | 54.298 % |
+| +0.25 uA | 55.609 % |
+
+The NE555 datasheet specifies threshold current 0.1 uA typ / **0.25 uA max**, so
+the part's own guaranteed corner lands outside the old window. At the
+pre-rescale values the same +/-0.25 uA gives 53.21-53.64 %, about ten times the
+margin -- which is what "unchanged" was true of.
+
+The window is now `[51.2 %, 55.6 %]`. **This is a corrected derivation, not a
+relaxed bound.** The old number was computed from an incomplete model of the
+same circuit; nothing about the circuit got worse and no measurement was made to
+fit. The rescale itself is kept: a 1 uF film part has far better tolerance and
+leakage than a 10 uF electrolytic, which is worth more than duty precision in a
+blinker.
+
+The simulation cannot see any of this. `Bset`/`Bthr` in `netlist.cir` are B-source
+voltage expressions and draw exactly zero input current, so the deck measures the
+Ib = 0 row (53.45 %) and always will. That is a stated limit of the rung-0
+macromodel, not a passing result.
+
+## VCC bypass
+
+`CBYP`, 100 nF from pin 8 to ground, added under AMB-123. The design had no
+supply bypass at all -- the only capacitors were the timing cap and the CONT
+bypass on pin 5. At 9 V the totem-pole output draws a shoot-through spike on
+every edge, and both comparator thresholds are derived from VCC, so on a real
+board with a PP3 snap and lead inductance this is the classic 555 double-trigger.
+
+The deck cannot show it either: `VCC vcc 0 PWL(...)` is an ideal zero-impedance
+source.
+
+Worth recording for AC2: `corpus/README.md` reasons about a generic "power_in pin
+with no capacitor to ground" rule and treats it as producing a **spurious** error
+on this benchmark, which is part of why the `decoupling-rule` group is rated
+"passes, with nothing to spare". It was not spurious. It was a true positive
+against a real omission, and the corpus's own BUG-0056 describes the same defect
+class on a DIP-8. Fixing the benchmark removes the tension instead of narrowing
+the rule to hide it.

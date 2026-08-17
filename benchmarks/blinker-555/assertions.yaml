@@ -32,8 +32,18 @@ assertions:
     signal: v(out)
     kind: derived_param        # 100*t_on/t_period; t_on is one trig_targ meas
                                #   (RISE=1 -> FALL=1, VAL=3.7 V, TD=2 s)
-    expected: 53.42 %          # (RA+RB)/(RA+2RB); passives move it <0.1 pt,
-    window: [52.4 %, 54.4 %]   #   window set by 555 threshold/Ron non-idealities
+    expected: 53.42 %          # (RA+RB)/(RA+2RB); passives move it <0.1 pt.
+    window: [51.2 %, 55.6 %]   #   Widened from [52.4, 54.4] under AMB-123: that
+                               #   window omitted the timing-pin bias-current
+                               #   term, which scales with R and not with RC, so
+                               #   the 10k/68k -> 100k/680k rescale multiplied it
+                               #   by ten. At the NE555's datasheet threshold
+                               #   current (0.25 uA max) the duty is 51.24-55.61%,
+                               #   i.e. the part's own spec corner fell OUTSIDE
+                               #   the declared window. See design.md sec. 6.
+                               #   This is a corrected derivation, not a relaxed
+                               #   bound: the old one was computed from an
+                               #   incomplete model of the same circuit.
     measured: 53.45 %
     verdict: PASS
 

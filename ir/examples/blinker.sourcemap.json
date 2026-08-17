@@ -1,7 +1,7 @@
 {
   "sourcemap_version": 0,
   "ir_version": 0,
-  "design_hash": "sha256:43de0bdc153ff89b2d32f500217d53a7b59e892b55054dd44425c3053a42c889",
+  "design_hash": "sha256:543a39fcfc0daea6156593da057374c78f5325df4823a42d0b25161ac8fbff6e",
   "files": [
     {
       "path": "ir/examples/blinker.rhoform",

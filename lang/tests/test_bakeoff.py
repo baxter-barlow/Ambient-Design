@@ -210,7 +210,7 @@ class CorpusIntegrity(unittest.TestCase):
     def test_blinker_reproduces_the_committed_ir(self):
         anchors = check_anchor(CORPUS["blinker-555"])
         self.assertEqual([a["kind"] for a in anchors], ["netlist-ir"])
-        self.assertIn("25 connections", anchors[0]["compared"])
+        self.assertIn("27 connections", anchors[0]["compared"])
 
     def test_esp32_matches_the_committed_bom_and_power_tree(self):
         anchors = check_anchor(CORPUS["esp32s3-devboard"])
@@ -350,14 +350,32 @@ class RoundTrip(unittest.TestCase):
                     len(arm.render(model, "inferred+columnar")),
                     len(arm.render(model, "inferred")),
                 )
+        # The blinker USED to be the counter-example: with two capacitors,
+        # nothing repeated `COLUMNAR_MIN_ROWS = 3` times and a table would have
+        # been a header with nothing under it. Adding the VCC bypass the design
+        # was missing gave it a third capacitor and it now gets a table.
+        #
+        # That is worth more than the test it broke. The L6 columnar reading was
+        # already labelled preliminary, and this shows exactly how fragile it
+        # is: the "columnar does not help small designs" half of it turned on
+        # one design having two of something rather than three. A threshold
+        # effect that a single passive flips is a property of the threshold, not
+        # of design size, and AMB-57 should re-measure knowing that.
         blinker = CORPUS["blinker-555"]
+        capacitors = sum(
+            1 for i in blinker.modules[0].instances
+            if i.definition.endswith("Capacitor")
+        )
+        self.assertGreaterEqual(
+            capacitors, 3,
+            "this test's premise is that the blinker now HAS a columnar-eligible "
+            "group; if that changed, re-derive the claim rather than the number",
+        )
         for arm in CANDIDATES:
             with self.subTest(arm=arm.key, design="blinker-555"):
-                # Nothing in a 555 blinker repeats three times with the same
-                # shape, so a table would be a header with nothing under it.
-                self.assertEqual(
-                    arm.render(blinker, "inferred+columnar"),
-                    arm.render(blinker, "inferred"),
+                self.assertLess(
+                    len(arm.render(blinker, "inferred+columnar")),
+                    len(arm.render(blinker, "inferred")),
                 )
 
 

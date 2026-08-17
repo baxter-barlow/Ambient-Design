@@ -60,7 +60,8 @@ XU1  0 nct out vcc cont nct disch vcc NE555_RHOFORM
 RA   vcc  disch 100k
 RB   disch nct   680k
 CT   nct  0     1u
-CB   cont 0     10n                       ; CONT bypass
+CB   cont 0     10n                       ; CONT bypass (pin 5)
+CBYP vcc  0     100n                      ; VCC bypass (pin 8) -- see design.md sec. 5
 RL   out  nled  560                       ; LED ballast: (9-1.7-2.0)/560 ~ 9.5 mA
 DLED nled nks   LEDRED
 RLK  nled nks   10Meg                     ; convergence leak across LED
