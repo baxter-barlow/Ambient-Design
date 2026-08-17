@@ -373,6 +373,27 @@ def check_spec(spec, label, problems, minimum=None, gate_structure=True):
                 "operands are a copy of the inputs that nothing reconciles. "
                 "Name the `inputs` key each operand comes from.")
             continue
+        # OPERANDS THE RELATION ACTUALLY CONSUMES. `used` was filled from every
+        # key in check_inputs, so adding `decorative: 99999` with
+        # `check_inputs_from: {decorative: worst.theta_ja_c_w}` marked that
+        # input read while nothing read it -- reopening the 500 C ambient by a
+        # third route. evaluate() takes fixed operand names per relation.
+        RELATION_OPERANDS = {
+            "interval-within": {"inner", "outer"},
+            "at-least": {"have", "need"},
+            "at-least-all": {"have", "needs"},
+            "at-most": {"have", "limit"},
+            "sum-at-most": {"parts", "limit"},
+        }
+        consumed = RELATION_OPERANDS.get(assertion.get("check"))
+        if consumed is not None:
+            extra = sorted(set(declared) - consumed)
+            if extra:
+                problems.append(
+                    f"{label}/{name}: declares operand(s) {extra}, which "
+                    f"`{assertion.get('check')}` does not read. An operand the "
+                    "relation never consumes still marks its input used, so a "
+                    "decorative mapping launders an unread input.")
         used = set()
         for operand, value in declared.items():
             if operand in formulas:

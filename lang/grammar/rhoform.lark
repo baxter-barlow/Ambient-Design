@@ -19,19 +19,19 @@
 start: _NEWLINE? PRAGMA _NEWLINE module_def+
 
 // A module groups instances, nets and assertions.
-module_def: "module" FREE_NAME ":" _NEWLINE _INDENT statement+ _DEDENT
+module_def: /module(?![A-Za-z0-9_])/ FREE_NAME ":" _NEWLINE _INDENT statement+ _DEDENT
 
 // Everything a module body can carry.
 statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl
 
 // This module's own interface port. The role is a pin_role name.
-port_decl: "port" FREE_NAME NAME _NEWLINE
+port_decl: /port(?![A-Za-z0-9_])/ FREE_NAME NAME _NEWLINE
 
 // L9b's intentional single-pin net, declared rather than inferred.
-isolated_decl: "isolated" endpoint _NEWLINE
+isolated_decl: /isolated(?![A-Za-z0-9_])/ endpoint _NEWLINE
 
 // A named net and its members, one per line.
-net_decl: "net" FREE_NAME net_attributes? ":" _NEWLINE _INDENT (endpoint _NEWLINE)+ _DEDENT
+net_decl: /net(?![A-Za-z0-9_])/ FREE_NAME net_attributes? ":" _NEWLINE _INDENT (endpoint _NEWLINE)+ _DEDENT
 
 // Typed net attributes (T5 voltage/ground domains).
 net_attributes: "(" (net_attribute ("," net_attribute)*)? ")"
@@ -46,7 +46,7 @@ chain: chain_head ("~" endpoint)+ _NEWLINE
 chain_head: FREE_NAME ("." NAME)?
 
 // Instantiation. Facts about the instance live in its optional body.
-instance_decl: FREE_NAME "=" "new" qualified_name arguments? (instance_body | _NEWLINE)
+instance_decl: FREE_NAME "=" /new(?![A-Za-z0-9_])/ qualified_name arguments? (instance_body | _NEWLINE)
 
 // The block that carries everything about an instance but its values.
 instance_body: ":" _NEWLINE _INDENT instance_stmt+ _DEDENT
@@ -55,31 +55,31 @@ instance_body: ":" _NEWLINE _INDENT instance_stmt+ _DEDENT
 instance_stmt: pin_decl | part_decl | hardware_decl | negated_flag | flag
 
 // A component pin, optionally carrying footprint designators.
-pin_decl: "pin" NAME NAME designator* _NEWLINE
+pin_decl: /pin(?![A-Za-z0-9_])/ NAME NAME designator* _NEWLINE
 
 // A footprint pin designator: `7`, or `A1` on a connector.
 designator: NUMBER | NAME
 
 // D1's binding ladder: an abstract constrained part, or a pinned pick.
-part_decl: "part" ("abstract" | STRING) (":" _NEWLINE _INDENT constraint+ _DEDENT | _NEWLINE)
+part_decl: /part(?![A-Za-z0-9_])/ (/abstract(?![A-Za-z0-9_])/ | STRING) (":" _NEWLINE _INDENT constraint+ _DEDENT | _NEWLINE)
 
 // One resolution constraint.
 constraint: NAME "=" value _NEWLINE
 
 // L9 hardware classification. The kind is a hardware_kind name.
-hardware_decl: "hardware" NAME _NEWLINE
+hardware_decl: /hardware(?![A-Za-z0-9_])/ NAME _NEWLINE
 
 // An explicit false. The bare flag only means true, so denying a library default needs its own spelling.
-negated_flag: "no" ("exclude_from_bom" | "board_only") _NEWLINE
+negated_flag: /no(?![A-Za-z0-9_])/ (/exclude_from_bom(?![A-Za-z0-9_])/ | /board_only(?![A-Za-z0-9_])/) _NEWLINE
 
 // A fabrication flag set to true (L9c).
-flag: ("dnp" | "exclude_from_bom" | "board_only") _NEWLINE
+flag: (/dnp(?![A-Za-z0-9_])/ | /exclude_from_bom(?![A-Za-z0-9_])/ | /board_only(?![A-Za-z0-9_])/) _NEWLINE
 
 // L6's columnar sub-syntax for uniform tabular instances.
-table_decl: "table" qualified_name table_binding? "(" column_list? ")" ":" _NEWLINE _INDENT table_row+ _DEDENT
+table_decl: /table(?![A-Za-z0-9_])/ qualified_name table_binding? "(" column_list? ")" ":" _NEWLINE _INDENT table_row+ _DEDENT
 
 // The part binding shared by every row.
-table_binding: "part" ("abstract" | STRING)
+table_binding: /part(?![A-Za-z0-9_])/ (/abstract(?![A-Za-z0-9_])/ | STRING)
 
 // Column names. `part.<name>` addresses a constraint.
 column_list: column ("," column)*
@@ -91,10 +91,10 @@ column: NAME ("." NAME)?
 table_row: FREE_NAME value* _NEWLINE
 
 // A V1 assertion. The tier is written because V1 makes it visible in every diagnostic.
-assertion: "assert" NAME ("static" | "dynamic") NAME "(" NAME ")" bound _NEWLINE
+assertion: /assert(?![A-Za-z0-9_])/ NAME (/static(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/) NAME "(" NAME ")" bound _NEWLINE
 
 // `within` takes an interval; a dimensionless one is two NUMBERs, since the lexer only forms a QUANTITY around a unit.
-bound: "within" (QUANTITY_INTERVAL | NUMBER "to" NUMBER) | "at" ("least" | "most") (QUANTITY_PLAIN | NUMBER)
+bound: /within(?![A-Za-z0-9_])/ (QUANTITY_INTERVAL | NUMBER /to(?![A-Za-z0-9_])/ NUMBER) | /at(?![A-Za-z0-9_])/ (/least(?![A-Za-z0-9_])/ | /most(?![A-Za-z0-9_])/) (QUANTITY_PLAIN | NUMBER)
 
 // Elaboration parameters, as keyword arguments.
 arguments: "(" (argument ("," argument)*)? ")"
@@ -103,7 +103,7 @@ arguments: "(" (argument ("," argument)*)? ")"
 argument: NAME "=" value
 
 // T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole — hence INTEGER here and NUMBER in `bound`.
-value: QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | "true" | "false"
+value: QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | /true(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/
 
 // A connectable point: this module's port, or an instance pin.
 endpoint: NAME ("." NAME)?

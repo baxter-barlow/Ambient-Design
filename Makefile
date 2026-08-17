@@ -122,6 +122,8 @@ sim:
 	python3 tests/benchmarks/derive-555-windows.py --check
 	python3 tests/benchmarks/check-design-docs.py --self-test
 	python3 tests/benchmarks/check-design-docs.py
+	python3 tests/benchmarks/check-corners.py --self-test
+	python3 tests/benchmarks/check-corners.py
 	bash tests/benchmarks/run-sim.sh
 
 # The gates in .github/workflows/repository-policy.yml. Kept as its own target

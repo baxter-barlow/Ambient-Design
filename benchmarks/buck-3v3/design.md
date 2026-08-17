@@ -57,20 +57,20 @@ Choose the standard value **L = 10 uH**, which gives (ideal duty):
     DIL(12 V) = 3.3 x 0.725 / 5.0             = 0.479 App
     DIL(9 V)  = 3.3 x 0.633 / 5.0             = 0.418 App
 
-Measured in the behavioral deck: 0.4844 App at 12 V, 0.565 App worst case at
+Measured in the behavioral deck: 0.4844 App at 12 V, 0.5119 App worst case at
 14 V -- slightly above ideal because the loop regulates duty above D = Vout/Vin
 to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
 
 Peak current and saturation margin (using measured worst-case ripple):
 
-    Ipk = Iout + DIL/2 = 2.0 + 0.515/2 = 2.26 A
+    Ipk = Iout + DIL/2 = 2.0 + 0.5119/2 = 2.256 A
 
 Part: **Coilcraft XGL6060-103MEC** (10 uH +/-20%, DCR 18.5 mOhm typ /
 20.4 mOhm max, Isat 3.6 A at 10% inductance drop / 5.5 A at 20% / 7.3 A at
 30%, Irms 7.3 A for 20 C rise / 10.0 A for 40 C rise; Coilcraft datasheet
 Document 1621-2, rev. 02/19/26). Saturation margin against the strictest
 rating point: 3.6/2.26 = **1.6x** at the 10%-drop Isat, 5.5/2.26 = 2.4x at
-the 20%-drop rating. A 100% overload transient (4.28 A) stays below the
+the 20%-drop rating. A 100% overload transient (4.256 A) stays below the
 5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
 gracefully rather than collapsing. RMS heating: Irms ~= 2.0 A vs 7.3 A
 (20 C rise) rating.
@@ -88,8 +88,8 @@ bias these derate ~18%, so C_eff ~= **36 uF** (the deck simulates the derated
 value -- deratings are physics, not pessimism). Net ESR of two ~4 mOhm
 ceramics in parallel: ~2 mOhm.
 
-    DV_C   = 0.565 / (8 x 500e3 x 36e-6) = 3.9 mV
-    DV_ESR = 0.565 x 0.002               = 1.1 mV
+    DV_C   = 0.5119 / (8 x 500e3 x 36e-6) = 3.6 mV
+    DV_ESR = 0.5119 x 0.002              = 1.0 mV
     DV_pp  ~= 5 mV  (terms are phase-shifted, not directly additive)
 
 Measured: 3.587 mVpp at 12 V -- **13.9x margin** against the 50 mV spec. The cap
@@ -120,7 +120,7 @@ Synchronous FETs, both **Infineon BSC059N04LS6** (OptiMOS 6, 40 V, Rds(on)
 
 - Voltage margin: 40 V rating vs 14 V max input plus switch-node ringing
   (budget 2x Vin transient) -> 40/14 = **2.8x** static margin.
-- Current: continuous Id rating tens of amps vs 2.28 A peak.
+- Current: continuous Id rating tens of amps vs 2.256 A peak.
 - Conduction loss at 2 A, 12 V (D' = 0.30):
   - HS: I^2 x Ron x D'     = 4 x 0.0059 x 0.30 = 7.1 mW
   - LS: I^2 x Ron x (1-D') = 4 x 0.0059 x 0.70 = 16.5 mW
@@ -156,7 +156,7 @@ loss up, so the budget is conservative rather than optimistic.
 Fixed (frequency-dependent + quiescent) subtotal ~= 0.40 W; conduction
 subtotal ~= 0.11 W.
 
-    eta = 6.68 / (6.68 + 0.51) = 92.9% (predicted)
+    eta = 6.588 / (6.588 + 0.502) = 92.9% (predicted)
 
 The behavioral deck carries the conduction terms explicitly (Ron in the
 switch-node B-source, DCR and ESR as real elements) and draws the fixed
@@ -248,12 +248,37 @@ belong to higher rungs.
 | Startup overshoot (`overshoot_pct`) | <= 5% | 0.0466% | pass |
 | 1A->2A settling (`t_settle_us`) | <= 500 us | 16.86 us | pass |
 
-Input corners (9 V / 14 V, supplementary runs in `validation.log`): all five
-stay green; worst deltas are ripple-current 0.515 App at 14 V, settling
-39.4 us at 9 V, and output ripple 3.14 mVpp at 9 V (a slow envelope over
-~100 cycles -- per-cycle ripple there is 6.4 mVpp -- still 2x inside the
-50 mV window). No assertion window was modified from the task defaults;
-every target was met with the components as chosen.
+Input corners, re-run against the shipped deck and appended to
+`validation.log` (2 ns, 31.2k divider):
+
+| Vin | il_pp | vout_pp | t_settle_us |
+|---|---|---|---|
+| 9 V | 0.421457 A | 3.084 mVpp | 45.392 us |
+| 12 V | 0.484413 A | 3.587 mVpp | 16.858 us |
+| 14 V | 0.511869 A | 3.812 mVpp | 15.528 us |
+
+All five assertions stay green at every corner. Worst deltas are
+ripple-current 0.5119 App at 14 V, settling 45.39 us at 9 V (11x inside the
+500 us window), and output ripple 3.812 mVpp at 14 V (13x inside the 50 mV
+window). No assertion window was modified from the task defaults; every
+target was met with the components as chosen.
+
+An earlier revision of this paragraph published 0.515 App, 39.4 us and
+3.14 mVpp and cited "supplementary runs in `validation.log`". None of the
+three came from the shipped deck: 0.515 and 3.14 are the 31.6k divider at
+2 ns, and 39.4 us is the 31.6k divider at 40 ns. The cited runs were not in
+`validation.log` either -- the only occurrence of the word "corner" in that
+file is the line recording that an earlier regeneration destroyed them. The
+survey was never re-run when the divider changed; it is now, and the numbers
+above are in the evidence file.
+
+It also claimed the 9 V ripple was "a slow envelope over ~100 cycles --
+per-cycle ripple there is 6.4 mVpp". A peak-to-peak over a window cannot be
+smaller than the peak-to-peak of a cycle inside it, so that could not have
+been true of any deck. Measured directly at 9 V, single-cycle probes give
+2.995 / 3.002 mVpp against the 50-cycle figure of 3.084: the envelope adds
+0.09 mV, which is to say there is none. The "2x" was 50/24.4, the 40 ns
+value.
 
 ## Two assertions that cannot currently fail, stated rather than implied
 
@@ -301,9 +326,9 @@ against a 60 s budget for three digits nothing downstream reads, and the
 alternative is a gate that cannot detect a deck change at all. Anyone refining
 the timestep for a real reason should re-record the five values and say so.
 
-None of the engineering conclusions move across the sweep: `Ipk` 2.26 A,
-saturation margin 1.6x, ripple margin 13.7x, efficiency 0.9295 (timestep
-invariant), settling 16.9 us against a 500 us budget.
+None of the engineering conclusions move across the sweep: `Ipk` 2.256 A,
+saturation margin 1.6x, ripple margin 13.9x, efficiency 0.92864 (timestep
+invariant to five figures), settling 16.86 us against a 500 us budget.
 
 ## Output-voltage error stack
 

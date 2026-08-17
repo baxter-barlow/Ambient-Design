@@ -15,7 +15,7 @@
 # `measured:` below is from that run.
 # Windows are the task defaults; none were widened. Measured values are from
 # the canonical `ngspice -b netlist.cir` run recorded in validation.log
-# (ngspice-46, 0.38 s wall, 2026-08-15 fix round).
+# (ngspice-46, 4.9 s wall at the shipped 2 ns timestep).
 
 benchmark: bench-buck
 fidelity_class: behavioral
