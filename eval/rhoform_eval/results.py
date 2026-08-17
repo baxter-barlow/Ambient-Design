@@ -33,6 +33,14 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Kinds that mean a real model / real gate produced this. Kept as allowlists so
+# that an unrecognised value fails closed. tests/eval/check-run-records.py holds
+# the same two sets; they are duplicated deliberately, because a gate importing
+# the thing it checks cannot catch that thing changing.
+LIVE_MODEL_KINDS = ("anthropic", "openai", "live")
+LIVE_GATE_KINDS = ("command", "compiler")
+
+
 def build_run_record(
     *,
     run_id: str,
@@ -69,9 +77,20 @@ def build_run_record(
         non_authoritative_reasons.append(
             f"tokenizer {tokenizer_identity.get('name')!r} is non-gating"
         )
-    if model_identity.get("kind") in ("replay", "scripted", "stub"):
+    # ALLOWLIST, not a denylist. `in ("replay", "scripted", "stub")` meant an
+    # unrecognised kind — `mock`, `testdouble`, a typo — minted an authoritative
+    # record, and the schema used the same denylist so it agreed.
+    if model_identity.get("kind") not in LIVE_MODEL_KINDS:
         non_authoritative_reasons.append(
             f"model source is {model_identity.get('kind')!r}, not a live pinned model"
+        )
+    # And the GATE identity, which README says this is computed from and which
+    # was stored and never read: a run whose verdicts came from a ReplayGate
+    # could call itself authoritative, producing a record the repository's own
+    # run-record checker then rejects.
+    if gate_identity.get("kind") not in LIVE_GATE_KINDS:
+        non_authoritative_reasons.append(
+            f"gate is {gate_identity.get('kind')!r}, not a live compile/check gate"
         )
 
     record = {

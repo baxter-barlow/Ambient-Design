@@ -1,4 +1,18 @@
 # Rhoform benchmark b: 3.3V/2A buck -- dynamic assertions (rung 0, behavioral)
+#
+# TIMESTEP: the deck ran at `.tran ... 40n` until AMB-123, which is 50 points per
+# switching cycle and NOT converged for a 500 kHz PWM comparator with no event
+# detection. vout_pp read 7.09 mV against a converged 3.64 mV, il_pp 0.520 A
+# against 0.487 A, and overshoot_pct 0.112 % against 0.048 %. design.md
+# explained the 9 V corner's 24.4 mVpp as "a slow envelope oscillation" with a
+# damping mechanism; at 2 ns that corner reads 3.14 mV and the envelope does not
+# exist. It was beat between the duty cycle and the time grid.
+#
+# Worse, the assertion checker added in the same issue compares `measured:` to
+# three significant figures -- so the gate had been made to ENFORCE the
+# numerical error, and refining the timestep would have failed `make sim`.
+# The deck now runs at 2 ns (5 s wall, inside the 60 s budget) and every
+# `measured:` below is from that run.
 # Windows are the task defaults; none were widened. Measured values are from
 # the canonical `ngspice -b netlist.cir` run recorded in validation.log
 # (ngspice-46, 0.38 s wall, 2026-08-15 fix round).
@@ -8,7 +22,7 @@ fidelity_class: behavioral
 sim_rung: 0
 deck: netlist.cir
 runtime_budget_s: 60
-measured_runtime_s: 0.38
+measured_runtime_s: 5.0
 
 assertions:
   - name: vout_mean
@@ -18,7 +32,7 @@ assertions:
       min: 3.201              # 3.3 V - 3%
       max: 3.399              # 3.3 V + 3%
       unit: V
-    measured: 3.32796
+    measured: 3.32800
     status: pass              # +0.85% (feedback divider 31.6k/10k regulation point)
 
   - name: vout_ripple_pp
@@ -27,7 +41,7 @@ assertions:
     expected:
       max: 0.050
       unit: V
-    measured: 0.00709
+    measured: 0.00364
     status: pass
 
   - name: efficiency
@@ -36,7 +50,7 @@ assertions:
     expected:
       min: 0.85
       unit: ratio
-    measured: 0.92945
+    measured: 0.92946
     status: pass              # conduction losses explicit (DCR 20.4 mOhm max);
                               # 0.40 W fixed-loss budget
 
@@ -46,7 +60,7 @@ assertions:
     expected:
       max: 5.0
       unit: percent
-    measured: 0.112
+    measured: 0.0477
     status: pass              # 500 us soft-start ramp on the reference
 
   - name: load_step_settling
@@ -55,7 +69,7 @@ assertions:
     expected:
       max: 500.0
       unit: us
-    measured: 16.02
+    measured: 16.90
     status: pass
 
 cross_checks:                 # informational, not gating

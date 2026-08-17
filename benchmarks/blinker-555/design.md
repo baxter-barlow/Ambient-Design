@@ -90,7 +90,7 @@ the 555 itself — comparator threshold ratio error, discharge-transistor Ron
 negligible), and finite edge shape — so the assertion window is set at device
 level:
 
-- **duty window: 52.4 – 54.4 %** (53.42 % ± 1.0 point)
+- **duty window: 53.3 – 57.9 %** (one-sided; see sec. 6)
 
 LED on-current window from Vf spread (1.8–2.2 V), Voh spread (7.0–7.5 V),
 RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
@@ -100,7 +100,7 @@ RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
 | Assertion | Predicted window | Measured | Verdict |
 |---|---|---|---|
 | f_osc | 0.932 – 1.051 Hz | 0.98823 Hz | PASS |
-| duty_pct | 52.4 – 54.4 % | 53.45 % | PASS |
+| duty_pct | 53.3 – 57.9 % | 53.45 % | PASS |
 | t_period | 0.952 – 1.073 s | 1.01191 s | PASS |
 | i_led_on | 8.0 – 10.5 mA | 9.257 mA | PASS |
 | v_out_high | 6.8 – 7.6 V | 7.199 V | PASS |
@@ -153,13 +153,13 @@ design blinker_555 {
   net led  { U1.OUT, RL.1 }  ; net anod { RL.2, D1.A }
   net gnd  { V9.-, CT.2, CB.2, D1.K, U1.GND }
   assert freq(U1.OUT) in 0.932Hz..1.051Hz after 2s
-  assert duty(U1.OUT) in 52.4%..54.4%   after 2s
+  assert duty(U1.OUT) in 53.3%..57.9%   after 2s
 }
 ```
 
 ## Duty-cycle window: why it is +/-2.2 points and not +/-1.0
 
-The window was `[52.4 %, 54.4 %]`, derived from comparator-threshold ratio
+The original window was `[52.4 %, 54.4 %]`, derived from comparator-threshold ratio
 error, discharge-transistor Ron and finite edge shape. That derivation omits the
 term that dominates at these impedances: the timing-pin **bias current**.
 
@@ -190,8 +190,26 @@ the part's own guaranteed corner lands outside the old window. At the
 pre-rescale values the same +/-0.25 uA gives 53.21-53.64 %, about ten times the
 margin -- which is what "unchanged" was true of.
 
-The window is now `[51.2 %, 55.6 %]`. **This is a corrected derivation, not a
-relaxed bound.** The old number was computed from an incomplete model of the
+The window is `[53.3 %, 57.9 %]`, and it is ONE-SIDED. **This is a corrected
+derivation, not a relaxed bound** — but it took two goes, and the first was
+wrong in three ways worth recording:
+
+1. **Sign.** Both timing pins SINK current from the node, so `Ib >= 0`. TI's
+   SLFS022K publishes THRES and TRIG currents positive and RESET negative. A
+   symmetric `+/-0.25 uA` window spent 2.2 points modelling a low corner with
+   no mechanism, and spent them instead of covering the high corner that exists.
+2. **Magnitude.** 0.25 uA is the THRES max read alone. The datasheet's own
+   design guidance — the note fixing `RA+RB <= 3.4 MOhm` at 5 V and 10 MOhm at
+   15 V — implies `(5/3)/3.4M = 0.49 uA` and `(15/3)/10M = 0.50 uA`. That is
+   the figure the part's guaranteed behaviour is stated against, and it is
+   double what was used. (TI's THRES typ is 30 nA, not the 0.1 uA quoted
+   earlier; `parts/examples/ti-ne555p.part.json` records 30/250 nA correctly.)
+3. **Rounding.** The first correction tabulated 55.609 % and then set the
+   window to 55.6 %, excluding the very corner it was widened to admit.
+
+Corners are now swept over `RA +/-1 %`, `RB +/-1 %`, `C +/-5 %` and
+`Ib in [0, 0.5 uA]` jointly, and rounded OUTWARD, which is what sec. 7 already
+does for the LED window. The old number was computed from an incomplete model of the
 same circuit; nothing about the circuit got worse and no measurement was made to
 fit. The rescale itself is kept: a 1 uF film part has far better tolerance and
 leakage than a 10 uF electrolytic, which is worth more than duty precision in a
@@ -201,6 +219,24 @@ The simulation cannot see any of this. `Bset`/`Bthr` in `netlist.cir` are B-sour
 voltage expressions and draw exactly zero input current, so the deck measures the
 Ib = 0 row (53.45 %) and always will. That is a stated limit of the rung-0
 macromodel, not a passing result.
+
+### The same term moves the frequency and period windows
+
+Applying the correction to duty alone left two sibling assertions failing at the
+corner this section declares real: at `Ib = 0.25 uA` with `R +1 %` and `C +5 %`,
+`f = 0.92422 Hz` against a declared floor of 0.932, and `T = 1.08199 s` against
+a declared ceiling of 1.073. All three assertions come from the same two
+equations, so all three are now swept over the same joint corner set:
+
+| assertion | was | is |
+|---|---|---|
+| `osc_period` | 0.952 – 1.073 s | **0.951 – 1.096 s** |
+| `osc_frequency` | 0.932 – 1.051 Hz | **0.912 – 1.052 Hz** |
+| `duty_cycle_high` | 52.4 – 54.4 % | **53.3 – 57.9 %** |
+
+The period window was also rounded INWARD at both ends even at `Ib = 0`
+(0.95178 < 0.952 and 1.07322 > 1.073), so it excluded the passive-tolerance
+corner before bias current was considered at all.
 
 ## VCC bypass
 

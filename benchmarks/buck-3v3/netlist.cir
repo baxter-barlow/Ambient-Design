@@ -66,7 +66,7 @@ Bpwm pwm 0 V = (V(comp) > V(rmp)) ? 1 : 0
 Bsett sett 0 V = (abs(V(out) - VTGT) > SBAND) ? 1 : 0
 
 * ---------- analysis ----------
-.tran 100n 2.5m 0 40n
+.tran 100n 2.5m 0 2n
 
 * mean output voltage at full load (2 A), steady window
 .meas tran vout_avg AVG v(out) from=2.0m to=2.5m
