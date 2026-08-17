@@ -21,11 +21,19 @@ WHAT THIS CAN AND CANNOT CHECK, stated rather than blurred:
   design_hash          verifiable today, and verified here.
   source-map pairing   verifiable today: consumers must reject a pair whose
                        `design_hash` values disagree, so the two must match.
-  source_hash          NOT verifiable yet. It hashes the `.rhoform` sources,
-                       and none exist — the compiler is what will make it
-                       honest. Reported as unverified, never as a pass.
-  files[].sha256       same: each entry is checked the moment its file exists
-                       on disk, and reported unverified until then.
+  source_hash          NOT verifiable, and NOT because the sources are
+                       missing — the schema defines it as a sha256 over the
+                       sorted (path, sha256) pairs, and the source map
+                       carries those today. It is the SERIALIZATION of that
+                       list that no document pins: separator, encoding and
+                       line ending are all unstated, so there is no single
+                       byte string to hash. Pin it in the IR spec and this
+                       becomes checkable; until then the committed value is
+                       a placeholder and is reported as unverified rather
+                       than passed.
+  files[].sha256       checked the moment the file exists at its
+                       repository-relative path; reported unverified until
+                       then.
 
 Exit codes follow tests/structure/check-layout.sh: 0 pass, 1 mismatch, 2 when
 the gate could not run.
@@ -93,7 +101,13 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
 
     # Source-side hashes. Every one is checked the moment its file exists.
     for entry in source_map.get("files", []):
-        source_path = (ROOT / "ir" / entry["path"]).resolve()
+        # `path` is defined by ir/source-map.schema.json as a
+        # REPOSITORY-relative POSIX path, not one relative to ir/. Resolving
+        # it the other way made this whole leg dead code: it looked for a
+        # file that could never be there, reported "does not exist yet", and
+        # passed — while a real source file sitting at the schema's location
+        # went unchecked.
+        source_path = (ROOT / entry["path"]).resolve()
         if not source_path.exists():
             notes.append(f"{sm_rel}: {entry['path']} does not exist yet")
             continue
@@ -104,7 +118,10 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
                 f"{entry.get('sha256')}"
             )
     if header.get("source_hash"):
-        notes.append(f"{rel}: source_hash covers sources that do not exist yet")
+        notes.append(
+            f"{rel}: source_hash is unverifiable — the IR spec pins no "
+            "serialization for the (path, sha256) list it hashes"
+        )
 
 
 def self_test() -> int:

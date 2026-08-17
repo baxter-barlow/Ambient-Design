@@ -60,7 +60,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 147 tests (24 need lark)
+python3 -m unittest discover -s tests -t .  # 148 tests (23 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
@@ -76,15 +76,15 @@ gate.
 | `starlark` | restricted-Python builder API (§4's baseline) | explicit, inferred |
 
 ```
-# candidate A                         # candidate B
+# candidate A                             # candidate B
 r_a = new rhoform.lib.passive.Resistor    r_a = new rhoform.lib.passive.Resistor(
-r_a.resistance = 100kohm +/- 1%           resistance = 100kohm +/- 1%):
-r_a.part.package = "axial_0207"           part abstract:
-signal VCC                                    package = "axial_0207"
-VCC ~ j_bat.pos                       net VCC:
-VCC ~ r_a.a                               j_bat.pos
-VCC ~ timer.vcc                           r_a.a
-                                          timer.vcc
+r_a.resistance = 100kohm +/- 1%               resistance = 100kohm +/- 1%):
+r_a.part.package = "axial_0207"               part abstract:
+signal VCC                                        package = "axial_0207"
+VCC ~ j_bat.pos                           net VCC:
+VCC ~ r_a.a                                   j_bat.pos
+VCC ~ timer.vcc                               r_a.a
+                                              timer.vcc
 ```
 
 **ONE AXIS DIFFERS, and it is stated so it can be argued with:** how a design

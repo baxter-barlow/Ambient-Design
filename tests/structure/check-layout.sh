@@ -108,6 +108,53 @@ for json_root in $JSON_ROOTS; do
   done < <(find "$ROOT/$json_root" -type f -name '*.json' | LC_ALL=C sort)
 done
 
+# The retired project name must not come back. AMB-122 renamed AED to
+# Rhoform across everything that ships; without a gate, one copied snippet or
+# one reverted file reintroduces it and nothing notices until the name is
+# inconsistent again. Three exclusions are deliberate and are listed
+# explicitly rather than pattern-matched loosely:
+#
+#   aed-part-data / aed_part_data   a SEPARATE project's repository
+#   sha256 digests                  two of them spell the letters mid-hash
+#   the note in tests/ir/           records that the rename happened
+#   this file                       a check cannot forbid a word without
+#                                   naming it, so it does not scan itself
+#
+# Only tracked files are scanned: an untracked scratch tree is not the
+# repository.
+if [ "$json_parser" = "python3" ] && command -v git >/dev/null 2>&1; then
+  brand_hits=$(cd "$ROOT" && git ls-files -z | python3 -c '
+import re, sys
+ALLOWED = ("aed-part-data", "aed_part_data")
+HEX = re.compile(r"\b[0-9a-f]{64}\b")
+NOTE = "tests/ir/check-hashes.py"
+SELF = "tests/structure/check-layout.sh"
+hits = []
+for rel in sys.stdin.buffer.read().split(b"\0"):
+    rel = rel.decode()
+    if not rel or rel == SELF:
+        continue
+    try:
+        text = open(rel, encoding="utf-8").read()
+    except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+        continue
+    for token in ALLOWED:
+        text = text.replace(token, "")
+    text = HEX.sub("", text)
+    if rel == NOTE:
+        text = text.replace("the AED -> Rhoform rename", "")
+    for line_no, line in enumerate(text.split("\n"), 1):
+        if re.search("aed", line, re.I):
+            hits.append(f"{rel}:{line_no}")
+if hits:
+    print("\n".join(hits))
+' 2>/dev/null)
+  if [ -n "$brand_hits" ]; then
+    printf 'FAIL: the retired name AED reappears in tracked files:\n%s\n' "$brand_hits" >&2
+    exit 1
+  fi
+fi
+
 # The toolchain manifest must parse as YAML when PyYAML is available.
 # Without PyYAML the deep parse is deferred to CI, where it always runs.
 yaml_check="deferred (PyYAML unavailable)"
