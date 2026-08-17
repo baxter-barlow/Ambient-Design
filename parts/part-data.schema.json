@@ -268,7 +268,8 @@
         "unit": {
           "type": "string",
           "minLength": 1,
-          "description": "Unit symbol, UCUM-style with common SI prefixes (\"V\", \"mA\", \"uA\", \"mV\", \"ohm\", \"Mohm\", \"degC\", \"mW\", \"pF\", \"ppm/K\", \"degC/W\"). Dimensionless quantities use \"1\". Matches the unit vocabulary of the netlist IR's Quantity so values move between the two without reinterpretation."
+          "description": "Unit symbol, UCUM-style with common SI prefixes (\"V\", \"mA\", \"uA\", \"mV\", \"ohm\", \"Mohm\", \"degC\", \"mW\", \"pF\", \"ppm/K\", \"degC/W\"). Dimensionless quantities use \"1\". Matches the unit vocabulary of the netlist IR's Quantity so values move between the two without reinterpretation. Capped at 32 characters: `unit` is a required member of every Measure in this schema and carried no maximum, which made it the widest payload slot in the record — a 3 MB string validated.",
+          "maxLength": 32
         },
         "min": {
           "$ref": "#/$defs/Bound",
@@ -695,7 +696,8 @@
         "source_id": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9._-]*(?![\\s\\S])",
-          "description": "Identifier for this source, unique within the record and referenced by `provenance` entries."
+          "description": "Identifier for this source, unique within the record and referenced by `provenance` entries. Capped at 64 characters. Its pattern accepts lowercase hex, so a hex-encoded PDF fitted — inside the one object whose own description says 'every free-text field here carries a maxLength so the obvious attempts fail'. A 21 MB record validated.",
+          "maxLength": 64
         },
         "vendor": {
           "type": "string",
@@ -732,7 +734,8 @@
         "identity_version": {
           "type": "string",
           "pattern": "^chv[0-9]+\\+reg[0-9A-Za-z._-]+(?![\\s\\S])",
-          "description": "Versions everything `content_hash` depends on: the normalization algorithm version and the vendor stamp-strip registry version, e.g. \"chv1+reg2026.08.14\". Hashes minted under different identity versions are NOT comparable. Format matches the datasheet pipeline's IdentityVersion string form."
+          "description": "Versions everything `content_hash` depends on: the normalization algorithm version and the vendor stamp-strip registry version, e.g. \"chv1+reg2026.08.14\". Hashes minted under different identity versions are NOT comparable. Format matches the datasheet pipeline's IdentityVersion string form.",
+          "maxLength": 64
         },
         "retrieved_at": {
           "type": "string",
