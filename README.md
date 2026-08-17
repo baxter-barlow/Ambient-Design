@@ -7,11 +7,21 @@ The model makes engineering decisions. Deterministic tooling owns parsing, netli
 ## Names
 
 The language, the compiler and the CLI are **Rhoform**; sources are `.rhoform`.
-The company is Ambient Labs. The GitHub repository, the Linear project and the
-Notion project are still called *Ambient Design* — renaming those is a separate
-piece of work from renaming what ships, and each needs its own review, so this
-repository deliberately still answers to the old project name in those three
-places and nowhere else.
+The company is Ambient Labs.
+
+Where the work is *tracked* still carries older names, and they are not all the
+same name — renaming what ships was one piece of work, and renaming each
+tracker is another, each needing its own review:
+
+| Surface | Name today |
+|---|---|
+| GitHub repository | `baxter-barlow/Ambient-Design` |
+| Notion project | Ambient Design |
+| Linear project | Agentic Electronic Design |
+| `AGENTS.md` title | Agentic Electronic Design: Agent Policy |
+
+Everything the project *ships* — the language, the CLI, diagnostics, schema
+`$id`s, the stdlib root, cache directories — says Rhoform.
 
 ## Status
 

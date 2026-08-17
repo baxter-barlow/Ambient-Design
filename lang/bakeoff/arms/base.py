@@ -50,10 +50,13 @@ from ..quantities import QuantityError, parse_quantity
 
 # L8's syntax-version pragma, spelled as the §8-Q2 naming decision fixed it
 # (AMB-30): `#pragma rhoform-syntax <major.minor>`. The placeholder this
-# replaced, `#pragma language "0.1.0"`, predated the decision. Only the
-# pragma moves to the decided vocabulary here — `rhoform.lib.*` and the Rhoform
-# diagnostic prefixes belong to the repository-wide rename, which is a
-# different piece of work. Freezing a grammar does not license a rename.
+# replaced, `#pragma language "0.1.0"`, predated the decision.
+#
+# The syntax freeze adopted this one spelling ahead of the rest, on the
+# grounds that freezing a grammar does not license a repository-wide rename.
+# That rename has since happened, so the stdlib root and the diagnostic
+# prefixes here now say Rhoform too — the note that used to explain why they
+# did not was rewritten by the very sweep it was describing.
 PRAGMA = "#pragma rhoform-syntax 0.1"
 
 VARIANTS = ("explicit", "inferred", "inferred+columnar")

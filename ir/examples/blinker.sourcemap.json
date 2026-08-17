@@ -4,11 +4,11 @@
   "design_hash": "sha256:107d254be3844d52eb1425193d1af86fd597b461e754b59cf9ae77528043a345",
   "files": [
     {
-      "path": "examples/blinker.rhoform",
+      "path": "ir/examples/blinker.rhoform",
       "sha256": "c65fae0174616b55620ba6539c41d29bf8724d5497df981ab29e764ecf202c2a"
     },
     {
-      "path": "examples/lib/indicator.rhoform",
+      "path": "ir/examples/lib/indicator.rhoform",
       "sha256": "7a0af331bb5b0c8ae2d3a8d677f530fad943697963dc375fe02e70deb5bf8960"
     }
   ],

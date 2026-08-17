@@ -159,7 +159,7 @@ above, because JSON Schema cannot detect either one.
 
 Note on the examples: they are hand-written illustrations tracking the fixed benchmark (a) design
 (RA 100 k 1 %, RB 680 k 1 %, CT 1 µF 5 %, RL 560 Ω 1 %, CONT bypass 10 nF, assertion windows from
-`bench-555/assertions.yaml`). `/mh1` and `/tp_out` are board-side extras beyond that BOM and are
+`benchmarks/blinker-555/assertions.yaml`). `/mh1` and `/tp_out` are board-side extras beyond that BOM and are
 both `exclude_from_bom`. `design_hash` is genuine — it is the sha256 of this file's bytes with the
 `design_hash` value blanked, per the schema rule, and the source map carries the same value, so
 the pair binding is real and recheckable:
