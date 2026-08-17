@@ -123,6 +123,10 @@ MINIMUM_AGREEMENTS = 14
 MINIMUM_ACTION_REFS = 16
 
 
+class _SkipFingerprint(Exception):
+    """Internal: the behavioural fingerprint cannot be checked offline."""
+
+
 class GateUnavailable(Exception):
     """The check could not be performed. Never reported as a pass."""
 
@@ -402,6 +406,24 @@ def check(manifest, read=None):
                     f"evaluation.tokenizer.fingerprint (harness not importable: {exc})"
                 )
             else:
+                # ONLY IF THE VOCABULARY IS ALREADY LOCAL. tiktoken fetches it
+                # on first use, so this leg was initiating an outbound request
+                # from a gate whose contract is that it is offline -- the
+                # previous fix made that failure non-fatal without making the
+                # fetch conditional. Nothing downloaded in testing only because
+                # the network happened to be blocked.
+                import os as _os
+                cache_dir = _os.environ.get("TIKTOKEN_CACHE_DIR") or ""
+                cached = bool(cache_dir) and _os.path.isdir(cache_dir) and any(
+                    _os.scandir(cache_dir))
+                if not cached:
+                    READ_BY_KEY.append(
+                        "evaluation.tokenizer.fingerprint (tiktoken's encoding "
+                        "vocabulary is not in a local cache; loading it would "
+                        "fetch over the network, which a gate that must run "
+                        "offline cannot do. Set TIKTOKEN_CACHE_DIR to a warmed "
+                        "cache to verify this pin behaviourally.)")
+                    raise _SkipFingerprint
                 try:
                     TiktokenTokenizer(str(encoding), str(pinned))
                 except PinnedTokenizerError as exc:
@@ -427,6 +449,8 @@ def check(manifest, read=None):
                         "evaluation.tokenizer.fingerprint (could not be "
                         f"verified here: {exc})"
                     )
+        except _SkipFingerprint:
+            pass
         finally:
             _sys.path.remove(str(ROOT / "eval"))
 

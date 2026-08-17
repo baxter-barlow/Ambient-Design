@@ -303,6 +303,26 @@ def self_test():
     cases.append(("main() exits 1 when a table disagrees", planted == 1))
     cases.append(("main() exits 0 when it agrees", clean == 0))
 
+    # WIRING OVER THE REAL TREE. Both wiring cases above pass explicit
+    # directories, so emptying REQUIRED, zeroing the floor or narrowing the
+    # verdict regex left the self-test green while the gate checked nothing.
+    import contextlib as _c, io as _io
+    with _c.redirect_stdout(_io.StringIO()) as _out, _c.redirect_stderr(_io.StringIO()):
+        default_code = main([])
+    default_text = _out.getvalue()
+    cases.append(("main() with no arguments checks the real benchmarks",
+                  default_code == 0 and "PASS: 10 results row(s)" in default_text))
+    # Narrowing VERDICT back to ^(pass|PASS)$ breaks no real row, because no
+    # real row uses `Pass` -- which is exactly why a row could escape by
+    # adopting one. Pinned directly.
+    cases.append(("a dressed verdict cell is still a verdict", all(
+        len(result_rows(agreeing.replace("| PASS |", f"| {form} |"))) == 2
+        for form in ("Pass", "pass (see note)", "PASS - ok", "fail"))))
+    cases.append(("a cell that is not a verdict is not read as one", not
+        result_rows(agreeing.replace("| PASS |", "| passenger count |"))))
+    cases.append(("every REQUIRED benchmark is actually reached",
+                  set(REQUIRED) == {"blinker-555", "buck-3v3"}))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1
