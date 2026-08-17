@@ -127,6 +127,12 @@ sim:
 # range, which only exists once something is committed.
 policy:
 	sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
+	# The COMMIT, not the working tree. `git diff --check HEAD` compares the
+	# index to HEAD, so it goes silent the moment a defect is committed — which
+	# is how a trailing-whitespace failure landed in this repository while
+	# `make policy` reported clean. CI compares base..head; this compares the
+	# last commit, which is the local equivalent.
+	git diff --check HEAD~1 HEAD 2>/dev/null || git diff --check $$(git rev-list --max-parents=0 HEAD) HEAD
 	git diff --check HEAD
 	sh .github/scripts/check-dco.sh $$(git rev-list --max-parents=0 HEAD) HEAD
 

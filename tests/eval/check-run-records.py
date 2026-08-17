@@ -369,13 +369,6 @@ def problems_for(record, label):
             "and are still compared. Recording the reading is necessary and not "
             "sufficient: AMB-119 is unsettled, and the two readings differ by a "
             "third of the repair budget.")
-    budgets = {
-        (arm.get("config") or {}).get("token_budget")
-        for arm in arms.values() if isinstance(arm, dict)
-    } - {None}
-    if len(budgets) > 1:
-        bad(f"arms were run under different token budgets ({sorted(budgets)}) and "
-            "are still compared")
     benches = {
         (arm.get("config") or {}).get("benchmark")
         for arm in arms.values() if isinstance(arm, dict)

@@ -102,6 +102,11 @@ QUANTITY = re.compile(r"^\s*(?P<number>-?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*(?P<unit
 # and how far a one-sided bound may sit from it. Loose on purpose: a real
 # tolerance stack is rarely wider, and this must not fight engineering. It
 # exists to catch a window that has stopped asserting anything at all.
+# How many assertions each deck benchmark must carry. Every sibling gate has a
+# floor; these two did not, so 8 of the 10 declared assertions could be deleted
+# with `make sim` green.
+MINIMUM_ASSERTIONS = 5
+
 MAX_RELATIVE_WINDOW = 3.0
 # A one-sided bound is a SPEC LIMIT, not a tolerance: "ripple below 50 mV" on a
 # converter measuring 3.6 mV is a 14x margin and is exactly what good design
@@ -215,13 +220,19 @@ def meas_id_of(assertion, name):
     return str(assertion.get("meas_id") or name).lower()
 
 
-def check_benchmark(case, spec, log_text, problems):
+def check_benchmark(case, spec, log_text, problems, minimum=None):
     """One benchmark's assertions against one ngspice log."""
     measured = parse_log(log_text)
     assertions = spec.get("assertions") or []
     if not assertions:
         problems.append(f"{case}: declares no assertions; a benchmark must assert something")
         return 0
+    floor = MINIMUM_ASSERTIONS if minimum is None else minimum
+    if len(assertions) < floor:
+        problems.append(
+            f"{case}: declares {len(assertions)} assertion(s), below the floor "
+            f"of {floor}. Lowering it is a decision; drifting under it is not."
+        )
 
     checked = 0
     for assertion in assertions:
@@ -397,7 +408,9 @@ def self_test():
 
     def run(spec, text=log):
         problems = []
-        check_benchmark("case", spec, text, problems)
+        # minimum=0: these probes are single assertions by design; the floor is
+        # a statement about a real benchmark's population, not about a fixture.
+        check_benchmark("case", spec, text, problems, minimum=0)
         return problems
 
     cases = [
@@ -451,18 +464,20 @@ def self_test():
     with _tmp.TemporaryDirectory() as _d:
         _case = Path(_d) / "probe"
         _case.mkdir()
+        _five = "".join(
+            f"  - name: osc_period{i}\n    meas_id: t_period\n"
+            "    window: [2.0 s, 3.0 s]\n" for i in range(MINIMUM_ASSERTIONS))
         (_case / "assertions.yaml").write_text(
-            "deck: netlist.cir\nassertions:\n"
-            "  - name: osc_period\n    meas_id: t_period\n"
-            "    window: [2.0 s, 3.0 s]\n", encoding="utf-8")
+            "deck: netlist.cir\nassertions:\n" + _five, encoding="utf-8")
         _log = Path(_d) / "ng.log"
         _log.write_text("t_period   =  1.01191e+00\n", encoding="utf-8")
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
             _planted = main([str(_case), str(_log)])
+        _ok = "".join(
+            f"  - name: osc_period{i}\n    meas_id: t_period\n"
+            "    window: [0.9 s, 1.1 s]\n" for i in range(MINIMUM_ASSERTIONS))
         (_case / "assertions.yaml").write_text(
-            "deck: netlist.cir\nassertions:\n"
-            "  - name: osc_period\n    meas_id: t_period\n"
-            "    window: [0.9 s, 1.1 s]\n", encoding="utf-8")
+            "deck: netlist.cir\nassertions:\n" + _ok, encoding="utf-8")
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
             _clean = main([str(_case), str(_log)])
     cases.append(("main() exits 1 on a value outside its window", _planted == 1))
