@@ -437,6 +437,62 @@ def model_problems(problems):
     return len(checked)
 
 
+# design.md's AC1a line-count table publishes the same measurement
+# lang/README.md does, in a second document, and check-design-docs only reads
+# tables whose last cell is a verdict -- so this one was outside every gate.
+# It has already been published against the losing arm once.
+LINE_TABLES = {"blinker-555": ("candidate_b", ROOT / "lang" / "examples"
+                               / "blinker-555.design.json")}
+
+
+def line_count_problems(problems):
+    """Hold design.md's AC1a line table to the renderer it names."""
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "lang"))
+    try:
+        from bakeoff import arms as _arms
+        from bakeoff.model import load_model
+    except ImportError as exc:
+        raise GateUnavailable(f"the bake-off harness is not importable: {exc}")
+    checked = 0
+    for name, (arm_name, model_path) in LINE_TABLES.items():
+        doc = ROOT / "benchmarks" / name / "design.md"
+        if not doc.is_file():
+            problems.append(f"{name}/design.md is missing")
+            continue
+        arm = getattr(_arms, arm_name)
+        model = load_model(model_path)
+        want = {v: len(arm.render(model, v).splitlines())
+                for v in ("explicit", "inferred", "inferred+columnar")}
+        seen = set()
+        for line in doc.read_text(encoding="utf-8").splitlines():
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) != 2:
+                continue
+            variant = cells[0].replace(" + ", "+").replace(" ", "")
+            variant = {"explicit": "explicit", "inferred": "inferred",
+                       "inferred+columnar": "inferred+columnar"}.get(variant)
+            if variant is None:
+                continue
+            found = re.search(r"\d+", cells[1])
+            if found is None:
+                continue
+            if int(found.group(0)) != want[variant]:
+                problems.append(
+                    f"{name}/design.md: the AC1a table publishes "
+                    f"{found.group(0)} lines for {variant}, but {arm_name} "
+                    f"renders {want[variant]}. This table has already been "
+                    "published against the losing arm once.")
+                continue
+            seen.add(variant)
+            checked += 1
+        if len(seen) < 3:
+            problems.append(
+                f"{name}/design.md: reconciled {len(seen)} of 3 AC1a line "
+                "counts; a row that stops parsing also stops being checked.")
+    return checked
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -457,6 +513,7 @@ def main(argv):
         for case in cases:
             total += check_case(case, problems)
         windows = model_problems(problems) if not argv else 0
+        lines_ok = line_count_problems(problems) if not argv else 0
     except GateUnavailable as exc:
         print(f"design-docs: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -468,7 +525,8 @@ def main(argv):
         return 1
     print(f"design-docs: PASS: {total} results row(s) agree with the "
           f"measurements their benchmarks record, and {windows} model/IR "
-          "assertion window(s) agree with the benchmark that gates them.")
+          f"assertion window(s) and {lines_ok} AC1a line count(s) agree "
+          "with the artifacts that produce them.")
     return 0
 
 

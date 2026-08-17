@@ -101,6 +101,8 @@ MINIMUM_DISTINCT_ROWS = 12
 # copies of one correct row met a cell count of 18 while five real rows left
 # the document, which is the third recurrence of this exact defect here.
 MINIMUM_T9_CELLS = 18
+# 4 rows x 5 thresholds.
+MINIMUM_SWEEP_CELLS = 20
 
 
 class GateUnavailable(Exception):
@@ -149,7 +151,28 @@ def measure_now():
     # the one thing nothing checks. Stored to one decimal, which is how the
     # README publishes it.
     from bakeoff.measure import measure
-    t9 = measure()["readings"]["t9_by_rule"]
+    readings = measure()["readings"]
+    # THE L6 SWEEP, stored per (design, arm, threshold).
+    for design, arms_seen in readings["l6_threshold_curve"].items():
+        for arm, reading in arms_seen.items():
+            for threshold, saving in reading["saving_by_threshold"].items():
+                tokens[f"l6|{design}|{arm}|{threshold}"] = saving
+    # LINE COUNTS, which the harness does not publish, measured here from the
+    # same renderers the token counts come from.
+    from bakeoff.arms import candidate_a, candidate_b, starlark
+    from bakeoff.model import load_model
+    for design in DESIGNS:
+        model = load_model(ROOT / "lang" / "examples" / f"{design}.design.json")
+        for name, arm in {"candidate_a": candidate_a, "candidate_b": candidate_b,
+                          "starlark": starlark}.items():
+            for variant in VARIANTS:
+                try:
+                    rendered = arm.render(model, variant)
+                except Exception:
+                    continue
+                tokens[f"lines|{design}|{name}|{variant}"] = len(
+                    rendered.splitlines())
+    t9 = readings["t9_by_rule"]
     for design, arms_seen in t9.items():
         for arm, reading in arms_seen.items():
             fractions = reading["by_rule_fraction"]
@@ -415,6 +438,73 @@ def token_problems(text, counts, problems, minimum=None):
             f"the floor "
             f"of {MINIMUM_T9_CELLS}. This table was a stated exclusion and went "
             "stale through two corrections while nothing looked at it.")
+
+    # THE L6 SWEEP TABLE, located by its own header. An auditor changed a row
+    # from 65/45 to 6500/4500 with zero problems reported: this table was
+    # deliberately excluded from the token-table locator (its columns are
+    # thresholds) and then checked by nothing at all.
+    sweep_seen = set()
+    in_sweep = False
+    thresholds = []
+    for line in all_lines:
+        if line.startswith("| Design | Arm |") and ("≥2" in line or ">=2" in line):
+            in_sweep = True
+            header_cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            thresholds = [re.sub(r"[^\d]", "", c) for c in header_cells[2:]]
+            continue
+        if in_sweep:
+            if not line.strip().startswith("|"):
+                break
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) < 3 or cells[0].startswith("---"):
+                continue
+            design, arm = cells[0], cells[1]
+            for threshold, cell in zip(thresholds, cells[2:]):
+                want = counts.get(f"l6|{design}|{arm}|{threshold}")
+                if want is None:
+                    continue
+                found = re.search(r"-?\d+", cell.replace(",", ""))
+                if found is None:
+                    continue
+                if int(found.group(0)) != want:
+                    problems.append(
+                        f"lang/README.md: the L6 sweep publishes {cell} for "
+                        f"{design}/{arm} at threshold {threshold}, but the "
+                        f"harness measures {want}.")
+                    continue
+                sweep_seen.add((design, arm, threshold))
+                checked += 1
+    if minimum is None and len(sweep_seen) < MINIMUM_SWEEP_CELLS:
+        problems.append(
+            f"lang/README.md: reconciled {len(sweep_seen)} distinct L6 sweep "
+            f"cell(s), below the sweep floor of {MINIMUM_SWEEP_CELLS}.")
+
+    # LINE COUNTS IN PROSE, in both documents that publish them. An auditor
+    # rewrote "119 explicit / 82 inferred / 71 inferred+columnar" to
+    # "999/888/777" with zero problems, and that sentence is AC1a's headline
+    # evidence -- the one already found published against the LOSING arm once.
+    prose = re.search(
+        r"comes in at (\d+) explicit / (\d+) inferred / (\d+) inferred\+columnar "
+        r"on (candidate_a|candidate_b|starlark)", text)
+    if prose:
+        arm = prose.group(4)
+        for variant, published in zip(VARIANTS, prose.groups()[:3]):
+            want = counts.get(f"lines|blinker-555|{arm}|{variant}")
+            if want is None:
+                continue
+            if int(published) != want:
+                problems.append(
+                    f"lang/README.md: publishes {published} lines for "
+                    f"blinker-555/{arm}/{variant}, but the renderer produces "
+                    f"{want}. This sentence is AC1a's headline evidence and has "
+                    "already been published against the wrong arm once.")
+                continue
+            rows_seen.add(("lines", arm, variant))
+            checked += 1
+    elif minimum is None:
+        problems.append(
+            "lang/README.md: the AC1a line-count sentence is gone or reshaped, "
+            "so its three numbers are checked by nothing.")
 
     floor = MINIMUM_DISTINCT_ROWS if minimum is None else minimum
     if len(rows_seen) < floor:
