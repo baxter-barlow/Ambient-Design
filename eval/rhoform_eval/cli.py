@@ -29,7 +29,57 @@ from .tokenizer import (
 )
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def read_tokenizer_pin() -> tuple[str | None, str | None]:
+    """(encoding, fingerprint) from toolchain/versions.yaml, without PyYAML.
+
+    The same four-line scan `lang/bakeoff/measure.py` uses, and for the same
+    reason: this has to run wherever `make check` runs. Returns (None, None) if
+    the manifest is unreadable rather than raising, so a missing manifest
+    surfaces as "no pin" at the call site instead of as a stack trace.
+    """
+    encoding = fingerprint = None
+    try:
+        lines = (REPO_ROOT / "toolchain" / "versions.yaml").read_text(
+            encoding="utf-8"
+        ).splitlines()
+    except OSError:
+        return None, None
+    inside = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("tokenizer:"):
+            inside = True
+            continue
+        if inside and stripped.startswith("encoding:"):
+            encoding = stripped.split(":", 1)[1].strip().strip('"')
+        if inside and stripped.startswith("fingerprint:"):
+            fingerprint = stripped.split(":", 1)[1].strip().strip('"')
+        if inside and stripped.startswith("probe_corpus:"):
+            break
+    return encoding, fingerprint
+
+
 def load_tokenizer(name: str | None, fingerprint: str | None, allow_stub: bool):
+    """Build the tokenizer, DEFAULTING the pin from toolchain/versions.yaml.
+
+    `--fingerprint` used to default to None, and nothing under eval/ read the
+    manifest, so no invocation of this harness ever checked the behavioural
+    pin. A six-line tiktoken shim that counted whitespace words produced
+    `gating: true` counts and an `authoritative: true` record, and the schema
+    accepted it — while eval/README.md says "a same-named artifact that
+    tokenizes differently must [fail the pin]". The pin value itself was always
+    correct; it was simply never consulted.
+
+    The sibling consumer `lang/bakeoff/measure.py` did read it, which is what
+    showed the mechanism worked and that the AC5a-facing entry point was the
+    one omitting it.
+
+    An explicit `--fingerprint` still wins, so a deliberate re-pin is possible;
+    it just cannot happen by default or by omission.
+    """
     if name in (None, "stub"):
         if not allow_stub:
             raise PinnedTokenizerError(
@@ -38,6 +88,18 @@ def load_tokenizer(name: str | None, fingerprint: str | None, allow_stub: bool):
                 "can never satisfy a gate)."
             )
         return StubTokenizer()
+    if fingerprint is None:
+        pinned_encoding, pinned_fingerprint = read_tokenizer_pin()
+        if pinned_fingerprint and name == pinned_encoding:
+            fingerprint = pinned_fingerprint
+        elif pinned_fingerprint:
+            raise PinnedTokenizerError(
+                f"tokenizer {name!r} is not the encoding pinned in "
+                f"toolchain/versions.yaml ({pinned_encoding!r}), and no "
+                "--fingerprint was given. Counting with an unpinned ruler "
+                "produces numbers no later run can reproduce; pass "
+                "--fingerprint explicitly to say you mean it."
+            )
     return TiktokenTokenizer(name, fingerprint)
 
 
