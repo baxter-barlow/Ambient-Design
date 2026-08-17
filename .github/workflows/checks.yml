@@ -31,10 +31,11 @@ jobs:
           # Keep in sync with toolchain/versions.yaml (python.version).
           python-version: "3.12"
       - name: Install pinned PyYAML
-        # check-layout.sh defers the versions.yaml deep parse when PyYAML
-        # is absent; installing it here guarantees the deep-parse gate
-        # actually runs in CI. Keep in sync with toolchain/versions.yaml
-        # (python.packages).
+        # check-layout.sh FAILS (exit 2) when PyYAML is absent -- an
+        # unavailable gate is not a pass -- so this install is what lets the
+        # versions.yaml deep parse run at all. The comment here used to say the
+        # script "defers" the parse, which describes behaviour it replaced.
+        # Keep in sync with toolchain/versions.yaml (python.packages).
         run: |
           python3 --version
           python3 -m pip install PyYAML==6.0.2

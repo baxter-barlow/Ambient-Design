@@ -20,7 +20,7 @@
 .param KI=6.47e4
 .param KD=2.33e-5
 .param VTGT=3.296     ; regulation point: 0.8*(1+31.2k/10k)
-.param SBAND=33.3m    ; 1% settling band around VTGT
+.param SBAND=32.96m   ; 1% settling band around VTGT (was 33.3m, which was 1% of the pre-centring 3.328 V and 1.010% of this one)
 
 * ---------- input fixture: ramped supply (V3) ----------
 V3 in 0 PWL(0 0 20u 0 220u 12 1 12)
