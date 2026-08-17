@@ -82,10 +82,17 @@ CONSUMERS = {
     # became generic — which mattered, because the manifest says of it: "NEVER
     # edit the probe corpus: changing it changes every fingerprint and silently
     # invalidates every recorded pin."
+    # These two are read from the manifest AT RUNTIME by measure.py rather than
+    # copied into it, which is the strongest relationship a consumer can have
+    # with a pin -- there is no second copy to drift. So the needle is the parse
+    # itself, not the value. Spelled as the bare words `encoding` and
+    # `fingerprint` it matched read_text(encoding="utf-8") and an argparse help
+    # string, so both consumers could stop reading the manifest entirely and
+    # still count as verified agreements.
     ("evaluation", "tokenizer", "fingerprint"): (
-        lambda v: "fingerprint", [EVAL_CLI, MEASURE]),
+        lambda v: 'startswith("fingerprint:")', [MEASURE]),
     ("evaluation", "tokenizer", "encoding"): (
-        lambda v: "encoding", [EVAL_CLI, MEASURE]),
+        lambda v: 'startswith("encoding:")', [MEASURE]),
     ("kicad", "series", "9.0"): (lambda v: v, [CHECKS]),
     ("kicad", "series", "10.0"): (lambda v: v, [CHECKS]),
 }
@@ -103,7 +110,12 @@ NOT_YET_CONSUMED = set()
 # 17 without the optional behavioural fingerprint check, which is the number CI
 # sees. Fitting this to a local venv that happens to carry tiktoken made the
 # floor itself environment-dependent.
-MINIMUM_AGREEMENTS = 17
+# 14, not the 17 this was. Three of those "agreements" were bare-word matches
+# counted as verified: `encoding` satisfied by read_text(encoding="utf-8"),
+# `fingerprint` by an argparse help string, ngspice's version by the word
+# appearing anywhere. Read-by-key pins are reported and NOT counted now, so the
+# floor is the number of pins whose VALUE a consumer is actually held to.
+MINIMUM_AGREEMENTS = 30
 
 
 class GateUnavailable(Exception):
@@ -327,8 +339,13 @@ def check(manifest, read=None):
                         f"{needle!r}, so nothing there reads this pin."
                     )
                 else:
+                    # NOT counted toward MINIMUM_AGREEMENTS. Three of the
+                    # seventeen "agreements" were word-presence matches, two of
+                    # them satisfied by text with nothing to do with the pin:
+                    # `encoding` by read_text(encoding="utf-8"), `fingerprint`
+                    # by an argparse help string. A floor made of those numbers
+                    # measures nothing.
                     READ_BY_KEY.append(".".join(path))
-                    checked += 1
                 continue
             occurrences = [line for line in live if key in line]
             if needle not in "\n".join(live):
@@ -421,10 +438,47 @@ def check(manifest, read=None):
     # arbitrary third-party code inside the trust boundary of every job, in a
     # gate whose own text says "an unpinned or unrecorded one is unaudited code".
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml")) + \
-                sorted((ROOT / ".github" / "workflows").glob("*.yaml"))
+                sorted((ROOT / ".github" / "workflows").glob("*.yaml")) + \
+                sorted((ROOT / ".github" / "actions").glob("**/action.yml")) + \
+                sorted((ROOT / ".github" / "actions").glob("**/action.yaml"))
     for workflow in (workflows or [CHECKS, DCO, POLICY]):
         text = read(workflow)
         if text is None:
+            continue
+        # PARSED, not scanned. Line-oriented matching missed the flow-mapping
+        # form -- `steps: [{uses: attacker/evil-action@main}]` is valid YAML and
+        # valid Actions and was invisible. The line scan is kept as a fallback
+        # for when PyYAML is absent, and reported as such rather than silently
+        # skipped.
+        parsed_refs = []
+        try:
+            import yaml as _yaml
+            def _walk_uses(node):
+                if isinstance(node, dict):
+                    for k, v in node.items():
+                        if k == "uses" and isinstance(v, str):
+                            parsed_refs.append(v)
+                        else:
+                            _walk_uses(v)
+                elif isinstance(node, list):
+                    for item in node:
+                        _walk_uses(item)
+            _walk_uses(_yaml.safe_load(text))
+        except ImportError:
+            parsed_refs = None
+        except Exception:
+            parsed_refs = None
+        if parsed_refs is not None:
+            for ref in parsed_refs:
+                if ref.startswith("./") or ref.startswith("docker://"):
+                    continue
+                if ref not in known_refs:
+                    problems.append(
+                        f"{workflow.name}: uses {ref!r}, which "
+                        "toolchain/versions.yaml does not pin. An unrecorded "
+                        "action is unaudited code inside every job.")
+                else:
+                    checked += 1
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
@@ -521,7 +575,12 @@ def self_test():
     real_check, real_load = check, load_manifest
     try:
         globals()["load_manifest"] = lambda: {"python": {"version": "3.12"}}
-        globals()["check"] = lambda *_a, **_k: (["planted problem"], 0)
+        # checked=MINIMUM_AGREEMENTS, NOT 0. With 0 the floor produced the
+        # non-zero exit all by itself, so the branch this case is named for
+        # could be deleted and the case stayed green -- a floor tripping in
+        # place of the check it backstops, which is the exact failure this
+        # file's other comments warn about.
+        globals()["check"] = lambda *_a, **_k: (["planted problem"], MINIMUM_AGREEMENTS)
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             planted = main([])
         globals()["check"] = lambda *_a, **_k: ([], MINIMUM_AGREEMENTS)
