@@ -4,7 +4,7 @@
 `ir/examples/blinker.ir.json` carries `header.design_hash`, which `ir/README.md`
 defines as a hash over the document's own canonical bytes, and the paired
 source map mirrors it. Until this gate existed NOTHING recomputed either one:
-the schemas gate and `ir/validate.sh` check shape, and the schema pins the
+the schemas gate checks shape, and the schema pins the
 `^sha256:[0-9a-f]{64}$` pattern — that the value LOOKS like a hash, not that it
 is the right one. So the worked example of the determinism contract was free to
 carry a hash that did not describe its own bytes, with every gate green.

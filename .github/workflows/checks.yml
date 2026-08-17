@@ -166,6 +166,14 @@ jobs:
         with:
           # Keep in sync with toolchain/versions.yaml (python.version).
           python-version: "3.12"
+      - name: Recorded runs are internally consistent
+        # The schema proves shape; it has no arithmetic. An audit built eleven
+        # dishonest records from the committed demo run — a 64K context passing
+        # a 12K limit, a gate passing at 2/10, 99 successes in 10 trials — and
+        # the schema accepted every one.
+        run: |
+          python3 tests/eval/check-run-records.py --self-test
+          python3 tests/eval/check-run-records.py
       - name: Run harness tests
         # stdlib unittest: no install step, so this job cannot be weakened
         # by a dependency resolution problem.

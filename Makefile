@@ -98,6 +98,8 @@ grammar:
 # harness whose statistics quietly changed would still emit confident
 # verdicts.
 eval-tests:
+	python3 tests/eval/check-run-records.py --self-test
+	python3 tests/eval/check-run-records.py
 	python3 -m unittest discover -s eval/tests -t eval
 	cd eval && python3 -m rhoform_eval selftest
 	cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub

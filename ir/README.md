@@ -13,8 +13,7 @@ Files here:
 | `examples/blinker.ir.json` | Hand-written elaboration of the 555 blinker benchmark |
 | `examples/blinker.sourcemap.json` | Matching source map |
 | `examples/negative/` | Negative controls: each file must be **rejected** by its schema |
-| `validate.sh` | Validates the examples, and asserts every negative control fails |
-| `validation.log` | Transcript of the validation runs |
+| `validation.log` | Transcript of the validation runs, and the carried-forward retraction |
 
 ## Versioning policy
 
@@ -97,7 +96,7 @@ All backends read the one IR artifact; none re-parse DSL source, and none talk t
 
 JSON Schema validates *shape*. The following invariants are real requirements on every IR
 document but are **not** expressible in the schema, so a document can be schema-green and still
-be rejected by the compiler. They are listed here so nobody mistakes a green `validate.sh` for a
+be rejected by the compiler. They are listed here so nobody mistakes a green schema gate for a
 correctness proof; each needs a compiler check plus its own test, not a schema fixture.
 
 - **Path uniqueness.** `instances[].path` and `assertions[].path` must each be unique across the
@@ -127,7 +126,7 @@ correctness proof; each needs a compiler check plus its own test, not a schema f
 ## Validating
 
 ```sh
-./validate.sh          # writes stdout; CI redirects to validation.log
+python3 ../tests/schemas/validate-schemas.py   # validates ir/ with the pinned jsonschema
 ```
 
 Prefers `python3 -m jsonschema`-style validation when the `jsonschema` package is present, falls
