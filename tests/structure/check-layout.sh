@@ -108,10 +108,16 @@ for json_root in $JSON_ROOTS; do
   done < <(find "$ROOT/$json_root" -type f -name '*.json' | LC_ALL=C sort)
 done
 
-# The retired project name must not come back. AMB-122 renamed AED to
-# Rhoform across everything that ships; without a gate, one copied snippet or
-# one reverted file reintroduces it and nothing notices until the name is
-# inconsistent again.
+# Retired names must not come back. AMB-122 renamed AED to Rhoform across
+# everything that ships, and AMB-118 moved the KiCad library prefix off
+# `ael:` because AEL is Keysight ADS's Application Extension Language - a
+# same-industry collision. Without a gate, one copied snippet or one reverted
+# file reintroduces either and nothing notices until it is inconsistent again.
+#
+# The library prefix is matched as `ael:` and not as a bare word, because
+# unlike the project name it is retired only in that one position: three
+# letters that occur inside ordinary English would fail on the next document
+# that happens to contain them.
 #
 # PATHS ARE CHECKED AS WELL AS CONTENTS. The first version of this scanned
 # file bodies only, so re-creating `eval/aed_eval/` and tracking a file in it
@@ -142,6 +148,7 @@ HEX = re.compile(r"\b[0-9a-f]{64}\b")
 NOTE = "tests/ir/check-hashes.py"
 SELF = "tests/structure/check-layout.sh"
 BRAND = re.compile("aed", re.I)
+PREFIX = re.compile(r"\bael:", re.I)
 hits = []
 for raw in sys.stdin.buffer.read().split(b"\0"):
     rel = raw.decode()
@@ -183,13 +190,13 @@ for raw in sys.stdin.buffer.read().split(b"\0"):
     if rel == NOTE:
         text = text.replace("the AED -> Rhoform rename", "")
     for line_no, line in enumerate(text.split("\n"), 1):
-        if BRAND.search(line):
+        if BRAND.search(line) or PREFIX.search(line):
             hits.append(f"{rel}:{line_no}")
 if hits:
     print("\n".join(hits))
 ')
   if [ -n "$brand_hits" ]; then
-    printf 'FAIL: the retired name AED reappears in tracked files:\n%s\n' "$brand_hits" >&2
+    printf 'FAIL: a retired name (AED, or the ael: library prefix) reappears in tracked files:\n%s\n' "$brand_hits" >&2
     exit 1
   fi
 fi

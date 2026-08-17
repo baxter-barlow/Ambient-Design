@@ -9,7 +9,7 @@
   "package": {
     "name": "D (SOIC)",
     "pin_count": 14,
-    "footprint_ref": "ael:SOIC-14_3.9x8.7mm_P1.27mm"
+    "footprint_ref": "rho:SOIC-14_3.9x8.7mm_P1.27mm"
   },
   "pins": [
     {

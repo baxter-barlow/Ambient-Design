@@ -355,7 +355,7 @@
         "footprint_ref": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+$",
-          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. Rhoform's own originally-authored library is `ael:`. Absent means the part has no footprint bound yet \u2014 legitimate for a D2 stub part, which can still be netlisted and type-checked."
+          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. Rhoform's own originally-authored library is `rho:`. It was the AEL prefix until AMB-118: AEL is Keysight ADS's Application Extension Language, a same-industry collision an EE could reasonably mistake for another EDA vendor's scripting language, and it had to move before AMB-64 and AMB-65 embedded it in every generated symbol and footprint. Absent means the part has no footprint bound yet \u2014 legitimate for a D2 stub part, which can still be netlisted and type-checked."
         },
         "thermal_pad": {
           "type": "boolean",

@@ -9,7 +9,7 @@
   "package": {
     "name": "ESP32-S3-WROOM-1",
     "pin_count": 41,
-    "footprint_ref": "ael:XCVR_ESP32-S3-WROOM-1",
+    "footprint_ref": "rho:XCVR_ESP32-S3-WROOM-1",
     "thermal_pad": true
   },
   "pins": [
