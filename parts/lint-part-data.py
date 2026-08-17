@@ -129,12 +129,24 @@ def walk_measures(node, path=""):
             yield from walk_measures(value, f"{path}/{i}")
 
 
-def lint(doc, label):
-    """Return a list of human-readable defects."""
+def lint(doc, label, unchecked=None):
+    """Return a list of human-readable defects.
+
+    `unchecked` collects checks that could not be PERFORMED on this record, as
+    distinct from checks that failed. The two must not be conflated in either
+    direction: reporting an unresolvable bound as a defect blames the record
+    for a limitation of the data model, and skipping it silently — which is
+    what happened until AMB-123 — leaves a containment gate covering some pins
+    and not others with no way to tell which.
+    """
     problems = []
+    unchecked = problems if unchecked is None else unchecked
 
     def bad(check, message):
         problems.append(f"{label}: {check}: {message}")
+
+    def cannot_check(check, message):
+        unchecked.append(f"{label}: {check}: {message}")
 
     pins = doc.get("pins", [])
     pin_names = [p.get("name") for p in pins]
@@ -302,6 +314,29 @@ def lint(doc, label):
                            "containment cannot be checked across units")
                 continue
             a_lo, a_hi = a.get("min"), a.get("max")
+            # A RelativeBound (`{reference, offset}`) is not a number, and this
+            # loop's `isinstance(..., (int, float))` guards silently skipped
+            # every one of them — including the case parts/README.md presents
+            # as the interesting one. On the shipped AP7361C, whose
+            # OUT.abs_max.voltage.max is `IN + 0.3 V`, a recommended maximum of
+            # 100 V passed cleanly while the numeric sibling pin correctly
+            # rejected 60 V against 6.5 V.
+            #
+            # Resolving the reference needs a supply value the record does not
+            # carry, so this cannot be checked here. It is REPORTED as
+            # unchecked rather than skipped: a containment gate that quietly
+            # covers some pins and not others, with no way to tell which, is
+            # the shape of gap this file exists to close.
+            for endpoint, side in ((a_lo, "min"), (a_hi, "max")):
+                if isinstance(endpoint, dict) and "reference" in endpoint:
+                    cannot_check("L12", f"pin {pin.get('name')!r}: abs_max {quantity} "
+                               f"{side} is a relative bound "
+                               f"({endpoint.get('reference')}"
+                               f"{endpoint.get('offset', 0):+g}), so containment "
+                               "cannot be checked without a value for that "
+                               "reference. Either state the bound numerically or "
+                               "record the reference's value in the same record; "
+                               "an unresolvable limit checks nothing.")
             for key in ("min", "typ", "max"):
                 value = r.get(key)
                 if not isinstance(value, (int, float)):
@@ -473,7 +508,7 @@ def main() -> int:
         print("lint: no *.part.json records found; nothing to lint.")
         return 0
 
-    problems = []
+    problems, unchecked = [], []
     for path in files:
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
@@ -484,10 +519,15 @@ def main() -> int:
         # deliberately malformed, and linting them would report noise.
         if "negative" in path.parts:
             continue
-        found = lint(doc, str(path))
+        found = lint(doc, str(path), unchecked)
         problems.extend(found)
         if not found:
             print(f"lint: {path}: clean.")
+
+    # Printed on every run, and counted in the pass line, so a growing set of
+    # unresolvable bounds is visible rather than silently shrinking coverage.
+    for note in unchecked:
+        print(f"lint: unchecked: {note}")
 
     if problems:
         for problem in problems:
@@ -495,7 +535,11 @@ def main() -> int:
         print(f"lint: {len(problems)} problem(s).", file=sys.stderr)
         return 1
 
-    print(f"lint: PASS: {len([f for f in files if 'negative' not in f.parts])} record(s) consistent.")
+    print(
+        f"lint: PASS: {len([f for f in files if 'negative' not in f.parts])} "
+        f"record(s) consistent, {len(unchecked)} check(s) not performable on the "
+        "data as modelled."
+    )
     return 0
 
 
