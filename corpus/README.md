@@ -301,11 +301,12 @@ Counted once but blocked by more than one missing fact, so the single row unders
 
 Entries in the third column carry a blocker that survives adding the field, named in `classification.yaml`. For one of them the counterfactual is not merely weaker but inverted: adding the fact would make the generic rule flag the *corrected* design.
 
-1 entry makes a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code, because a code with one member costs more than it buys.
+2 of those entries make a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code: the population is small enough that a code would cost more than it buys, and both entries carry a further blocker anyway. (This sentence read "a code with one member" while the table had two, because the count above it was generated and the clause after it was not.)
 
 | entry | carried at | further blocker, if any |
 |---|---|---|
 | `BUG-0052` | `parameters` | the root cause is that stray capacitance was ignored, and stray C is a layout quantity the DSL holds no coordinates for |
+| `BUG-0054` | `pins[].abs_max.voltage.conditions` | two blockers, either of which is sufficient. The entry states a datasheet requirement rather than reporting an observed failure, in the same words as its twin BUG-0053 -- so there is no buggy board for any check to catch. And the violation exists only in the VDD = 0 state, which the frozen syntax has no construct for, so promoting `conditions` does not reach it. `carried_at` is kept because it is TRUE -- the fact is in D3 v0 in an open map -- and the published table already carries a "further blocker" column for exactly this case. An earlier revision under AMB-123 dropped it, on a gate rule that treated `not-a-postmortem` as emptying promotion; that conflated a claim about the source with a claim about where the fact lives, and made the entry assert something its own missing_fact contradicts. |
 
 <!-- /generated -->
 

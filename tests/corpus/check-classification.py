@@ -204,14 +204,22 @@ RESIDUAL_KINDS = {
     "not-a-postmortem": "the entry states a requirement rather than reporting an observed failure, so there is no buggy board for any check to catch",
 }
 
-# Each of these says nothing a schema change reaches, so none can sit on an
+# Each of these says nothing a SCHEMA CHANGE reaches, so none can sit on an
 # entry that also claims the fix is a promotion. Keyed on `carried_at`, which
 # is what carries that claim.
+#
+# `not-a-postmortem` is deliberately NOT in this list. It is a claim about the
+# SOURCE -- the entry states a requirement rather than reporting an observed
+# failure -- and says nothing about where the fact lives in D3. Treating the
+# two as the same forced BUG-0054 to assert "absent" when its own
+# `missing_fact` says the qualification is "expressible only as an open
+# `conditions` key", and `conditions` resolves. The gate's own docstring says
+# `carried_at` exists to make "absent" and "present but not enumerated"
+# different, checkable states; conflating them picked the false one.
 RESIDUAL_KIND_EMPTIES_PROMOTION = (
     "fact-undocumented",
     "designs-identical",
     "not-design-time",
-    "not-a-postmortem",
 )
 
 # `at_risk` entries group into the decisions that would lose them together.
@@ -1003,7 +1011,10 @@ def summary_block(entries) -> str:
             )
             + " a weaker claim: the fact is already in D3 v0, in an open map, so the fix is "
             "to **promote** a key rather than add a field. Marked here rather than given a "
-            "reason code, because a code with one member costs more than it buys.",
+            "reason code: the population is small enough that a code would cost more than "
+            "it buys, and both entries carry a further blocker anyway. "
+            "(This sentence read \"a code with one member\" while the table had two, "
+            "because the count above it was generated and the clause after it was not.)",
             "",
             "| entry | carried at | further blocker, if any |",
             "|---|---|---|",

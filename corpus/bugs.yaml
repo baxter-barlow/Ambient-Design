@@ -795,6 +795,7 @@ bugs:
     to meet the absolute maximum voltage on VBUS specification" (Note 1, p.20, Figure 8, divider 47k/24k); Table
     2 CP2109 abs-max on VBUS with "VDD not powered" is VDD+3.6V.'
   collected: '2026-08-14'
+  review: caveat-not-postmortem
 - id: BUG-0055
   title: TL072 buffers with floating inputs overheat and back-drive ADC
   source:

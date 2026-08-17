@@ -27,8 +27,8 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:8bceef85d5465fd50c2f12857346e0da7c270fbed9bad8d8636247c09f495f5f
-  corpus_hash: sha256:7a0dee1f684de095e7532888ca7c53ea6e16c25e628bab5d636b39c2e06b9941
+  decision_hash: sha256:f09d3d855eab68aac1b45692d903b26a022b04a65c0bf165949679383eb2f640
+  corpus_hash: sha256:73ae8a734be5f5c771d128e600f3c197385b7e8b8c57c4074449da29b052ddfd
 
 entries:
 
@@ -818,6 +818,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].abs_max.voltage"]
   gap_class: pin-semantics
+  carried_at: pins[].abs_max.voltage.conditions
   missing_path: pins[].conditional_limits
   compound: single-class
   missing_fact: >-
@@ -839,7 +840,7 @@ entries:
     BUG-0010 and BUG-0052, whose in-scope flips were reverted for it.
   residual_kind: not-a-postmortem
   residual_blocker: >-
-    two blockers, either of which is sufficient. The entry states a datasheet requirement rather than reporting an observed failure, in the same words as its twin BUG-0053 -- so there is no buggy board for any check to catch. And the violation exists only in the VDD = 0 state, which the frozen syntax has no construct for, so promoting `conditions` does not reach it. `carried_at` was recorded here and has been dropped: it put the entry in the published counterfactual table as a promotion candidate for the next schema_version, which neither blocker permits.
+    two blockers, either of which is sufficient. The entry states a datasheet requirement rather than reporting an observed failure, in the same words as its twin BUG-0053 -- so there is no buggy board for any check to catch. And the violation exists only in the VDD = 0 state, which the frozen syntax has no construct for, so promoting `conditions` does not reach it. `carried_at` is kept because it is TRUE -- the fact is in D3 v0 in an open map -- and the published table already carries a "further blocker" column for exactly this case. An earlier revision under AMB-123 dropped it, on a gate rule that treated `not-a-postmortem` as emptying promotion; that conflated a claim about the source with a claim about where the fact lives, and made the entry assert something its own missing_fact contradicts.
 
 - id: BUG-0055
   verdict: in-scope
