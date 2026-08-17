@@ -44,7 +44,14 @@ dist/
 # error. `git add` on an ignored path does nothing unless forced, so nothing
 # ever warned. tests/structure/check-layout.sh now fails if one of these exists
 # untracked, so the exclusion cannot come back by accident.
-!**/validation.log
+#
+# The negation was `!**/validation.log`, an EXACT name. The very next evidence
+# file written after that fix was `validation-corners.log`, which the exact
+# name does not match -- so it was ignored, `git status` was clean because the
+# file was ignored rather than untracked, and `make all` exited 0 here and 2 on
+# every fresh clone. A prefix negation is the right shape: any file whose name
+# begins `validation` is a deliverable, not scratch output.
+!**/validation*.log
 !tests/golden/UPDATES.log
 
 # Cross-agent configuration is intentionally versioned. These negations

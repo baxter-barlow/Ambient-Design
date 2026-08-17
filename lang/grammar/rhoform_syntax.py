@@ -355,7 +355,18 @@ class Lit(Node):
         self.text = text
 
     def render(self, dialect: str) -> str:
+        # BOTH ARTIFACTS. The guard went into the Lark half only, so the
+        # human-readable EBNF still described the pre-fix language and an
+        # implementer working from it would reproduce `moduleM:` -> `module M:`.
+        # This module's own docstring says two artifacts nobody diffs will
+        # disagree eventually and the disagreement will surface as a parser
+        # that accepts something the spec forbids -- which is exactly what a
+        # one-sided fix to a frozen pair produces.
         if dialect != "lark":
+            # The EBNF states the boundary ONCE, in the lexical layer, rather
+            # than repeating a lookahead on all 28 keyword literals. Spelling
+            # it inline 28 times is noise; stating it nowhere is what let the
+            # Lark half and this half describe different languages.
             return f"'{self.text}'"
         # KEYWORDS CARRY THEIR OWN WORD BOUNDARY. An anonymous "module"
         # literal is matched by Lark's LALR CONTEXTUAL lexer, which restricts
@@ -850,6 +861,13 @@ def emit_ebnf() -> str:
         out.append(f"{name} ::= {_regex_literal(pattern)}")
     out.append("")
     out.append("(* The lexical layer. *)")
+    out.append("(* KEYWORD BOUNDARY. Every quoted word literal below and in the")
+    out.append("   productions above matches only when NOT followed by [A-Za-z0-9_].")
+    out.append("   Without this rule `moduleM:` lexes as `module` + `M` and parses as")
+    out.append("   `module M:`; the Lark artifact encodes it per-literal as")
+    out.append("   /word(?![A-Za-z0-9_])/. An implementer who ignores this rule builds")
+    out.append("   a parser that accepts programs this grammar forbids. *)")
+    out.append("")
     for name, parts, doc in LEXICAL:
         out.append(f"(* {doc} *)")
         if parts is None:

@@ -150,7 +150,7 @@ while IFS= read -r evidence; do
   git -C "$ROOT" ls-files --error-unmatch "$rel" >/dev/null 2>&1 \
     || untracked_evidence="$untracked_evidence  $rel
 "
-done < <(find "$ROOT" -type f \( -name 'validation.log' -o -name 'UPDATES.log' \) \
+done < <(find "$ROOT" -type f \( -name 'validation*.log' -o -name 'UPDATES.log' \) \
            -not -path "$ROOT/.git/*" -not -path "$ROOT/.claude/*" | LC_ALL=C sort)
 if [ -n "$untracked_evidence" ]; then
   printf 'FAIL: evidence file(s) exist on disk but are not tracked:\n%s' "$untracked_evidence" >&2
