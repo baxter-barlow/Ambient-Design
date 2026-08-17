@@ -124,6 +124,8 @@ sim:
 	python3 tests/benchmarks/check-design-docs.py
 	python3 tests/benchmarks/check-corners.py --self-test
 	python3 tests/benchmarks/check-corners.py
+	python3 lang/tests/check_readme_numbers.py --self-test
+	python3 lang/tests/check_readme_numbers.py
 	bash tests/benchmarks/run-sim.sh
 
 # The gates in .github/workflows/repository-policy.yml. Kept as its own target
