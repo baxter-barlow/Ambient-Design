@@ -107,7 +107,15 @@ def check_spec(spec, label, problems, minimum=None):
             problems.append(f"{label}/{name}: {exc}")
             continue
         checked += 1
-        recorded = str(assertion.get("status", "")).upper().startswith("PASS")
+        status = assertion.get("status")
+        if status is None:
+            # Absent status read as "not PASS", so a relation that does NOT hold
+            # and records no verdict was silently accepted.
+            problems.append(
+                f"{label}/{name}: records no `status:`, so there is no verdict "
+                "for the recomputed relation to agree or disagree with.")
+            continue
+        recorded = str(status).upper().startswith("PASS")
         if holds != recorded:
             problems.append(
                 f"{label}/{name}: recorded status {assertion.get('status')!r} but "
@@ -130,8 +138,19 @@ def check_spec(spec, label, problems, minimum=None):
         recorded = assertion.get("inputs")
         if not isinstance(recorded, dict):
             recorded = {}
-        shared = {v for v in declared.values() if isinstance(v, (int, float))}
-        listed = {v for v in recorded.values() if isinstance(v, (int, float))}
+        # Flatten LISTS too. `interval-within` takes two of them and
+        # `sum-at-most` one, so filtering them out left A1 and A8 unreconciled —
+        # their `inputs` could be made absurd while `check_inputs` stayed put.
+        def _numbers(mapping):
+            out = set()
+            for value in mapping.values():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    out.add(value)
+                elif isinstance(value, (list, tuple)):
+                    out.update(v for v in value
+                               if isinstance(v, (int, float)) and not isinstance(v, bool))
+            return out
+        shared, listed = _numbers(declared), _numbers(recorded)
         missing = shared - listed
         if declared and recorded and missing:
             problems.append(
