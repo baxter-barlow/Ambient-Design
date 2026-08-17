@@ -139,7 +139,11 @@ def _free_name_pattern() -> str:
     return rf"(?!(?:{alternatives})(?![A-Za-z0-9_])){_IDENT}"
 
 TERMINALS: dict[str, str] = {
-    "PRAGMA": r"\#pragma[^\n]*",
+    # Printable ASCII, like COMMENT and STRING. The pragma line was the last
+    # lexeme still admitting a tab or a non-ASCII character that the
+    # tokenizer rejects per character, which made L5's ASCII rule hold
+    # everywhere except the one line every file is required to carry.
+    "PRAGMA": r"\#pragma[ -~]*",
     # Two identifier terminals, because the prototype checks reserved words at
     # some name positions and not others. FREE_NAME is where a name is being
     # BOUND — module, port, net, table row, instance — and is the set the

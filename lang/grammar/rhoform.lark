@@ -113,7 +113,7 @@ qualified_name: NAME ("." NAME)*
 
 // Terminals. QUANTITY_INTERVAL outranks QUANTITY so that the
 // `A to B` form lexes as the interval wherever both are legal.
-PRAGMA.2: /\#pragma[^\n]*/
+PRAGMA.2: /\#pragma[ -~]*/
 QUANTITY_INTERVAL.2: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
 QUANTITY.1: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
 QUANTITY_PLAIN: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/

@@ -17,7 +17,7 @@ source module as CLOSED_VOCABULARIES.
 *)
 
 (* Terminals. *)
-PRAGMA ::= /\#pragma[^\n]*/
+PRAGMA ::= /\#pragma[ -~]*/
 FREE_NAME ::= /(?!(?:abstract|assert|at|board_only|dnp|dynamic|exclude_from_bom|false|hardware|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
 NAME ::= /[A-Za-z_][A-Za-z0-9_]*/
 QUANTITY ::= /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
