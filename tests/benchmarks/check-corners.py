@@ -51,7 +51,10 @@ REQUIRED = {"buck-3v3": 2}
 # this; this one repeated it the same day. 6 = two
 # surveyed corners x three measurement columns; the 12 V row is the nominal
 # deck and is held by check-assertions.py's transcript leg instead.
-MINIMUM_DOC_CELLS = {"buck-3v3": 6}
+MINIMUM_DOC_CELLS = {"buck-3v3": 9}
+# The deck's own supply voltage, whose design.md row has no corner block and
+# is therefore held to validation.log instead.
+NOMINAL_VOLTS = {"buck-3v3": 12.0}
 # How far at least one measurement must move for a substitution to be a corner
 # rather than a nudge. 1% is far below any real input-corner survey (the buck's
 # 9 V and 14 V rows move ripple current by 13% and 6%) and far above numerical
@@ -359,6 +362,55 @@ def check_case(case_dir, problems, minimum=None):
         # A FLOOR on the design.md leg. Without one, the leg silently going to
         # zero coverage -- which renaming one block header did -- was
         # indistinguishable from passing.
+        # THE NOMINAL ROW, held to validation.log rather than to a corner
+        # block. Its voltage is the deck's own supply, so it has no `# rerun:`
+        # entry and fell between the two gates.
+        nominal_volts = NOMINAL_VOLTS.get(case_dir.name)
+        if nominal_volts is not None and header is not None:
+            transcript = case_dir / "validation.log"
+            recorded_nominal = {}
+            if transcript.is_file():
+                for line in transcript.read_text(encoding="utf-8",
+                                                 errors="replace").splitlines():
+                    found = MEAS.match(line.strip())
+                    if found and found.group("name").lower() not in NOT_A_MEASUREMENT:
+                        recorded_nominal.setdefault(found.group("name").lower(),
+                                                    found.group("value"))
+            if nominal_volts not in rows:
+                problems.append(
+                    f"{case_dir.name}/design.md: publishes no corner row for the "
+                    f"nominal {nominal_volts} V, so the deck's own operating "
+                    "point is absent from the table a reader acts on.")
+            elif not recorded_nominal:
+                problems.append(
+                    f"{case_dir.name}: validation.log records no measurements, "
+                    "so the nominal corner row is compared to nothing.")
+            else:
+                for name, cell in zip(header, rows[nominal_volts]):
+                    written = recorded_nominal.get(name)
+                    if written is None:
+                        problems.append(
+                            f"{case_dir.name}/design.md: the corner table has a "
+                            f"{name!r} column, but validation.log records no "
+                            "such measurement for the nominal run.")
+                        continue
+                    number = re.search(r"[-+]?\d+(?:\.\d+)?", cell)
+                    if number is None:
+                        continue
+                    shown = float(number.group(0))
+                    if re.search(r"m(V|A)", cell):
+                        shown *= 1e-3
+                    figures = min(significant_figures(number.group(0)),
+                                  significant_figures(written))
+                    if round_to_significant(shown, figures) != round_to_significant(
+                            float(written), figures):
+                        problems.append(
+                            f"{case_dir.name}/design.md: publishes {cell!r} for "
+                            f"{name} at the nominal {nominal_volts} V, but the "
+                            f"shipped deck produces {written}.")
+                        continue
+                    checked_cells.add((nominal_volts, name))
+
         expected_cells = MINIMUM_DOC_CELLS.get(case_dir.name)
         if expected_cells is not None and len(checked_cells) < expected_cells:
             problems.append(

@@ -36,6 +36,7 @@ failure.
     python3 tests/benchmarks/check-hand-assertions.py <benchmark-dir>
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -730,6 +731,77 @@ def self_test():
     return 0
 
 
+# design.md figures that must equal an assertion operand. benchmark (c)'s
+# design.md was ENTIRELY ungated -- an auditor changed every number in it at
+# once with `make all` green, and it published `4.7 + 4.7 = 9.5` (dropping C2
+# from the left side while keeping the sum) for as long as it existed. These
+# are the load-bearing ones: each is a number the document offers as the
+# margin a reader would act on.
+DOC_FIGURES = {
+    "esp32s3-devboard": (
+        # (regex capturing the published number, assertion id, operand path)
+        (r"VBUS-visible bulk capacitance[^=]*=\s*[\d.\s+]*=\s*\*\*([\d.]+) uF",
+         "A8_usb_inrush_capacitance", "sum_parts", 1e-6),
+        (r"Tj = \*\*([\d.]+) C\*\*", "A5_ldo_thermal_at_wifi_tx", "have", 1.0),
+        (r"1 A rating gives ([\d.]+) mA margin", "A3_3v3_source_capability",
+         "rating_margin_mA", 1.0),
+    ),
+}
+
+
+def doc_problems(case_dir, spec, problems):
+    """Hold design.md's published margins to the assertions that compute them."""
+    figures = DOC_FIGURES.get(case_dir.name)
+    if not figures:
+        return 0
+    doc = case_dir / "design.md"
+    if not doc.is_file():
+        problems.append(f"{case_dir.name}: has no design.md to reconcile")
+        return 0
+    text = doc.read_text(encoding="utf-8")
+    by_id = {a.get("id"): a for a in (spec.get("assertions") or [])}
+    checked = 0
+    for pattern, assertion_id, operand, scale in figures:
+        assertion = by_id.get(assertion_id)
+        if assertion is None:
+            problems.append(
+                f"{case_dir.name}/design.md: cites {assertion_id}, which "
+                "assertions.yaml no longer declares.")
+            continue
+        ci = assertion.get("check_inputs") or {}
+        if operand == "sum_parts":
+            want = sum(float(v) for v in ci.get("parts") or [])
+        elif operand == "rating_margin_mA":
+            # Margin over the WORST PEAK -- needs[0], worst_rail_a -- which is
+            # what the sentence says ("608 mA margin over worst peak and 2x the
+            # module's required"). My first version used max(needs), the
+            # module's 0.5 A requirement, and reported the correct document as
+            # wrong. The gate was the defect.
+            want = (float(ci.get("have")) - float(ci.get("needs")[0])) * 1000.0
+        else:
+            want = float(ci.get(operand))
+        found = re.search(pattern, text)
+        if found is None:
+            problems.append(
+                f"{case_dir.name}/design.md: the figure for {assertion_id} is "
+                "gone or reshaped, so it is checked by nothing. This document "
+                "was entirely ungated until AMB-123.")
+            continue
+        shown = float(found.group(1)) * scale
+        if abs(shown - want) > abs(want) * 1e-3 + 1e-12:
+            problems.append(
+                f"{case_dir.name}/design.md: publishes {found.group(1)} for "
+                f"{assertion_id}, but the assertion's own inputs give "
+                f"{want / scale:.6g}.")
+            continue
+        checked += 1
+    if checked < len(figures):
+        problems.append(
+            f"{case_dir.name}/design.md: reconciled {checked} of "
+            f"{len(figures)} published figure(s).")
+    return checked
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -803,7 +875,9 @@ def main(argv):
         return 1
     problems = []
     try:
-        checked = check_spec(load_yaml(spec_path), case_dir.name, problems)
+        spec = load_yaml(spec_path)
+        checked = check_spec(spec, case_dir.name, problems)
+        checked += doc_problems(case_dir, spec, problems)
     except GateUnavailable as exc:
         print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
