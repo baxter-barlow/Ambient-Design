@@ -1,0 +1,29 @@
+Rhoform benchmark (b) — input-corner evidence.
+
+Separate from validation.log because these are runs of MODIFIED decks, and the
+transcript check in check-assertions.py holds validation.log to a fresh run of
+the deck as shipped. Mixing them made the corner values look like drift.
+
+Each block declares the single substitution that produced it, as
+`# rerun: <old line> -> <new line>`. tests/benchmarks/check-corners.py applies
+that edit to netlist.cir, runs it, and compares. So these numbers are evidence
+that can be re-derived, not numbers in a file.
+
+# rerun: V3 in 0 PWL(0 0 20u 0 220u 12 1 12) -> V3 in 0 PWL(0 0 20u 0 220u 9 1 9)
+--- V3 = 9 V ---
+vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.08403e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.21457e-01 from=  2.40000e-03 to=  2.50000e-03
+eff                 =  9.28649e-01
+overshoot_pct       =  4.29034e-02
+t_settle_us         =  4.53920e+01
+
+# rerun: V3 in 0 PWL(0 0 20u 0 220u 12 1 12) -> V3 in 0 PWL(0 0 20u 0 220u 14 1 14)
+--- V3 = 14 V ---
+vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
+vout_pp             =  3.81167e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  5.11869e-01 from=  2.40000e-03 to=  2.50000e-03
+eff                 =  9.28625e-01
+overshoot_pct       =  4.89802e-02
+t_settle_us         =  1.55280e+01
+

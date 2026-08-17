@@ -578,27 +578,68 @@ class Conformance(unittest.TestCase):
         longest-match wins, so it can never reach the other direction. Lark's
         LALR CONTEXTUAL lexer restricts the terminal set per parser state, so
         wherever a keyword was the only viable terminal it matched a prefix of
-        the following identifier: `moduleM:` parsed identically to `module M:`,
-        and seven more constructs did the same. Every probe here is in a
-        position the existing test structurally cannot occupy.
+        the following identifier: `moduleM:` parsed identically to `module M:`.
+
+        EVERY probe here must be in a position where the keyword's production
+        is REACHABLE. My first version of this test put `pin`, `part`,
+        `hardware` and `no` at module scope, where they are instance-statement
+        productions and were already rejected for an unrelated reason -- five
+        of eight probes were vacuous, and 21 of the 24 keyword boundaries could
+        be removed with the whole suite green. Each case below is paired with
+        the well-formed construct it is a corruption of, so a probe that stops
+        exercising the boundary shows up as its partner failing.
         """
-        body = "\n    net N_A:\n        r1.p1\n        r1.p2\n"
-        glued = (
-            "moduleM:" + body,
-            "module M:\n    pinb passive\n",
-            "module M:\n    pina passive 1\n",
-            "partabstract:\n    port p passive\n",
-            "module M:\n    hardwaretest_point tp1\n",
-            "module M:\n    r1 = new " + self.RESISTOR + "(resistance = 1kohm)\n"
-            "    noexclude_from_bom r1\n",
-            "module M:\n    f1 = newrhoform.lib.passive.Resistor\n",
-            "module M:\n    assert A staticfrequency(GND) within 1Hz to 2Hz\n",
+        HEAD = "#pragma rhoform-syntax 0.1\n\n"
+        NET = "\n    net N_A:\n        r1.p1\n        r1.p2\n"
+        INST = f"    r1 = new {self.RESISTOR}(resistance = 1kohm)\n"
+        BODY = HEAD + f"module M:\n    r1 = new {self.RESISTOR}:\n"
+        # (well-formed, glued) -- the glued form must be rejected and the
+        # well-formed one accepted, or the probe is not testing the boundary.
+        pairs = (
+            (HEAD + "module M:" + NET, HEAD + "moduleM:" + NET),
+            (HEAD + "module M:\n    port p passive\n",
+             HEAD + "module M:\n    portp passive\n"),
+            (HEAD + "module M:\n" + INST,
+             HEAD + "module M:\n    r1 = newrhoform.lib.passive.Resistor\n"),
+            # `pin`, `part`, `hardware` and `no` are INSTANCE statements and
+            # are only reachable inside an instance body. Probing them at
+            # module scope -- which my first version did -- tests nothing:
+            # they were already rejected there for an unrelated reason.
+            (BODY + "        no exclude_from_bom\n",
+             BODY + "        noexclude_from_bom\n"),
+            (BODY + "        no board_only\n",
+             BODY + "        noboard_only\n"),
+            (BODY + "        pin b passive\n",
+             BODY + "        pinb passive\n"),
+            (BODY + "        pin a passive 1\n",
+             BODY + "        pina passive 1\n"),
+            (BODY + "        dnp\n", BODY + "        dnpx\n"),
+            (HEAD + "module M:\n    tp1 = new hardware:\n        hardware test_point\n",
+             HEAD + "module M:\n    tp1 = new hardware:\n        hardwaretest_point\n"),
+            (HEAD + "module M:\n    assert A static frequency(N_A) within 1Hz to 2Hz\n" + NET,
+             HEAD + "module M:\n    assert A staticfrequency(N_A) within 1Hz to 2Hz\n" + NET),
+            (HEAD + "module M:\n    assert A dynamic frequency(N_A) within 1Hz to 2Hz\n" + NET,
+             HEAD + "module M:\n    assert A dynamicfrequency(N_A) within 1Hz to 2Hz\n" + NET),
+            (HEAD + "module M:\n    assert A static frequency(N_A) at least 1Hz\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) atleast 1Hz\n" + NET),
+            (HEAD + "module M:\n    assert A static frequency(N_A) at least 1Hz\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) at least1Hz\n" + NET),
+            (HEAD + "module M:\n    assert A static frequency(N_A) at most 1Hz\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) atmost 1Hz\n" + NET),
+            (HEAD + "module M:\n    assert A static frequency(N_A) within 1.0 to 2.0\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) within1.0 to 2.0\n" + NET),
+            (HEAD + "module M:\n    assert A static frequency(N_A) within 1.0 to 2.0\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) within 1.0 to2.0\n" + NET),
         )
-        for construct in glued:
-            with self.subTest(construct=construct.splitlines()[0]):
-                source = "#pragma rhoform-syntax 0.1\n\n" + construct
+        for well_formed, glued in pairs:
+            first = glued.splitlines()[2] if len(glued.splitlines()) > 2 else glued
+            with self.subTest(construct=first.strip()):
+                self.assertTrue(
+                    self._accepts(well_formed),
+                    "the well-formed partner must parse, or the probe below "
+                    "proves nothing about the boundary")
                 self.assertFalse(
-                    self._accepts(source),
+                    self._accepts(glued),
                     "a keyword absorbed the identifier that follows it")
 
     def test_a_bound_takes_the_shape_its_keyword_requires(self):

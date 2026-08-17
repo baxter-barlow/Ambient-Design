@@ -28,6 +28,13 @@ INTEGER ::= /-?(?:0|[1-9][0-9]*)/
 STRING ::= /"[ !#-~]*"/
 
 (* The lexical layer. *)
+(* KEYWORD BOUNDARY. Every quoted word literal below and in the
+   productions above matches only when NOT followed by [A-Za-z0-9_].
+   Without this rule `moduleM:` lexes as `module` + `M` and parses as
+   `module M:`; the Lark artifact encodes it per-literal as
+   /word(?![A-Za-z0-9_])/. An implementer who ignores this rule builds
+   a parser that accepts programs this grammar forbids. *)
+
 (* A comment runs to end of line. A `#pragma` word is excluded so the L8 header is never swallowed as one — but `#pragmatic` is an ordinary comment, which is why the exclusion ends at a word boundary. ASCII only, like every other lexeme. *)
 COMMENT ::= /\#(?!pragma(?![A-Za-z0-9_]))[ -~]*/
 
