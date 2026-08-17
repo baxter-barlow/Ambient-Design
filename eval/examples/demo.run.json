@@ -2057,6 +2057,8 @@
     "alpha": 0.05,
     "baseline_arm": "starlark_baseline",
     "baseline_rate": 0.6,
+    "discordant_b": null,
+    "discordant_c": null,
     "interpretation": "Not significant, and no minimum effect of interest was declared, so there is no basis on which to call the run adequately powered. Declare the effect size worth detecting and re-evaluate, or record the question as unanswered. This is NOT evidence of equivalence.",
     "minimum_effect_of_interest": null,
     "p_value": 0.9295665634674922,
@@ -2090,7 +2092,8 @@
   },
   "non_authoritative_reasons": [
     "tokenizer 'stub-whitespace' is non-gating",
-    "model source is 'replay', not a live pinned model"
+    "model source is 'replay', not a live pinned model",
+    "gate is 'replay', not a live compile/check gate"
   ],
   "notes": "SYNTHETIC FIXTURE. The responses and verdicts are scripted to exercise every path in the protocol - first-shot pass, repair-loop recovery, a response with no fenced code block, and exhaustion of the iteration budget. It is NOT a measurement, and no conclusion about any model or grammar may be drawn from it.",
   "purpose": "harness demonstration and offline regression fixture",

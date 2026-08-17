@@ -464,10 +464,16 @@ def self_test():
         ("L3", "duplicate source_id", mutate(lambda d: d["sources"].append(dict(d["sources"][0])))),
         ("L4", "supply draw on a signal pin", mutate(lambda d: d["modes"][0]["draw"][0].__setitem__("pin", "1A"))),
         ("L4", "supply draw on an unknown pin", mutate(lambda d: d["modes"][0]["draw"][0].__setitem__("pin", "NOPE"))),
-        ("L5", "unit claims an unknown pin", mutate(lambda d: d["units"][0]["pins"].append("GHOST")), "GHOST"),
+        ("L5", "unit claims an unknown pin", mutate(lambda d: d["units"][0]["pins"].append("GHOST")), "names unknown pin"),
         ("L5", "pin in both a unit and shared_pins", mutate(lambda d: d["units"][0]["pins"].append("VCC")), "shared"),
         ("L5", "pin belongs to no unit and is not shared", mutate(lambda d: d["shared_pins"].remove("GND"))),
-        ("L5", "pin declares an undeclared unit", mutate(lambda d: d["pins"][0].__setitem__("unit", "7")), "'7'"),
+        ("L5", "pin declares an undeclared unit", mutate(lambda d: d["pins"][0].__setitem__("unit", "7")), "which is not in units[]"),
+        # The third L5 clause. It had no case at all, so deleting it made a
+        # genuine multi-unit inconsistency vanish entirely rather than merely
+        # being mislabelled.
+        ("L5", "pin declares a unit that does not list it",
+         mutate(lambda d: d["pins"][0].__setitem__("unit", d["units"][1]["id"])),
+         "does not list it as a member"),
         ("L6", "shared_pins names an unknown pin", mutate(lambda d: d["shared_pins"].append("GHOST"))),
         ("L7", "duplicate physical designator", mutate(lambda d: d["pins"][1]["numbers"].__setitem__(0, "1"))),
         ("L8", "pins out of sort order", mutate(lambda d: d["pins"].reverse())),
