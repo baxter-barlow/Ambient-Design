@@ -11,11 +11,14 @@
 # that would catch them. Counts live in the generated block in the README, not
 # here, so that no number in this header can go stale.
 #
-# `decision_hash` covers id, verdict, key, gap_class and missing_path — the
-# decisions and the falsifiable claims behind them — but not this prose. Changing a
-# verdict moves it; tests/corpus/check-classification.py fails until the change
-# is made deliberately with --write. That is the whole point: AMB-61 must not
-# be able to move its own denominator quietly.
+# `decision_hash` covers each entry's decisions and the falsifiable claims
+# behind them, but not this prose. The exact fields are `decision_hash` in
+# tests/corpus/check-classification.py and are deliberately not restated
+# anywhere — the same rule as the counts above, for the same reason: this
+# sentence went stale in three separate files while it tried to list them.
+# Changing a verdict moves the hash, and the gate fails until the change is
+# made deliberately with --write. That is the whole point: AMB-61 must not be
+# able to move its own denominator quietly.
 
 classification:
   issue: AMB-36
