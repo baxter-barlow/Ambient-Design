@@ -589,10 +589,22 @@ def problems_for(record, label):
                 if isinstance(iterations, list) and iterations and trial.get("passed"):
                     last = iterations[-1]
                     gate = last.get("gate") if isinstance(last, dict) else None
-                    if isinstance(gate, dict) and gate.get("passed") is False:
+                    # A PASSING TRIAL MUST SHOW A PASSING GATE. Testing only
+                    # `passed is False` meant setting the final gate to null
+                    # silenced the check -- and a trial with a failing early
+                    # gate and a null final one went entirely unexamined. The
+                    # harness records passed=True only on a passing gate, so a
+                    # passing trial with no final gate did not come from it.
+                    if not isinstance(gate, dict):
+                        bad(f"arm {name!r} trial {index} is marked passed but "
+                            "its final iteration records no gate result, so "
+                            "the verdict rests on nothing. The harness sets "
+                            "passed only on a passing gate.")
+                    elif gate.get("passed") is not True:
                         bad(f"arm {name!r} trial {index} is marked passed while "
                             "its final iteration's own gate records "
-                            f"passed=false (exit {gate.get('exit_code')}).")
+                            f"passed={gate.get('passed')!r} "
+                            f"(exit {gate.get('exit_code')}).")
 
     # The tokenizer fingerprint, against the manifest pin. versions.yaml says
     # "two records are comparable only if their fingerprints match", and no
@@ -891,6 +903,10 @@ def self_test():
             "lower-tail Fisher", lambda r: r["flip_criterion"].update(p_value=0.5))),
         # The inner-gate clause: its NAME was fixed last round and its coverage
         # gap -- the thing that let the wrong name survive -- was not.
+        ("a passing trial with no final gate result is caught", hit(
+            "records no gate result", lambda r: [
+                tr["iterations"][-1].update(gate=None)
+                for tr in r["arms"][arm_name]["trials"] if tr.get("passed")])),
         ("a trial marked passed whose own final gate failed is caught", hit(
             "its final iteration's own gate", lambda r: [
                 tr["iterations"][-1]["gate"].update(passed=False, exit_code=1)
