@@ -90,10 +90,12 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # DISTINCT (design, arm) rows, not cells: the floor counted cells, so
 # duplicating a correct row paid for one that had stopped parsing.
 # Distinct (table, row) identities that must reconcile: 5 token rows + 3
-# decision rows + 3 card entries. The self-test's floor was `reconciled >= 20`
+# decision rows + 3 card entries. The token table has SIX rows, not five, so
+# 11 left one row's worth of slack -- and it was only caught by an unrelated
+# cell count, which is a floor tripping in place of the check it backstops. The self-test's floor was `reconciled >= 20`
 # against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
 # was dead because that slack always fired first.
-MINIMUM_DISTINCT_ROWS = 11
+MINIMUM_DISTINCT_ROWS = 12
 
 
 class GateUnavailable(Exception):
@@ -156,6 +158,14 @@ def inputs_fingerprint():
     digest = hashlib.sha256()
     sources = sorted((ROOT / "lang" / "bakeoff").rglob("*.py"))
     sources += sorted((ROOT / "lang" / "examples").glob("*.design.json"))
+    # THE RULER, which the first version left out. `measure.py` reads
+    # `evaluation.tokenizer.encoding` from the manifest at runtime, so
+    # re-pinning the tokenizer moves ALL NINETEEN counts -- and `check-pins`
+    # cannot help, because that pin is read-by-key and its value is explicitly
+    # not compared. Without this the artifact and the README stayed consistent
+    # with each other, both measured with a tokenizer the manifest no longer
+    # declares. This is the round-8 finding one input over.
+    sources.append(ROOT / "toolchain" / "versions.yaml")
     for path in sources:
         digest.update(path.relative_to(ROOT).as_posix().encode("utf-8"))
         digest.update(path.read_bytes())
@@ -291,7 +301,12 @@ def token_problems(text, counts, problems, minimum=None):
         for arm, published in zip(("candidate_a", "candidate_b", "starlark"),
                                   card_line.groups()):
             want = counts.get(f"card|{arm}")
-            if want is not None and int(published) != want:
+            if want is None:
+                problems.append(
+                    f"lang/token-counts.json records no card count for {arm}, "
+                    "so the published one is compared to nothing.")
+                continue
+            if int(published) != want:
                 problems.append(
                     f"lang/README.md: the language-card line publishes "
                     f"{published} for {arm}, but lang/token-counts.json records "

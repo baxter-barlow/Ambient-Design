@@ -749,8 +749,41 @@ def main(argv):
         except GateUnavailable as exc:
             print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
             return 2
+        # VALIDATE BEFORE BLESSING. `--write` recomputed and rewrote the hash
+        # without running check_spec, so it blessed specs the gate rejects --
+        # including round 5's binding swap, a 1 mA LDO "supplying" a 99 A rail,
+        # laundered into the committed hash in one command. That turns the
+        # "deliberate, reviewed commit" defence into an edited line, which is
+        # the exact thing structure_hash exists to prevent.
+        problems = []
+        check_spec(spec, case_dir.name, problems, gate_structure=False)
+        if problems:
+            print("hand-assert: REFUSING to write: the spec does not pass its "
+                  "own checks, so blessing it would launder a defect into the "
+                  "committed hash:", file=sys.stderr)
+            for problem in problems:
+                print(f"  {problem}", file=sys.stderr)
+            return 1
         digest = structure_hash(spec.get("assertions") or [])
         text = spec_path.read_text(encoding="utf-8")
+        # SHOW WHAT CHANGED. A swap like `have: worst_rail_a` for
+        # `have: ldo_rating_a` is arithmetically valid -- 99 >= max(0.001, 0.5)
+        # is true -- so no check can call it wrong. What this tool must not do
+        # is make it invisible. The bindings are printed so the reviewer of the
+        # commit sees exactly which operand moved to which input.
+        import re as _re
+        previous = _re.search(r"check_inputs_structure_hash: (\S+)", text)
+        if previous and previous.group(1) != digest:
+            print(f"hand-assert: the operand-to-input bindings CHANGED "
+                  f"({previous.group(1)[:23]}... -> {digest[:23]}...). Review "
+                  "these before committing:")
+            for assertion in spec.get("assertions") or []:
+                origin = assertion.get("check_inputs_from")
+                if origin:
+                    print(f"  {assertion.get('id')}: {origin}")
+                for operand, formula in (assertion.get("check_inputs_derived")
+                                         or {}).items():
+                    print(f"  {assertion.get('id')}: {operand} = {formula}")
         import re as _re
         if "check_inputs_structure_hash:" in text:
             text = _re.sub(r"check_inputs_structure_hash: \S+",

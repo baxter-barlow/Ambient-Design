@@ -138,6 +138,26 @@ REQUIRED_JOBS = {
     "repository-policy.yml": ("agent-layout",),
 }
 
+# THE COMMANDS each gate must actually run in CI. Requiring the job NAME tested
+# the shape of the previous defect (a job key disappearing) rather than the
+# property (the gate runs). A job kept with `if: false`, or with every gate step
+# replaced by `run: true`, satisfied the name check while check-run-records ran
+# nowhere in CI -- the identical outcome deleting the job produced.
+REQUIRED_CI_COMMANDS = (
+    "tests/structure/check-layout.sh",
+    "tests/schemas/validate-schemas.py",
+    "tests/corpus/check-corpus.py",
+    "tests/corpus/check-classification.py",
+    "tests/toolchain/check-pins.py",
+    "tests/ir/check-hashes.py",
+    "tests/eval/check-run-records.py",
+    "tests/benchmarks/run-sim.sh",
+    "tests/benchmarks/check-corners.py",
+    "tests/benchmarks/check-design-docs.py",
+    "lang/tests/check_readme_numbers.py",
+    "parts/lint-part-data.py",
+)
+
 
 class _SkipFingerprint(Exception):
     """Internal: the behavioural fingerprint cannot be checked offline."""
@@ -747,6 +767,33 @@ def main(argv):
         for job in jobs:
             if job not in defined:
                 missing_jobs.append(f"{workflow_name}: job {job!r} is gone")
+    # Every gate command must appear in some workflow, and in a job that is
+    # not disabled.
+    workflow_text = ""
+    live_jobs = 0
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        try:
+            import yaml as _yaml
+            document = _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        for job_name, job in (document.get("jobs") or {}).items():
+            if not isinstance(job, dict):
+                continue
+            if str(job.get("if", "")).strip().lower() in ("false", "${{ false }}"):
+                missing_jobs.append(
+                    f"{path.name}: job {job_name!r} is disabled with `if: false`, "
+                    "so it defines steps and runs none of them")
+                continue
+            live_jobs += 1
+            for step in (job.get("steps") or []):
+                if isinstance(step, dict) and step.get("run"):
+                    workflow_text += "\n" + str(step["run"])
+    for command in REQUIRED_CI_COMMANDS:
+        if command not in workflow_text:
+            missing_jobs.append(
+                f"no live CI job runs {command!r}. A gate that runs only in "
+                "`make all` is not enforced on a pull request.")
     if missing_jobs:
         print("toolchain-pins: FAIL: CI job(s) removed:", file=sys.stderr)
         for entry in missing_jobs:

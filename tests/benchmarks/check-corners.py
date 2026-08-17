@@ -44,10 +44,19 @@ ROOT = Path(__file__).resolve().parents[2]
 # leave this gate by deleting its own evidence -- the failure mode run-sim.sh
 # learned twice and check-assertions.py learned once.
 REQUIRED = {"buck-3v3": 2}
-# Cells of each benchmark's design.md corner table that MUST reconcile. 6 = two
+# DISTINCT (corner, measurement) identities in each benchmark's design.md
+# corner table that must reconcile. Counting CELLS let a duplicated column pay
+# for a deleted one -- the settling column, carrying the 45.39 us worst case,
+# could leave the reader's table entirely. Its sibling gate had already learned
+# this; this one repeated it the same day. 6 = two
 # surveyed corners x three measurement columns; the 12 V row is the nominal
 # deck and is held by check-assertions.py's transcript leg instead.
 MINIMUM_DOC_CELLS = {"buck-3v3": 6}
+# How far at least one measurement must move for a substitution to be a corner
+# rather than a nudge. 1% is far below any real input-corner survey (the buck's
+# 9 V and 14 V rows move ripple current by 13% and 6%) and far above numerical
+# noise.
+MINIMUM_CORNER_SHIFT = 0.01
 
 RERUN = re.compile(r"^#\s*rerun:\s*(?P<old>.+?)\s*->\s*(?P<new>.+?)\s*$")
 MEAS = re.compile(
@@ -157,6 +166,10 @@ def check_case(case_dir, problems, minimum=None):
     # headers. Whether a substitution changes the circuit is a question the
     # simulator answers.
     seen_edits = set()
+    # Run the nominal deck ONCE, not once per block: it was 2 of the 4 ngspice
+    # runs in this gate and scaled linearly with corner count for no
+    # information.
+    nominal_output = None
     reconciled = 0
     for old, new, recorded, header in found_blocks:
         if old == new:
@@ -170,6 +183,29 @@ def check_case(case_dir, problems, minimum=None):
                 f"{case_dir.name}/validation-corners.log: two corner blocks "
                 "declare the same substitution, so one benchmark's floor is met "
                 "by running the same corner twice.")
+            continue
+        # THE HEADER MUST DESCRIBE THE SUBSTITUTION. It was free text, so the
+        # 9 V and 14 V labels could be swapped -- publishing ripple current
+        # FALLING with input voltage and moving the worst case onto the wrong
+        # rail -- with every gate green. Deriving the voltage from the
+        # substitution alone was abandoned earlier because it only matched the
+        # buck's PWL shape; the answer is to keep the header AND require the
+        # two to agree.
+        claimed = re.search(r"(\d+(?:\.\d+)?)\s*V", header)
+        if claimed is None:
+            problems.append(
+                f"{case_dir.name}/validation-corners.log: block header "
+                f"{header!r} names no voltage, so nothing binds this evidence "
+                "to the corner it claims to survey.")
+            continue
+        if not re.search(r"(?<![\d.])" + re.escape(claimed.group(1)) + r"(?![\d])",
+                         new):
+            problems.append(
+                f"{case_dir.name}/validation-corners.log: header claims "
+                f"{claimed.group(1)} V but the substitution it labels is "
+                f"{new.strip()[:52]!r}, which does not contain that value. A "
+                "label nothing binds to the edit lets the nominal deck publish "
+                "as any corner at all.")
             continue
         seen_edits.add((old, new))
         if old not in base:
@@ -185,8 +221,10 @@ def check_case(case_dir, problems, minimum=None):
             continue
         with tempfile.TemporaryDirectory() as tmp:
             fresh = run_deck(base.replace(old, new, 1), Path(tmp))
-        with tempfile.TemporaryDirectory() as tmp:
-            nominal = run_deck(base, Path(tmp))
+        if nominal_output is None:
+            with tempfile.TemporaryDirectory() as tmp:
+                nominal_output = run_deck(base, Path(tmp))
+        nominal = nominal_output
         def _values(text):
             out = {}
             for line in text.splitlines():
@@ -198,8 +236,13 @@ def check_case(case_dir, problems, minimum=None):
         moved = _values(fresh)
         still = _values(nominal)
         shared = set(moved) & set(still)
+        # MATERIALLY different, not merely different. At 1e-9 relative, a
+        # substitution of `12` -> `12.0001` cleared the rule while producing
+        # the nominal deck's numbers to four significant figures: the "9 V
+        # corner" understated settling by 63%. A corner that moves nothing a
+        # reader would notice is the nominal deck under another name.
         if shared and all(
-                abs(moved[k] - still[k]) <= abs(still[k]) * 1e-9 + 1e-15
+                abs(moved[k] - still[k]) <= abs(still[k]) * MINIMUM_CORNER_SHIFT
                 for k in shared):
             problems.append(
                 f"{case_dir.name}/validation-corners.log: the substitution "
@@ -260,7 +303,7 @@ def check_case(case_dir, problems, minimum=None):
                 f"{case_dir.name}/design.md: the corner table has no header row "
                 "naming its measurements, so no cell can be bound to the "
                 "measurement it claims to publish.")
-        checked_cells = 0
+        checked_cells = set()
         for old, new_line, recorded, block_header in found_blocks:
             volts = re.search(r"(\d+(?:\.\d+)?)\s*V", block_header)
             if volts is None:
@@ -300,14 +343,14 @@ def check_case(case_dir, problems, minimum=None):
                         f"{written}. The table a reader acts on is not the "
                         "evidence.")
                     continue
-                checked_cells += 1
+                checked_cells.add((volt_value, name))
         # A FLOOR on the design.md leg. Without one, the leg silently going to
         # zero coverage -- which renaming one block header did -- was
         # indistinguishable from passing.
         expected_cells = MINIMUM_DOC_CELLS.get(case_dir.name)
-        if expected_cells is not None and checked_cells < expected_cells:
+        if expected_cells is not None and len(checked_cells) < expected_cells:
             problems.append(
-                f"{case_dir.name}/design.md: reconciled {checked_cells} corner "
+                f"{case_dir.name}/design.md: reconciled {len(checked_cells)} corner "
                 f"cell(s) against the evidence, below the floor of "
                 f"{expected_cells}.")
     return reconciled
@@ -365,10 +408,15 @@ def self_test():
     # which the shape rule missed.
     cases.append(("a substitution that changes nothing is caught by running it", any(
         "identical to the nominal deck" in p for p in probe(
-            "# rerun: R1 in out 1k -> R1 in out  1k\n--- 9 V ---\nvout = 2.5\n"))))
+            "# rerun: V1 in 0 DC 9 -> V1 in 0 DC 9.0\n--- 9 V ---\nvout = 4.5\n",
+            deck=DECK.replace("V1 in 0 DC 5", "V1 in 0 DC 9")))))
     cases.append(("two blocks declaring the same substitution are caught", any(
         "same substitution" in p for p in probe(good + good))))
     # THE TABLE A READER SEES, which is where the original finding lived.
+    cases.append(("a header claiming a corner its substitution does not make is caught", any(
+        "does not contain that value" in p for p in probe(
+            "# rerun: V1 in 0 DC 5 -> V1 in 0 DC 9\n--- 14 V ---\nvout = 4.5\n"))))
+
     # THE DESIGN.MD TABLE, bound by column name.
     cases.append(("a design.md corner cell that disagrees is caught", any(
         "is not the evidence" in p for p in _doc_probe(
@@ -380,6 +428,11 @@ def self_test():
     cases.append(("a column naming a measurement the block lacks is caught", any(
         "records no such measurement" in p for p in _doc_probe(
             "| Vin | ghost |\n|---|---|\n| 9 V | 4.5 |", DECK, good))))
+
+    # THE DOC-CELL FLOOR, which was pinned by nothing: emptying it let the
+    # design.md leg verify zero cells and still print PASS.
+    cases.append(("the doc-cell floor fires when the table stops reconciling", any(
+        "below the floor" in p for p in _doc_floor_probe())))
 
     # WIRING, over the real entry point.
     import contextlib, io
@@ -408,6 +461,27 @@ def self_test():
         return 1
     print(f"corners: self-test PASS: {len(cases)} cases.")
     return 0
+
+
+def _doc_floor_probe():
+    """Drive the design.md leg with a REAL benchmark name, so the shipped
+    floor applies rather than the probes' minimum=0."""
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as tmp:
+        case = Path(tmp) / "buck-3v3"
+        case.mkdir()
+        (case / "netlist.cir").write_text(
+            ".title p\nV1 in 0 DC 5\nR1 in out 1k\nR2 out 0 1k\n"
+            ".tran 1u 100u\n.meas tran vout AVG v(out) FROM=50u TO=100u\n.end\n",
+            encoding="utf-8")
+        (case / "validation-corners.log").write_text(
+            "# rerun: V1 in 0 DC 5 -> V1 in 0 DC 9\n--- 9 V ---\n"
+            "vout                =  4.50000e+00\n", encoding="utf-8")
+        (case / "design.md").write_text(
+            "| Vin | vout |\n|---|---|\n| 9 V | see log |\n", encoding="utf-8")
+        problems = []
+        check_case(case, problems, minimum=0)
+        return problems
 
 
 def _doc_probe(doc_row, deck, evidence):
