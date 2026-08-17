@@ -5,7 +5,12 @@
 
 .PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
 
-# Everything CI runs. That comment used to be false: .github/workflows/
+# Everything CI runs, with ONE stated exception: checks.yml's "Resolve the
+# pinned KiCad digests" step needs network (`docker manifest inspect`) and so
+# cannot be a local target. It is named here rather than left to be rediscovered
+# — a comment that quietly excludes something is how this went wrong before.
+#
+# That comment used to be false in a way that was not stated: .github/workflows/
 # repository-policy.yml ran two gates no make target invoked, so a contributor
 # could get `make all` green and still take a red CI on a check they had no way
 # to run locally.

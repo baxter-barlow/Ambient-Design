@@ -464,10 +464,10 @@ def self_test():
         ("L3", "duplicate source_id", mutate(lambda d: d["sources"].append(dict(d["sources"][0])))),
         ("L4", "supply draw on a signal pin", mutate(lambda d: d["modes"][0]["draw"][0].__setitem__("pin", "1A"))),
         ("L4", "supply draw on an unknown pin", mutate(lambda d: d["modes"][0]["draw"][0].__setitem__("pin", "NOPE"))),
-        ("L5", "unit claims an unknown pin", mutate(lambda d: d["units"][0]["pins"].append("GHOST"))),
-        ("L5", "pin in both a unit and shared_pins", mutate(lambda d: d["units"][0]["pins"].append("VCC"))),
+        ("L5", "unit claims an unknown pin", mutate(lambda d: d["units"][0]["pins"].append("GHOST")), "GHOST"),
+        ("L5", "pin in both a unit and shared_pins", mutate(lambda d: d["units"][0]["pins"].append("VCC")), "shared"),
         ("L5", "pin belongs to no unit and is not shared", mutate(lambda d: d["shared_pins"].remove("GND"))),
-        ("L5", "pin declares an undeclared unit", mutate(lambda d: d["pins"][0].__setitem__("unit", "7"))),
+        ("L5", "pin declares an undeclared unit", mutate(lambda d: d["pins"][0].__setitem__("unit", "7")), "'7'"),
         ("L6", "shared_pins names an unknown pin", mutate(lambda d: d["shared_pins"].append("GHOST"))),
         ("L7", "duplicate physical designator", mutate(lambda d: d["pins"][1]["numbers"].__setitem__(0, "1"))),
         ("L8", "pins out of sort order", mutate(lambda d: d["pins"].reverse())),
@@ -491,9 +491,16 @@ def self_test():
     ]
 
     failures = 0
-    for check, description, doc in cases:
+    for entry in cases:
+        check, description, doc = entry[0], entry[1], entry[2]
+        fragment = entry[3] if len(entry) > 3 else None
         found = lint(doc, "case")
-        if any(f": {check}: " in f for f in found):
+        # Match on the MESSAGE, not just the check ID. Matching on the ID meant
+        # any L5 branch satisfied any L5 case, so three L5 clauses could be
+        # deleted with the suite green — and for one of them the defect then
+        # went entirely unreported.
+        if any(f": {check}: " in f and (fragment is None or fragment in f)
+               for f in found):
             print(f"self-test ok:   {check} fires on {description}")
         else:
             print(f"self-test FAIL: {check} did NOT fire on {description}")
