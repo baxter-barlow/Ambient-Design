@@ -115,7 +115,12 @@ NOT_YET_CONSUMED = set()
 # `fingerprint` by an argparse help string, ngspice's version by the word
 # appearing anywhere. Read-by-key pins are reported and NOT counted now, so the
 # floor is the number of pins whose VALUE a consumer is actually held to.
-MINIMUM_AGREEMENTS = 30
+MINIMUM_AGREEMENTS = 14
+# Actions are counted SEPARATELY. Folding them into one number meant the floor
+# was 30 of which 16 were `uses:` occurrences, so deleting the `lark:` pin (the
+# gate then compares its consumer to nothing) and duplicating one checkout step
+# put the total back at 30 and passed.
+MINIMUM_ACTION_REFS = 16
 
 
 class GateUnavailable(Exception):
@@ -428,6 +433,7 @@ def check(manifest, read=None):
     # A `uses:` line pinned to something the manifest never mentions is the
     # same defect from the other direction: an unaudited action inside the
     # trust boundary of every job.
+    action_refs = 0
     known_refs = {
         str(block["ref"])
         for block in (dig(manifest, ("ci", "actions")) or {}).values()
@@ -439,8 +445,10 @@ def check(manifest, read=None):
     # gate whose own text says "an unpinned or unrecorded one is unaudited code".
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml")) + \
                 sorted((ROOT / ".github" / "workflows").glob("*.yaml")) + \
-                sorted((ROOT / ".github" / "actions").glob("**/action.yml")) + \
-                sorted((ROOT / ".github" / "actions").glob("**/action.yaml"))
+                sorted(p for p in ROOT.glob("**/action.yml")
+                       if ".git/" not in str(p)) + \
+                sorted(p for p in ROOT.glob("**/action.yaml")
+                       if ".git/" not in str(p))
     for workflow in (workflows or [CHECKS, DCO, POLICY]):
         text = read(workflow)
         if text is None:
@@ -466,11 +474,35 @@ def check(manifest, read=None):
             _walk_uses(_yaml.safe_load(text))
         except ImportError:
             parsed_refs = None
-        except Exception:
+        except Exception as exc:
+            # REPORTED. This used to fall back silently, so a workflow carrying
+            # one unparseable tag downgraded the whole file to the line scanner
+            # and hid `steps: [{uses: attacker/evil-action@main}]` completely.
+            # The comment claiming it was "reported as such" described nothing.
+            problems.append(
+                f"{workflow.name}: is not parseable as YAML ({exc.__class__.__name__}"
+                f": {str(exc).splitlines()[0][:80]}), so this gate falls back to "
+                "a line scan that cannot see the flow-mapping form. Fix the file "
+                "or this workflow is only partly checked.")
             parsed_refs = None
         if parsed_refs is not None:
             for ref in parsed_refs:
-                if ref.startswith("./") or ref.startswith("docker://"):
+                # `docker://` and `./` were skipped outright. A docker image is
+                # third-party code inside the job exactly as an action is, and
+                # a local `./tools/evil` composite action was never globbed
+                # either -- so `uses: ./tools/evil` containing
+                # `uses: attacker/evil-action@main` was invisible end to end.
+                if ref.startswith("./"):
+                    local = ROOT / ref[2:]
+                    candidates = [local / "action.yml", local / "action.yaml"]
+                    if not any(c.is_file() for c in candidates):
+                        problems.append(
+                            f"{workflow.name}: uses local action {ref!r}, which "
+                            "has no action.yml. A step pointing at nothing is "
+                            "either dead or resolved somewhere this gate cannot "
+                            "see.")
+                    else:
+                        action_refs += 1
                     continue
                 if ref not in known_refs:
                     problems.append(
@@ -478,7 +510,7 @@ def check(manifest, read=None):
                         "toolchain/versions.yaml does not pin. An unrecorded "
                         "action is unaudited code inside every job.")
                 else:
-                    checked += 1
+                    action_refs += 1
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
@@ -499,7 +531,9 @@ def check(manifest, read=None):
                     "inside the trust boundary of the job that checks out the "
                     "source; an unpinned or unrecorded one is unaudited code."
                 )
-    return problems, checked
+            else:
+                action_refs += 1
+    return problems, checked, action_refs
 
 
 def self_test():
@@ -516,20 +550,36 @@ def self_test():
                               "digest": "sha256:aaa"}]},
     }
     good = {
-        CHECKS: ('python-version: "3.12"\njsonschema==4.26.0\nPyYAML==6.0.2\nlark==1.3.0\n'
-                 "ngspice=46+ds-1\n  uses: actions/checkout@abc\n  uses: actions/setup-python@def\n"
+        # VALID YAML, because the gate now parses workflows and reports the
+        # ones it cannot. A fixture that is only a bag of matching lines was
+        # exercising the fallback scanner rather than the shipped path.
+        CHECKS: ("on: push\n"
+                 "jobs:\n"
+                 "  gate:\n"
+                 "    runs-on: ubuntu-latest\n"
+                 "    container:\n"
                  "      image: debian:x@sha256:y\n"
-                 "          kicad/kicad:9.0.9@sha256:aaa\n"),
+                 "    steps:\n"
+                 "      - uses: actions/checkout@abc\n"
+                 "      - uses: actions/setup-python@def\n"
+                 "        with:\n"
+                 '          python-version: "3.12"\n'
+                 "      - run: |\n"
+                 "          pip install jsonschema==4.26.0 PyYAML==6.0.2 lark==1.3.0\n"
+                 "          apt-get install ngspice=46+ds-1\n"
+                 "          docker pull kicad/kicad:9.0.9@sha256:aaa\n"),
         MANIFEST: 'version: "46"\n',
         RUN_SIM: 'fail_env "could not read ngspice.version from the manifest."\n',
-        DCO: "  uses: actions/checkout@abc\n",
-        POLICY: "  uses: actions/checkout@abc\n",
+        DCO: ("on: push\njobs:\n  d:\n    steps:\n"
+              "      - uses: actions/checkout@abc\n"),
+        POLICY: ("on: push\njobs:\n  p:\n    steps:\n"
+                 "      - uses: actions/checkout@abc\n"),
     }
 
     def reader(mapping):
         return lambda path: mapping.get(path)
 
-    problems, checked = check(fake, reader(good))
+    problems, checked, _refs = check(fake, reader(good))
     cases = [("a consistent manifest reports no problem", not problems and checked > 0)]
 
     drifted = dict(good)
@@ -591,10 +641,12 @@ def self_test():
         # could be deleted and the case stayed green -- a floor tripping in
         # place of the check it backstops, which is the exact failure this
         # file's other comments warn about.
-        globals()["check"] = lambda *_a, **_k: (["planted problem"], MINIMUM_AGREEMENTS)
+        globals()["check"] = lambda *_a, **_k: (
+            ["planted problem"], MINIMUM_AGREEMENTS, MINIMUM_ACTION_REFS)
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             planted = main([])
-        globals()["check"] = lambda *_a, **_k: ([], MINIMUM_AGREEMENTS)
+        globals()["check"] = lambda *_a, **_k: (
+            [], MINIMUM_AGREEMENTS, MINIMUM_ACTION_REFS)
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             clean = main([])
     finally:
@@ -618,7 +670,7 @@ def main(argv):
         return self_test()
     try:
         manifest = load_manifest()
-        problems, checked = check(manifest)
+        problems, checked, action_refs = check(manifest)
     except GateUnavailable as exc:
         print(f"toolchain-pins: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -639,11 +691,21 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
+    if action_refs < MINIMUM_ACTION_REFS:
+        print(
+            f"toolchain-pins: FAIL: verified only {action_refs} action "
+            f"reference(s), below the floor of {MINIMUM_ACTION_REFS}. Counted "
+            "separately from pins on purpose: one number let a deleted pin be "
+            "paid for by an added CI step.",
+            file=sys.stderr,
+        )
+        return 1
     for pin in sorted(set(READ_BY_KEY)):
         print(f"toolchain-pins: read-by-key: {pin} — its consumer reads this pin "
               "from the manifest rather than copying the value, so agreement is "
               "structural and the value itself is not compared here.")
-    print(f"toolchain-pins: PASS: {checked} pin/consumer agreement(s) verified.")
+    print(f"toolchain-pins: PASS: {checked} pin/consumer agreement(s) and "
+          f"{action_refs} action reference(s) verified.")
     return 0
 
 

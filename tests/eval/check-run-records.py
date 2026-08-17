@@ -76,6 +76,64 @@ def _fisher_lower_tail(a: int, b: int, c: int, d: int) -> float:
         for x in range(lo, a + 1)))
 
 
+def _int_fields(record, problems_out, label):
+    """Report any schema-integer field written as a JSON float.
+
+    JSON Schema accepts 250000.0 for "type": "integer" -- and so does
+    jsonschema 4.26.0 -- but isinstance(250000.0, int) is False in Python. So
+    every `isinstance(x, int)` guard in this file was disabled by writing the
+    number with a `.0`, which turned off the A4 ceiling, the headroom identity,
+    the passed-vs-limit rule, the AC5a threshold, the trial floor, the Wilson
+    recomputation, the observed-rate check and the gate-vs-arm reconciliation
+    at once. A record doing that validated and produced zero findings.
+
+    Rather than widen every guard and hope none is missed, the float spelling
+    is itself the finding: these fields are counts.
+    """
+    COUNT_PATHS = (
+        ("a4_context_budget", "limit"), ("a4_context_budget", "total"),
+        ("a4_context_budget", "headroom"),
+        ("ac5_gate", "successes"), ("ac5_gate", "trials"),
+        ("flip_criterion", "discordant_b"), ("flip_criterion", "discordant_c"),
+    )
+    for path in COUNT_PATHS:
+        node = record
+        for key in path[:-1]:
+            node = node.get(key) if isinstance(node, dict) else None
+        if not isinstance(node, dict):
+            continue
+        value = node.get(path[-1])
+        if isinstance(value, float):
+            problems_out.append(
+                f"{label}: {'.'.join(path)} is written as {value!r}, a JSON "
+                "float. The schema declares it an integer and a count cannot be "
+                "fractional; every check on this field tests isinstance(int) and "
+                "is silently skipped by the float spelling.")
+    for name, arm in (record.get("arms") or {}).items():
+        if not isinstance(arm, dict):
+            continue
+        for key in ("successes", "trial_count"):
+            if isinstance(arm.get(key), float):
+                problems_out.append(
+                    f"{label}: arms.{name}.{key} is written as "
+                    f"{arm[key]!r}, a JSON float; see above.")
+
+
+def _mcnemar_lower_tail(b: int, c: int) -> float:
+    """P(X <= b), X ~ Binomial(b + c, 1/2). Independent of the harness.
+
+    The paired branch checked the 2x2 table's ARITHMETIC and never its p, so a
+    0/10-against-10/10 run recorded `inconclusive` at p=0.93 with every arm
+    link intact and both gates green. Burying the finding that reopens the
+    standalone-DSL decision was one field away.
+    """
+    from math import comb
+    n = b + c
+    if n == 0:
+        return 1.0
+    return min(1.0, sum(comb(n, k) for k in range(0, b + 1)) / (2 ** n))
+
+
 AC5A_THRESHOLD = Fraction(7, 10)
 
 # AC4's ceiling is a constant OF THE ACCEPTANCE CRITERION, not per-run data.
@@ -114,6 +172,8 @@ def problems_for(record, label):
 
     def bad(message):
         out.append(f"{label}: {message}")
+
+    _int_fields(record, out, label)
 
     budget = record.get("a4_context_budget")
     if isinstance(budget, dict):
@@ -308,6 +368,26 @@ def problems_for(record, label):
         # and is checked against its discordant counts elsewhere.
         primary = flip.get("primary_arm")
         baseline_name = flip.get("baseline_arm")
+        # NAMING THE ARMS IS MANDATORY. Neither field is in the schema's
+        # `properties`, let alone `required`, so omitting them skipped the
+        # recomputation entirely and freed `p_value` -- a flip verdict whose
+        # arms are unnamed is a verdict about nothing.
+        if isinstance(arms, dict) and arms:
+            for role in ("primary_arm", "baseline_arm"):
+                if flip.get(role) is None:
+                    bad(f"flip_criterion records a verdict but no `{role}`, so "
+                        "its p-value is recomputed against nothing and the "
+                        "verdict names no data.")
+        # PAIRED runs are recomputed too, from their discordant counts.
+        if (isinstance(p_value, (int, float)) and flip.get("paired")
+                and isinstance(flip.get("discordant_b"), int)
+                and isinstance(flip.get("discordant_c"), int)):
+            want = _mcnemar_lower_tail(flip["discordant_b"], flip["discordant_c"])
+            if abs(p_value - want) > 1e-3:
+                bad(f"flip_criterion.p_value is {p_value}, but the exact "
+                    f"lower-tail McNemar test on b={flip['discordant_b']}, "
+                    f"c={flip['discordant_c']} gives {want:.6f}. The paired "
+                    "branch checked the table's arithmetic and never its p.")
         if (isinstance(p_value, (int, float)) and not flip.get("paired")
                 and isinstance(arms, dict)
                 and primary in arms and baseline_name in arms):

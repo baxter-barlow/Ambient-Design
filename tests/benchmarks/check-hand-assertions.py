@@ -22,6 +22,13 @@ Relations are matched on the `check:` key each assertion declares, not parsed
 out of prose: a checker that guessed at English would fail open the first time
 someone rephrased a line.
 
+STATED LIMIT. benchmark (c) has no deck, so its `validation.log` carries no
+`.meas` lines and `check-assertions.py`'s transcript comparison has nothing to
+reconcile it against. Of the five committed transcripts, two are mechanically
+checked and this one is not; it is a record of hand computation, and the
+computation itself is what this file gates. Saying so here because "checked by
+nothing" reads identically to "checked" from outside.
+
 Exit codes: 0 pass, 1 an assertion whose verdict does not follow, 2 environment
 failure.
 
@@ -55,15 +62,40 @@ def _leaf_numbers(mapping, prefix=""):
     return out
 
 
+def _numeric_string(value):
+    """A number written as a string is still a number.
+
+    `worst_rail_a: "99.0"` was invisible to this walk, so it was not an orphan,
+    needed no `inputs_not_gated` entry, and could be set to anything.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        return float(value.strip())
+    except ValueError:
+        return None
+
+
 def _flatten(value, path, out):
     if isinstance(value, dict):
         for k, v in value.items():
             _flatten(v, f"{path}.{k}" if path else k, out)
     elif isinstance(value, (list, tuple)):
-        if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value):
+        if value and all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                         for v in value):
             out[path] = list(value)
+        else:
+            # A list of DICTS is a table of corner values and was dropped
+            # whole: `corners: [{ta_c: 500, i_a: 99.0}]` was completely
+            # invisible, which is the "500 C ambient" case by another route.
+            for index, item in enumerate(value):
+                _flatten(item, f"{path}[{index}]", out)
     elif isinstance(value, (int, float)) and not isinstance(value, bool):
         out[path] = value
+    else:
+        number = _numeric_string(value)
+        if number is not None:
+            out[path] = number
 
 
 def _resolve(inputs, name):
@@ -75,6 +107,29 @@ def _resolve(inputs, name):
 
 
 _ALLOWED = None
+
+
+def _perturb(mapping, dotted, new_value):
+    """Return a copy of `mapping` with one dotted key replaced. None if absent."""
+    import copy
+    out = copy.deepcopy(mapping)
+    parts = dotted.replace("]", "").replace("[", ".").split(".")
+    node = out
+    for part in parts[:-1]:
+        if isinstance(node, list):
+            try:
+                node = node[int(part)]
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return None
+    last = parts[-1]
+    if isinstance(node, dict) and last in node:
+        node[last] = new_value
+        return out
+    return None
 
 
 def evaluate_formula(expr, inputs):
@@ -160,9 +215,76 @@ def evaluate(check, inputs):
 # growing to everything.
 MINIMUM_MECHANISED = 8
 
+# The assertion IDs that MUST be mechanised. A bare count let A3 be relabelled
+# `not_mechanisable` and a filler assertion appended, keeping `checked` at 8
+# while the one with the interesting inputs left the gate.
+# Keyed BY BENCHMARK: this is a statement about one real population, not about
+# every spec this function is ever handed. Applying it globally tripped the
+# self-test's own fixture -- the fourth time in this audit a floor has been
+# written as if fixtures were benchmarks.
+MUST_MECHANISE = {
+    "esp32s3-devboard": (
+        "A1_rail_voltage_containment", "A2_vbus_budget_t10",
+        "A3_3v3_source_capability", "A4_ldo_dropout_at_min_vbus",
+        "A5_ldo_thermal_at_wifi_tx", "A6_ptc_hold_margin",
+        "A7_deep_sleep_rail_current", "A8_usb_inrush_capacitance",
+    ),
+}
 
-def check_spec(spec, label, problems, minimum=None):
+
+def structure_hash(assertions):
+    """Content hash over WHICH INPUT PLAYS WHICH ROLE, per assertion.
+
+    The reconciliation proves each operand equals some named input. It cannot
+    know that the author named the RIGHT one: swapping the mapping alongside
+    the values restored round 5's finding exactly --
+
+        check_inputs: {have: 99.0, needs: [0.001, 0.500]}
+        check_inputs_from: {have: worst_rail_a, needs: [ldo_rating_a, ...]}
+        inputs: {ldo_rating_a: 0.001, worst_rail_a: 99.0, ...}
+
+    -- which is arithmetically true, electrically meaningless, and green. No
+    amount of arithmetic catches that, because the arithmetic is correct. What
+    a gate CAN do is refuse to let the binding change quietly: this is the same
+    device corpus/classification.yaml uses for `decision_hash`. Changing which
+    input feeds which operand is a real engineering decision and now has to be
+    a deliberate, reviewed commit rather than an edited line.
+    """
+    import hashlib, json
+    shape = []
+    for assertion in sorted(assertions, key=lambda a: str(a.get("id"))):
+        shape.append({
+            "id": assertion.get("id"),
+            "check": assertion.get("check"),
+            "from": assertion.get("check_inputs_from"),
+            "derived": assertion.get("check_inputs_derived"),
+            "not_gated": sorted((assertion.get("inputs_not_gated") or {})),
+            "not_mechanisable": bool(assertion.get("not_mechanisable")),
+        })
+    payload = json.dumps(shape, sort_keys=True, ensure_ascii=True,
+                         separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def check_spec(spec, label, problems, minimum=None, gate_structure=True):
     assertions = spec.get("assertions") or []
+    if gate_structure and assertions:
+        committed = spec.get("check_inputs_structure_hash")
+        actual = structure_hash(assertions)
+        if committed is None:
+            problems.append(
+                f"{label}: records no `check_inputs_structure_hash`. Which "
+                "input feeds which operand is an engineering decision that "
+                "arithmetic cannot check; it is pinned so changing it is a "
+                f"reviewed commit. Add: check_inputs_structure_hash: {actual}")
+        elif committed != actual:
+            problems.append(
+                f"{label}: check_inputs_structure_hash is {committed}, but the "
+                f"operand-to-input bindings hash to {actual}. A binding changed. "
+                "That is allowed and sometimes right -- but swapping `have` and "
+                "`need` between two inputs is arithmetically valid and "
+                "electrically meaningless, so it must be deliberate. Update the "
+                "hash in the same commit and say why.")
     if not assertions:
         problems.append(f"{label}: declares no assertions")
         return 0
@@ -209,6 +331,14 @@ def check_spec(spec, label, problems, minimum=None):
                 f"the inputs give {shown} -> {'PASS' if holds else 'FAIL'}. The "
                 "verdict does not follow from the numbers beside it."
             )
+    if minimum is None:
+        missing = [i for i in MUST_MECHANISE.get(label, ())
+                   if not any(a.get("id") == i and a.get("check") for a in assertions)]
+        if missing:
+            problems.append(
+                f"{label}: assertion(s) {missing} must be mechanised and are "
+                "not. A bare count let the one with the interesting inputs be "
+                "relabelled unmechanisable and replaced with filler.")
     floor = MINIMUM_MECHANISED if minimum is None else minimum
     if checked < floor:
         problems.append(
@@ -252,15 +382,54 @@ def check_spec(spec, label, problems, minimum=None):
                     problems.append(f"{label}/{name}: {operand}: {exc}")
                     continue
                 import ast as _ast
+                this_formula = set()
                 for node in _ast.walk(_ast.parse(formulas[operand], mode="eval")):
                     if isinstance(node, _ast.Name):
-                        used.add(node.id)
+                        this_formula.add(node.id)
                     elif isinstance(node, _ast.Attribute):
                         parts, cur = [], node
                         while isinstance(cur, _ast.Attribute):
                             parts.append(cur.attr); cur = cur.value
                         if isinstance(cur, _ast.Name):
-                            parts.append(cur.id); used.add(".".join(reversed(parts)))
+                            parts.append(cur.id); this_formula.add(".".join(reversed(parts)))
+                used.update(this_formula)
+                # NaN compares false against everything, so `(1e308*1e308 -
+                # 1e308*1e308)` reconciled with ANY operand. A formula that
+                # does not produce a finite number has not derived anything.
+                import math as _math
+                if not _math.isfinite(got):
+                    problems.append(
+                        f"{label}/{name}: formula for {operand} evaluates to "
+                        f"{got!r}, which is not a finite number. A non-finite "
+                        "result compares equal to nothing and unequal to "
+                        "nothing, so it reconciles with any operand at all.")
+                    continue
+                # EVERY NAMED INPUT MUST MATTER. `used` was filled from the
+                # names appearing in the expression, so `0*worst.ta_c` marked
+                # ta_c used while removing it from the arithmetic -- a 500 C
+                # ambient and a 39 A load, gate green. Each name is perturbed;
+                # one that does not move the result is not an input to it.
+                for name_used in sorted(this_formula):
+                    probe = dict(recorded)
+                    flat_probe = {}
+                    _flatten(probe, "", flat_probe)
+                    base = flat_probe.get(name_used)
+                    if not isinstance(base, (int, float)):
+                        continue
+                    bumped = _perturb(probe, name_used, base * 2.0 + 1.0)
+                    if bumped is None:
+                        continue
+                    try:
+                        moved = evaluate_formula(formulas[operand], bumped)
+                    except (ValueError, KeyError, SyntaxError, ArithmeticError):
+                        continue
+                    if _math.isfinite(moved) and moved == got:
+                        problems.append(
+                            f"{label}/{name}: formula for {operand} names "
+                            f"`{name_used}` but changing it does not change the "
+                            "result, so the input is declared used and is not. "
+                            "Multiplying a term by zero satisfies the "
+                            "reconciliation while removing it from the physics.")
                 if abs(got - float(value)) > abs(float(value)) * 1e-3 + 1e-12:
                     problems.append(
                         f"{label}/{name}: operand {operand}={value} but its own "
@@ -342,7 +511,8 @@ def self_test():
                              inputs={f"in_{k}": v for k, v in ci.items()},
                              check_inputs_from={k: f"in_{k}" for k in ci})
         problems = []
-        check_spec({"assertions": [assertion]}, "probe", problems, minimum=0)
+        check_spec({"assertions": [assertion]}, "probe", problems, minimum=0,
+                   gate_structure=False)
         return problems
 
     cases.append(("a true interval containment passes", not probe(
@@ -413,7 +583,8 @@ def self_test():
     check_spec({"assertions": [
         {"id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
          "check_inputs_from": {"have": "h", "need": "n"},
-         "inputs": {"h": 1.0, "n": 0.5}, "status": "PASS"}]}, "probe", floor_problems)
+         "inputs": {"h": 1.0, "n": 0.5}, "status": "PASS"}]}, "probe",
+        floor_problems, gate_structure=False)
     cases.append(("the mechanised-assertion floor fires on a short spec", any(
         "floor" in p for p in floor_problems)))
     cases.append(("an assertion recording no status is caught", any(
@@ -426,8 +597,12 @@ def self_test():
     # driving the shipped path.
     import contextlib, io, tempfile
 
+    STRUCT = structure_hash([
+        {"id": f"a{i}", "check": "at-least",
+         "check_inputs_from": {"have": "h", "need": "n"}} for i in range(8)])
+
     def drive(have, need):
-        body = "assertions:\n" + "".join(
+        body = f"check_inputs_structure_hash: {STRUCT}\n\nassertions:\n" + "".join(
             f"  - id: a{i}\n    check: at-least\n"
             f"    check_inputs: {{have: {have}, need: {need}}}\n"
             f"    check_inputs_from: {{have: h, need: n}}\n"

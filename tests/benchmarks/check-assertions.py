@@ -353,7 +353,13 @@ def load_yaml(path):
         raise GateUnavailable(f"{path} is not readable as YAML: {exc}") from exc
 
 
-def transcript_problems(case_dir, fresh_text, problems):
+# Benchmarks whose transcript MUST exist. Named rather than inferred, because
+# "no validation.log" and "this directory is a self-test fixture" are otherwise
+# the same observation.
+MUST_HAVE_TRANSCRIPT = frozenset({"blinker-555", "buck-3v3", "esp32s3-devboard"})
+
+
+def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=None):
     """Hold validation.log to the run it claims to be a capture of.
 
     Five `validation.log` files are cited as committed evidence by nine tracked
@@ -367,6 +373,13 @@ def transcript_problems(case_dir, fresh_text, problems):
     """
     log_path = case_dir / "validation.log"
     if not log_path.is_file():
+        if case_dir.name in MUST_HAVE_TRANSCRIPT:
+            problems.append(
+                f"{case_dir.name}: has no validation.log. Nine tracked "
+                "documents cite these files as committed evidence; a missing "
+                "one used to return 0 and let the gate print PASS, which is "
+                "the same 'reduce the number of things checked' failure the IR "
+                "pairing forbids.")
         return 0
     # ngspice's own `exit` status line matches the meas shape and is not a
     # measurement. Anything the deck does not declare with `.meas` is excluded
@@ -379,13 +392,18 @@ def transcript_problems(case_dir, fresh_text, problems):
             fresh.setdefault(found.group("name").lower(), found.group("value"))
     reconciled = 0
     seen = set()
+    lines_seen = 0
     for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
         found = MEAS_LINE.match(line)
         if not found:
             continue
         name = found.group("name").lower()
-        if name in NOT_A_MEASUREMENT or name in seen:
+        if name in NOT_A_MEASUREMENT:
             continue
+        # EVERY occurrence, not the first. blinker-555's transcript already
+        # ships a duplicated `.meas results` block, so deduping meant a correct
+        # six-line header made the whole ngspice capture below it -- 6.1 Hz,
+        # 74 mA -- invisible to this comparison.
         seen.add(name)
         if name not in fresh:
             problems.append(
@@ -403,6 +421,14 @@ def transcript_problems(case_dir, fresh_text, problems):
                 "cite as evidence describes a deck that no longer exists.")
             continue
         reconciled += 1
+    # A FLOOR. Truncating the file to one correct line reported "1 transcript
+    # measurement matched" and exited 0; an empty file reported 0 and did the
+    # same. The count of `.meas` names the deck declares is the right bar.
+    if minimum_measurements is not None and len(seen) < minimum_measurements:
+        problems.append(
+            f"{case_dir.name}/validation.log: reconciles {len(seen)} distinct "
+            f"measurement(s), but this deck declares {minimum_measurements}. A "
+            "truncated or emptied transcript is not evidence.")
     return reconciled
 
 
@@ -430,7 +456,20 @@ def main(argv):
             problems,
         )
         fresh_text = log_path.read_text(encoding="utf-8", errors="replace")
-        transcript = transcript_problems(case_dir, fresh_text, problems)
+        # The floor is the number of distinct .meas names the DECK declares,
+        # read from the deck itself so it cannot drift from the benchmark.
+        deck = case_dir / "netlist.cir"
+        declared = set()
+        if deck.is_file():
+            for line in deck.read_text(encoding="utf-8", errors="replace").splitlines():
+                stripped = line.strip().lower()
+                if stripped.startswith(".meas"):
+                    parts = stripped.split()
+                    if len(parts) >= 3:
+                        declared.add(parts[2])
+        transcript = transcript_problems(
+            case_dir, fresh_text, problems,
+            minimum_measurements=len(declared) or None)
     except GateUnavailable as exc:
         print(f"sim-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
