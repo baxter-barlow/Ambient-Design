@@ -116,3 +116,21 @@ t_settle_us         =  1.68960e+01
 === assertion windows ===
 sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows.
 exit=0
+
+=== Input-corner runs (9 V / 12 V / 14 V), at the converged 2 ns timestep ===
+
+design.md cites these as "supplementary runs in validation.log". They were in
+the pre-AMB-123 log and regenerating it dropped them, which left a live citation
+pointing at a file that no longer contained what it named — a fresh gap opened
+while closing a stale one. Reproduced here by retargeting V3's final value and
+re-running; everything else in the deck is unchanged.
+
+  9 V (low corner)     vout_avg=3.32800e+00  vout_pp=3.13876e-03  il_pp=4.23283e-01  eff=9.29481e-01  t_settle_us=4.55420e+01
+  12 V (nominal)       vout_avg=3.32800e+00  vout_pp=3.63856e-03  il_pp=4.87195e-01  eff=9.29462e-01  t_settle_us=1.68760e+01
+  14 V (high corner)   vout_avg=3.32800e+00  vout_pp=4.12012e-03  il_pp=5.14993e-01  eff=9.29450e-01  t_settle_us=1.54620e+01
+
+Ipk at the worst corner = 2.0 + il_pp/2, which is what sets the inductor
+saturation margin quoted in design.md sec. 4. Note these are the CONVERGED
+numbers: at the deck's former 40 ns grid the 9 V corner read 24.4 mVpp of
+output ripple and design.md explained it as an envelope oscillation. It was
+beat against the time grid, and it is not there at 2 ns.

@@ -63,7 +63,7 @@ to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
 
 Peak current and saturation margin (using measured worst-case ripple):
 
-    Ipk = Iout + DIL/2 = 2.0 + 0.565/2 = 2.28 A
+    Ipk = Iout + DIL/2 = 2.0 + 0.515/2 = 2.26 A
 
 Part: **Coilcraft XGL6060-103MEC** (10 uH +/-20%, DCR 18.5 mOhm typ /
 20.4 mOhm max, Isat 3.6 A at 10% inductance drop / 5.5 A at 20% / 7.3 A at
@@ -244,8 +244,32 @@ belong to higher rungs.
 | 1A->2A settling | <= 500 us | 16.0 us | pass |
 
 Input corners (9 V / 14 V, supplementary runs in `validation.log`): all five
-stay green; worst deltas are ripple-current 0.565 App at 14 V, settling
-39.4 us at 9 V, and output ripple 24.4 mVpp at 9 V (a slow envelope over
+stay green; worst deltas are ripple-current 0.515 App at 14 V, settling
+39.4 us at 9 V, and output ripple 3.14 mVpp at 9 V (a slow envelope over
 ~100 cycles -- per-cycle ripple there is 6.4 mVpp -- still 2x inside the
 50 mV window). No assertion window was modified from the task defaults;
 every target was met with the components as chosen.
+
+## Two assertions that cannot currently fail, stated rather than implied
+
+`efficiency` is **arithmetic over a hand-entered constant, not a measurement.**
+`Gin` injects `PFIX/V(in)` as input current, so `pin_avg` is identically
+`pout + I^2*(Ron+DCR) + PFIX`, and `eff` is a closed form in `PFIX = 0.40 W`.
+It is invariant under the timestep (0.929453 at 40 ns, 0.929462 at 2 ns) and
+essentially flat across the input range (0.929481 / 0.929462 / 0.929450 at
+9 / 12 / 14 V). The `>= 0.85` bound is satisfied for any `PFIX <= 1.07 W`.
+Nothing about switching loss is being verified: at rung 0 there is no switching
+model to verify. The assertion earns its place by pinning the loss BUDGET, and
+it should be re-derived against a real switching model at rung 1.
+
+`startup_overshoot` **measures steady-state ripple, not overshoot.** Probing the
+same expression over 1.20-1.40 ms — a window containing no startup transient,
+since soft-start ends at 600 us — gives 0.0477 % against the assertion's
+0.0477 %. The residual true overshoot is `vout_max_startup 3.32958` against
+`vmax_late 3.32957`, about 0.01 mV. The reported figure is half the
+peak-to-peak ripple over the mean. It would report the same number on a
+converter with no soft-start at all.
+
+Both are kept because they bound something real (a loss budget, a ripple
+envelope) and both are labelled `informational_at_rung_0` in assertions.yaml so
+that a reader does not mistake either for the check its name suggests.

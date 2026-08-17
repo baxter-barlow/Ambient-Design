@@ -257,8 +257,10 @@ jobs:
         run: |
           apt-get install -y --no-install-recommends python3 python3-yaml
           python3 -c "import yaml, sys; print('python', sys.version.split()[0], 'PyYAML', yaml.__version__)"
-      - name: Self-test the assertion checker
-        run: python3 tests/benchmarks/check-assertions.py --self-test
+      - name: Self-test the assertion checkers
+        run: |
+          python3 tests/benchmarks/check-assertions.py --self-test
+          python3 tests/benchmarks/check-hand-assertions.py --self-test
       - name: Run benchmark decks and check their assertion windows
         run: bash tests/benchmarks/run-sim.sh
 
