@@ -65,6 +65,14 @@ jobs:
         # stopped firing would otherwise report a clean sweep over every
         # record, which is indistinguishable from having no linter at all.
         run: python3 parts/lint-part-data.py --self-test
+      - name: IR content hashes
+        # Proves `design_hash` describes its own bytes and the source map
+        # agrees. Stdlib only. The self-test runs first so a check that
+        # stopped firing fails loudly instead of reporting a clean sweep.
+        run: |
+          python3 tests/ir/check-hashes.py --self-test
+          python3 tests/ir/check-hashes.py
+
       - name: Lint part-data cross-references
         # Invariants JSON Schema has no vocabulary for: provenance pointers
         # resolving, supply draw attributed to real power_in pins, unit
