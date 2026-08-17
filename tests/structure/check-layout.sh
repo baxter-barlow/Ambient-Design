@@ -148,8 +148,15 @@ for raw in sys.stdin.buffer.read().split(b"\0"):
     if not rel or rel == SELF:
         continue
     # The path itself, which is how a renamed package or skill directory
-    # comes back.
-    if BRAND.search(rel) and not any(a in rel for a in ALLOWED):
+    # comes back. Stripped THEN searched, exactly as the body is below: an
+    # earlier version exempted the whole path if any allowed token appeared
+    # anywhere in it, so a single `aed-part-data` segment switched the gate
+    # off for everything beneath it - the moment that pipeline is vendored or
+    # mirrored under its own name, the subtree stops being checked.
+    probe = rel
+    for token in ALLOWED:
+        probe = probe.replace(token, "")
+    if BRAND.search(probe):
         hits.append(f"{rel}  (path)")
     try:
         text = open(rel, encoding="utf-8").read()
