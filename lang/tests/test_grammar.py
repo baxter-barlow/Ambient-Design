@@ -589,6 +589,16 @@ class Conformance(unittest.TestCase):
             ),
             "comment": self._design("    port p passive  # 100k\u03a9\n"),
             "tab between tokens": self._design("    port\tp passive\n"),
+            # The pragma line was the last lexeme still admitting a tab or a
+            # non-ASCII character, which left L5's ASCII rule holding
+            # everywhere except the one line every file must carry.
+            "pragma, tab": f"{PRAGMA_TEXT}\t\n\nmodule M:\n    port p passive\n",
+            "pragma, non-ascii": (
+                f"{PRAGMA_TEXT} \u03a9\n\nmodule M:\n    port p passive\n"
+            ),
+            "pragma, DEL": (
+                f"{PRAGMA_TEXT}\x7f\n\nmodule M:\n    port p passive\n"
+            ),
         }
         for label, source in cases.items():
             with self.subTest(where=label):
