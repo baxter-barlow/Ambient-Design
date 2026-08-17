@@ -98,6 +98,13 @@ QUANTITY = re.compile(r"^\s*(?P<number>-?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*(?P<unit
 # written to: round this run's result to the recorded number of significant
 # figures and require equality. A record that claims more digits than it can
 # support is held to all of them, which is the right incentive.
+# How wide a two-sided window may be, as a multiple of the value it brackets,
+# and how far a one-sided bound may sit from it. Loose on purpose: a real
+# tolerance stack is rarely wider, and this must not fight engineering. It
+# exists to catch a window that has stopped asserting anything at all.
+MAX_RELATIVE_WINDOW = 3.0
+MAX_ONE_SIDED_RATIO = 10.0
+
 SIGNIFICANT = re.compile(r"[1-9][0-9]*(?:\.[0-9]*)?|0\.0*[1-9][0-9]*")
 
 
@@ -237,6 +244,44 @@ def check_benchmark(case, spec, log_text, problems):
             continue
 
         checked += 1
+
+        # A WINDOW MUST BE A CLAIM. Comparing a measurement to a bound the same
+        # author wrote in the same file checks YAML-against-deck agreement, not
+        # engineering: widening `[0.932 Hz, 1.051 Hz]` to
+        # `[0.000001 Hz, 1000000 Hz]` passed, so the gate could not fail on a
+        # value in either direction once both files moved together.
+        #
+        # The floor is deliberately loose — 3x around the expected value, or 10x
+        # for a one-sided bound — because a legitimate tolerance stack is rarely
+        # wider than that and this must not fight real engineering. It exists to
+        # catch the window that has stopped asserting anything at all.
+        expected = assertion.get("expected")
+        if expected is not None and not isinstance(expected, dict):
+            try:
+                centre = to_reported(expected, assertion, f"{label}.expected")
+            except ValueError:
+                centre = None
+            if centre is not None and centre != 0:
+                if low > float("-inf") and high < float("inf"):
+                    span = (high - low) / abs(centre)
+                    if span > MAX_RELATIVE_WINDOW:
+                        problems.append(
+                            f"{label}: window [{low:.6g}, {high:.6g}] spans "
+                            f"{span:.1f}x its expected value {centre:.6g}. A "
+                            "window that wide asserts nothing; state a real "
+                            f"tolerance or raise MAX_RELATIVE_WINDOW "
+                            f"(currently {MAX_RELATIVE_WINDOW}) deliberately."
+                        )
+                        continue
+                else:
+                    bound = high if high < float("inf") else low
+                    if bound != 0 and abs(bound / centre) > MAX_ONE_SIDED_RATIO:
+                        problems.append(
+                            f"{label}: one-sided bound {bound:.6g} is "
+                            f"{abs(bound / centre):.1f}x its expected value "
+                            f"{centre:.6g}, so it cannot fail."
+                        )
+                        continue
         if not (low <= value <= high):
             problems.append(
                 f"{label}: measured {value:.6g} is outside the declared window "

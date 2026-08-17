@@ -87,10 +87,43 @@ IR_EXAMPLES = ROOT / "ir" / "examples"
 CANONICAL_PROFILE = "rhoform-canonical-json/1"
 
 
+def _canonical_number(value):
+    """Clause 7: one spelling per numeric VALUE, independent of language.
+
+    The profile pinned encoding, key order, whitespace, escaping, NaN and array
+    order — and said nothing about numbers, so `1000` and `1e3` are the same
+    value and hashed differently, and `1e16` serialized as `1e+16` here against
+    `10000000000000000` from JSON.stringify. A profile whose stated purpose is
+    that "two toolchains agree on one design" has to pin this or it does not
+    deliver the thing it is for.
+
+    The rule: a float whose value is integral is written as that integer, and
+    every other float is written by `repr`, which is the shortest string that
+    round-trips. Integers are already unambiguous. `-0.0` normalizes to `0`,
+    because a design has no signed zero.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError("NaN and Infinity are not representable")
+        if value == int(value):
+            return int(value)
+    return value
+
+
+def _canonicalize(node):
+    if isinstance(node, dict):
+        return {key: _canonicalize(sub) for key, sub in node.items()}
+    if isinstance(node, list):
+        return [_canonicalize(sub) for sub in node]
+    return _canonical_number(node)
+
+
 def canonical_bytes(document) -> bytes:
     """Serialize per rhoform-canonical-json/1."""
     return json.dumps(
-        document,
+        _canonicalize(document),
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
@@ -249,6 +282,22 @@ def self_test() -> int:
         "canonical_bytes sorts keys and strips insignificant whitespace",
         canonical_bytes({"b": 1, "a": {"d": 2, "c": 3}})
         == b'{"a":{"c":3,"d":2},"b":1}\n',
+    ))
+    checks.append((
+        "an integral float and its integer hash the same",
+        canonical_bytes({"v": 1000}) == canonical_bytes({"v": 1e3}),
+    ))
+    checks.append((
+        "a large integer is not written in exponent form",
+        canonical_bytes({"v": 1e16}) == b'{"v":10000000000000000}\n',
+    ))
+    checks.append((
+        "negative zero normalizes",
+        canonical_bytes({"v": -0.0}) == canonical_bytes({"v": 0}),
+    ))
+    checks.append((
+        "a genuinely fractional value keeps its shortest round-trip form",
+        canonical_bytes({"v": 0.1}) == b'{"v":0.1}\n',
     ))
     checks.append((
         "canonical_bytes refuses NaN rather than emitting it",
