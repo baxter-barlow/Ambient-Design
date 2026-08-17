@@ -186,12 +186,12 @@ recorded L6's saving on (a) as 0 when it is 45-82.
 |---|---|---:|---:|---:|
 | blinker-555 | candidate_a | 1344 | 993 | 911 |
 | blinker-555 | candidate_b | 1069 | **814** | 769 |
-| blinker-555 | starlark | 1144 | 822 | — |
+| blinker-555 | starlark | 1252 | 901 | — |
 | esp32s3-devboard | candidate_a | 8554 | 6318 | 5131 |
 | esp32s3-devboard | candidate_b | 6631 | **5003** | **4160** |
-| esp32s3-devboard | starlark | 7273 | 5064 | — |
+| esp32s3-devboard | starlark | 7333 | 5124 | — |
 
-Language cards: candidate_a 863, candidate_b 886, starlark 823 tokens — all
+Language cards: candidate_a 865, candidate_b 888, starlark 827 tokens — all
 comfortably inside §4's ~3K flip-criterion budget.
 
 **The decision, on the `inferred` cell** — the realistic one, and the one the
@@ -199,11 +199,11 @@ arms were built to be compared on:
 
 | | (a) blinker | (c) esp32 | (c) +columnar | card | defects | localised |
 |---|---:|---:|---:|---:|---:|---:|
-| candidate_a | 906 | 6318 | 5131 | 863 | 15/15 | 100% |
-| **candidate_b** | **748** | **5003** | **4160** | 886 | **16/16** | 94% |
-| starlark | 822 | 5064 | — | 823 | 14/16 | 100% |
+| candidate_a | 993 | 6318 | 5131 | 865 | 15/15 | 100% |
+| **candidate_b** | **814** | **5003** | **4160** | 888 | **16/16** | 94% |
+| starlark | 901 | 5124 | — | 827 | 14/16 | 100% |
 
-B is 17.4% cheaper than A on (a) and 20.8% on (c), and it is the only arm that
+B is 18.0% cheaper than A on (a) and 20.8% on (c), and it is the only arm that
 beats the Starlark baseline on both designs. It detects one defect more than A
 — A cannot express the dropped-bracket mutation on (c) at all — and pays for
 its block scoping with one mis-localised diagnostic in sixteen, which is the

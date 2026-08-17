@@ -1,0 +1,24 @@
+{
+  "_comment": "Generated. Regenerate deliberately with: python3 lang/tests/check_readme_numbers.py --write, on a machine with the optional tiktoken pin installed and its cache warm. lang/README.md is held to this file OFFLINE.",
+  "counts": {
+    "blinker-555|candidate_a|explicit": 1344,
+    "blinker-555|candidate_a|inferred": 993,
+    "blinker-555|candidate_a|inferred+columnar": 911,
+    "blinker-555|candidate_b|explicit": 1069,
+    "blinker-555|candidate_b|inferred": 814,
+    "blinker-555|candidate_b|inferred+columnar": 769,
+    "blinker-555|starlark|explicit": 1252,
+    "blinker-555|starlark|inferred": 901,
+    "card|candidate_a": 865,
+    "card|candidate_b": 888,
+    "card|starlark": 827,
+    "esp32s3-devboard|candidate_a|explicit": 8554,
+    "esp32s3-devboard|candidate_a|inferred": 6318,
+    "esp32s3-devboard|candidate_a|inferred+columnar": 5131,
+    "esp32s3-devboard|candidate_b|explicit": 6631,
+    "esp32s3-devboard|candidate_b|inferred": 5003,
+    "esp32s3-devboard|candidate_b|inferred+columnar": 4160,
+    "esp32s3-devboard|starlark|explicit": 7333,
+    "esp32s3-devboard|starlark|inferred": 5124
+  }
+}
