@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure schemas lint bakeoff grammar eval-tests sim golden
+.PHONY: all check structure schemas lint ir-hashes bakeoff grammar eval-tests sim golden
 
 # Everything CI runs.
 all: check sim golden
@@ -11,7 +11,7 @@ all: check sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure schemas lint bakeoff grammar eval-tests
+check: structure schemas lint ir-hashes bakeoff grammar eval-tests
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -32,6 +32,16 @@ schemas:
 lint:
 	python3 parts/lint-part-data.py --self-test
 	python3 parts/lint-part-data.py
+
+# IR content hashes. The schemas gate proves an IR document has the right
+# SHAPE; this proves its `design_hash` actually describes its own bytes and
+# that the paired source map agrees. Nothing recomputed either until this
+# existed, so a rename could invalidate the determinism contract's worked
+# example with every gate green. The self-test runs first, for the same
+# reason the part linter's does.
+ir-hashes:
+	python3 tests/ir/check-hashes.py --self-test
+	python3 tests/ir/check-hashes.py
 
 # Syntax bake-off (lang/): the candidate grammars must round-trip their own
 # output, agree with each other on the same design, and agree with the
