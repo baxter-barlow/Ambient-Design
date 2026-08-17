@@ -245,7 +245,7 @@ components:
     value: 4.7uF 25V X5R
     package: "0603"
     mpn: TDK C1608X5R1E475K080AC
-    role: LDO input (VBUS-visible total 9.4uF <= 10uF USB limit)
+    role: LDO input (VBUS-visible total 9.5uF <= 10uF USB limit; C1+C3 bulk plus C2 HF)
   - ref: C4
     value: 22uF 10V X5R
     package: "0805"

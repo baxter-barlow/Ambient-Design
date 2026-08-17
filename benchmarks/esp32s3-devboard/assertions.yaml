@@ -17,6 +17,7 @@ assertions:
     check_inputs:
       inner: [3.234, 3.366]
       outer: [3.0, 3.6]
+    check_inputs_from: {inner: ldo_vout_v, outer: module_vdd33_v}
     kind: voltage-domain containment (Polymorphic Blocks component-mediated transfer)
     expr: "ldo.vout_interval within module.vdd33_recommended"
     inputs: {ldo_vout_v: [3.234, 3.366], module_vdd33_v: [3.0, 3.6]}   # +/-2%; Table 6-2
@@ -29,6 +30,7 @@ assertions:
     check_inputs:
       have: 0.39491
       limit: 0.5
+    check_inputs_from: {have: sum_worst_a, limit: capability_a}
     kind: current-budget containment (T10), VBUS rail
     expr: "sum(vbus_loads.wifi_tx_peak.worst) <= usb.capability"
     inputs: {sum_worst_a: 0.39491, capability_a: 0.500}
@@ -37,10 +39,11 @@ assertions:
     status: PASS
 
   - id: A3_3v3_source_capability
-    check: at-least
+    check: at-least-all
     check_inputs:
       have: 1.0
-      need: 0.500
+      needs: [0.39166, 0.500]
+    check_inputs_from: {have: ldo_rating_a, needs: [worst_rail_a, module_required_a]}
     kind: current-budget containment, 3.3 V rail
     expr: "ldo.i_rating >= max(sum(p3v3_loads)) AND ldo.i_rating >= module.required_source"
     inputs: {ldo_rating_a: 1.000, worst_rail_a: 0.39166, module_required_a: 0.500}  # Table 6-2 I_VDD min 0.5 A
@@ -53,10 +56,14 @@ assertions:
     check_inputs:
       have: 3.818
       need: 3.5618
+    check_inputs_from: {have: v_ldo_in_min_v}
+    check_inputs_derived:
+      need: "vout_max_v + vdo_guardband_v_per_a * i_load_a"
+    inputs_not_gated:
+      vdo_typ_v_per_a: "the datasheet-typ basis, published as a secondary row; the gate uses the conservative in-house guardband, which is the larger number"
     kind: dropout margin at minimum input, wifi_tx_peak worst
     expr: "v_ldo_in_min >= vout_max + vdo(i_load)"
     inputs:
-      v_required_min_v: 3.5618      # vout_max + vdo_guardband*i_load = 3.366 + 0.50*0.3916
       v_ldo_in_min_v: 3.818       # 4.40 - 0.1382 (PTC 0.35R) - 0.0434 (bead 0.11R) - 0.400 (Vf max), power-tree.yaml; exact 3.81834
       vout_max_v: 3.366
       i_load_a: 0.3916            # LDO OUTPUT current at wifi_tx_peak worst (P3V3 load; excludes the 60 uA Iq, which flows Vin->GND)
@@ -76,12 +83,21 @@ assertions:
     check_inputs:
       have: 121.9
       limit: 125
+    check_inputs_from: {limit: tj_gate_c}
+    check_inputs_derived:
+      have: "worst.ta_c + ((worst.vin_v - worst.vout_v) * worst.iout_a + worst.vin_v * iq_a) * theta_ja_datasheet_c_w"
+    inputs_not_gated:
+      worst.theta_ja_c_w: "the ~1 in^2 pour assumption; published as the secondary margin. The GATED number uses the datasheet minimum-pad 110 C/W, which is the pessimistic one"
+      typ.vin_v: "the typical row, reported for context and not gated"
+      typ.vout_v: "the typical row, reported for context and not gated"
+      typ.iout_a: "the typical row, reported for context and not gated"
+      typ.ta_c: "the typical row, reported for context and not gated"
     kind: "junction temperature at continuous TX (conservative: peak treated as sustained)"
     expr: "Tj = Ta + P x theta_ja <= Tj_limit ; P = (Vin - Vout) x Iout + Vin x Iq"
     inputs:
-      tj_worst_c: 121.9             # at the datasheet minimum-pad theta_JA of 110 C/W
       tj_gate_c: 125                # the design's own gate, below the 150 C datasheet limit
-      worst: {vin_v: 4.903, vout_v: 3.234, iout_a: 0.3916, ta_c: 50, theta_ja_c_w: 62, tj_limit_c: 125}
+      iq_a: 60.0e-6                 # AP7361C quiescent current, flows Vin->GND
+      worst: {vin_v: 4.903, vout_v: 3.234, iout_a: 0.3916, ta_c: 50, theta_ja_c_w: 62}
       typ:   {vin_v: 4.585, vout_v: 3.300, iout_a: 0.3561, ta_c: 25}
       theta_ja_datasheet_c_w: 110   # AP7361C DS37274 Rev. 5-2 thermal table, SOT223, Note 9: "mounted on FR-4 substrate PC board, with minimum recommended pad layout" (note states no airflow condition and no board size for SOT223)
     calc_worst: "P = 1.669 x 0.3916 + 4.903 x 60e-6 = 0.6534 + 0.0003 = 0.654 W; Tj = 50 + 0.654 x 62 = 90.5 C"
@@ -96,6 +112,7 @@ assertions:
     check_inputs:
       have: 0.6
       need: 0.39491
+    check_inputs_from: {have: hold_derated_a, need: worst_a}
     kind: series-element rating vs continuous draw
     expr: "ptc.hold_derated(50C) >= vbus_worst_continuous"
     inputs: {hold_derated_a: 0.60, worst_a: 0.39491}
@@ -107,6 +124,7 @@ assertions:
     check_inputs:
       have: 9.0e-06
       limit: 1.0e-04
+    check_inputs_from: {have: predicted_a, limit: gate_a}
     kind: measurable low-power gate (maps to future stub sim / bench measurement at J5)
     expr: "i(P3V3_LOAD, deep_sleep) <= 100e-6"
     inputs: {predicted_a: 9.0e-6, gate_a: 1.0e-4}   # 8 uA module (Table 6-7) + <=1 uA leakage; excludes LDO Iq and 5V-side PWR LED by construction
@@ -116,11 +134,12 @@ assertions:
   - id: A8_usb_inrush_capacitance
     check: sum-at-most
     check_inputs:
-      parts: [4.7e-06, 4.7e-06]
+      parts: [4.7e-06, 4.7e-06, 1.0e-07]
       limit: 1.0e-05
+    check_inputs_from: {parts: [c1_f, c3_f, c2_f], limit: limit_f}
     kind: attach-point bulk capacitance limit
     expr: "sum(vbus_visible_bulk) <= 10e-6"
-    inputs: {c1_f: 4.7e-6, c3_f: 4.7e-6, sum_f: 9.4e-6, limit_f: 1.0e-5}
+    inputs: {c1_f: 4.7e-6, c3_f: 4.7e-6, c2_f: 0.1e-6, limit_f: 1.0e-5}
     note: "3.3 V bank (>=87 uF) charges behind LDO current limit, not at attach"
     status: PASS
 
@@ -130,8 +149,6 @@ assertions:
     kind: strapping-node DC solution at EN rising edge (details in pin-plan.md)
     expr: "straps sample to {GPIO0:1, GPIO45:0, GPIO46:0, GPIO3:float} unless BOOT held"
     inputs:
-      limit_f: 1.0e-05              # USB 2.0 attach limit, 10 uF
-      gate_a: 1.0e-04               # the 100 uA gate this assertion's expr states
       gpio0: "internal 45k PU (Table 6-3) || external 10k PU -> high"
       gpio45: "external 10k PD (fitted) + internal weak PD -> low (VDD_SPI = 3.3 V)"
       gpio46: "internal weak PD -> low"
