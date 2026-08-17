@@ -431,6 +431,21 @@ def self_test() -> int:
         checks.append(("check_document reports a missing source map",
                        any("no paired source map" in p for p in problems)))
 
+        # The source-map design_hash comparison, uncovered: a map pointing at
+        # a DIFFERENT document is the failure this pairing exists to detect.
+        mism_doc = Path(tmp) / "mismatched.ir.json"
+        mism_doc.write_text(text, encoding="utf-8")
+        mism_map = Path(tmp) / "mismatched.sourcemap.json"
+        real_map = json.loads(
+            (IR_EXAMPLES / "blinker.sourcemap.json").read_text(encoding="utf-8"))
+        real_map["design_hash"] = "sha256:" + "0" * 64
+        mism_map.write_text(json.dumps(real_map), encoding="utf-8")
+        mism_problems = []
+        check_document(mism_doc, mism_problems, [])
+        checks.append((
+            "a source map naming a different design_hash is caught",
+            any("does not match the IR" in p for p in mism_problems)))
+
         # WIRING for the sort rules: the cases above call sort_problems
         # directly, so cutting the one line that calls it from check_document
         # left every one of them green.

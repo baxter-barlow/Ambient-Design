@@ -537,6 +537,17 @@ def self_test():
     cases.append(("a drifted package pin is caught", any(
         "jsonschema" in p for p in check(fake, reader(drifted))[0])))
 
+    # THE PER-OCCURRENCE RULE, which had no case: every `drifted` fixture above
+    # REMOVES the needle entirely, which lands on the "does not contain" branch
+    # instead. This is the shape the rule was written for -- a file with several
+    # `python-version:` lines, one of them drifted, the rest still correct.
+    multi = dict(good)
+    multi[CHECKS] = good[CHECKS].replace(
+        'python-version: "3.12"\n',
+        'python-version: "3.12"\npython-version: "3.12"\npython-version: "3.11"\n')
+    cases.append(("one drifted line among several correct ones is caught", any(
+        "at least one disagrees" in p for p in check(fake, reader(multi))[0])))
+
     drifted2 = dict(good)
     drifted2[CHECKS] = good[CHECKS].replace("actions/checkout@abc", "actions/checkout@deadbeef")
     caught = check(fake, reader(drifted2))[0]

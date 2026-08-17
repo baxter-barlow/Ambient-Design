@@ -298,6 +298,50 @@ def self_test() -> int:
     cases.append(("a control failing somewhere it does not declare is caught",
                   code == 1 and "actually fails at" in text))
 
+    # THREE BRANCHES an auditor found uncovered. Each fires; none had a case.
+    def run_raw(build):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "parts" / "examples" / "negative").mkdir(parents=True)
+            build(root)
+            argv = sys.argv
+            sys.argv = ["validate-schemas.py", str(root)]
+            try:
+                with contextlib.redirect_stdout(io.StringIO()) as out, \
+                     contextlib.redirect_stderr(io.StringIO()) as err:
+                    return main(), out.getvalue() + err.getvalue()
+            finally:
+                sys.argv = argv
+
+    def _no_schema(root):
+        # examples present, schema deleted: without this branch the root's
+        # examples and all its negative controls stop being validated silently.
+        (root / "parts" / "examples" / "good.part.json").write_text(_json.dumps(good))
+    code, text = run_raw(_no_schema)
+    cases.append(("examples with no schema to validate them are caught",
+                  code == 1 and "declares NO *.schema.json" in text))
+
+    def _bad_schema(root):
+        (root / "parts" / "part-data.schema.json").write_text(
+            _json.dumps({"type": "not-a-type"}))
+        (root / "parts" / "examples" / "good.part.json").write_text(_json.dumps(good))
+    code, text = run_raw(_bad_schema)
+    cases.append(("a malformed schema is caught, not skipped",
+                  code == 1 and "not a well-formed JSON Schema" in text))
+
+    def _stray(root):
+        (root / "parts" / "part-data.schema.json").write_text(_json.dumps(SCHEMA))
+        (root / "parts" / "examples" / "good.part.json").write_text(_json.dumps(good))
+        (root / "parts" / "examples" / "negative" / "n1.part.json").write_text(
+            _json.dumps(control))
+        # a mapped suffix outside every declared examples/ directory
+        (root / "parts" / "elsewhere").mkdir()
+        (root / "parts" / "elsewhere" / "orphan.part.json").write_text(
+            _json.dumps({"stability": "whatever it likes"}))
+    code, text = run_raw(_stray)
+    cases.append(("a mapped example outside examples/ is caught",
+                  code == 1 and "no gate validates it" in text))
+
     code, text = run(good, {"n1.part.json": {"stability": "stable"}})
     cases.append(("a control with no declaration is caught",
                   code == 1 and "does not declare where it fails" in text))

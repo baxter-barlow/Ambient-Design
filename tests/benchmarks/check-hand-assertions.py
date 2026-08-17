@@ -407,6 +407,20 @@ def self_test():
              "inputs": {"rating_a": 1.0, "need_a": 0.5, "spare": 1.0},
              "inputs_not_gated": {"spare": ""}, "status": "PASS"}))))
 
+    # The floor and the missing-`status:` branch, both uncovered: the probes
+    # all pass minimum=0, so no case could reach the floor.
+    floor_problems = []
+    check_spec({"assertions": [
+        {"id": "a", "check": "at-least", "check_inputs": {"have": 1.0, "need": 0.5},
+         "check_inputs_from": {"have": "h", "need": "n"},
+         "inputs": {"h": 1.0, "n": 0.5}, "status": "PASS"}]}, "probe", floor_problems)
+    cases.append(("the mechanised-assertion floor fires on a short spec", any(
+        "floor" in p for p in floor_problems)))
+    cases.append(("an assertion recording no status is caught", any(
+        "records no `status:`" in p for p in probe(
+            {"id": "a", "check": "at-least",
+             "check_inputs": {"have": 0.001, "need": 99.0}}))))
+
     # WIRING, over the real entry point. Eight assertions because main() applies
     # MINIMUM_MECHANISED, and a wiring case that dodged the floor would not be
     # driving the shipped path.
