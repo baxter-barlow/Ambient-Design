@@ -7,7 +7,7 @@ against this tree — the previous contents described a pre-rename tree and, for
 the corpus, a 63-entry population that is now 61.
 
 Command: python3 tests/corpus/check-classification.py --self-test
-corpus-classification: self-test PASS: 82 checks.
+corpus-classification: self-test PASS: 86 checks.
 exit=0
 
 Command: python3 tests/corpus/check-classification.py

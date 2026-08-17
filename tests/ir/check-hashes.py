@@ -261,6 +261,38 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
     # ir/source-map.schema.json declares `files` "Sorted bytewise-ascending by
     # path", and nothing enforced it -- so the map has the same one-design-many-
     # hashes property the IR had, via source_hash.
+    # NODE COVERAGE. ir/source-map.schema.json says "Every instance,
+    # assertion, and net of the referenced IR document must have an entry" and
+    # ir/README.md repeats it; nothing checked it, so the bypass capacitor
+    # AMB-123 added to the design and the IR was never added to the sidecar --
+    # a diagnostic on that part has no source location, in the one committed
+    # illustration of I9. Same shape as the superseded-window finding: the pair
+    # was updated on one side.
+    identities = set()
+    for instance in document.get("instances") or []:
+        if instance.get("path"):
+            identities.add(instance["path"])
+    for net in document.get("nets") or []:
+        if net.get("name"):
+            identities.add(net["name"])
+    for assertion in document.get("assertions") or []:
+        if assertion.get("path"):
+            identities.add(assertion["path"])
+    nodes = source_map.get("nodes")
+    if isinstance(nodes, dict):
+        uncovered = sorted(identities - set(nodes))
+        if uncovered:
+            problems.append(
+                f"{source_map_path.name}: has no `nodes` entry for "
+                f"{uncovered}. The schema and ir/README.md both require every "
+                "instance, net and assertion identity to have one; without it "
+                "a diagnostic on that entity has no source location.")
+        stray = sorted(set(nodes) - identities)
+        if stray:
+            problems.append(
+                f"{source_map_path.name}: has `nodes` entries for {stray}, "
+                "which the IR does not contain.")
+
     files = source_map.get("files")
     if isinstance(files, list):
         paths = [f.get("path") or "" for f in files if isinstance(f, dict)]

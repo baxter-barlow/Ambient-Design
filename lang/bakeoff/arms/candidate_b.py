@@ -627,8 +627,8 @@ A mA uA nA, W mW uW, Hz kHz MHz, s ms us ns, m mm um, degC.
 
 ## Assertions
 
-    assert assert_freq dynamic frequency(OUT) within 0.932Hz to 1.051Hz
-    assert assert_duty dynamic duty_cycle(OUT) within 0.524 to 0.544
+    assert assert_freq dynamic frequency(OUT) within 0.923Hz to 1.052Hz
+    assert assert_duty dynamic duty_cycle(OUT) within 0.533 to 0.558
 
 `<name> <tier> <measurement>(<net>)` then `within <lo> to <hi>`,
 `at least <bound>` or `at most <bound>`. Tier is `static` or `dynamic`.

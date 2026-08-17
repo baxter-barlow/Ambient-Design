@@ -194,13 +194,25 @@ Note on the examples: they are hand-written illustrations tracking the fixed ben
 (RA 100 k 1 %, RB 680 k 1 %, CT 1 µF 5 %, RL 560 Ω 1 %, CONT bypass 10 nF, assertion windows from
 `benchmarks/blinker-555/assertions.yaml`). `/mh1` and `/tp_out` are board-side extras beyond that BOM and are
 both `exclude_from_bom`. `design_hash` is genuine: it is the sha256 of this document's `rhoform-canonical-json/1` serialization with the `design_hash` value blanked (see the profile section above), so the pair binding is real and recheckable with `python3 tests/ir/check-hashes.py`. Do NOT recompute it from the file's raw bytes — that was the old rule, it is not what the schema says, and it is why two conforming implementations disagreed.
-`design_hash` value blanked, per the schema rule, and the source map carries the same value, so
-the pair binding is real and recheckable:
+Recompute it with the gate's own canonicaliser -- not with a regex over the
+raw bytes, which is the rule this paragraph just disavowed:
 
 ```sh
-python3 -c 'import hashlib,re;q=chr(34);t=open("examples/blinker.ir.json").read();b=re.sub("("+q+"design_hash"+q+": )"+q+"[^"+q+"]*"+q,lambda m:m.group(1)+q+q,t,count=1);print("sha256:"+hashlib.sha256(b.encode()).hexdigest())'
-# -> sha256:107d254be3844d52eb1425193d1af86fd597b461e754b59cf9ae77528043a345
+python3 -c 'import importlib.util,json,pathlib
+s=importlib.util.spec_from_file_location("h","../tests/ir/check-hashes.py")
+m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
+d=json.loads(pathlib.Path("examples/blinker.ir.json").read_text())
+d["header"]["design_hash"]=""
+print(m.design_hash_of(d))'
+# -> sha256:b2a4c088018511439166f0c214d70de0546739886191067b27686f4b421cd419
 ```
+
+That is the value committed in `examples/blinker.ir.json` and mirrored in the
+source map. An earlier revision of this section published
+`sha256:107d254b...`, produced by a raw-byte regex recipe printed three lines
+under the sentence forbidding raw-byte hashing -- and that digest matched
+neither the recipe's actual output nor the committed hash. It was residue of a
+half-deleted block, which also left the paragraph above starting mid-sentence.
 
 `source_hash`, the source-map file digests, and all byte/line offsets remain shape-valid
 placeholders: no `.rhoform` source files exist yet, so there is nothing to hash or index. The compiler

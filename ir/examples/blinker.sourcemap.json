@@ -69,6 +69,28 @@
         }
       ]
     },
+    "/c_byp": {
+      "declaration": {
+        "file": 0,
+        "byte_start": 520,
+        "byte_end": 543,
+        "line_start": 11,
+        "col_start": 5,
+        "line_end": 11,
+        "col_end": 28
+      },
+      "instantiation_trace": [
+        {
+          "file": 0,
+          "byte_start": 520,
+          "byte_end": 543,
+          "line_start": 11,
+          "col_start": 5,
+          "line_end": 11,
+          "col_end": 28
+        }
+      ]
+    },
     "/c_ctl": {
       "declaration": {
         "file": 0,
@@ -492,5 +514,8 @@
         }
       ]
     }
+  },
+  "x_notes": {
+    "spans": "Notional. ir/examples/*.rhoform do not exist yet, so check-hashes.py reports this map as unverified and no span here has been measured against a real file. /c_byp was missing entirely until AMB-123 -- the bypass capacitor was added to the design and the IR and not to this sidecar, so a diagnostic on it had no source location at all. Regenerate every span together once the sources land."
   }
 }
