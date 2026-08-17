@@ -575,7 +575,10 @@ def self_test():
 
 
 # How many checks may legitimately be unperformable across the whole record set.
-# Today: two, both L12 containment on pins whose abs_max is relative. Raise it
+# Today: two, both on diodes-ap7361c-33e-13 pin OUT -- one relative abs_max
+# bound, one recommended current with no abs_max sibling. (This comment said
+# "four NE555 pins", which is a different record and a different number.)
+# Raise it
 # deliberately and name the record; drifting up is how a rule opts out of
 # itself.
 MAXIMUM_UNCHECKED = 2

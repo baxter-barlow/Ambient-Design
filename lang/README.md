@@ -109,8 +109,8 @@ less to say.
 
 **Anchoring.** Each reference design is checked against an artifact authored by
 a *different issue*. `blinker-555` is elaborated, flattened, and required to
-reproduce `ir/examples/blinker.ir.json` (AMB-38) exactly — 12 instances, 7
-nets, 25 connections, 2 assertions. `esp32s3-devboard` is required to match
+reproduce `ir/examples/blinker.ir.json` (AMB-38) exactly — 13 instances, 7
+nets, 27 connections, 2 assertions. `esp32s3-devboard` is required to match
 `benchmarks/esp32s3-devboard/parts.yaml` (AMB-39) — 60 placements, 3 DNP, and
 172 refdes/package/MPN fields — *and* to reproduce the five series edges in
 that benchmark's `power-tree.yaml`. A bake-off whose reference netlist was
@@ -241,7 +241,7 @@ SMD build, so a library carrying one would hand the measurement a number that
 depends on which design is in the corpus — which biases T9-2 DOWN.
 
 **L6 columnar saving: 843-1187 tokens (17-19%) on (c) at the default
-threshold, 45-82 (5-8%) on (a) — but the threshold is a judgement, so the
+threshold, 45-82 (6-8%) on (a) — but the threshold is a judgement, so the
 report sweeps it.**
 `COLUMNAR_MIN_ROWS = 3` was documented here as "the smallest group where a
 table is shorter than the statements it replaces". Sweeping it showed that is
@@ -275,7 +275,7 @@ sentence was true when written and nobody updated it.
 **Line counts against AC1's ceilings.** Benchmark (c) is budgeted at ~600 DSL
 lines and `design.md` estimates 380-450. Measured: 548 (A, inferred), 513 (B,
 inferred), 408/368 with columnar. The estimate was optimistic without columnar
-and right with it. Benchmark (a) is budgeted at ~150 and comes in at 130 explicit / 93 inferred / 82 inferred+columnar, matching benchmarks/blinker-555/design.md sec. AC1a. (This line read 86/75 until AMB-123: 333869c added the bypass cap to lang/examples/blinker-555.design.json without touching this file, and no gate reads this README.)
+and right with it. Benchmark (a) is budgeted at ~150 and comes in at 119 explicit / 82 inferred / 71 inferred+columnar on candidate_b, the arm that won, matching benchmarks/blinker-555/design.md sec. AC1a. (This line read 86/75 until AMB-123, then 130/93/82 -- which are candidate_a's, the arm that LOST and whose rendering the frozen grammar is tested to reject.)
 
 **Diagnostic quality on nine seeded defects** (P2: the repair loop is the unit
 of design, so this is not a side measurement):

@@ -65,13 +65,17 @@ DESIGNS = ("blinker-555", "esp32s3-devboard")
 ARMS = ("candidate_a", "candidate_b", "starlark")
 VARIANTS = ("explicit", "inferred", "inferred+columnar")
 
-ROW = re.compile(r"^\|\s*(?P<design>[a-z0-9-]+)\s*\|\s*(?P<arm>[a-z_]+)\s*\|(?P<rest>.+)\|\s*$")
+# Backticks and bold are ordinary Markdown. Requiring BARE names made a row
+# unparseable -- and unparseable was SILENT, so backticking the decision table
+# dropped the gate from 27 cells to 16 with no diagnostic at all.
+ROW = re.compile(
+    r"^\|\s*[`*]*(?P<design>[a-z0-9-]+)[`*]*\s*\|\s*[`*]*(?P<arm>[a-z_]+)[`*]*\s*\|(?P<rest>.+)\|\s*$")
 # `| **candidate_b** | 748 | 5003 | 4160 | 886 | ... |` -- the decision table,
 # whose first cell is the ARM. ROW's design pattern is `[a-z0-9-]+`, which
 # cannot match `candidate_a`, so all seven of this table's token cells were
 # outside the gate by construction and four of them were stale.
 DECISION_ROW = re.compile(
-    r"^\|\s*\**(?P<arm>candidate_a|candidate_b|starlark)\**\s*\|(?P<rest>.+)\|\s*$")
+    r"^\|\s*[`*]*(?P<arm>candidate_a|candidate_b|starlark)[`*]*\s*\|(?P<rest>.+)\|\s*$")
 # The decision table's token columns, in order.
 DECISION_KEYS = (
     "blinker-555|{arm}|inferred",
@@ -85,7 +89,11 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # stops being checked, so the count is pinned rather than counted.
 # DISTINCT (design, arm) rows, not cells: the floor counted cells, so
 # duplicating a correct row paid for one that had stopped parsing.
-MINIMUM_DISTINCT_ROWS = 5
+# Distinct (table, row) identities that must reconcile: 5 token rows + 3
+# decision rows + 3 card entries. The self-test's floor was `reconciled >= 20`
+# against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
+# was dead because that slack always fired first.
+MINIMUM_DISTINCT_ROWS = 11
 
 
 class GateUnavailable(Exception):
@@ -129,6 +137,31 @@ def measure_now():
     return tokens
 
 
+def inputs_fingerprint():
+    """sha256 over everything that determines the counts.
+
+    The artifact was pinned "exactly as corpus/classification.yaml pins
+    decision_hash" -- but that analogy was false in the load-bearing way:
+    decision_hash is RECOMPUTED OFFLINE, so drift breaks the build. This
+    artifact was verified only by `--verify`, which no target and no CI job
+    runs, and which needs a tokenizer no CI job installs. So changing an arm's
+    renderer left README and artifact agreeing with each other, both stale,
+    every gate green -- the "measured once, published forever" condition this
+    file exists to end, moved one file over.
+
+    Hashing the arm sources and the example models is offline and needs no
+    tokenizer, so the artifact now goes stale LOUDLY.
+    """
+    import hashlib
+    digest = hashlib.sha256()
+    sources = sorted((ROOT / "lang" / "bakeoff").rglob("*.py"))
+    sources += sorted((ROOT / "lang" / "examples").glob("*.design.json"))
+    for path in sources:
+        digest.update(path.relative_to(ROOT).as_posix().encode("utf-8"))
+        digest.update(path.read_bytes())
+    return "sha256:" + digest.hexdigest()
+
+
 def load_counts():
     """The committed artifact. Offline, no optional packages."""
     import json
@@ -137,7 +170,16 @@ def load_counts():
             f"{ARTIFACT.name} is missing. Regenerate it on a machine with the "
             "pinned tokenizer: python3 lang/tests/check_readme_numbers.py --write")
     try:
-        return json.loads(ARTIFACT.read_text(encoding="utf-8"))["counts"]
+        document = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+        committed = document.get("inputs_fingerprint")
+        actual = inputs_fingerprint()
+        if committed != actual:
+            raise GateUnavailable(
+                f"{ARTIFACT.name} was measured against arms/examples that have "
+                f"since changed (records {committed}, inputs now hash to "
+                f"{actual}). Re-measure on a machine with the pinned tokenizer: "
+                "python3 lang/tests/check_readme_numbers.py --write")
+        return document["counts"]
     except (ValueError, KeyError) as exc:
         raise GateUnavailable(f"{ARTIFACT.name} is not readable: {exc}") from exc
 
@@ -239,6 +281,29 @@ def token_problems(text, counts, problems, minimum=None):
             rows_seen.add(("decision", arm))
             checked += 1
 
+    # THE CARD LINE, which is prose rather than a table. The docstring named it
+    # as covered and `token_problems` parses table rows only, so all three of
+    # its numbers were free.
+    card_line = re.search(
+        r"Language cards:\s*candidate_a\s+(\d+),\s*candidate_b\s+(\d+),"
+        r"\s*starlark\s+(\d+)", text)
+    if card_line:
+        for arm, published in zip(("candidate_a", "candidate_b", "starlark"),
+                                  card_line.groups()):
+            want = counts.get(f"card|{arm}")
+            if want is not None and int(published) != want:
+                problems.append(
+                    f"lang/README.md: the language-card line publishes "
+                    f"{published} for {arm}, but lang/token-counts.json records "
+                    f"{want}.")
+                continue
+            rows_seen.add(("card", arm))
+            checked += 1
+    else:
+        problems.append(
+            "lang/README.md: the language-card line is gone or reshaped, so its "
+            "three counts are checked by nothing.")
+
     floor = MINIMUM_DISTINCT_ROWS if minimum is None else minimum
     if len(rows_seen) < floor:
         problems.append(
@@ -264,6 +329,7 @@ def write_artifact():
                      "lang/tests/check_readme_numbers.py --write, on a machine "
                      "with the optional tiktoken pin installed and its cache "
                      "warm. lang/README.md is held to this file OFFLINE."),
+        "inputs_fingerprint": inputs_fingerprint(),
         "counts": dict(sorted(counts.items())),
     }, indent=2) + "\n", encoding="utf-8")
     print(f"readme-numbers: wrote {ARTIFACT.name} ({len(counts)} counts).")
@@ -303,7 +369,8 @@ def self_test():
              "\n"
              "| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n"
              "|---|---:|---:|---:|---:|---:|\n"
-             "| candidate_a | 20 | 21 | 31 | 90 | 15/15 |\n")
+             "| candidate_a | 20 | 21 | 31 | 90 | 15/15 |\n"
+             "\nLanguage cards: candidate_a 90, candidate_b 91, starlark 92 tokens\n")
     FAKE = {
         "blinker-555|candidate_a|explicit": 10,
         "blinker-555|candidate_a|inferred": 20,
@@ -320,6 +387,8 @@ def self_test():
         "esp32s3-devboard|candidate_b|inferred": 51,
         "esp32s3-devboard|candidate_b|inferred+columnar": 61,
         "card|candidate_a": 90,
+        "card|candidate_b": 91,
+        "card|starlark": 92,
     }
 
     def probe(table, counts=FAKE):
@@ -349,6 +418,16 @@ def self_test():
                 TABLE.replace("| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n", "")))),
         ("a missing token-table header is caught", any(
             "header row is gone" in p for p in probe(TABLE.replace(HEADER, "")))),
+        ("a stale language-card number is caught", any(
+            "language-card line publishes" in p for p in probe(
+                TABLE.replace("candidate_a 90,", "candidate_a 863,")))),
+        ("a missing language-card line is caught", any(
+            "checked by nothing" in p for p in probe(
+                TABLE[:TABLE.index("\nLanguage cards:")]))),
+        ("a backticked row is still read", any(
+            "publishes" in p for p in probe(
+                TABLE.replace("| blinker-555 | candidate_a | 10 |",
+                              "| `blinker-555` | `candidate_a` | 999 |")))),
         # The L6 sweep has the same row shape and different columns; reading it
         # as the token table compared a threshold saving to a token count.
         ("the L6 sweep table is not read as the token table", not probe(
@@ -370,7 +449,7 @@ def self_test():
         real = []
         reconciled = check(real)
         cases.append(("the committed README reconciles against the artifact",
-                      not real and reconciled >= 20))
+                      not real and reconciled >= 30))
     except GateUnavailable as exc:
         print(f"readme-numbers: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2

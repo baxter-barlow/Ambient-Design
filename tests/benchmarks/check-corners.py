@@ -44,6 +44,10 @@ ROOT = Path(__file__).resolve().parents[2]
 # leave this gate by deleting its own evidence -- the failure mode run-sim.sh
 # learned twice and check-assertions.py learned once.
 REQUIRED = {"buck-3v3": 2}
+# Cells of each benchmark's design.md corner table that MUST reconcile. 6 = two
+# surveyed corners x three measurement columns; the 12 V row is the nominal
+# deck and is held by check-assertions.py's transcript leg instead.
+MINIMUM_DOC_CELLS = {"buck-3v3": 6}
 
 RERUN = re.compile(r"^#\s*rerun:\s*(?P<old>.+?)\s*->\s*(?P<new>.+?)\s*$")
 MEAS = re.compile(
@@ -145,6 +149,13 @@ def check_case(case_dir, problems, minimum=None):
     # blocks whose edits touched only ngspice COMMENT lines, carrying the
     # nominal 12 V measurements under 9 V and 14 V headers, passed and
     # satisfied the floor. il_pp at a real 14 V is 0.5119 A, not 0.4844.
+    # A CORNER MUST BE A DIFFERENT CIRCUIT, tested by RUNNING both decks rather
+    # than by inspecting the substitution's shape. The first version rejected
+    # edits starting with `*` or `;`, which is a test for the literal previous
+    # defect: a whitespace-only edit, or `.param LVAL=10u -> .param LVAL=10.0u`,
+    # passed all of it and carried the nominal measurements under corner
+    # headers. Whether a substitution changes the circuit is a question the
+    # simulator answers.
     seen_edits = set()
     reconciled = 0
     for old, new, recorded, header in found_blocks:
@@ -153,12 +164,6 @@ def check_case(case_dir, problems, minimum=None):
                 f"{case_dir.name}/validation-corners.log: a `# rerun:` line "
                 "substitutes a line for itself, so the 'corner' is the nominal "
                 "deck.")
-            continue
-        if old.lstrip().startswith("*") or old.lstrip().startswith(";"):
-            problems.append(
-                f"{case_dir.name}/validation-corners.log: the `# rerun:` line "
-                f"edits a comment ({old.strip()[:40]!r}), which changes nothing "
-                "electrical. A corner has to be a different circuit.")
             continue
         if (old, new) in seen_edits:
             problems.append(
@@ -180,6 +185,29 @@ def check_case(case_dir, problems, minimum=None):
             continue
         with tempfile.TemporaryDirectory() as tmp:
             fresh = run_deck(base.replace(old, new, 1), Path(tmp))
+        with tempfile.TemporaryDirectory() as tmp:
+            nominal = run_deck(base, Path(tmp))
+        def _values(text):
+            out = {}
+            for line in text.splitlines():
+                found = MEAS.match(line.strip())
+                if found and found.group("name").lower() not in NOT_A_MEASUREMENT:
+                    out.setdefault(found.group("name").lower(),
+                                   float(found.group("value")))
+            return out
+        moved = _values(fresh)
+        still = _values(nominal)
+        shared = set(moved) & set(still)
+        if shared and all(
+                abs(moved[k] - still[k]) <= abs(still[k]) * 1e-9 + 1e-15
+                for k in shared):
+            problems.append(
+                f"{case_dir.name}/validation-corners.log: the substitution "
+                f"{old.strip()[:32]!r} -> {new.strip()[:32]!r} produces "
+                "measurements identical to the nominal deck, so this 'corner' "
+                "is the nominal deck under another name. A corner has to be a "
+                "different circuit, which is a question the simulator answers.")
+            continue
         produced = {}
         for line in fresh.splitlines():
             meas = MEAS.match(line.strip())
@@ -209,50 +237,79 @@ def check_case(case_dir, problems, minimum=None):
     # the original finding, fully reachable, one file from the fix for it.
     doc = case_dir / "design.md"
     if doc.is_file():
-        published = {}
+        # BOUND BY COLUMN NAME. The first version matched a published cell
+        # against ANY recorded value in the block, so a settling time satisfied
+        # a ripple-current cell: 45.392 A of inductor ripple on a 2 A converter
+        # -- 89x the physical value -- passed. The table's header names the
+        # measurement each column carries, so that is what each cell is held to.
+        header, rows, headerless = None, {}, 0
         for line in doc.read_text(encoding="utf-8").splitlines():
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if len(cells) < 2:
                 continue
+            if header is None and cells[0].lower() in ("vin", "v_in", "supply"):
+                header = [c.lower() for c in cells[1:]]
+                continue
             volt = re.match(r"^(\d+(?:\.\d+)?)\s*V$", cells[0])
-            if not volt:
+            if volt:
+                headerless += 1
+                if header is not None:
+                    rows[float(volt.group(1))] = cells[1:]
+        if header is None and headerless:
+            problems.append(
+                f"{case_dir.name}/design.md: the corner table has no header row "
+                "naming its measurements, so no cell can be bound to the "
+                "measurement it claims to publish.")
+        checked_cells = 0
+        for old, new_line, recorded, block_header in found_blocks:
+            volts = re.search(r"(\d+(?:\.\d+)?)\s*V", block_header)
+            if volts is None:
+                problems.append(
+                    f"{case_dir.name}/validation-corners.log: block header "
+                    f"{block_header!r} names no voltage, so its design.md row is "
+                    "compared to nothing. Renaming a header silently switched "
+                    "this whole leg off.")
                 continue
-            published[float(volt.group(1))] = cells[1:]
-        for old, new, recorded, header in found_blocks:
-            # From the BLOCK HEADER, which is what design.md's first column
-            # names. Deriving it from the substitution text matched only the
-            # buck's PWL shape, so any other corner form skipped this leg.
-            volts = re.search(r"(\d+(?:\.\d+)?)\s*V", header)
-            if volts is None or float(volts.group(1)) not in published:
+            volt_value = float(volts.group(1))
+            if volt_value not in rows:
+                problems.append(
+                    f"{case_dir.name}/design.md: publishes no corner row for "
+                    f"{volt_value} V, which validation-corners.log surveys.")
                 continue
-            row = published[float(volts.group(1))]
-            for cell in row:
+            for name, cell in zip(header or [], rows[volt_value]):
+                written = recorded.get(name)
+                if written is None:
+                    problems.append(
+                        f"{case_dir.name}/design.md: the corner table has a "
+                        f"{name!r} column, but the {volt_value} V block records "
+                        "no such measurement.")
+                    continue
                 number = re.search(r"[-+]?\d+(?:\.\d+)?", cell)
                 if number is None:
                     continue
-                # The cell's own unit decides the scale. Recorded values are
-                # in the deck's units: volts, amps, and microseconds for the
-                # *_us measurements.
-                text = number.group(0)
-                shown = float(text)
+                shown = float(number.group(0))
                 if re.search(r"m(V|A)", cell):
                     shown *= 1e-3
-                elif re.search(r"\bus\b", cell):
-                    pass  # already microseconds, like t_settle_us
-                matched = any(
-                    round_to_significant(
-                        shown, min(significant_figures(text),
-                                   significant_figures(written)))
-                    == round_to_significant(
-                        float(written), min(significant_figures(text),
-                                            significant_figures(written)))
-                    for written in recorded.values())
-                if not matched:
+                figures = min(significant_figures(number.group(0)),
+                              significant_figures(written))
+                if round_to_significant(shown, figures) != round_to_significant(
+                        float(written), figures):
                     problems.append(
-                        f"{case_dir.name}/design.md: the corner table publishes "
-                        f"{cell!r} at {volts.group(1)} V, which matches no "
-                        "measurement in validation-corners.log for that corner. "
-                        "The table a reader acts on is not the evidence.")
+                        f"{case_dir.name}/design.md: publishes {cell!r} for "
+                        f"{name} at {volt_value} V, but that corner produces "
+                        f"{written}. The table a reader acts on is not the "
+                        "evidence.")
+                    continue
+                checked_cells += 1
+        # A FLOOR on the design.md leg. Without one, the leg silently going to
+        # zero coverage -- which renaming one block header did -- was
+        # indistinguishable from passing.
+        expected_cells = MINIMUM_DOC_CELLS.get(case_dir.name)
+        if expected_cells is not None and checked_cells < expected_cells:
+            problems.append(
+                f"{case_dir.name}/design.md: reconciled {checked_cells} corner "
+                f"cell(s) against the evidence, below the floor of "
+                f"{expected_cells}.")
     return reconciled
 
 
@@ -303,18 +360,26 @@ def self_test():
     cases.append(("a corner that substitutes a line for itself is caught", any(
         "for itself" in p for p in probe(
             "# rerun: V1 in 0 DC 5 -> V1 in 0 DC 5\n--- x ---\nvout = 2.5\n"))))
-    cases.append(("a corner that edits only a comment is caught", any(
-        "changes nothing electrical" in p for p in probe(
-            "# rerun: * a comment -> * another comment\n--- x ---\nvout = 2.5\n",
-            deck=DECK.replace(".title probe", ".title probe\n* a comment")))))
+    # A no-op substitution is now caught by RUNNING both decks, not by the
+    # shape of the edited line -- so a whitespace-only edit is caught too,
+    # which the shape rule missed.
+    cases.append(("a substitution that changes nothing is caught by running it", any(
+        "identical to the nominal deck" in p for p in probe(
+            "# rerun: R1 in out 1k -> R1 in out  1k\n--- 9 V ---\nvout = 2.5\n"))))
     cases.append(("two blocks declaring the same substitution are caught", any(
         "same substitution" in p for p in probe(good + good))))
     # THE TABLE A READER SEES, which is where the original finding lived.
-    cases.append(("a design.md corner cell matching no measurement is caught", any(
-        "not the evidence" in p for p in _doc_probe(
-            "| 9 V | 9.9 A |", DECK, good.replace("9 V", "9 V")))))
-    cases.append(("a design.md corner cell that matches is accepted", not
-        _doc_probe("| 9 V | 4.5 V |", DECK, good)))
+    # THE DESIGN.MD TABLE, bound by column name.
+    cases.append(("a design.md corner cell that disagrees is caught", any(
+        "is not the evidence" in p for p in _doc_probe(
+            "| Vin | vout |\n|---|---|\n| 9 V | 9.9 |", DECK, good))))
+    cases.append(("a design.md corner cell that agrees is accepted", not
+        _doc_probe("| Vin | vout |\n|---|---|\n| 9 V | 4.5 |", DECK, good)))
+    cases.append(("a corner table with no header row is caught", any(
+        "no header row" in p for p in _doc_probe("| 9 V | 4.5 |", DECK, good))))
+    cases.append(("a column naming a measurement the block lacks is caught", any(
+        "records no such measurement" in p for p in _doc_probe(
+            "| Vin | ghost |\n|---|---|\n| 9 V | 4.5 |", DECK, good))))
 
     # WIRING, over the real entry point.
     import contextlib, io
@@ -352,8 +417,7 @@ def _doc_probe(doc_row, deck, evidence):
         case.mkdir()
         (case / "netlist.cir").write_text(deck, encoding="utf-8")
         (case / "validation-corners.log").write_text(evidence, encoding="utf-8")
-        (case / "design.md").write_text(
-            "| Vin | value |\n|---|---|\n" + doc_row + "\n", encoding="utf-8")
+        (case / "design.md").write_text(doc_row + "\n", encoding="utf-8")
         problems = []
         check_case(case, problems, minimum=0)
         return problems

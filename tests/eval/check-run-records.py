@@ -122,7 +122,11 @@ def _int_fields(record, problems_out, label):
                     f"{label}: arms.{name}.outcomes.{key} is written as "
                     f"{value!r}, a JSON float; a trial count cannot be "
                     "fractional and every check on it tests isinstance(int).")
-        for key in ("successes", "trial_count"):
+        # `total_tokens` too: its two guards are isinstance(int), so the float
+        # spelling disabled both the sum check and the zero-cost check. The
+        # docstring says "rather than widen every guard and hope none is
+        # missed" -- and then missed one.
+        for key in ("successes", "trial_count", "total_tokens"):
             if isinstance(arm.get(key), float):
                 problems_out.append(
                     f"{label}: arms.{name}.{key} is written as "
@@ -537,6 +541,11 @@ def problems_for(record, label):
         if isinstance(trials, list) and trials:
             trial_seeds = [t.get("seed") for t in trials if isinstance(t, dict)]
             present = [s for s in trial_seeds if s is not None]
+            if len(present) != len(trial_seeds):
+                bad(f"arm {name!r} has {len(trial_seeds) - len(present)} trial(s) "
+                    "recording no seed. AC5a counts INDEPENDENT trials, and a "
+                    "trial with no seed cannot be shown to be one -- omitting "
+                    "the field skipped both seed checks entirely.")
             if present and len(set(present)) != len(present):
                 bad(f"arm {name!r} runs {len(present)} trial(s) on "
                     f"{len(set(present))} distinct seed(s). AC5a counts "
@@ -558,14 +567,21 @@ def problems_for(record, label):
             for index, trial in enumerate(trials):
                 if not isinstance(trial, dict):
                     continue
-                gates = trial.get("gates") or trial.get("checks")
-                if isinstance(gates, list) and gates and trial.get("passed"):
-                    failed = [g for g in gates if isinstance(g, dict)
-                              and g.get("passed") is False]
-                    if failed:
+                # `trials[i].iterations[j].gate` -- where the harness ACTUALLY
+                # writes it. The first version read `trial["gates"]` or
+                # `trial["checks"]`, neither of which the harness writes, so the
+                # clause was dead: 22 inner gates could record passed=false
+                # under trials marked passed with no finding. That is the third
+                # time in this audit a clause has read a field name nobody
+                # produces, and this one had no self-test case either.
+                iterations = trial.get("iterations")
+                if isinstance(iterations, list) and iterations and trial.get("passed"):
+                    last = iterations[-1]
+                    gate = last.get("gate") if isinstance(last, dict) else None
+                    if isinstance(gate, dict) and gate.get("passed") is False:
                         bad(f"arm {name!r} trial {index} is marked passed while "
-                            f"{len(failed)} of its own gate(s) record "
-                            "passed=false.")
+                            "its final iteration's own gate records "
+                            f"passed=false (exit {gate.get('exit_code')}).")
 
     # The tokenizer fingerprint, against the manifest pin. versions.yaml says
     # "two records are comparable only if their fingerprints match", and no
