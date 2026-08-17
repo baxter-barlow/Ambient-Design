@@ -3,7 +3,7 @@
     "ir_version": 0,
     "language_version": "0.1.0",
     "design_name": "blinker_555",
-    "design_hash": "sha256:43de0bdc153ff89b2d32f500217d53a7b59e892b55054dd44425c3053a42c889",
+    "design_hash": "sha256:543a39fcfc0daea6156593da057374c78f5325df4823a42d0b25161ac8fbff6e",
     "source_hash": "sha256:af59b1271c7a742c1a31cb3e46b3c9e41d7b27ab8d5bf7cd6b1f76accd22a459",
     "generator": {
       "name": "rhoformc",
@@ -23,6 +23,53 @@
       "board_only": false
     },
     {
+      "path": "/c_byp",
+      "kind": "component",
+      "definition": "rhoform.lib.passive.Capacitor",
+      "parameters": {
+        "capacitance": {
+          "value": 100,
+          "unit": "nF",
+          "tolerance": {
+            "min": 90,
+            "max": 110
+          }
+        }
+      },
+      "ports": [
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
+      ],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false,
+      "part": {
+        "binding": "abstract",
+        "constraints": {
+          "capacitance": {
+            "value": 100,
+            "unit": "nF",
+            "tolerance": {
+              "min": 90,
+              "max": 110
+            }
+          },
+          "dielectric": "X7R",
+          "voltage_rating": {
+            "value": 50,
+            "unit": "V"
+          },
+          "package": "0805"
+        }
+      }
+    },
+    {
       "path": "/c_ctl",
       "kind": "component",
       "definition": "rhoform.lib.passive.Capacitor",
@@ -30,12 +77,21 @@
         "capacitance": {
           "value": 10,
           "unit": "nF",
-          "tolerance": { "min": 9, "max": 11 }
+          "tolerance": {
+            "min": 9,
+            "max": 11
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "b", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -46,10 +102,16 @@
           "capacitance": {
             "value": 10,
             "unit": "nF",
-            "tolerance": { "min": 9, "max": 11 }
+            "tolerance": {
+              "min": 9,
+              "max": 11
+            }
           },
           "dielectric": "X7R",
-          "voltage_rating": { "value": 50, "unit": "V" },
+          "voltage_rating": {
+            "value": 50,
+            "unit": "V"
+          },
           "package": "0805"
         }
       }
@@ -62,12 +124,21 @@
         "capacitance": {
           "value": 1,
           "unit": "uF",
-          "tolerance": { "min": 0.95, "max": 1.05 }
+          "tolerance": {
+            "min": 0.95,
+            "max": 1.05
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "b", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -78,10 +149,16 @@
           "capacitance": {
             "value": 1,
             "unit": "uF",
-            "tolerance": { "min": 0.95, "max": 1.05 }
+            "tolerance": {
+              "min": 0.95,
+              "max": 1.05
+            }
           },
           "dielectric": "PET_film",
-          "voltage_rating": { "value": 63, "unit": "V" },
+          "voltage_rating": {
+            "value": 63,
+            "unit": "V"
+          },
           "package": "radial_5mm"
         }
       }
@@ -95,12 +172,21 @@
         "current": {
           "value": 9.5,
           "unit": "mA",
-          "tolerance": { "min": 8.0, "max": 10.5 }
+          "tolerance": {
+            "min": 8.0,
+            "max": 10.5
+          }
         }
       },
       "ports": [
-        { "name": "ctl", "role": "input" },
-        { "name": "gnd", "role": "power_in" }
+        {
+          "name": "ctl",
+          "role": "input"
+        },
+        {
+          "name": "gnd",
+          "role": "power_in"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -115,12 +201,21 @@
         "forward_voltage": {
           "value": 2.0,
           "unit": "V",
-          "tolerance": { "min": 1.8, "max": 2.2 }
+          "tolerance": {
+            "min": 1.8,
+            "max": 2.2
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "k", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "k",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -141,12 +236,21 @@
         "resistance": {
           "value": 560,
           "unit": "ohm",
-          "tolerance": { "min": 554.4, "max": 565.6 }
+          "tolerance": {
+            "min": 554.4,
+            "max": 565.6
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "b", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -157,9 +261,15 @@
           "resistance": {
             "value": 560,
             "unit": "ohm",
-            "tolerance": { "min": 554.4, "max": 565.6 }
+            "tolerance": {
+              "min": 554.4,
+              "max": 565.6
+            }
           },
-          "power_rating": { "value": 0.25, "unit": "W" },
+          "power_rating": {
+            "value": 0.25,
+            "unit": "W"
+          },
           "package": "axial_0207"
         }
       }
@@ -170,8 +280,20 @@
       "definition": "rhoform.lib.connector.BatteryConnector9V",
       "parameters": {},
       "ports": [
-        { "name": "neg", "role": "power_out", "pin_numbers": ["2"] },
-        { "name": "pos", "role": "power_out", "pin_numbers": ["1"] }
+        {
+          "name": "neg",
+          "role": "power_out",
+          "pin_numbers": [
+            "2"
+          ]
+        },
+        {
+          "name": "pos",
+          "role": "power_out",
+          "pin_numbers": [
+            "1"
+          ]
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -186,7 +308,10 @@
       "kind": "component",
       "definition": "rhoform.lib.mech.MountingHole",
       "parameters": {
-        "diameter": { "value": 3.2, "unit": "mm" }
+        "diameter": {
+          "value": 3.2,
+          "unit": "mm"
+        }
       },
       "ports": [],
       "hardware_kind": "mounting_hole",
@@ -202,12 +327,21 @@
         "resistance": {
           "value": 100000,
           "unit": "ohm",
-          "tolerance": { "min": 99000, "max": 101000 }
+          "tolerance": {
+            "min": 99000,
+            "max": 101000
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "b", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -218,9 +352,15 @@
           "resistance": {
             "value": 100000,
             "unit": "ohm",
-            "tolerance": { "min": 99000, "max": 101000 }
+            "tolerance": {
+              "min": 99000,
+              "max": 101000
+            }
           },
-          "power_rating": { "value": 0.25, "unit": "W" },
+          "power_rating": {
+            "value": 0.25,
+            "unit": "W"
+          },
           "package": "axial_0207"
         }
       }
@@ -233,12 +373,21 @@
         "resistance": {
           "value": 680000,
           "unit": "ohm",
-          "tolerance": { "min": 673200, "max": 686800 }
+          "tolerance": {
+            "min": 673200,
+            "max": 686800
+          }
         }
       },
       "ports": [
-        { "name": "a", "role": "passive" },
-        { "name": "b", "role": "passive" }
+        {
+          "name": "a",
+          "role": "passive"
+        },
+        {
+          "name": "b",
+          "role": "passive"
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -249,9 +398,15 @@
           "resistance": {
             "value": 680000,
             "unit": "ohm",
-            "tolerance": { "min": 673200, "max": 686800 }
+            "tolerance": {
+              "min": 673200,
+              "max": 686800
+            }
           },
-          "power_rating": { "value": 0.25, "unit": "W" },
+          "power_rating": {
+            "value": 0.25,
+            "unit": "W"
+          },
           "package": "axial_0207"
         }
       }
@@ -262,14 +417,62 @@
       "definition": "rhoform.lib.timer.Ne555",
       "parameters": {},
       "ports": [
-        { "name": "ctl", "role": "passive", "pin_numbers": ["5"] },
-        { "name": "dis", "role": "open_collector", "pin_numbers": ["7"] },
-        { "name": "gnd", "role": "power_in", "pin_numbers": ["1"] },
-        { "name": "out", "role": "output", "pin_numbers": ["3"] },
-        { "name": "rst", "role": "input", "pin_numbers": ["4"] },
-        { "name": "thr", "role": "input", "pin_numbers": ["6"] },
-        { "name": "trig", "role": "input", "pin_numbers": ["2"] },
-        { "name": "vcc", "role": "power_in", "pin_numbers": ["8"] }
+        {
+          "name": "ctl",
+          "role": "passive",
+          "pin_numbers": [
+            "5"
+          ]
+        },
+        {
+          "name": "dis",
+          "role": "open_collector",
+          "pin_numbers": [
+            "7"
+          ]
+        },
+        {
+          "name": "gnd",
+          "role": "power_in",
+          "pin_numbers": [
+            "1"
+          ]
+        },
+        {
+          "name": "out",
+          "role": "output",
+          "pin_numbers": [
+            "3"
+          ]
+        },
+        {
+          "name": "rst",
+          "role": "input",
+          "pin_numbers": [
+            "4"
+          ]
+        },
+        {
+          "name": "thr",
+          "role": "input",
+          "pin_numbers": [
+            "6"
+          ]
+        },
+        {
+          "name": "trig",
+          "role": "input",
+          "pin_numbers": [
+            "2"
+          ]
+        },
+        {
+          "name": "vcc",
+          "role": "power_in",
+          "pin_numbers": [
+            "8"
+          ]
+        }
       ],
       "dnp": false,
       "exclude_from_bom": false,
@@ -279,7 +482,10 @@
         "lockfile_key": "timer.555/ti-NE555P@2",
         "constraints": {
           "function": "timer_555",
-          "supply_max": { "value": 16, "unit": "V" }
+          "supply_max": {
+            "value": 16,
+            "unit": "V"
+          }
         }
       }
     },
@@ -289,7 +495,10 @@
       "definition": "rhoform.lib.mech.TestPoint",
       "parameters": {},
       "ports": [
-        { "name": "p", "role": "passive" }
+        {
+          "name": "p",
+          "role": "passive"
+        }
       ],
       "hardware_kind": "test_point",
       "dnp": false,
@@ -298,55 +507,252 @@
     }
   ],
   "nets": [
-    { "name": "GND", "ground_domain": "gnd" },
-    { "name": "N_CTL", "voltage_domain": "vbat_9v" },
-    { "name": "N_DIS", "voltage_domain": "vbat_9v" },
-    { "name": "N_IND_LED", "voltage_domain": "vbat_9v" },
-    { "name": "N_TH", "voltage_domain": "vbat_9v" },
-    { "name": "OUT", "voltage_domain": "vbat_9v" },
-    { "name": "VCC", "voltage_domain": "vbat_9v" }
+    {
+      "name": "GND",
+      "ground_domain": "gnd"
+    },
+    {
+      "name": "N_CTL",
+      "voltage_domain": "vbat_9v"
+    },
+    {
+      "name": "N_DIS",
+      "voltage_domain": "vbat_9v"
+    },
+    {
+      "name": "N_IND_LED",
+      "voltage_domain": "vbat_9v"
+    },
+    {
+      "name": "N_TH",
+      "voltage_domain": "vbat_9v"
+    },
+    {
+      "name": "OUT",
+      "voltage_domain": "vbat_9v"
+    },
+    {
+      "name": "VCC",
+      "voltage_domain": "vbat_9v"
+    }
   ],
   "connections": [
-    { "net": "GND", "port": { "instance": "/c_ctl", "port": "b" } },
-    { "net": "GND", "port": { "instance": "/c_t", "port": "b" } },
-    { "net": "GND", "port": { "instance": "/indicator", "port": "gnd" } },
-    { "net": "GND", "port": { "instance": "/indicator/d1", "port": "k" } },
-    { "net": "GND", "port": { "instance": "/j_bat", "port": "neg" } },
-    { "net": "GND", "port": { "instance": "/timer", "port": "gnd" } },
-    { "net": "N_CTL", "port": { "instance": "/c_ctl", "port": "a" } },
-    { "net": "N_CTL", "port": { "instance": "/timer", "port": "ctl" } },
-    { "net": "N_DIS", "port": { "instance": "/r_a", "port": "b" } },
-    { "net": "N_DIS", "port": { "instance": "/r_b", "port": "a" } },
-    { "net": "N_DIS", "port": { "instance": "/timer", "port": "dis" } },
-    { "net": "N_IND_LED", "port": { "instance": "/indicator/d1", "port": "a" } },
-    { "net": "N_IND_LED", "port": { "instance": "/indicator/r_lim", "port": "b" } },
-    { "net": "N_TH", "port": { "instance": "/c_t", "port": "a" } },
-    { "net": "N_TH", "port": { "instance": "/r_b", "port": "b" } },
-    { "net": "N_TH", "port": { "instance": "/timer", "port": "thr" } },
-    { "net": "N_TH", "port": { "instance": "/timer", "port": "trig" } },
-    { "net": "OUT", "port": { "instance": "/indicator", "port": "ctl" } },
-    { "net": "OUT", "port": { "instance": "/indicator/r_lim", "port": "a" } },
-    { "net": "OUT", "port": { "instance": "/timer", "port": "out" } },
-    { "net": "OUT", "port": { "instance": "/tp_out", "port": "p" } },
-    { "net": "VCC", "port": { "instance": "/j_bat", "port": "pos" } },
-    { "net": "VCC", "port": { "instance": "/r_a", "port": "a" } },
-    { "net": "VCC", "port": { "instance": "/timer", "port": "rst" } },
-    { "net": "VCC", "port": { "instance": "/timer", "port": "vcc" } }
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/c_byp",
+        "port": "b"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/c_ctl",
+        "port": "b"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/c_t",
+        "port": "b"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/indicator",
+        "port": "gnd"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/indicator/d1",
+        "port": "k"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/j_bat",
+        "port": "neg"
+      }
+    },
+    {
+      "net": "GND",
+      "port": {
+        "instance": "/timer",
+        "port": "gnd"
+      }
+    },
+    {
+      "net": "N_CTL",
+      "port": {
+        "instance": "/c_ctl",
+        "port": "a"
+      }
+    },
+    {
+      "net": "N_CTL",
+      "port": {
+        "instance": "/timer",
+        "port": "ctl"
+      }
+    },
+    {
+      "net": "N_DIS",
+      "port": {
+        "instance": "/r_a",
+        "port": "b"
+      }
+    },
+    {
+      "net": "N_DIS",
+      "port": {
+        "instance": "/r_b",
+        "port": "a"
+      }
+    },
+    {
+      "net": "N_DIS",
+      "port": {
+        "instance": "/timer",
+        "port": "dis"
+      }
+    },
+    {
+      "net": "N_IND_LED",
+      "port": {
+        "instance": "/indicator/d1",
+        "port": "a"
+      }
+    },
+    {
+      "net": "N_IND_LED",
+      "port": {
+        "instance": "/indicator/r_lim",
+        "port": "b"
+      }
+    },
+    {
+      "net": "N_TH",
+      "port": {
+        "instance": "/c_t",
+        "port": "a"
+      }
+    },
+    {
+      "net": "N_TH",
+      "port": {
+        "instance": "/r_b",
+        "port": "b"
+      }
+    },
+    {
+      "net": "N_TH",
+      "port": {
+        "instance": "/timer",
+        "port": "thr"
+      }
+    },
+    {
+      "net": "N_TH",
+      "port": {
+        "instance": "/timer",
+        "port": "trig"
+      }
+    },
+    {
+      "net": "OUT",
+      "port": {
+        "instance": "/indicator",
+        "port": "ctl"
+      }
+    },
+    {
+      "net": "OUT",
+      "port": {
+        "instance": "/indicator/r_lim",
+        "port": "a"
+      }
+    },
+    {
+      "net": "OUT",
+      "port": {
+        "instance": "/timer",
+        "port": "out"
+      }
+    },
+    {
+      "net": "OUT",
+      "port": {
+        "instance": "/tp_out",
+        "port": "p"
+      }
+    },
+    {
+      "net": "VCC",
+      "port": {
+        "instance": "/c_byp",
+        "port": "a"
+      }
+    },
+    {
+      "net": "VCC",
+      "port": {
+        "instance": "/j_bat",
+        "port": "pos"
+      }
+    },
+    {
+      "net": "VCC",
+      "port": {
+        "instance": "/r_a",
+        "port": "a"
+      }
+    },
+    {
+      "net": "VCC",
+      "port": {
+        "instance": "/timer",
+        "port": "rst"
+      }
+    },
+    {
+      "net": "VCC",
+      "port": {
+        "instance": "/timer",
+        "port": "vcc"
+      }
+    }
   ],
   "assertions": [
     {
       "path": "/assert_duty",
       "tier": "dynamic",
       "measurement": "duty_cycle",
-      "subject": { "net": "OUT" },
-      "bounds": { "unit": "1", "min": 0.524, "max": 0.544 }
+      "subject": {
+        "net": "OUT"
+      },
+      "bounds": {
+        "unit": "1",
+        "min": 0.524,
+        "max": 0.544
+      }
     },
     {
       "path": "/assert_freq",
       "tier": "dynamic",
       "measurement": "frequency",
-      "subject": { "net": "OUT" },
-      "bounds": { "unit": "Hz", "min": 0.932, "max": 1.051 }
+      "subject": {
+        "net": "OUT"
+      },
+      "bounds": {
+        "unit": "Hz",
+        "min": 0.932,
+        "max": 1.051
+      }
     }
   ]
 }

@@ -21,3 +21,9 @@
 # (An exemption for `v1-roadmap.md` lived here. That file was moved to Notion in
 # 4834eb4, and check-layout.sh's ALLOWED_ROOT_MD now rejects it at the root, so
 # the rule granted an exemption to a state that is a layout violation.)
+
+# Evidence logs are CAPTURED TOOL OUTPUT, not authored source. ngspice emits
+# trailing whitespace ("Total elapsed time (seconds) = 0.241 ") and normalizing
+# it would edit a verbatim transcript to suit a lint rule — which is the wrong
+# way round for a file whose whole job is to be what the tool actually printed.
+**/validation.log -whitespace
