@@ -205,7 +205,12 @@ def check_case(case_dir, problems, minimum=None):
                 f"{claimed.group(1)} V but the substitution it labels is "
                 f"{new.strip()[:52]!r}, which does not contain that value. A "
                 "label nothing binds to the edit lets the nominal deck publish "
-                "as any corner at all.")
+                "as any corner at all. NOTE this is a cheap first check: a "
+                "stray digit anywhere in the substitution satisfies it. What "
+                "actually binds a block to its corner is the reproduce check "
+                "below, which re-runs the edit and compares every recorded "
+                "value; this one exists to give a clear message for the "
+                "common case rather than a wall of mismatches.")
             continue
         seen_edits.add((old, new))
         if old not in base:
