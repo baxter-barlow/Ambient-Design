@@ -787,7 +787,19 @@ def main(argv):
                 continue
             live_jobs += 1
             for step in (job.get("steps") or []):
-                if isinstance(step, dict) and step.get("run"):
+                if not isinstance(step, dict) or not step.get("run"):
+                    continue
+                # STEP-LEVEL `if:` TOO. The fix covered the job level only, so
+                # `if: false` one nesting level down turned any gate off in CI
+                # with make all green -- the property is "the command runs",
+                # and I tested it at the wrong depth.
+                if str(step.get("if", "")).strip().lower() in (
+                        "false", "${{ false }}"):
+                    missing_jobs.append(
+                        f"{path.name}: a step in job {job_name!r} is disabled "
+                        "with `if: false`; its gate runs nowhere")
+                    continue
+                if True:
                     # STRIP COMMENTS. A substring match over the raw run text
                     # was satisfied by `true  # was: python3 .../gate.py` --
                     # the command commented out and the gate still passing. I
@@ -796,8 +808,11 @@ def main(argv):
                     # mistake this file has now made three times.
                     for line in str(step["run"]).splitlines():
                         stripped = line.split("#", 1)[0].strip()
-                        if stripped:
-                            workflow_text += "\n" + stripped
+                        # A command inside `echo`, or an `if false;` branch, is
+                        # not a command that runs.
+                        if not stripped or stripped.startswith(("echo ", "if false")):
+                            continue
+                        workflow_text += "\n" + stripped
     for command in REQUIRED_CI_COMMANDS:
         if command not in workflow_text:
             missing_jobs.append(

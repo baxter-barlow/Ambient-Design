@@ -97,7 +97,9 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
 # was dead because that slack always fired first.
 MINIMUM_DISTINCT_ROWS = 12
-# 6 rows x 3 rules.
+# 6 rows x 3 rules, counted as DISTINCT (design, arm, rule) identities: six
+# copies of one correct row met a cell count of 18 while five real rows left
+# the document, which is the third recurrence of this exact defect here.
 MINIMUM_T9_CELLS = 18
 
 
@@ -220,11 +222,15 @@ def token_problems(text, counts, problems, minimum=None):
     # but whose columns are thresholds rather than variants -- so the gate
     # compared a sweep saving against a token count and reported nonsense.
     all_lines = text.splitlines()
+    token_headers = [i for i, line in enumerate(all_lines)
+                     if line.startswith("| Design | Arm |") and "explicit" in line]
+    if len(token_headers) > 1:
+        problems.append(
+            f"lang/README.md: publishes the token table {len(token_headers)} "
+            "times; only the first is read.")
     try:
-        token_start = next(
-            i for i, line in enumerate(all_lines)
-            if line.startswith("| Design | Arm |") and "explicit" in line)
-    except StopIteration:
+        token_start = token_headers[0]
+    except IndexError:
         problems.append(
             "lang/README.md: the token table's header row is gone, so its "
             "cells are checked by nothing.")
@@ -271,11 +277,16 @@ def token_problems(text, counts, problems, minimum=None):
     # also matched the DEFECT table, whose rows start the same way -- so the
     # gate compared 15/15 and 100% against token counts and reported nonsense.
     lines = all_lines
+    decision_headers = [i for i, line in enumerate(lines)
+                        if line.startswith("| ") and "(a) blinker" in line
+                        and "card" in line]
+    if len(decision_headers) > 1:
+        problems.append(
+            f"lang/README.md: publishes the decision table "
+            f"{len(decision_headers)} times; only the first is read.")
     try:
-        start = next(i for i, line in enumerate(lines)
-                     if line.startswith("| ") and "(a) blinker" in line
-                     and "card" in line)
-    except StopIteration:
+        start = decision_headers[0]
+    except IndexError:
         problems.append(
             "lang/README.md: the decision table's header row is gone, so its "
             "cells are checked by nothing. That table publishes the same "
@@ -311,9 +322,16 @@ def token_problems(text, counts, problems, minimum=None):
     # THE CARD LINE, which is prose rather than a table. The docstring named it
     # as covered and `token_problems` parses table rows only, so all three of
     # its numbers were free.
-    card_line = re.search(
+    card_lines = list(re.finditer(
         r"Language cards:\s*candidate_a\s+(\d+),\s*candidate_b\s+(\d+),"
-        r"\s*starlark\s+(\d+)", text)
+        r"\s*starlark\s+(\d+)", text))
+    if len(card_lines) > 1:
+        problems.append(
+            f"lang/README.md: publishes the language-card line {len(card_lines)} "
+            "times. Every locator here reads the FIRST match, so a second copy "
+            "is outside this gate -- which is how a corrected block inserted "
+            "above a stale one left the stale numbers shipping and unread.")
+    card_line = card_lines[0] if card_lines else None
     if card_line:
         for arm, published in zip(("candidate_a", "candidate_b", "starlark"),
                                   card_line.groups()):
@@ -338,11 +356,32 @@ def token_problems(text, counts, problems, minimum=None):
 
     # THE T9 TABLE, held to the same artifact. Percentages, so compared at the
     # one decimal the README prints.
-    t9_seen = 0
+    t9_seen = set()
+    t9_order = ["T9-1", "T9-2", "T9-3"]
     in_t9 = False
+    t9_headers = [l for l in all_lines if l.startswith("| Design | Arm | T9-1")]
+    if len(t9_headers) > 1:
+        problems.append(
+            f"lang/README.md: publishes the T9 table {len(t9_headers)} times; "
+            "only the first is read, so the others are gated by nothing.")
     for line in all_lines:
         if line.startswith("| Design | Arm | T9-1"):
             in_t9 = True
+            # BY NAME. The rules were zipped to cells 2-4 positionally, so
+            # swapping the T9-2 and T9-3 header labels re-attributed every
+            # value and left the gate green -- publishing T9-2 = 3.4% against
+            # the document's own conclusion that T9-2 spans 4.2-7.7%.
+            header_cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            t9_order = []
+            for cell in header_cells[2:5]:
+                found_rule = re.match(r"(T9-\d)", cell)
+                t9_order.append(found_rule.group(1) if found_rule else None)
+            if t9_order != ["T9-1", "T9-2", "T9-3"]:
+                problems.append(
+                    f"lang/README.md: the T9 table's rule columns are "
+                    f"{t9_order}, not T9-1/T9-2/T9-3 in order. Values are read "
+                    "by position, so a reordered header silently re-attributes "
+                    "every number.")
             continue
         if in_t9:
             if not line.strip().startswith("|"):
@@ -351,7 +390,9 @@ def token_problems(text, counts, problems, minimum=None):
             if len(cells) < 6 or cells[0] in ("---", ""):
                 continue
             design, arm = cells[0], cells[1]
-            for rule, cell in zip(("T9-1", "T9-2", "T9-3"), cells[2:5]):
+            for rule, cell in zip(t9_order, cells[2:5]):
+                if rule is None:
+                    continue
                 want = counts.get(f"t9|{design}|{arm}|{rule}")
                 if want is None:
                     continue
@@ -366,11 +407,12 @@ def token_problems(text, counts, problems, minimum=None):
                         "document calls the reading that answers T9.")
                     continue
                 rows_seen.add(("t9", design, arm))
-                t9_seen += 1
+                t9_seen.add((design, arm, rule))
                 checked += 1
-    if minimum is None and t9_seen < MINIMUM_T9_CELLS:
+    if minimum is None and len(t9_seen) < MINIMUM_T9_CELLS:
         problems.append(
-            f"lang/README.md: reconciled {t9_seen} T9 cell(s), below the floor "
+            f"lang/README.md: reconciled {len(t9_seen)} distinct T9 cell(s), below "
+            f"the floor "
             f"of {MINIMUM_T9_CELLS}. This table was a stated exclusion and went "
             "stale through two corrections while nothing looked at it.")
 
@@ -378,7 +420,7 @@ def token_problems(text, counts, problems, minimum=None):
     if len(rows_seen) < floor:
         problems.append(
             f"lang/README.md: reconciled {len(rows_seen)} distinct (design, arm) "
-            f"row(s), below the floor of {floor}. Counting CELLS let a "
+            f"row(s), below the row floor of {floor}. Counting CELLS let a "
             "duplicated correct row pay for one that had stopped parsing.")
     return checked
 
@@ -516,10 +558,10 @@ def self_test():
                 TABLE.replace("| blinker-555 | candidate_a | 10 | 20 | 30 |",
                               "| blinker-555 | candidate_a | 999 | 20 | 30 | note |")))),
         ("the distinct-row floor fires when rows stop parsing", any(
-            "below the floor" in p for p in _floor_probe(
+            "below the row floor" in p for p in _floor_probe(
                 HEADER + "| blinker-555 | candidate_a | 10 | 20 | 30 |\n", FAKE))),
         ("a duplicated row cannot pay for a missing one", any(
-            "below the floor" in p for p in _floor_probe(
+            "below the row floor" in p for p in _floor_probe(
                 HEADER + "| blinker-555 | candidate_a | 10 | 20 | 30 |\n" * 6, FAKE))),
     ]
 

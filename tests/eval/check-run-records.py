@@ -586,6 +586,11 @@ def problems_for(record, label):
                 # time in this audit a clause has read a field name nobody
                 # produces, and this one had no self-test case either.
                 iterations = trial.get("iterations")
+                if trial.get("passed") and not iterations:
+                    bad(f"arm {name!r} trial {index} is marked passed but "
+                        "records no `iterations`, so the gate result behind the "
+                        "verdict is absent. `iterations` is not schema-required, "
+                        "which is the same escape `trials` had one level up.")
                 if isinstance(iterations, list) and iterations and trial.get("passed"):
                     last = iterations[-1]
                     gate = last.get("gate") if isinstance(last, dict) else None
@@ -903,6 +908,10 @@ def self_test():
             "lower-tail Fisher", lambda r: r["flip_criterion"].update(p_value=0.5))),
         # The inner-gate clause: its NAME was fixed last round and its coverage
         # gap -- the thing that let the wrong name survive -- was not.
+        ("a passing trial carrying no iterations is caught", hit(
+            "records no `iterations`", lambda r: [
+                tr.pop("iterations", None)
+                for tr in r["arms"][arm_name]["trials"] if tr.get("passed")])),
         ("a passing trial with no final gate result is caught", hit(
             "records no gate result", lambda r: [
                 tr["iterations"][-1].update(gate=None)
