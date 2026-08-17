@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ambient.science/rhoform/schemas/part-data/0.schema.json",
   "title": "Rhoform Part Data (D3) v0",
-  "description": "One part record: the typed, provenance-carrying description of a single physical component that Rhoform's static tier checks against (requirement D3). A record is INPUT DATA, not a generated artifact \u2014 unlike the netlist IR it may carry retrieval timestamps, because provenance requires them; determinism is preserved by hashing the record into the design lockfile, not by forbidding wall-clock fields here. The record carries facts EXTRACTED FROM a datasheet plus a citation to it; it never embeds or redistributes the datasheet itself (D3: PDFs are fetch-on-demand absent a vendor redistribution agreement). SCHEMA STABILITY: version 0 is versioned but explicitly UNSTABLE \u2014 `stability` is pinned to \"unstable\" by this schema so no consumer can claim a stability guarantee that v1.0 does not make. Promotion to a third-party contract happens at 1.x against the criteria in open question 8-Q3. Extension points are restricted to properties matching ^x_ where explicitly allowed; every other object is closed so that a typo is an error rather than silently discarded data.",
+  "description": "One part record: the typed, provenance-carrying description of a single physical component that Rhoform's static tier checks against (requirement D3). A record is INPUT DATA, not a generated artifact — unlike the netlist IR it may carry retrieval timestamps, because provenance requires them; determinism is preserved by hashing the record into the design lockfile, not by forbidding wall-clock fields here. The record carries facts EXTRACTED FROM a datasheet plus a citation to it; it never embeds or redistributes the datasheet itself (D3: PDFs are fetch-on-demand absent a vendor redistribution agreement). SCHEMA STABILITY: version 0 is versioned but explicitly UNSTABLE — `stability` is pinned to \"unstable\" by this schema so no consumer can claim a stability guarantee that v1.0 does not make. Promotion to a third-party contract happens at 1.x against the criteria in open question 8-Q3. Extension points are restricted to properties matching ^x_ where explicitly allowed; every other object is closed so that a typo is an error rather than silently discarded data.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {
@@ -100,7 +100,7 @@
     "units": {
       "type": "array",
       "minItems": 1,
-      "description": "RESERVED multi-unit field set (requirement D3: \"Reserved before freeze: multi-unit/shared-package fields\"). Present only for parts whose package holds several independent functional units \u2014 a quad NAND, a dual op-amp. Each unit declares its pin membership; power pins shared by all units are listed in `shared_pins` instead. Reserving these fields at v0 rather than adding them at 1.x is what keeps the eventual multi-unit rollout a non-breaking change.",
+      "description": "RESERVED multi-unit field set (requirement D3: \"Reserved before freeze: multi-unit/shared-package fields\"). Present only for parts whose package holds several independent functional units — a quad NAND, a dual op-amp. Each unit declares its pin membership; power pins shared by all units are listed in `shared_pins` instead. Reserving these fields at v0 rather than adding them at 1.x is what keeps the eventual multi-unit rollout a non-breaking change.",
       "items": {
         "$ref": "#/$defs/Unit"
       }
@@ -109,7 +109,7 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "description": "RESERVED (multi-unit). Names of pins shared by every unit \u2014 typically the supply and ground pins that a schematic tool assigns to a separate power unit. Each entry must match a `pins[].name`; a pin listed here must NOT also be claimed by an individual unit's `pins` membership.",
+      "description": "RESERVED (multi-unit). Names of pins shared by every unit — typically the supply and ground pins that a schematic tool assigns to a separate power unit. Each entry must match a `pins[].name`; a pin listed here must NOT also be claimed by an individual unit's `pins` membership.",
       "items": {
         "type": "string",
         "minLength": 1
@@ -117,11 +117,13 @@
     },
     "parameters": {
       "$ref": "#/$defs/NamedMeasures",
-      "description": "The part's own defining characteristic values \u2014 the quantities that make it THIS part rather than another in the same family: \"resistance\", \"capacitance\", \"inductance\", \"forward_voltage\", \"temperature_coefficient\". For a jellybean passive this is the substantive content of the record; for an integrated circuit it is usually absent, because an IC's behaviour lives in its pins and modes rather than in a single value.\n\nDistinct from `ratings`, which bounds how the part may be USED, and from `pins[].characteristics`, which describes one terminal. The part resolver matches abstract constraints (\"a 10k 1% 0402 resistor\") against these values."
+      "description": "The part's own defining characteristic values — the quantities that make it THIS part rather than another in the same family: \"resistance\", \"capacitance\", \"inductance\", \"forward_voltage\", \"temperature_coefficient\". For a jellybean passive this is the substantive content of the record; for an integrated circuit it is usually absent, because an IC's behaviour lives in its pins and modes rather than in a single value.\n\nDistinct from `ratings`, which bounds how the part may be USED, and from `pins[].characteristics`, which describes one terminal. The part resolver matches abstract constraints (\"a 10k 1% 0402 resistor\") against these values.",
+      "maxProperties": 128
     },
     "ratings": {
       "$ref": "#/$defs/Ratings",
-      "description": "Part-level (not per-pin) absolute-maximum, recommended-operating, and thermal data."
+      "description": "Part-level (not per-pin) absolute-maximum, recommended-operating, and thermal data.",
+      "maxProperties": 128
     },
     "modes": {
       "type": "array",
@@ -158,7 +160,7 @@
     "notes": {
       "type": "string",
       "minLength": 1,
-      "description": "Free-text engineering notes: datasheet ambiguities, internal inconsistencies, values deliberately not recorded. Never load-bearing for a check \u2014 anything a checker consumes must be a typed field.",
+      "description": "Free-text engineering notes: datasheet ambiguities, internal inconsistencies, values deliberately not recorded. Never load-bearing for a check — anything a checker consumes must be a typed field.",
       "maxLength": 20000
     }
   },
@@ -174,7 +176,7 @@
       "$comment": "Mirrors LicenseClass in the aed-part-data pipeline (sources.py) minus RESTRICTED_NDA, which is rejected at construction there."
     },
     "Bound": {
-      "description": "One end of a measured range. Either an absolute number in the enclosing Measure's unit, or a bound expressed RELATIVE to another quantity \u2014 real datasheets specify logic thresholds that way (\"VIH min = 0.75 x VDD\", \"VIH max = VDD + 0.3 V\"), and flattening those to absolutes would silently pick a supply voltage the vendor did not.",
+      "description": "One end of a measured range. Either an absolute number in the enclosing Measure's unit, or a bound expressed RELATIVE to another quantity — real datasheets specify logic thresholds that way (\"VIH min = 0.75 x VDD\", \"VIH max = VDD + 0.3 V\"), and flattening those to absolutes would silently pick a supply voltage the vendor did not.",
       "oneOf": [
         {
           "type": "number",
@@ -196,7 +198,7 @@
         "reference": {
           "type": "string",
           "minLength": 1,
-          "description": "Name of the referenced quantity \u2014 normally a supply pin name on this part, e.g. \"VDD33\", or a rail name the design binds it to."
+          "description": "Name of the referenced quantity — normally a supply pin name on this part, e.g. \"VDD33\", or a rail name the design binds it to."
         },
         "factor": {
           "type": "number",
@@ -288,12 +290,13 @@
           "$ref": "#/$defs/Conditions",
           "description": "The test conditions under which these numbers hold. A measure without conditions asserts the enclosing context's conditions apply; a rating quoted outside its conditions is not usable, so conditions are recorded wherever the datasheet states them."
         }
-      }
+      },
+      "maxProperties": 30
     },
     "Conditions": {
       "type": "object",
       "minProperties": 1,
-      "description": "Test/operating conditions, as a map from condition name to its value. Values are either a Measure (a numeric condition such as an ambient temperature or a load current) or a string (a categorical condition such as a drive-strength setting or a modulation mode). Deliberately an OPEN map: the condition vocabulary is part-family specific and is still being learned, and forcing it closed at v0 would push real conditions into free text where no checker can see them.",
+      "description": "Test/operating conditions, as a map from condition name to its value. Values are either a Measure (a numeric condition such as an ambient temperature or a load current) or a string (a categorical condition such as a drive-strength setting or a modulation mode). Deliberately an OPEN map: the condition vocabulary is part-family specific and is still being learned, and forcing it closed at v0 would push real conditions into free text where no checker can see them. Values are capped at 1024 characters and the map at 64 entries: the string branch carried no maxLength at all, so a 3 MB base64 datasheet fitted in one condition value and validated cleanly.",
       "propertyNames": {
         "pattern": "^[a-z][a-z0-9_]*$",
         "description": "lower_snake_case condition name, e.g. \"ta\", \"vin\", \"iout\", \"pad_driver\", \"duty_cycle\"."
@@ -305,10 +308,12 @@
           },
           {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 1024
           }
         ]
-      }
+      },
+      "maxProperties": 64
     },
     "Package": {
       "type": "object",
@@ -355,7 +360,7 @@
         "footprint_ref": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+$",
-          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. Rhoform's own originally-authored library is `rho:`. It was the AEL prefix until AMB-118: AEL is Keysight ADS's Application Extension Language, a same-industry collision an EE could reasonably mistake for another EDA vendor's scripting language, and it had to move before AMB-64 and AMB-65 embedded it in every generated symbol and footprint. Absent means the part has no footprint bound yet \u2014 legitimate for a D2 stub part, which can still be netlisted and type-checked."
+          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. Rhoform's own originally-authored library is `rho:`. It was the AEL prefix until AMB-118: AEL is Keysight ADS's Application Extension Language, a same-industry collision an EE could reasonably mistake for another EDA vendor's scripting language, and it had to move before AMB-64 and AMB-65 embedded it in every generated symbol and footprint. Absent means the part has no footprint bound yet — legitimate for a D2 stub part, which can still be netlisted and type-checked."
         },
         "thermal_pad": {
           "type": "boolean",
@@ -440,7 +445,7 @@
         "unit": {
           "type": "string",
           "minLength": 1,
-          "description": "RESERVED (multi-unit): id of the `units[]` entry this pin belongs to. Absent on a multi-unit part means the pin is not part of any single unit \u2014 it must then appear in `shared_pins`."
+          "description": "RESERVED (multi-unit): id of the `units[]` entry this pin belongs to. Absent on a multi-unit part means the pin is not part of any single unit — it must then appear in `shared_pins`."
         },
         "abs_max": {
           "$ref": "#/$defs/PinLimits",
@@ -465,7 +470,8 @@
             "$ref": "#/$defs/Measure"
           }
         }
-      }
+      },
+      "maxProperties": 41
     },
     "PinLimits": {
       "type": "object",
@@ -487,7 +493,7 @@
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
-      "description": "What this pin can DELIVER, as opposed to what it may be subjected to (`abs_max`) or what the part draws (`modes`). Requirement T10: sources declare capability, loads declare draw, and the budget checker sums draw per domain and checks containment against capability.\n\nHONESTY REQUIREMENT: record the statistic the vendor published. A regulator whose datasheet guarantees `IOUT min 1.0 A` yields `source_current: {min: 1.0}` \u2014 a floor a checker may rely on. A microcontroller whose datasheet gives only `IOH typ 40 mA` yields `source_current: {typ: 40}` \u2014 no guaranteed floor at all, and a checker must treat it as such rather than promoting a typical to a limit.",
+      "description": "What this pin can DELIVER, as opposed to what it may be subjected to (`abs_max`) or what the part draws (`modes`). Requirement T10: sources declare capability, loads declare draw, and the budget checker sums draw per domain and checks containment against capability.\n\nHONESTY REQUIREMENT: record the statistic the vendor published. A regulator whose datasheet guarantees `IOUT min 1.0 A` yields `source_current: {min: 1.0}` — a floor a checker may rely on. A microcontroller whose datasheet gives only `IOH typ 40 mA` yields `source_current: {typ: 40}` — no guaranteed floor at all, and a checker must treat it as such rather than promoting a typical to a limit.",
       "properties": {
         "source_current": {
           "$ref": "#/$defs/Measure",
@@ -574,7 +580,7 @@
         },
         "thermal": {
           "$ref": "#/$defs/NamedMeasures",
-          "description": "Thermal resistances and characterization parameters, e.g. \"theta_ja\", \"theta_jc_top\", \"psi_jt\". Package-dependent: record the value for THIS record's package, and put the mounting/test conditions in the Measure's `conditions` \u2014 a theta_ja quoted without its board construction is not a usable number."
+          "description": "Thermal resistances and characterization parameters, e.g. \"theta_ja\", \"theta_jc_top\", \"psi_jt\". Package-dependent: record the value for THIS record's package, and put the mounting/test conditions in the Measure's `conditions` — a theta_ja quoted without its board construction is not a usable number."
         }
       }
     },
@@ -641,7 +647,7 @@
             "shutdown",
             "inrush"
           ],
-          "description": "Coarse classification, so a checker can select modes without parsing ids. \"active\": doing work. \"idle\": powered and clocked but not working. \"sleep\": reduced-power retention state. \"shutdown\": disabled. \"inrush\": transient startup surge, NOT a steady state \u2014 a checker that sums inrush into a steady-state budget is wrong, and this member exists so it can tell the difference.\n\nNote that peak-versus-typical is a property of the MEASURE (see Measure.peak), not of the mode: one mode can carry both a typical and a peak current."
+          "description": "Coarse classification, so a checker can select modes without parsing ids. \"active\": doing work. \"idle\": powered and clocked but not working. \"sleep\": reduced-power retention state. \"shutdown\": disabled. \"inrush\": transient startup surge, NOT a steady state — a checker that sums inrush into a steady-state budget is wrong, and this member exists so it can tell the difference.\n\nNote that peak-versus-typical is a property of the MEASURE (see Measure.peak), not of the mode: one mode can carry both a typical and a peak current."
         },
         "conditions": {
           "$ref": "#/$defs/Conditions",
@@ -684,7 +690,7 @@
         "origin",
         "license_class"
       ],
-      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES \u2014 only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by Rhoform (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what removes the SANCTIONED payload slot - the x_ namespace every tool is told to preserve. It does not, and no schema over free text can, stop someone base64-ing a PDF into a typed string field; every free-text field here carries a maxLength so the obvious attempts fail, but a determined producer can always abuse `mpn`. The guarantee this makes is narrow and worth stating exactly: there is no field here whose PURPOSE is to carry opaque data.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump \u2014 which is the review a redistribution-adjacent field should get.",
+      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES — only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by Rhoform (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what removes the SANCTIONED payload slot - the x_ namespace every tool is told to preserve. It does not, and no schema over free text can, stop someone base64-ing a PDF into a typed string field; every free-text field here carries a maxLength so the obvious attempts fail, but a determined producer can always abuse `mpn`. The guarantee this makes is narrow and worth stating exactly: there is no field here whose PURPOSE is to carry opaque data.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump — which is the review a redistribution-adjacent field should get.",
       "properties": {
         "source_id": {
           "type": "string",
@@ -721,7 +727,7 @@
         },
         "content_hash": {
           "$ref": "#/$defs/Sha256",
-          "description": "Versioned hash of the normalized extracted text \u2014 stamp-stripped, whitespace-collapsed, casefolded. This is the revision detector: byte_sha256 differing while content_hash matches is a harmless re-stamp, not a new revision. Only comparable between hashes minted under the same `identity_version`. Required when `state` is \"available\"."
+          "description": "Versioned hash of the normalized extracted text — stamp-stripped, whitespace-collapsed, casefolded. This is the revision detector: byte_sha256 differing while content_hash matches is a harmless re-stamp, not a new revision. Only comparable between hashes minted under the same `identity_version`. Required when `state` is \"available\"."
         },
         "identity_version": {
           "type": "string",
@@ -739,7 +745,7 @@
             "available",
             "source-unreachable"
           ],
-          "description": "\"available\": the document was retrieved and hashed. \"source-unreachable\": every known URL pattern failed after a re-location pass. An unreachable source keeps its citation and its facts \u2014 vendors move PDFs constantly \u2014 but carries no hashes, which is why the hash fields are conditionally required rather than always required."
+          "description": "\"available\": the document was retrieved and hashed. \"source-unreachable\": every known URL pattern failed after a re-location pass. An unreachable source keeps its citation and its facts — vendors move PDFs constantly — but carries no hashes, which is why the hash fields are conditionally required rather than always required."
         },
         "origin": {
           "type": "string",
@@ -779,7 +785,7 @@
               "byte_sha256",
               "retrieved_at"
             ],
-            "$comment": "An available source must be byte-identifiable and dated; anything less is an uncheckable citation. content_hash is deliberately NOT required here: computing it means running the pipeline's text-normalization algorithm, and a hand-authored seed-library record legitimately has the bytes it downloaded without having run that pipeline. Requiring it would either block hand-authoring or invite producers to paste the byte hash into the content_hash slot, which would silently destroy the re-stamp-versus-revision distinction the two-level identity exists for. When content_hash IS present it must be accompanied by the identity_version it was minted under, since hashes from different versions are not comparable \u2014 that pairing is enforced by dependentRequired above."
+            "$comment": "An available source must be byte-identifiable and dated; anything less is an uncheckable citation. content_hash is deliberately NOT required here: computing it means running the pipeline's text-normalization algorithm, and a hand-authored seed-library record legitimately has the bytes it downloaded without having run that pipeline. Requiring it would either block hand-authoring or invite producers to paste the byte hash into the content_hash slot, which would silently destroy the re-stamp-versus-revision distinction the two-level identity exists for. When content_hash IS present it must be accompanied by the identity_version it was minted under, since hashes from different versions are not comparable — that pairing is enforced by dependentRequired above."
           }
         }
       ]
@@ -830,13 +836,13 @@
         "locator": {
           "type": "string",
           "minLength": 1,
-          "description": "Where inside the source the value is found, in the document's own terms: \"Table 6-3\", \"Section 5.5, Electrical Characteristics\", \"page 4\". Human-checkable by design \u2014 a reviewer must be able to open the cited document and land on the number.",
+          "description": "Where inside the source the value is found, in the document's own terms: \"Table 6-3\", \"Section 5.5, Electrical Characteristics\", \"page 4\". Human-checkable by design — a reviewer must be able to open the cited document and land on the number.",
           "maxLength": 500
         },
         "target": {
           "type": "string",
           "minLength": 1,
-          "description": "Echo of the identity (`id`, `name`, or `source_id`) of the array element this entry's pointer resolves to. Required in practice whenever the pointer addresses an element of `pins`, `modes`, or `sources`.\n\nWHY THIS EXISTS: provenance keys are JSON Pointers, which address array elements BY INDEX, while this schema requires those same arrays to be sorted by their identity field. Those two requirements interact badly \u2014 renaming one mode re-sorts the array and silently re-points every index-based provenance entry at a DIFFERENT element. The pointer still resolves, so an unresolvable-pointer check cannot catch it, and the record ends up confidently citing the wrong datasheet table. Echoing the intended identity here makes that failure detectable: the part-library linter compares this value against the element the pointer actually resolves to and rejects a mismatch."
+          "description": "Echo of the identity (`id`, `name`, or `source_id`) of the array element this entry's pointer resolves to. Required in practice whenever the pointer addresses an element of `pins`, `modes`, or `sources`.\n\nWHY THIS EXISTS: provenance keys are JSON Pointers, which address array elements BY INDEX, while this schema requires those same arrays to be sorted by their identity field. Those two requirements interact badly — renaming one mode re-sorts the array and silently re-points every index-based provenance entry at a DIFFERENT element. The pointer still resolves, so an unresolvable-pointer check cannot catch it, and the record ends up confidently citing the wrong datasheet table. Echoing the intended identity here makes that failure detectable: the part-library linter compares this value against the element the pointer actually resolves to and rejects a mismatch."
         },
         "confidence": {
           "type": "string",
@@ -847,7 +853,7 @@
             "estimated",
             "unverified"
           ],
-          "description": "How the value relates to its source, ordered from strongest to weakest.\n\n\"datasheet-stated\": appears verbatim in the cited document.\n\"datasheet-derived\": computed from stated values by a documented rule (record the rule in `note`).\n\"vendor-confirmed\": obtained from vendor support or errata rather than the datasheet body.\n\"estimated\": an engineering estimate that is NOT in the source \u2014 guardbands and assumptions live here, and marking one \"datasheet-stated\" would launder an assumption into a vendor guarantee.\n\"unverified\": imported without checking.\n\nThis field is ordinal on purpose and there is no numeric score: a 0-to-1 confidence invites false precision that nobody can calibrate."
+          "description": "How the value relates to its source, ordered from strongest to weakest.\n\n\"datasheet-stated\": appears verbatim in the cited document.\n\"datasheet-derived\": computed from stated values by a documented rule (record the rule in `note`).\n\"vendor-confirmed\": obtained from vendor support or errata rather than the datasheet body.\n\"estimated\": an engineering estimate that is NOT in the source — guardbands and assumptions live here, and marking one \"datasheet-stated\" would launder an assumption into a vendor guarantee.\n\"unverified\": imported without checking.\n\nThis field is ordinal on purpose and there is no numeric score: a 0-to-1 confidence invites false precision that nobody can calibrate."
         },
         "method": {
           "type": "string",
@@ -866,5 +872,6 @@
         }
       }
     }
-  }
+  },
+  "maxProperties": 66
 }

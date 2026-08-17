@@ -34,6 +34,13 @@ values for the same design, which is the one thing "IR v0" had to nail down.
 5. `NaN` and `Infinity` are not representable and are an error.
 6. Arrays keep their order. Order is meaning here; each array's sort rule is
    stated on its own field and is not the encoder's business.
+7. **Numbers have one spelling per value.** A float whose value is integral is
+   written as that integer, every other float is written in the shortest form
+   that round-trips, and `-0.0` normalizes to `0`. Without this clause the
+   profile did not deliver the cross-implementation agreement it exists for:
+   `1000` and `1e3` are the same value and hashed differently, and `1e16`
+   serialized as `1e+16` here against `10000000000000000` from
+   JavaScript's `JSON.stringify`.
 
 `design_hash` is the SHA-256 of that serialization with `header.design_hash`
 set to `""`. Because it is computed from the parsed document, re-indenting a
