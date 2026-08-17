@@ -9,7 +9,7 @@
   "package": {
     "name": "P (PDIP)",
     "pin_count": 8,
-    "footprint_ref": "ael:DIP-8_W7.62mm"
+    "footprint_ref": "rho:DIP-8_W7.62mm"
   },
   "pins": [
     {

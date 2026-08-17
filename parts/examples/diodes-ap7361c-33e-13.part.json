@@ -9,7 +9,7 @@
   "package": {
     "name": "SOT223",
     "pin_count": 3,
-    "footprint_ref": "ael:SOT-223-3"
+    "footprint_ref": "rho:SOT-223-3"
   },
   "pins": [
     {

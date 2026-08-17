@@ -9,7 +9,7 @@
   "package": {
     "name": "0402",
     "pin_count": 2,
-    "footprint_ref": "ael:R_0402_1005Metric"
+    "footprint_ref": "rho:R_0402_1005Metric"
   },
   "pins": [
     { "name": "1", "numbers": ["1"], "role": "passive", "description": "Terminal 1. A chip resistor is symmetric; terminal order carries no meaning." },
