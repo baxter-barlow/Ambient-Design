@@ -50,7 +50,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # and exited 0. These counts are the answer to "how many rows should be here",
 # which the document cannot be trusted to supply.
 REQUIRED = {"blinker-555": 5, "buck-3v3": 5}
-# 2 assertions x 2 artifacts (design.json and the IR).
+# 2 assertions x 2 artifacts, counted as DISTINCT (file, measurement)
+# identities: counting matches let a duplicated assertion pay for a renamed one.
 MINIMUM_MODEL_WINDOWS = 4
 
 # A row is `| cell | cell | ... |`. The verdict column is the last cell.
@@ -332,6 +333,14 @@ def self_test():
         for form in ("Pass", "pass (see note)", "PASS - ok", "fail"))))
     cases.append(("a cell that is not a verdict is not read as one", not
         result_rows(agreeing.replace("| PASS |", "| passenger count |"))))
+    # THE MODEL/IR LEG, which had no case at all -- emptying MODEL_LINKS left
+    # the self-test green and the gate reporting 0 windows.
+    cases.append(("the model/IR window leg reconciles the real artifacts", (
+        lambda ps: not ps and MODEL_LINKS and MINIMUM_MODEL_WINDOWS == 4)(
+            [] if model_problems([]) >= MINIMUM_MODEL_WINDOWS else ["short"])))
+    cases.append(("MODEL_LINKS still names the blinker model and its IR",
+                  {p.name for _, p, q in MODEL_LINKS for p, q in [(p, q)]} ==
+                  {"blinker-555.design.json"}))
     cases.append(("every REQUIRED benchmark is actually reached",
                   set(REQUIRED) == {"blinker-555", "buck-3v3"}))
 
@@ -378,7 +387,7 @@ LINKED_ASSERTIONS = {
 def model_problems(problems):
     """Hold the DSL model and the IR to the benchmark's declared windows."""
     import json
-    checked = 0
+    checked = set()
     for name, model_path, ir_path in MODEL_LINKS:
         spec_path = ROOT / "benchmarks" / name / "assertions.yaml"
         if not spec_path.is_file():
@@ -420,12 +429,12 @@ def model_problems(problems):
                         "the window the benchmark gates on must be the same "
                         "numbers.")
                     continue
-                checked += 1
-    if checked < MINIMUM_MODEL_WINDOWS:
+                checked.add((path.name, measurement))
+    if len(checked) < MINIMUM_MODEL_WINDOWS:
         problems.append(
-            f"reconciled {checked} model window(s), below the floor of "
+            f"reconciled {len(checked)} distinct model window(s), below the floor of "
             f"{MINIMUM_MODEL_WINDOWS}.")
-    return checked
+    return len(checked)
 
 
 def main(argv):

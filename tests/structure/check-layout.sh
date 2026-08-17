@@ -170,22 +170,43 @@ fi
 # the gate printed 21 -- the denominator moved 100 minutes after the file was
 # written, in a commit titled "loudly", and nothing read the file, so it
 # outlived the fix. Each pair is (evidence file, command whose summary it quotes).
+transcripts_checked=0
 for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
             "ir/validation.log:tests/ir/check-hashes.py"; do
   evidence="$ROOT/${pair%%:*}"
   command="$ROOT/${pair##*:}"
   [ -f "$evidence" ] && [ -f "$command" ] || continue
   fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
-  [ -n "$fresh" ] || continue
+  if [ -z "$fresh" ]; then
+    printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' \
+      "${pair##*:}" "${pair%%:*}" >&2
+    exit 1
+  fi
   prefix=${fresh%%:*}
-  quoted=$(grep -m1 "^$prefix: PASS" "$evidence" || true)
-  if [ -n "$quoted" ] && [ "$quoted" != "$fresh" ]; then
+  # Anchor-free and whitespace-tolerant. `^prefix: PASS` let a transcript
+  # escape by indenting the line by one space or deleting it outright, and the
+  # `[ -n "$quoted" ]` guard then failed OPEN -- in a script whose own comment
+  # says a self-reported statistic is not an assertion.
+  quoted=$(grep -m1 "$prefix: PASS" "$evidence" | sed 's/^[[:space:]]*//' || true)
+  if [ -z "$quoted" ]; then
+    printf 'FAIL: %s carries no "%s: PASS" line to compare.\n' "${pair%%:*}" "$prefix" >&2
+    printf 'Deleting the quoted summary is not a way to stop disagreeing with the gate.\n' >&2
+    exit 1
+  fi
+  transcripts_checked=$((transcripts_checked + 1))
+  if [ "$quoted" != "$fresh" ]; then
     printf 'FAIL: %s quotes a summary the gate no longer prints:\n' "${pair%%:*}" >&2
     printf '  file: %s\n  now:  %s\n' "$quoted" "$fresh" >&2
     printf 'An evidence transcript that disagrees with the gate it transcribes is not evidence.\n' >&2
     exit 1
   fi
 done
+if [ "$transcripts_checked" -lt 2 ]; then
+  printf 'FAIL: reconciled %s evidence transcript(s), expected 2. A leg that\n' \
+    "$transcripts_checked" >&2
+  printf 'quietly checks nothing is indistinguishable from one that passes.\n' >&2
+  exit 1
+fi
 
 printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml parsed, retired-name scan scanned, evidence files tracked).\n' \
   "$md_count" "$json_count" "$JSON_ROOTS"

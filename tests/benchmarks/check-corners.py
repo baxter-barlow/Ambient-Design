@@ -198,8 +198,15 @@ def check_case(case_dir, problems, minimum=None):
                 f"{header!r} names no voltage, so nothing binds this evidence "
                 "to the corner it claims to survey.")
             continue
-        if not re.search(r"(?<![\d.])" + re.escape(claimed.group(1)) + r"(?![\d])",
-                         new):
+        # NOT followed by a SPICE unit suffix. `PWL(0 0 20u 0 220u 9 1 9)`
+        # contains `20u`, so a header claiming 20 V bound to the 9 V edit and
+        # republished 9 V ripple as 20 V ripple -- falling with input voltage,
+        # and outside the design's own 9-14 V window. The reproduce check
+        # cannot catch this: it re-runs the same substitution, so it binds the
+        # numbers to the edit and never the edit to the claimed voltage.
+        if not re.search(
+                r"(?<![\d.])" + re.escape(claimed.group(1))
+                + r"(?![\d])(?![munpkKMG]\w*)", new):
             problems.append(
                 f"{case_dir.name}/validation-corners.log: header claims "
                 f"{claimed.group(1)} V but the substitution it labels is "
@@ -418,6 +425,11 @@ def self_test():
     cases.append(("two blocks declaring the same substitution are caught", any(
         "same substitution" in p for p in probe(good + good))))
     # THE TABLE A READER SEES, which is where the original finding lived.
+    cases.append(("a corner that moves the deck by less than the threshold is caught", any(
+        "identical to the nominal deck" in p for p in probe(
+            "# rerun: V1 in 0 DC 9 -> V1 in 0 DC 9.00001\n--- 9 V ---\n"
+            "vout                =  4.50000e+00\n",
+            deck=DECK.replace("V1 in 0 DC 5", "V1 in 0 DC 9")))))
     cases.append(("a header claiming a corner its substitution does not make is caught", any(
         "does not contain that value" in p for p in probe(
             "# rerun: V1 in 0 DC 5 -> V1 in 0 DC 9\n--- 14 V ---\nvout = 4.5\n"))))
