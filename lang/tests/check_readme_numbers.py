@@ -17,15 +17,29 @@ bake-off's published conclusions.
 
 Fixing the numbers by hand does not fix that. This does.
 
-WHAT IT CHECKS. Every row of the token-cost table and the L6 threshold sweep
-is recomputed from the arms and the pinned tokenizer and compared exactly.
-These are integer token counts from a pinned tokenizer, so exact is right:
-there is no rounding to be generous about.
+WHAT IT CHECKS. Every published token count in lang/README.md -- the token
+table, the decision table, and the language-card line -- against
+`lang/token-counts.json`, exactly. These are integers from a pinned tokenizer,
+so exact is right: there is no rounding to be generous about.
+
+WHY AN ARTIFACT AND NOT A LIVE MEASUREMENT. The first version of this file
+called the pinned tiktoken encoding directly. That made `make sim` depend on an
+OPTIONAL package that no CI job installs, so the benchmarks-sim job could not
+have passed as written -- and on a cold cache it fetched the vocabulary over
+the network from inside a target whose contract is that it runs offline. That
+is the identical defect tests/toolchain/check-pins.py had gone to explicit
+trouble to fix for itself, reintroduced one file over.
+
+So the counts are a committed artifact, regenerated deliberately with `--write`
+by someone who has the tokenizer, exactly as corpus/classification.yaml pins
+decision_hash. The offline gate reads the artifact; `--verify` re-measures and
+is run only where tiktoken is present. An artifact that drifts from the arms is
+caught by `--verify`; a README that drifts from the artifact is caught here,
+offline, always.
 
 WHAT IT DELIBERATELY DOES NOT CHECK. Prose, and the annotation-tax percentages
 (T9), which are derived through a longer chain this file would have to
-duplicate to check. Those remain the author's job; the tables that carry the
-freeze-basis numbers do not.
+duplicate. Those remain the author's job.
 
 Exit codes: 0 pass, 1 a table disagrees with the harness, 2 environment.
 
@@ -39,30 +53,53 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "lang" / "README.md"
+ARTIFACT = ROOT / "lang" / "token-counts.json"
 
 # design -> the example model that renders it
 DESIGNS = ("blinker-555", "esp32s3-devboard")
-ARMS = ("candidate_a", "candidate_b")
+# starlark included. The first version listed only the candidates, so 14 of the
+# README's 26 published counts were outside the gate -- and 8 of those 14 were
+# stale, including every blinker cell of the table headed "The decision", whose
+# numbers the headline percentage is computed from. The docstring said "every
+# row".
+ARMS = ("candidate_a", "candidate_b", "starlark")
 VARIANTS = ("explicit", "inferred", "inferred+columnar")
 
 ROW = re.compile(r"^\|\s*(?P<design>[a-z0-9-]+)\s*\|\s*(?P<arm>[a-z_]+)\s*\|(?P<rest>.+)\|\s*$")
+# `| **candidate_b** | 748 | 5003 | 4160 | 886 | ... |` -- the decision table,
+# whose first cell is the ARM. ROW's design pattern is `[a-z0-9-]+`, which
+# cannot match `candidate_a`, so all seven of this table's token cells were
+# outside the gate by construction and four of them were stale.
+DECISION_ROW = re.compile(
+    r"^\|\s*\**(?P<arm>candidate_a|candidate_b|starlark)\**\s*\|(?P<rest>.+)\|\s*$")
+# The decision table's token columns, in order.
+DECISION_KEYS = (
+    "blinker-555|{arm}|inferred",
+    "esp32s3-devboard|{arm}|inferred",
+    "esp32s3-devboard|{arm}|inferred+columnar",
+    "card|{arm}",
+)
 CELL_NUMBER = re.compile(r"-?\d+")
 
 # How many rows each table must contribute. A row that stops being parsed also
 # stops being checked, so the count is pinned rather than counted.
-MINIMUM_TOKEN_ROWS = 4
-MINIMUM_SWEEP_ROWS = 4
+# DISTINCT (design, arm) rows, not cells: the floor counted cells, so
+# duplicating a correct row paid for one that had stopped parsing.
+MINIMUM_DISTINCT_ROWS = 5
 
 
 class GateUnavailable(Exception):
     """The check could not be performed. Never reported as a pass."""
 
 
-def _harness():
-    """(token_counts, sweep) measured now, via the same code `measure` uses."""
+def measure_now():
+    """Measure every (design, arm, variant) with the pinned tokenizer.
+
+    Only reachable via --write/--verify. The offline gate never calls this.
+    """
     sys.path.insert(0, str(ROOT / "lang"))
     try:
-        from bakeoff.arms import candidate_a, candidate_b
+        from bakeoff.arms import candidate_a, candidate_b, starlark
         from bakeoff.measure import load_tokenizer
         from bakeoff.model import load_model
     except ImportError as exc:  # pragma: no cover
@@ -71,24 +108,64 @@ def _harness():
         tokenizer = load_tokenizer()
     except Exception as exc:
         raise GateUnavailable(
-            f"the pinned tokenizer is unavailable ({exc}); an unavailable gate "
-            "is not a pass.") from exc
+            f"the pinned tokenizer is unavailable ({exc})") from exc
 
-    arms = {"candidate_a": candidate_a, "candidate_b": candidate_b}
+    arms = {"candidate_a": candidate_a, "candidate_b": candidate_b,
+            "starlark": starlark}
     tokens = {}
     for design in DESIGNS:
         model = load_model(ROOT / "lang" / "examples" / f"{design}.design.json")
         for name, arm in arms.items():
             for variant in VARIANTS:
-                tokens[(design, name, variant)] = tokenizer.count(
-                    arm.render(model, variant))
+                try:
+                    rendered = arm.render(model, variant)
+                except Exception:
+                    # starlark has no columnar variant; the README prints an
+                    # em dash there and nothing should be invented for it.
+                    continue
+                tokens[f"{design}|{name}|{variant}"] = tokenizer.count(rendered)
+    for name, arm in arms.items():
+        tokens[f"card|{name}"] = tokenizer.count(arm.language_card())
     return tokens
 
 
-def token_table_problems(text, tokens, problems, minimum=None):
-    """The `| Design | Arm | explicit | inferred | +columnar |` table."""
+def load_counts():
+    """The committed artifact. Offline, no optional packages."""
+    import json
+    if not ARTIFACT.is_file():
+        raise GateUnavailable(
+            f"{ARTIFACT.name} is missing. Regenerate it on a machine with the "
+            "pinned tokenizer: python3 lang/tests/check_readme_numbers.py --write")
+    try:
+        return json.loads(ARTIFACT.read_text(encoding="utf-8"))["counts"]
+    except (ValueError, KeyError) as exc:
+        raise GateUnavailable(f"{ARTIFACT.name} is not readable: {exc}") from exc
+
+
+def token_problems(text, counts, problems, minimum=None):
+    """Every `| design | arm | ... |` row, against the committed counts."""
     checked = 0
-    for line in text.splitlines():
+    rows_seen = set()
+    # THE TOKEN TABLE, located by its own header. Matching any `| design | arm |`
+    # row also matched the L6 THRESHOLD SWEEP, whose rows have the same shape
+    # but whose columns are thresholds rather than variants -- so the gate
+    # compared a sweep saving against a token count and reported nonsense.
+    all_lines = text.splitlines()
+    try:
+        token_start = next(
+            i for i, line in enumerate(all_lines)
+            if line.startswith("| Design | Arm |") and "explicit" in line)
+    except StopIteration:
+        problems.append(
+            "lang/README.md: the token table's header row is gone, so its "
+            "cells are checked by nothing.")
+        token_start = len(all_lines)
+    token_lines = []
+    for line in all_lines[token_start:]:
+        if not line.strip().startswith("|"):
+            break
+        token_lines.append(line)
+    for line in token_lines:
         found = ROW.match(line.strip())
         if not found:
             continue
@@ -96,29 +173,78 @@ def token_table_problems(text, tokens, problems, minimum=None):
         if design not in DESIGNS or arm not in ARMS:
             continue
         cells = [c.strip() for c in found.group("rest").split("|")]
-        if len(cells) != 3:
-            continue
         published = []
         for cell in cells:
             number = CELL_NUMBER.search(cell.replace(",", ""))
             published.append(None if number is None else int(number.group(0)))
-        if any(v is None for v in published):
-            continue
+        # Match cells to variants positionally, skipping em-dash / empty cells
+        # rather than dropping the whole row: requiring exactly three cells
+        # meant a row could leave the gate by growing a fourth column.
         for variant, value in zip(VARIANTS, published):
-            want = tokens[(design, arm, variant)]
+            if value is None:
+                continue
+            key = f"{design}|{arm}|{variant}"
+            want = counts.get(key)
+            if want is None:
+                continue
             if value != want:
                 problems.append(
-                    f"lang/README.md: token table publishes {value} for "
-                    f"{design}/{arm}/{variant}, but the harness measures {want}. "
-                    "This table is the bake-off's published cost evidence.")
+                    f"lang/README.md: publishes {value} for {key}, but "
+                    f"lang/token-counts.json records {want}. This is the "
+                    "bake-off's published cost evidence.")
                 continue
+            rows_seen.add((design, arm))
             checked += 1
-    floor = MINIMUM_TOKEN_ROWS * len(VARIANTS) if minimum is None else minimum
-    if checked < floor:
+    # THE DECISION TABLE, which publishes the same `inferred` measurement as
+    # the token table and disagreed with it in-file: 906 against 993, 748
+    # against 814, 822 against 901.
+    # LOCATED BY ITS OWN HEADER. Matching any row that starts with an arm name
+    # also matched the DEFECT table, whose rows start the same way -- so the
+    # gate compared 15/15 and 100% against token counts and reported nonsense.
+    lines = all_lines
+    try:
+        start = next(i for i, line in enumerate(lines)
+                     if line.startswith("| ") and "(a) blinker" in line
+                     and "card" in line)
+    except StopIteration:
         problems.append(
-            f"lang/README.md: reconciled {checked} token-table cell(s), below "
-            f"the floor of {floor}. A row that stops being parsed also stops "
-            "being checked.")
+            "lang/README.md: the decision table's header row is gone, so its "
+            "cells are checked by nothing. That table publishes the same "
+            "`inferred` measurement as the token table and once disagreed "
+            "with it in-file.")
+        start = len(lines)
+    for line in lines[start:]:
+        if not line.strip().startswith("|"):
+            break
+        found = DECISION_ROW.match(line.strip())
+        if not found:
+            continue
+        arm = found.group("arm")
+        cells = [c.strip() for c in found.group("rest").split("|")]
+        for template, cell in zip(DECISION_KEYS, cells):
+            number = CELL_NUMBER.search(cell.replace(",", "").replace("*", ""))
+            if number is None:
+                continue
+            key = template.format(arm=arm)
+            want = counts.get(key)
+            if want is None:
+                continue
+            if int(number.group(0)) != want:
+                problems.append(
+                    f"lang/README.md: the decision table publishes "
+                    f"{number.group(0)} for {key}, but lang/token-counts.json "
+                    f"records {want}. Two tables in this file were publishing "
+                    "different numbers for the same measurement.")
+                continue
+            rows_seen.add(("decision", arm))
+            checked += 1
+
+    floor = MINIMUM_DISTINCT_ROWS if minimum is None else minimum
+    if len(rows_seen) < floor:
+        problems.append(
+            f"lang/README.md: reconciled {len(rows_seen)} distinct (design, arm) "
+            f"row(s), below the floor of {floor}. Counting CELLS let a "
+            "duplicated correct row pay for one that had stopped parsing.")
     return checked
 
 
@@ -126,52 +252,125 @@ def check(problems, minimum=None):
     if not README.is_file():
         problems.append("lang/README.md is missing")
         return 0
-    return token_table_problems(
-        README.read_text(encoding="utf-8"), _harness(), problems, minimum)
+    return token_problems(
+        README.read_text(encoding="utf-8"), load_counts(), problems, minimum)
+
+
+def write_artifact():
+    import json
+    counts = measure_now()
+    ARTIFACT.write_text(json.dumps({
+        "_comment": ("Generated. Regenerate deliberately with: python3 "
+                     "lang/tests/check_readme_numbers.py --write, on a machine "
+                     "with the optional tiktoken pin installed and its cache "
+                     "warm. lang/README.md is held to this file OFFLINE."),
+        "counts": dict(sorted(counts.items())),
+    }, indent=2) + "\n", encoding="utf-8")
+    print(f"readme-numbers: wrote {ARTIFACT.name} ({len(counts)} counts).")
+    return 0
+
+
+def verify_artifact():
+    """Re-measure and compare to the artifact. Needs the tokenizer."""
+    counts = load_counts()
+    fresh = measure_now()
+    problems = []
+    for key, value in sorted(fresh.items()):
+        if counts.get(key) != value:
+            problems.append(
+                f"{ARTIFACT.name}: records {counts.get(key)} for {key}, but "
+                f"measuring now gives {value}.")
+    for key in sorted(set(counts) - set(fresh)):
+        problems.append(f"{ARTIFACT.name}: records {key}, which no arm renders.")
+    if problems:
+        print("readme-numbers: FAIL:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
+    print(f"readme-numbers: PASS: {len(fresh)} committed count(s) reproduce.")
+    return 0
 
 
 def self_test():
-    TABLE = (
-        "| Design | Arm | explicit | inferred | +columnar |\n"
-        "|---|---|---:|---:|---:|\n"
-        "| blinker-555 | candidate_a | 10 | 20 | 30 |\n"
-        "| blinker-555 | candidate_b | 40 | **50** | 60 |\n")
+    HEADER = ("| Design | Arm | explicit | inferred | +columnar |\n"
+              "|---|---|---:|---:|---:|\n")
+    TABLE = (HEADER +
+             "| blinker-555 | candidate_a | 10 | 20 | 30 |\n"
+             "| blinker-555 | candidate_b | 40 | **50** | 60 |\n"
+             "| blinker-555 | starlark | 70 | 80 | — |\n"
+             "| esp32s3-devboard | candidate_a | 11 | 21 | 31 |\n"
+             "| esp32s3-devboard | candidate_b | 41 | 51 | 61 |\n"
+             "\n"
+             "| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n"
+             "|---|---:|---:|---:|---:|---:|\n"
+             "| candidate_a | 20 | 21 | 31 | 90 | 15/15 |\n")
     FAKE = {
-        ("blinker-555", "candidate_a", "explicit"): 10,
-        ("blinker-555", "candidate_a", "inferred"): 20,
-        ("blinker-555", "candidate_a", "inferred+columnar"): 30,
-        ("blinker-555", "candidate_b", "explicit"): 40,
-        ("blinker-555", "candidate_b", "inferred"): 50,
-        ("blinker-555", "candidate_b", "inferred+columnar"): 60,
+        "blinker-555|candidate_a|explicit": 10,
+        "blinker-555|candidate_a|inferred": 20,
+        "blinker-555|candidate_a|inferred+columnar": 30,
+        "blinker-555|candidate_b|explicit": 40,
+        "blinker-555|candidate_b|inferred": 50,
+        "blinker-555|candidate_b|inferred+columnar": 60,
+        "blinker-555|starlark|explicit": 70,
+        "blinker-555|starlark|inferred": 80,
+        "esp32s3-devboard|candidate_a|explicit": 11,
+        "esp32s3-devboard|candidate_a|inferred": 21,
+        "esp32s3-devboard|candidate_a|inferred+columnar": 31,
+        "esp32s3-devboard|candidate_b|explicit": 41,
+        "esp32s3-devboard|candidate_b|inferred": 51,
+        "esp32s3-devboard|candidate_b|inferred+columnar": 61,
+        "card|candidate_a": 90,
     }
 
-    def probe(table, tokens=FAKE):
+    def probe(table, counts=FAKE):
         problems = []
-        token_table_problems(table, tokens, problems, minimum=0)
+        token_problems(table, counts, problems, minimum=0)
         return problems
 
     cases = [
-        ("a table matching the harness reports nothing", not probe(TABLE)),
+        ("a table matching the artifact reports nothing", not probe(TABLE)),
         ("a stale token count is caught", any(
-            "published" in p for p in probe(TABLE.replace("| 20 |", "| 906 |")))),
+            "publishes" in p for p in probe(TABLE.replace("| 20 |", "| 906 |", 1)))),
         ("bold markup does not hide a stale value", any(
-            "published" in p for p in probe(TABLE.replace("**50**", "**748**")))),
-        # THE REAL DEFECT: the L6 saving on (a) was published as 0.
-        ("the columnar column is checked, not just the first two", any(
-            "inferred+columnar" in p for p in probe(TABLE.replace("| 30 |", "| 20 |")))),
-        ("the row floor fires when rows stop parsing", any(
-            "below the floor" in p for p in (lambda: (
-                lambda ps: ps)(_floor_probe(TABLE, FAKE)))())),
+            "publishes" in p for p in probe(TABLE.replace("**50**", "**748**")))),
+        # THE ROWS THE FIRST VERSION SKIPPED. starlark was outside ARMS, and the
+        # decision table's first cell is the arm, which the design pattern
+        # cannot match -- 8 of the 14 skipped cells were stale.
+        ("a stale starlark row is caught", any(
+            "starlark" in p for p in probe(TABLE.replace("| 70 | 80 |", "| 1144 | 822 |")))),
+        ("a stale decision-table cell is caught", any(
+            "decision table" in p for p in probe(
+                TABLE.replace("| candidate_a | 20 | 21 |", "| candidate_a | 906 | 21 |")))),
+        ("a stale language-card cell is caught", any(
+            "card|candidate_a" in p for p in probe(
+                TABLE.replace("| 31 | 90 | 15/15 |", "| 31 | 863 | 15/15 |")))),
+        ("a missing decision-table header is caught", any(
+            "header row is gone" in p for p in probe(
+                TABLE.replace("| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n", "")))),
+        ("a missing token-table header is caught", any(
+            "header row is gone" in p for p in probe(TABLE.replace(HEADER, "")))),
+        # The L6 sweep has the same row shape and different columns; reading it
+        # as the token table compared a threshold saving to a token count.
+        ("the L6 sweep table is not read as the token table", not probe(
+            TABLE + "\n| blinker-555 | candidate_a | 112 | 82 | 0 | 0 | 0 |\n")),
+        ("a row that grows a column is still read", any(
+            "publishes" in p for p in probe(
+                TABLE.replace("| blinker-555 | candidate_a | 10 | 20 | 30 |",
+                              "| blinker-555 | candidate_a | 999 | 20 | 30 | note |")))),
+        ("the distinct-row floor fires when rows stop parsing", any(
+            "below the floor" in p for p in _floor_probe(
+                HEADER + "| blinker-555 | candidate_a | 10 | 20 | 30 |\n", FAKE))),
+        ("a duplicated row cannot pay for a missing one", any(
+            "below the floor" in p for p in _floor_probe(
+                HEADER + "| blinker-555 | candidate_a | 10 | 20 | 30 |\n" * 6, FAKE))),
     ]
 
-    # WIRING over the real README and the real harness, because everything
-    # above uses a fake table -- which is how lang/README.md came to be
-    # checked by nothing in the first place.
+    # WIRING over the real README and the committed artifact.
     try:
         real = []
         reconciled = check(real)
-        cases.append(("the committed README reconciles against the harness",
-                      not real and reconciled >= MINIMUM_TOKEN_ROWS * len(VARIANTS)))
+        cases.append(("the committed README reconciles against the artifact",
+                      not real and reconciled >= 20))
     except GateUnavailable as exc:
         print(f"readme-numbers: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -187,17 +386,25 @@ def self_test():
     return 0
 
 
-def _floor_probe(table, tokens):
+def _floor_probe(table, counts):
     """The floor applies to the real table's population, so it is exercised
     with the shipped default rather than the probes' minimum=0."""
     problems = []
-    token_table_problems(table, tokens, problems)
+    token_problems(table, counts, problems)
     return problems
 
 
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
+    try:
+        if argv and argv[0] == "--write":
+            return write_artifact()
+        if argv and argv[0] == "--verify":
+            return verify_artifact()
+    except GateUnavailable as exc:
+        print(f"readme-numbers: UNAVAILABLE: {exc}", file=sys.stderr)
+        return 2
     problems = []
     try:
         checked = check(problems)
@@ -209,8 +416,8 @@ def main(argv):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"readme-numbers: PASS: {checked} published token count(s) match the "
-          "harness.")
+    print(f"readme-numbers: PASS: {checked} published token count(s) match "
+          "lang/token-counts.json.")
     return 0
 
 
