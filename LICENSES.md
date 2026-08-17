@@ -23,7 +23,7 @@ Attribute as: `Rhoform, copyright 2026 Baxter Barlow, https://github.com/baxter-
 The sentence "everything in this tree is Apache-2.0 source and operational
 configuration" was not true of two directories, and both are material:
 
-- **`corpus/`** carries 83 verbatim excerpts from third-party forum posts,
+- **`corpus/`** carries 93 verbatim excerpts from third-party forum posts,
   issue trackers and blog postmortems. The project cannot license a forum
   poster's words under Apache-2.0. They are quoted for identification,
   criticism and research; copyright in each stays with its author, and each is

@@ -20,7 +20,7 @@ Third-party material redistributed in this repository
 
 corpus/bugs.yaml
 
-    Contains 83 short verbatim excerpts, spanning all 61 entries, from public
+    Contains 93 short verbatim excerpts, spanning all 61 entries, from public
     forum posts, issue trackers, mailing lists, blog postmortems and vendor
     errata. They sit principally in the
     `evidence:` field, and in a handful of cases in `symptom:` or
@@ -28,6 +28,12 @@ corpus/bugs.yaml
     or two, is attributed to a specific public URL in the same entry's
     `source:` block, and is included so that a reader can check that the entry
     describes the bug its source describes.
+
+    The count is 83 in `evidence:`, 8 in `symptom:` and 2 in `root_cause:`.
+    An earlier revision published 83 -- the `evidence:`-only figure -- while
+    the same sentence named the other two fields, so the number understated
+    the third-party content by 11%. Reproduce with a count of quoted spans of
+    three or more characters over those three fields of corpus/bugs.yaml.
 
     These excerpts are NOT licensed under Apache-2.0 and are not the project's
     to relicense. They are quoted for identification, criticism and research;
@@ -37,8 +43,12 @@ corpus/bugs.yaml
     The corpus records a source URL for every entry. It does not record a
     checksum or a per-source licence determination, which AGENTS.md asks for
     when redistributing vendor artifacts. That gap is real and is tracked
-    rather than papered over -- see the Linear issue referenced in
-    corpus/README.md.
+    rather than papered over. An earlier revision said "see the Linear issue
+    referenced in corpus/README.md"; that file references no such issue, so
+    the claim that the gap was tracked rested on a pointer that does not
+    resolve. It is tracked under AMB-123's follow-ups; the corpus records a
+    source URL per entry and no checksum or per-source licence determination,
+    and that remains true.
 
 parts/examples/*.part.json
 

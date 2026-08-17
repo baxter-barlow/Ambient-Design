@@ -125,6 +125,19 @@ MINIMUM_AGREEMENTS = 14
 # passed. These are the real per-workflow counts.
 MINIMUM_ACTION_REFS = {"checks.yml": 14, "dco.yml": 1, "repository-policy.yml": 1}
 
+# The JOBS each workflow must define. Counting action references stopped
+# cross-file compensation and not within-file: an auditor deleted the whole
+# eval-harness job from checks.yml, added two redundant `uses:` steps to
+# another job, and the count matched at 14 with `make all` green and
+# check-run-records running nowhere in CI. A job is what runs a gate; the
+# count of steps is not.
+REQUIRED_JOBS = {
+    "checks.yml": ("bakeoff", "benchmarks-sim", "eval-harness", "golden",
+                   "grammar", "schemas", "structure", "toolchain-pins"),
+    "dco.yml": ("signoff",),
+    "repository-policy.yml": ("agent-layout",),
+}
+
 
 class _SkipFingerprint(Exception):
     """Internal: the behavioural fingerprint cannot be checked offline."""
@@ -718,6 +731,30 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
+    missing_jobs = []
+    for workflow_name, jobs in REQUIRED_JOBS.items():
+        path = ROOT / ".github" / "workflows" / workflow_name
+        if not path.is_file():
+            missing_jobs.append(f"{workflow_name}: the workflow file is gone")
+            continue
+        try:
+            import yaml as _yaml
+            defined = set((_yaml.safe_load(path.read_text(encoding="utf-8"))
+                           or {}).get("jobs") or {})
+        except Exception as exc:
+            missing_jobs.append(f"{workflow_name}: not parseable ({exc})")
+            continue
+        for job in jobs:
+            if job not in defined:
+                missing_jobs.append(f"{workflow_name}: job {job!r} is gone")
+    if missing_jobs:
+        print("toolchain-pins: FAIL: CI job(s) removed:", file=sys.stderr)
+        for entry in missing_jobs:
+            print(f"  {entry}. A job is what runs a gate; counting `uses:` "
+                  "steps let a whole deleted job be paid for by duplicated "
+                  "steps in the same file.", file=sys.stderr)
+        return 1
+
     short = {name: (action_refs.get(name, 0), floor)
              for name, floor in MINIMUM_ACTION_REFS.items()
              if action_refs.get(name, 0) < floor}
