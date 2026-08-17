@@ -439,12 +439,32 @@ def check_spec(spec, label, problems, minimum=None, gate_structure=True):
                         continue
                     bumped = _perturb(probe, name_used, base * 2.0 + 1.0)
                     if bumped is None:
+                        # NOT a silent skip. `_perturb` returns None for a
+                        # dotted key that `inputs` spells flat rather than
+                        # nested -- and reshaping `inputs` that way does not
+                        # move check_inputs_structure_hash, so it silently
+                        # disabled this whole defence for every affected name.
+                        problems.append(
+                            f"{label}/{name}: formula for {operand} names "
+                            f"`{name_used}`, which this gate cannot perturb to "
+                            "check that it matters. Spell the input nested "
+                            "(worst: {ta_c: ...}) rather than flat "
+                            "('worst.ta_c: ...'), or the inert-term check "
+                            "does not run for it.")
                         continue
                     try:
                         moved = evaluate_formula(formulas[operand], bumped)
                     except (ValueError, KeyError, SyntaxError, ArithmeticError):
                         continue
-                    if _math.isfinite(moved) and moved == got:
+                    # MATERIAL, not merely nonzero. Exact equality meant a
+                    # coefficient of 1e-12 counted as "this input matters":
+                    # the result moved by ~1e-12 while the operand is compared
+                    # at 1e-3 relative, nine orders of magnitude coarser. So a
+                    # 500 C worst-case ambient sat in the record with the gate
+                    # green. An input has to move the result by at least as
+                    # much as the comparison can see.
+                    tolerance = abs(float(value)) * 1e-3 + 1e-12
+                    if _math.isfinite(moved) and abs(moved - got) <= tolerance:
                         problems.append(
                             f"{label}/{name}: formula for {operand} names "
                             f"`{name_used}` but changing it does not change the "

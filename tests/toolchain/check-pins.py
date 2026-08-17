@@ -120,7 +120,10 @@ MINIMUM_AGREEMENTS = 14
 # was 30 of which 16 were `uses:` occurrences, so deleting the `lark:` pin (the
 # gate then compares its consumer to nothing) and duplicating one checkout step
 # put the total back at 30 and passed.
-MINIMUM_ACTION_REFS = 16
+# PER FILE, not one total. A single number let an entire deleted job be paid
+# for by a duplicated checkout step elsewhere; the totals matched and the gate
+# passed. These are the real per-workflow counts.
+MINIMUM_ACTION_REFS = {"checks.yml": 14, "dco.yml": 1, "repository-policy.yml": 1}
 
 
 class _SkipFingerprint(Exception):
@@ -457,7 +460,7 @@ def check(manifest, read=None):
     # A `uses:` line pinned to something the manifest never mentions is the
     # same defect from the other direction: an unaudited action inside the
     # trust boundary of every job.
-    action_refs = 0
+    action_refs = {}
     known_refs = {
         str(block["ref"])
         for block in (dig(manifest, ("ci", "actions")) or {}).values()
@@ -526,7 +529,7 @@ def check(manifest, read=None):
                             "either dead or resolved somewhere this gate cannot "
                             "see.")
                     else:
-                        action_refs += 1
+                        action_refs[workflow.name] = action_refs.get(workflow.name, 0) + 1
                     continue
                 if ref not in known_refs:
                     problems.append(
@@ -534,7 +537,7 @@ def check(manifest, read=None):
                         "toolchain/versions.yaml does not pin. An unrecorded "
                         "action is unaudited code inside every job.")
                 else:
-                    action_refs += 1
+                    action_refs[workflow.name] = action_refs.get(workflow.name, 0) + 1
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             stripped = line.strip()
@@ -556,7 +559,7 @@ def check(manifest, read=None):
                     "source; an unpinned or unrecorded one is unaudited code."
                 )
             else:
-                action_refs += 1
+                action_refs[workflow.name] = action_refs.get(workflow.name, 0) + 1
     return problems, checked, action_refs
 
 
@@ -666,11 +669,11 @@ def self_test():
         # place of the check it backstops, which is the exact failure this
         # file's other comments warn about.
         globals()["check"] = lambda *_a, **_k: (
-            ["planted problem"], MINIMUM_AGREEMENTS, MINIMUM_ACTION_REFS)
+            ["planted problem"], MINIMUM_AGREEMENTS, dict(MINIMUM_ACTION_REFS))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             planted = main([])
         globals()["check"] = lambda *_a, **_k: (
-            [], MINIMUM_AGREEMENTS, MINIMUM_ACTION_REFS)
+            [], MINIMUM_AGREEMENTS, dict(MINIMUM_ACTION_REFS))
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             clean = main([])
     finally:
@@ -715,21 +718,24 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
-    if action_refs < MINIMUM_ACTION_REFS:
-        print(
-            f"toolchain-pins: FAIL: verified only {action_refs} action "
-            f"reference(s), below the floor of {MINIMUM_ACTION_REFS}. Counted "
-            "separately from pins on purpose: one number let a deleted pin be "
-            "paid for by an added CI step.",
-            file=sys.stderr,
-        )
+    short = {name: (action_refs.get(name, 0), floor)
+             for name, floor in MINIMUM_ACTION_REFS.items()
+             if action_refs.get(name, 0) < floor}
+    if short:
+        print("toolchain-pins: FAIL: workflow(s) below their action-reference "
+              "floor:", file=sys.stderr)
+        for name, (found, floor) in sorted(short.items()):
+            print(f"  {name}: {found} of {floor}. Counted PER FILE: one total "
+                  "let a whole deleted job be paid for by a duplicated step "
+                  "elsewhere.", file=sys.stderr)
         return 1
     for pin in sorted(set(READ_BY_KEY)):
         print(f"toolchain-pins: read-by-key: {pin} — its consumer reads this pin "
               "from the manifest rather than copying the value, so agreement is "
               "structural and the value itself is not compared here.")
     print(f"toolchain-pins: PASS: {checked} pin/consumer agreement(s) and "
-          f"{action_refs} action reference(s) verified.")
+          f"{sum(action_refs.values())} action reference(s) verified across "
+          f"{len(action_refs)} workflow file(s).")
     return 0
 
 

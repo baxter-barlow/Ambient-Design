@@ -248,8 +248,12 @@ belong to higher rungs.
 | Startup overshoot (`overshoot_pct`) | <= 5% | 0.0466% | pass |
 | 1A->2A settling (`t_settle_us`) | <= 500 us | 16.86 us | pass |
 
-Input corners, re-run against the shipped deck and appended to
-`validation.log` (2 ns, 31.2k divider):
+Input corners, in `validation-corners.log` (2 ns, 31.2k divider). Each block
+there declares the one deck substitution that produced it, and
+`tests/benchmarks/check-corners.py` applies that edit and re-runs, so these are
+runs of MODIFIED decks -- not of the shipped one, and not in `validation.log`,
+which this paragraph cited until AMB-123 while that file's only mention of a
+corner is the line recording that an earlier regeneration destroyed them:
 
 | Vin | il_pp | vout_pp | t_settle_us |
 |---|---|---|---|

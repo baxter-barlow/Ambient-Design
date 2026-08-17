@@ -60,7 +60,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 148 tests (23 need lark)
+python3 -m unittest discover -s tests -t .  # 157 tests (29 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
@@ -214,7 +214,7 @@ against a ~3K budget.
 near either grammar. AC5a is AMB-33's successor work, and if it contradicts
 this, the flip criterion in §4 is the mechanism, not this table.
 
-**T9 annotation tax: 24-30% in aggregate, and the aggregate is the wrong
+**T9 annotation tax: 24-30% in aggregate (23.9-30.1 measured), and the aggregate is the wrong
 number.** An earlier version of this file called it a lower bound. Decomposing
 it per rule shows why that was wrong:
 
@@ -227,11 +227,11 @@ it per rule shows why that was wrong:
 | esp32s3-devboard | candidate_b | 16.5% | 5.8% | 2.3% | 24.6% |
 | esp32s3-devboard | starlark | 23.5% | 4.2% | 2.6% | 30.4% |
 
-T9-1 is 59-77% of the total, and T9-1 is not inference — it is a component
+T9-1 is 58-77% of the total, and T9-1 is not inference — it is a component
 library handing over a pin list, which L2, D3 and D5 give unconditionally and
 which no candidate grammar would ever have charged an author for. The
 `explicit` denominator that includes it describes a language nobody proposed.
-**The reading that answers T9's question is the T9-2 column: 4.2-7.0%.**
+**The reading that answers T9's question is the T9-2 column: 4.2-7.7%.**
 
 Three biases, stated rather than one: counting T9-1 as inference at all biases
 UP; benchmark (c) is built so every instance is port-recoverable, which
@@ -266,8 +266,11 @@ AMB-123. Both were measured before 333869c added the bypass capacitor to
 group, so the default threshold now clears. The stale figure said L6 buys
 nothing on small designs, which is the stronger claim and the wrong one, and it
 sat in the section this README offers as the basis for whether L6 earns a place
-in v1. No gate reads this file — the numbers above come from
-`python3 -m bakeoff measure`, run in `lang/`.
+in v1. The numbers above come from `python3 -m bakeoff measure`, run in `lang/`, and
+the token counts are now held to `lang/token-counts.json` by
+`lang/tests/check_readme_numbers.py`. This paragraph said "no gate reads this
+file" while the same document, twenty lines up, said it was gated -- the
+sentence was true when written and nobody updated it.
 
 **Line counts against AC1's ceilings.** Benchmark (c) is budgeted at ~600 DSL
 lines and `design.md` estimates 380-450. Measured: 548 (A, inferred), 513 (B,
