@@ -37,9 +37,10 @@ is run only where tiktoken is present. An artifact that drifts from the arms is
 caught by `--verify`; a README that drifts from the artifact is caught here,
 offline, always.
 
-WHAT IT DELIBERATELY DOES NOT CHECK. Prose, and the annotation-tax percentages
-(T9), which are derived through a longer chain this file would have to
-duplicate. Those remain the author's job.
+WHAT IT DELIBERATELY DOES NOT CHECK. Prose. The T9 annotation-tax table USED to
+be excluded on the grounds that it was "the author's job" -- and it then stayed
+stale through two separate corrections, because an exclusion is an invitation.
+It is gated now.
 
 Exit codes: 0 pass, 1 a table disagrees with the harness, 2 environment.
 
@@ -96,6 +97,8 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
 # was dead because that slack always fired first.
 MINIMUM_DISTINCT_ROWS = 12
+# 6 rows x 3 rules.
+MINIMUM_T9_CELLS = 18
 
 
 class GateUnavailable(Exception):
@@ -136,6 +139,20 @@ def measure_now():
                 tokens[f"{design}|{name}|{variant}"] = tokenizer.count(rendered)
     for name, arm in arms.items():
         tokens[f"card|{name}"] = tokenizer.count(arm.language_card())
+    # THE T9 TABLE. It was a stated exclusion -- "Those remain the author's
+    # job" -- and it stayed stale through TWO corrections because of that: a
+    # round found 11 of 24 cells wrong, the prose ranges were recomputed from a
+    # live run, the table was not, and the next round found 13 of 24. A number
+    # this document calls "the reading that answers T9's question" cannot be
+    # the one thing nothing checks. Stored to one decimal, which is how the
+    # README publishes it.
+    from bakeoff.measure import measure
+    t9 = measure()["readings"]["t9_by_rule"]
+    for design, arms_seen in t9.items():
+        for arm, reading in arms_seen.items():
+            fractions = reading["by_rule_fraction"]
+            for rule, value in fractions.items():
+                tokens[f"t9|{design}|{arm}|{rule}"] = round(value * 1000)
     return tokens
 
 
@@ -319,6 +336,44 @@ def token_problems(text, counts, problems, minimum=None):
             "lang/README.md: the language-card line is gone or reshaped, so its "
             "three counts are checked by nothing.")
 
+    # THE T9 TABLE, held to the same artifact. Percentages, so compared at the
+    # one decimal the README prints.
+    t9_seen = 0
+    in_t9 = False
+    for line in all_lines:
+        if line.startswith("| Design | Arm | T9-1"):
+            in_t9 = True
+            continue
+        if in_t9:
+            if not line.strip().startswith("|"):
+                break
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) < 6 or cells[0] in ("---", ""):
+                continue
+            design, arm = cells[0], cells[1]
+            for rule, cell in zip(("T9-1", "T9-2", "T9-3"), cells[2:5]):
+                want = counts.get(f"t9|{design}|{arm}|{rule}")
+                if want is None:
+                    continue
+                found = re.search(r"[\d.]+", cell)
+                if found is None:
+                    continue
+                if abs(float(found.group(0)) - want / 10.0) > 0.05:
+                    problems.append(
+                        f"lang/README.md: the T9 table publishes {cell} for "
+                        f"{design}/{arm}/{rule}, but the harness measures "
+                        f"{want / 10.0:.1f}%. This is the table the same "
+                        "document calls the reading that answers T9.")
+                    continue
+                rows_seen.add(("t9", design, arm))
+                t9_seen += 1
+                checked += 1
+    if minimum is None and t9_seen < MINIMUM_T9_CELLS:
+        problems.append(
+            f"lang/README.md: reconciled {t9_seen} T9 cell(s), below the floor "
+            f"of {MINIMUM_T9_CELLS}. This table was a stated exclusion and went "
+            "stale through two corrections while nothing looked at it.")
+
     floor = MINIMUM_DISTINCT_ROWS if minimum is None else minimum
     if len(rows_seen) < floor:
         problems.append(
@@ -385,7 +440,10 @@ def self_test():
              "| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n"
              "|---|---:|---:|---:|---:|---:|\n"
              "| candidate_a | 20 | 21 | 31 | 90 | 15/15 |\n"
-             "\nLanguage cards: candidate_a 90, candidate_b 91, starlark 92 tokens\n")
+             "\nLanguage cards: candidate_a 90, candidate_b 91, starlark 92 tokens\n"
+             "\n| Design | Arm | T9-1 library pins | T9-2 inference | T9-3 L9 flags | all |\n"
+             "|---|---|---:|---:|---:|---:|\n"
+             "| blinker-555 | candidate_a | 1.5% | 2.5% | 3.5% | 7.5% |\n")
     FAKE = {
         "blinker-555|candidate_a|explicit": 10,
         "blinker-555|candidate_a|inferred": 20,
@@ -404,6 +462,9 @@ def self_test():
         "card|candidate_a": 90,
         "card|candidate_b": 91,
         "card|starlark": 92,
+        "t9|blinker-555|candidate_a|T9-1": 15,
+        "t9|blinker-555|candidate_a|T9-2": 25,
+        "t9|blinker-555|candidate_a|T9-3": 35,
     }
 
     def probe(table, counts=FAKE):
@@ -439,6 +500,9 @@ def self_test():
         ("a missing language-card line is caught", any(
             "checked by nothing" in p for p in probe(
                 TABLE[:TABLE.index("\nLanguage cards:")]))),
+        ("a stale T9 cell is caught", any(
+            "the T9 table publishes" in p for p in probe(
+                TABLE.replace("| 1.5% | 2.5%", "| 9.9% | 2.5%")))),
         ("a backticked row is still read", any(
             "publishes" in p for p in probe(
                 TABLE.replace("| blinker-555 | candidate_a | 10 |",

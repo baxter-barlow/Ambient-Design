@@ -40,7 +40,7 @@ assertions:
     signal: v(out)
     kind: trig_targ            # one .meas: RISE=1 -> RISE=2, VAL=3.7 V, TD=2 s
     expected: 1.012 s
-    window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
+    window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.25 uA]; see design.md sec. 6
     measured: 1.01191 s
     verdict: PASS
 

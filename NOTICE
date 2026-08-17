@@ -46,14 +46,15 @@ corpus/bugs.yaml
     rather than papered over. An earlier revision said "see the Linear issue
     referenced in corpus/README.md"; that file references no such issue, so
     the claim that the gap was tracked rested on a pointer that does not
-    resolve. It is tracked under AMB-123's follow-ups; the corpus records a
+    resolve. It is NOT currently tracked in a dedicated issue -- two earlier revisions
+    claimed it was, against pointers that did not resolve. The corpus records a
     source URL per entry and no checksum or per-source licence determination,
     and that remains true.
 
 parts/examples/*.part.json
 
     Electrical values transcribed from manufacturer datasheets, with the
-    document, revision, table and page recorded per field in each record's
+    document, revision and table or section recorded per field in each record's
     `provenance` block. Individual numbers are facts and are not themselves
     copyrightable; the datasheets they were read from are not redistributed and
     are not included here. Each record declares a `license_class` describing

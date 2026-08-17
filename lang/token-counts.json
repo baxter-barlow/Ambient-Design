@@ -1,6 +1,6 @@
 {
   "_comment": "Generated. Regenerate deliberately with: python3 lang/tests/check_readme_numbers.py --write, on a machine with the optional tiktoken pin installed and its cache warm. lang/README.md is held to this file OFFLINE.",
-  "inputs_fingerprint": "sha256:3623621506c1402e0aed4741aa148a0d9b88615cf1c7e5876763bb1f424e0147",
+  "inputs_fingerprint": "sha256:2e453921acdd476e1c141fee0828dc68f410e201f4b68728f739ecbc8029c94f",
   "counts": {
     "blinker-555|candidate_a|explicit": 1344,
     "blinker-555|candidate_a|inferred": 993,
@@ -20,6 +20,24 @@
     "esp32s3-devboard|candidate_b|inferred": 5003,
     "esp32s3-devboard|candidate_b|inferred+columnar": 4160,
     "esp32s3-devboard|starlark|explicit": 7333,
-    "esp32s3-devboard|starlark|inferred": 5124
+    "esp32s3-devboard|starlark|inferred": 5124,
+    "t9|blinker-555|candidate_a|T9-1": 151,
+    "t9|blinker-555|candidate_a|T9-2": 77,
+    "t9|blinker-555|candidate_a|T9-3": 34,
+    "t9|blinker-555|candidate_b|T9-1": 143,
+    "t9|blinker-555|candidate_b|T9-2": 70,
+    "t9|blinker-555|candidate_b|T9-3": 25,
+    "t9|blinker-555|starlark|T9-1": 204,
+    "t9|blinker-555|starlark|T9-2": 49,
+    "t9|blinker-555|starlark|T9-3": 27,
+    "t9|esp32s3-devboard|candidate_a|T9-1": 173,
+    "t9|esp32s3-devboard|candidate_a|T9-2": 60,
+    "t9|esp32s3-devboard|candidate_a|T9-3": 29,
+    "t9|esp32s3-devboard|candidate_b|T9-1": 165,
+    "t9|esp32s3-devboard|candidate_b|T9-2": 58,
+    "t9|esp32s3-devboard|candidate_b|T9-3": 23,
+    "t9|esp32s3-devboard|starlark|T9-1": 233,
+    "t9|esp32s3-devboard|starlark|T9-2": 42,
+    "t9|esp32s3-devboard|starlark|T9-3": 26
   }
 }

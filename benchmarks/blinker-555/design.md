@@ -167,7 +167,11 @@ Reproduce with:
       print(candidate_b.render(load_model(Path('lang/examples/blinker-555.design.json')), \
                                'inferred+columnar'))"
 
-The top-level module, verbatim from that command:
+The first 20 lines of the top-level module from that command. It is 53 lines,
+so this is a truncation, not the whole rendering: the cut lands one line before
+a second constraint in the `timer` block and 32 lines before the two `assert`
+statements, which is where a reader would have seen the windows this section
+discusses.
 
 ```rhoform
 module Blinker555:
@@ -275,8 +279,8 @@ equations, so all three are now swept over the same joint corner set:
 
 | assertion | was | is |
 |---|---|---|
-| `osc_period` | 0.951 – 1.083 s | **0.951 – 1.083 s** |
-| `osc_frequency` | 0.923 – 1.052 Hz | **0.923 – 1.052 Hz** |
+| `osc_period` | 0.952 – 1.073 s | **0.951 – 1.083 s** |
+| `osc_frequency` | 0.932 – 1.051 Hz | **0.923 – 1.052 Hz** |
 | `duty_cycle_high` | 52.4 – 54.4 % | **53.3 – 55.8 %** |
 
 The period window was also rounded INWARD at both ends even at `Ib = 0`

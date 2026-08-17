@@ -165,5 +165,27 @@ fi
 [ "$md_count" -ge 5 ] || fail "counted $md_count root Markdown files; expected at least 5, so the enumeration did not run"
 [ "$json_count" -ge 50 ] || fail "counted $json_count JSON files under [$JSON_ROOTS]; expected at least 50, so the enumeration did not run"
 
+# Evidence transcripts that quote a gate's own summary line must quote the line
+# that gate prints TODAY. corpus/validation.log certified "22 in scope" while
+# the gate printed 21 -- the denominator moved 100 minutes after the file was
+# written, in a commit titled "loudly", and nothing read the file, so it
+# outlived the fix. Each pair is (evidence file, command whose summary it quotes).
+for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
+            "ir/validation.log:tests/ir/check-hashes.py"; do
+  evidence="$ROOT/${pair%%:*}"
+  command="$ROOT/${pair##*:}"
+  [ -f "$evidence" ] && [ -f "$command" ] || continue
+  fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
+  [ -n "$fresh" ] || continue
+  prefix=${fresh%%:*}
+  quoted=$(grep -m1 "^$prefix: PASS" "$evidence" || true)
+  if [ -n "$quoted" ] && [ "$quoted" != "$fresh" ]; then
+    printf 'FAIL: %s quotes a summary the gate no longer prints:\n' "${pair%%:*}" >&2
+    printf '  file: %s\n  now:  %s\n' "$quoted" "$fresh" >&2
+    printf 'An evidence transcript that disagrees with the gate it transcribes is not evidence.\n' >&2
+    exit 1
+  fi
+done
+
 printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml parsed, retired-name scan scanned, evidence files tracked).\n' \
   "$md_count" "$json_count" "$JSON_ROOTS"

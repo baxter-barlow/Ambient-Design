@@ -12,7 +12,7 @@ exit=0
 
 Command: python3 tests/corpus/check-classification.py
 corpus-classification: unverified: citation spaces ga, ga-excluded, nongoal, req, v2-deferred resolve against lists transcribed from Notion specifications, not against the documents themselves — this gate runs offline.
-corpus-classification: PASS: 61 entries classified exactly once, 22 in scope, every citation resolves, decision_hash matches, populations published.
+corpus-classification: PASS: 61 entries classified exactly once, 21 in scope, every citation resolves, decision_hash matches, populations published.
 exit=0
 
 === HISTORICAL RECORD, and a loss ===
