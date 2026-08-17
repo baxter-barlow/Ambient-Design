@@ -24,7 +24,7 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:27b5ef432ebed89157d7bb36649043f3595c7a0a02f46aa863f47ac26501250c
+  decision_hash: sha256:0f2e8fe8d6d32bb835ba185325ba272cc63427aee3e1890c638392af31f2289d
 
 entries:
 
@@ -150,6 +150,7 @@ entries:
   reason: d3-gap
   cites: ["req:T5", "d3:pins[].recommended.voltage"]
   gap_class: part-own-value
+  compound: single-class
   missing_path: series_resistance
   missing_fact: >-
     a series element's resistance as a checker-reliable field. The value is real and unit-carrying
@@ -182,6 +183,7 @@ entries:
   family: voltage-domain-crossing
   at_risk: >-
     reads a `voltage_domain` attribute the grammar makes optional, so a design under test that declares none silences the rule
+  at_risk_group: domain-attributes
   cites: ["req:T5", "syntax:net_attributes", "vocab:net_attribute.voltage_domain", "d3:pins[].role"]
   rationale: >-
     Purely a net assignment: the ESD array's `power_in` pin sits on the 3V3 LDO-output net while
@@ -194,6 +196,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role", "syntax:net_decl"]
   gap_class: companion-requirement
+  compound: single-class
   missing_path: pins[].requires
   missing_fact: >-
     the external companion network a part requires on a control pin (the 1-10 uF EN/reset
@@ -211,6 +214,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role", "vocab:pin_role.tri_state"]
   gap_class: pin-semantics
+  compound: single-class
   missing_path: pins[].gates
   missing_fact: >-
     which output pins a given output-enable pin gates, and its active polarity, so an OE strapped
@@ -226,6 +230,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: strap-semantics
+  compound: single-class
   missing_path: pins[].strap
   missing_fact: >-
     which pins are latched at reset as configuration straps, and the level each valid
@@ -241,6 +246,7 @@ entries:
   reason: d3-gap
   cites: ["vocab:net_attribute.voltage_domain", "d3:pins[].role", "nongoal:xy-coordinates"]
   gap_class: companion-requirement
+  gap_class_also: ["functional-class"]
   missing_path: pins[].requires
   missing_fact: >-
     the bus type a transceiver pin belongs to, the external termination that bus requires (count
@@ -260,6 +266,7 @@ entries:
   reason: d3-gap
   cites: ["syntax:constraint", "d3:pins[].role"]
   gap_class: bus-address
+  compound: single-class
   missing_path: pins[].bus_address
   missing_fact: a part's I2C slave address, both its fixed default and the range its address pins select
   rationale: >-
@@ -272,6 +279,11 @@ entries:
 - id: BUG-0018
   verdict: in-scope
   family: erc-pin-role
+  at_risk: >-
+    the corpus does not record whether these SDA/SCL pins are a dedicated I2C peripheral or
+    general-purpose GPIO; on the GPIO reading `bidirectional` is a defensible transcription and
+    the open-drain rule is silent, exactly as for BUG-0022
+  at_risk_group: gpio-roles
   cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
   rationale: >-
     The article's story is RC rise time, but catching by any static rule counts. The buggy
@@ -284,6 +296,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     in-scope on the L9b undeclared-single-pin-net leg only; the fix adds a pull resistor, so a T2 rule keying on "no driver" fires on both versions
+  at_risk_group: l9b-leg
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
   rationale: >-
     BOOT0 is left unconnected, so it either appears in no net or forms a single-pin net not
@@ -296,6 +309,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     both legs need directional roles on MCU UART pins that are defensibly transcribed `bidirectional`
+  at_risk_group: gpio-roles
   cites: ["req:T2", "vocab:pin_role.output", "vocab:pin_role.input", "d3:pins[].role"]
   rationale: >-
     Straight-through wiring produces two violations at once: the TX-TX net has two `output`
@@ -308,6 +322,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].abs_max.voltage", "syntax:pin_decl"]
   gap_class: internal-pull
+  compound: single-class
   missing_path: pins[].internal_pull
   missing_fact: >-
     whether a GPIO has an internal pull-up, its strength, and whether that path defeats the pin's
@@ -327,6 +342,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     the SCL pin is a general-purpose STM32 GPIO, and this corpus itself records that such pins transcribe as `bidirectional`; roled that way rather than `open_drain`, the missing-pull-up rule is silent
+  at_risk_group: gpio-roles
   cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
   rationale: >-
     The push-pull setting is firmware, but the schematic-level defect the fix addresses is an I2C
@@ -339,6 +355,7 @@ entries:
   family: current-budget
   at_risk: >-
     T10 fires only if the part record transcribes a transmit mode; D3 v0 has no pin-class mechanism and the example records populate only what the benchmarks use, so a record can inherit the designer's own omission
+  at_risk_group: part-record
   cites: ["req:T10", "d3:pins[].capability.source_current", "d3:modes[].draw"]
   rationale: >-
     T10 in its canonical shape, and the one corpus entry where it genuinely fires: the regulator
@@ -351,6 +368,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: strap-semantics
+  compound: single-class
   missing_path: pins[].strap
   missing_fact: >-
     which pins are latched at reset as configuration straps (GPIO45 selects VDD_SPI, GPIO46 boot
@@ -366,6 +384,7 @@ entries:
   family: abs-max-containment
   at_risk: >-
     the abs-max leg is independent, but the domain leg reads the optional `voltage_domain` attribute
+  at_risk_group: domain-attributes
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
     Two legs, and the second is unambiguous: the STM32's MOSI pin is not 5 V tolerant, so a 5 V
@@ -378,6 +397,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     same L9b-only shape as BUG-0019
+  at_risk_group: l9b-leg
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
   rationale: >-
     Same shape as BUG-0019 and classified identically: BOOT0 shipped unconnected across a
@@ -390,6 +410,7 @@ entries:
   family: abs-max-containment
   at_risk: >-
     reads the optional `voltage_domain` attribute to know the net is 5 V
+  at_risk_group: domain-attributes
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
     The textbook case. A net declared `voltage_domain="5V"` carries the STM32's VDD pin, whose
@@ -401,6 +422,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: strap-semantics
+  compound: single-class
   missing_path: pins[].strap
   missing_fact: >-
     that GPIO15 is latched at reset as a boot-mode strap requiring a low level, and that the level
@@ -416,6 +438,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     FT232RL TEST is a reserved pin, and `nc` is a defensible transcription — the one role a checker exempts from both the undriven-input and single-pin-net rules
+  at_risk_group: part-record
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
   rationale: >-
     The FT232RL's TEST pin must be tied to GND and the schematic leaves it uncommitted. That is
@@ -428,6 +451,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     depends on the exposed pad being transcribed with a supply role AND `package.thermal_pad` being set; either omission silences the rule
+  at_risk_group: part-record
   cites: ["req:T2", "ga:GA-16", "d3:pins[].role", "d3:package.thermal_pad", "syntax:isolated_decl"]
   rationale: >-
     The exposed pad is pin 69, a ground connection, and it was left unconnected. `package.thermal_pad`
@@ -442,6 +466,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role"]
   gap_class: strap-semantics
+  compound: single-class
   missing_path: pins[].strap
   missing_fact: >-
     which pins are latched at reset as configuration straps, and the level each valid
@@ -458,6 +483,7 @@ entries:
   verdict: out-of-scope
   reason: d3-gap
   cites: ["d3:pins[].role"]
+  compound: single-class
   missing_path: pins[].internal_pull
   gap_class: internal-pull
   missing_fact: a pin's internal pull-up or pull-down presence and strength
@@ -502,6 +528,7 @@ entries:
   reason: d3-gap
   cites: ["syntax:argument", "d3:pins[].role"]
   gap_class: companion-requirement
+  compound: single-class
   missing_path: pins[].requires
   missing_fact: >-
     the external companion component value a part requires on a given pin, against which an
@@ -563,6 +590,7 @@ entries:
   family: voltage-domain-crossing
   at_risk: >-
     same optional-attribute dependency as BUG-0012; these two are the whole `voltage-domain-crossing` family
+  at_risk_group: domain-attributes
   cites: ["req:T5", "vocab:net_attribute.voltage_domain", "syntax:net_attributes"]
   rationale: >-
     Connecting two power interfaces whose declared voltage ranges do not overlap is T5's
@@ -590,6 +618,7 @@ entries:
   family: net-topology
   at_risk: >-
     in-scope on a generic "power_in pin with no capacitor to ground" rule; AC2 also demands zero spurious errors on the benchmarks, and narrowing the rule for precision loses this
+  at_risk_group: decoupling-rule
   cites: ["d3:pins[].role", "vocab:pin_role.power_in", "syntax:net_decl"]
   rationale: >-
     The capacitor is wholly absent, so the difference is a membership fact rather than a waveform,
@@ -690,7 +719,8 @@ entries:
   verdict: out-of-scope
   reason: d3-gap
   cites: ["d3:pins[].role", "vocab:pin_role.power_out"]
-  gap_class: functional-class
+  gap_class: companion-requirement
+  gap_class_also: ["pin-semantics"]
   missing_path: function
   missing_fact: >-
     a part's supply-conditional external-wiring requirement (V3 must tie to VCC at 3.3 V, cap-only
@@ -710,6 +740,7 @@ entries:
   reason: d3-gap
   cites: ["syntax:argument", "d3:pins[].role"]
   gap_class: companion-requirement
+  compound: single-class
   missing_path: pins[].requires
   missing_fact: >-
     the termination-resistance window an interface role requires of external companion components
@@ -740,6 +771,7 @@ entries:
   reason: d3-gap
   cites: ["syntax:constraint", "nongoal:xy-coordinates"]
   gap_class: part-own-value
+  compound: single-class
   missing_path: load_capacitance
   missing_fact: >-
     a crystal's specified load capacitance CL as a checker-reliable field. It lives in
@@ -760,6 +792,7 @@ entries:
   reason: d3-gap
   cites: []
   gap_class: companion-requirement
+  compound: single-class
   missing_path: pins[].requires
   missing_fact: >-
     the minimum output capacitance and dielectric a regulator requires of its external
@@ -780,6 +813,7 @@ entries:
   family: abs-max-containment
   at_risk: >-
     the abs-max bound is relative and its qualifying condition lives in `conditions`, an open map this gate now formally declares unreadable
+  at_risk_group: part-record
   cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
   rationale: >-
     The VBUS abs-max is stated relative to the supply (VDD + 3.6 V with VDD unpowered), and D3's
@@ -793,6 +827,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     the floating-input leg is L9b-only like BUG-0019, but the abs-max leg is independent of it, which makes this the least exposed of the flagged entries
+  at_risk_group: l9b-leg
   cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl", "d3:pins[].abs_max.voltage"]
   rationale: >-
     Two independent static routes. The TL072's non-inverting `input` pins appear in no net, which
@@ -805,6 +840,7 @@ entries:
   family: net-topology
   at_risk: >-
     same generic decoupling rule as BUG-0042, and lost with it
+  at_risk_group: decoupling-rule
   cites: ["d3:pins[].role", "vocab:pin_role.power_in", "syntax:net_decl"]
   rationale: >-
     No decoupling capacitor across pins 1-8 at all, so the difference is membership rather than
@@ -817,6 +853,7 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].role", "vocab:pin_role.input"]
   gap_class: pin-semantics
+  compound: single-class
   missing_path: pins[].polarity
   missing_fact: >-
     a comparator or amplifier input pin's polarity — which of a part's `input` pins is inverting
@@ -846,6 +883,7 @@ entries:
   family: erc-pin-role
   at_risk: >-
     in-scope only if AREF is transcribed with a driving role; recorded `passive`, the contention rule goes silent
+  at_risk_group: part-record
   cites: ["req:T2", "d3:pins[].role", "vocab:pin_role.power_out"]
   rationale: >-
     The buggy design puts two low-impedance drivers on one net — the board's 3V3 rail and the
