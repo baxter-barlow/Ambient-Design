@@ -1,0 +1,872 @@
+# AC2 in/out-of-scope classification, frozen (AMB-36).
+#
+# AC2: "each classified at freeze time — before checker tuning — as in-scope
+# (static-tier domain, expressible in the v1 DSL) or out-of-scope, both
+# populations published. Gate: static tier catches >=90% of in-scope bugs."
+#
+# The rubric, the two stated interpretations it rests on, and the reason-code
+# definitions are in corpus/README.md. Do not read a verdict without them: the
+# codes are narrow on purpose, and `out-of-scope` does NOT mean Rhoform misses
+# the bug — for the `dynamic-vocabulary` entries the ngspice tier is the tier
+# that would catch them. Counts live in the generated block in the README, not
+# here, so that no number in this header can go stale.
+#
+# `decision_hash` covers id, verdict, key, gap_class and missing_path — the
+# decisions and the falsifiable claims behind them — but not this prose. Changing a
+# verdict moves it; tests/corpus/check-classification.py fails until the change
+# is made deliberately with --write. That is the whole point: AMB-61 must not
+# be able to move its own denominator quietly.
+
+classification:
+  issue: AMB-36
+  requirement: AC2
+  roadmap_id: R8b
+  frozen: '2026-08-17'
+  corpus: corpus/bugs.yaml
+  corpus_entry_count: 61
+  decision_hash: sha256:6fd690e4707efc7944b0bf72ed211d53bf18ce3445d7cf43ef55f997348ed640
+
+entries:
+
+# --- BUG-0001 .. BUG-0013 -------------------------------------------------
+
+- id: BUG-0001
+  verdict: out-of-scope
+  reason: dynamic-vocabulary
+  cites: ["v2:ripple", "v2:overshoot"]
+  rationale: >-
+    What separates this from BUG-0023 is the shape of the fix, which both entries state. Here
+    "adding 470 uF bulk capacitance eliminated the brownouts" — the supply was adequate and the
+    transient was not, so the discriminator is rail sag during a sub-millisecond surge, which is
+    a waveform. In BUG-0023 "a 100uF cap alone did not save the undersized supply", so the
+    capability-against-draw comparison is the thing that fires. An earlier draft argued this from
+    a peak current figure in this repository's ESP32-S3 record; that was wrong twice over — the
+    entry is an original ESP32, and the schema states `peak` is an unguaranteed observation that
+    must not be promoted to a limit.
+
+- id: BUG-0002
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["syntax:flag"]
+  gap_class: functional-class
+  missing_path: function
+  missing_fact: >-
+    a part's functional class — that this diode is reverse-polarity protection — and whether a
+    power inlet requires a blocking element against a foreseeable reverse connection
+  rationale: >-
+    A draft flipped this to in-scope, reasoning that a `dnp` series element leaves the downstream
+    net with no source. `ir/netlist-ir.schema.json` refutes that in terms: "a dnp component is
+    still present in the netlist and schematic". Connectivity is identical with the flag set or
+    clear, so the buggy and corrected designs are the same netlist and no `erc-pin-role` rule can
+    separate them — the series-versus-shunt question the entry leaves open never even arises.
+    What is left is knowing that this part is protection and that the inlet needs it.
+
+- id: BUG-0003
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role", "syntax:net_decl"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    per-pin required external termination (an independent 5.1k Rd on each of CC1 and CC2), and
+    the related prohibition on commoning two named pins of one part
+  rationale: >-
+    Both netlists are trivially writable; the buggy one puts j1.cc1, j1.cc2 and one resistor on
+    a single net. CC pins carry an ordinary pin_role, so `erc-pin-role` sees no conflict, and
+    the net-topology companion-element rule has no field to source the requirement from. The
+    "part with both pins on one net" rule does not generalise to two of many pins on a
+    receptacle without firing on correct designs.
+
+- id: BUG-0004
+  verdict: out-of-scope
+  reason: v1-non-goal
+  cites: ["nongoal:thermal-analysis"]
+  rationale: >-
+    2.6 W of junction dissipation with no heatsink is the section-3 non-goal "thermal/EMI/
+    mechanical analysis" exactly. Electrically the buggy design sits inside every
+    checker-reliable window — 13 V in, 5 V out, ~200 mA are all within the 7805's ratings — so
+    no interval or budget rule separates it from the heatsinked fix.
+
+- id: BUG-0005
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: []
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the minimum output-capacitor ESR a regulator requires of its external compensation capacitor.
+    The entry gives the bench figures that bound it — a 0.17 ohm tantalum, or 50-100 milliohm of
+    added series resistance, restored a damped response
+  rationale: >-
+    The entry's evidence is qualitative — the datasheet "says it isn't stable with low-ESR
+    capacitors" — so the deciding fact is a categorical companion qualification, not a window.
+    That still puts it at step 6 rather than step 4: the requirement is published, so a field
+    carrying it decides the design without a run. Contrast BUG-0060, where no published
+    requirement exists and the dynamic code is correct. Same family as BUG-0033 and BUG-0053,
+    which carry a window and a minimum respectively.
+
+- id: BUG-0006
+  verdict: out-of-scope
+  reason: dynamic-vocabulary
+  cites: ["v2:overshoot", "v2:ripple"]
+  rationale: >-
+    The discriminator is rail undershoot during servo reservoir-cap inrush at hot-plug, a
+    transient excursion V2's v1 vocabulary measures. Inrush is not a mode — it appears in no
+    `modes[].draw` entry — so T10 cannot separate the buggy rail from the precharge-resistor
+    and P-FET fix.
+
+- id: BUG-0007
+  verdict: out-of-scope
+  reason: v1-non-goal
+  cites: ["nongoal:thermal-analysis"]
+  rationale: >-
+    Deciding it means computing dissipation against a package and ambient thermal limit, the
+    section-3 non-goal. The static inputs carry no power quantity at all: `pins[].abs_max` holds
+    only voltage and current, and part-level power_dissipation and theta_ja sit in the open
+    `ratings.*` maps a checker may not depend on. No pin voltage or current is out of window,
+    so abs-max containment finds nothing.
+
+- id: BUG-0008
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:modes[].draw", "d3:pins[].role"]
+  gap_class: functional-class
+  missing_path: function
+  missing_fact: >-
+    functional part class (is this instance an undervoltage cutoff?), a cell's minimum discharge
+    voltage, and any notion of energy over time — `modes[].draw` is instantaneous current, not a
+    duty-weighted budget
+  rationale: >-
+    The check would be topological and instant — "the pack net carries no undervoltage-disconnect
+    element" — but nothing tells a checker which instance is a cutoff part. Off-state drain is
+    also not a V2 measurement: the v1 dynamic vocabulary has no state-of-charge or runtime kind,
+    so the dynamic tier does not rescue it either.
+  residual_kind: fact-compound
+  residual_blocker: >-
+    functional class is one of three facts the check needs — a cell minimum discharge voltage and a notion of energy over time are the others — so adding `function` alone leaves it undecidable
+
+- id: BUG-0010
+  verdict: out-of-scope
+  reason: d3-not-enumerated
+  cites: ["req:T5", "d3:pins[].recommended.voltage"]
+  missing_path: series_resistance
+  missing_fact: >-
+    a series element's resistance as a checker-reliable field. The value is real and unit-carrying
+    in `parameters`, but only behind a conventional key spelling, so a check keyed on it is keyed
+    on a name nothing freezes
+  rationale: >-
+    A draft flipped this to in-scope on the grounds that a polyfuse's resistance is the part's own
+    value rather than a requirement placed on a companion. That distinction is real but
+    ORTHOGONAL to checker-reliability: an own value behind an unfrozen key is still unreadable,
+    which is why the flipped entry could cite no field for the resistance at all. Two further
+    problems settle it — the entry's failure is a DEGRADED fuse measured "over 1 Ohm", not a
+    design-time value, and at nominal resistance the drop is inside spec, so the check as
+    described would pass the buggy board.
+  carried_at: parameters
+  residual_blocker: >-
+    the failure is a DEGRADED fuse measured over 1 ohm; at nominal resistance the drop is inside spec, so no design-time check separates the two boards
+  residual_kind: not-design-time
+
+- id: BUG-0011
+  verdict: out-of-scope
+  reason: dynamic-vocabulary
+  cites: ["v2:ripple", "v2:oscillation-frequency"]
+  rationale: >-
+    Telling an undersized 1 uH inductor from a correct one requires observing discontinuous
+    conduction and the resulting undamped LC ringing. Netlist, declared domains and every closed
+    D3 field are identical across the two inductor values apart from the declared inductance
+    itself, so no static rule separates them. v1 catches this in the ngspice tier.
+
+- id: BUG-0012
+  verdict: in-scope
+  family: voltage-domain-crossing
+  cites: ["req:T5", "syntax:net_attributes", "vocab:net_attribute.voltage_domain", "d3:pins[].role"]
+  rationale: >-
+    Purely a net assignment: the ESD array's `power_in` pin sits on the 3V3 LDO-output net while
+    the I/O pins it protects sit on nets declared `voltage_domain="5V"`. That is T5's undeclared
+    crossing, decided from topology plus declared attributes. `pins[].abs_max.voltage`, whose
+    bounds may be stated relative to a rail, gives abs-max containment as a second static route.
+
+- id: BUG-0013
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role", "syntax:net_decl"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the external companion network a part requires on a control pin (the 1-10 uF EN/reset
+    capacitor, and the reset-release timing it exists to produce)
+  rationale: >-
+    Not the floating-strap case: EN is driven through the reset net, so the undriven-input rule
+    never fires and the net's member count is unremarkable. Catching it needs the part's own
+    requirement for an EN capacitor. The dynamic tier does not help — the closed measurement_kind
+    list has no boot-mode or reset-level kind.
+
+# --- BUG-0014 .. BUG-0030 -------------------------------------------------
+
+- id: BUG-0014
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role", "vocab:pin_role.tri_state"]
+  gap_class: pin-semantics
+  missing_path: pins[].gates
+  missing_fact: >-
+    which output pins a given output-enable pin gates, and its active polarity, so an OE strapped
+    to ground can be told from an OE driven by chip-select
+  rationale: >-
+    The buffer's OE is an ordinary endpoint on the ground net, so the design is writable and no
+    simulation is needed. D3 gives the role of each pin but no relation between a control pin and
+    the outputs whose drive state it governs. Both variants present a `tri_state` member on MISO,
+    so the output-contention rule cannot separate them.
+
+- id: BUG-0015
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    which pins are latched at reset as configuration straps, and the level each valid
+    configuration requires
+  rationale: >-
+    The strap is driven, not floating, so the generic undriven-input rule never fires. Deciding
+    it needs the fact that GPIO12/MTDI is sampled at reset to select VDD_SDIO. There is no
+    fallback through an assertion either: the closed measurement_kind vocabulary has no logic
+    level at reset.
+
+- id: BUG-0016
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["vocab:net_attribute.voltage_domain", "d3:pins[].role", "nongoal:xy-coordinates"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the bus type a transceiver pin belongs to, the external termination that bus requires (count
+    and value), and whether a part integrates its own terminator
+  rationale: >-
+    A counting rule would need a source for the required count, and there is none: the
+    net_attribute vocabulary is closed to voltage_domain and ground_domain, so a design cannot
+    declare "this is a CAN bus". The ECU's built-in terminator is equally unrepresentable, so the
+    checker cannot even count correctly. The "at the ends" half of the root cause is layout on
+    top of that.
+  residual_kind: v1-non-goal
+  residual_blocker: >-
+    the termination COUNT becomes checkable, but the "at the ends" half of the root cause is bus ordering on the board, which the DSL holds no coordinates for
+
+- id: BUG-0017
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["syntax:constraint", "d3:pins[].role"]
+  gap_class: bus-address
+  missing_path: pins[].bus_address
+  missing_fact: a part's I2C slave address, both its fixed default and the range its address pins select
+  rationale: >-
+    A design *may* write `i2c_address = "0x68"` as a constraint, but the constraint namespace is
+    free vocabulary, so a checker keying on that spelling depends on an unfrozen name. More
+    decisively the buggy design is two pinned picks with no address written anywhere — a designer
+    who had noticed would not have shipped it — so separating it from the corrected design means
+    reading each resolved part's default address.
+
+- id: BUG-0018
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
+  rationale: >-
+    The article's story is RC rise time, but catching by any static rule counts. The buggy
+    schematic has no external pull-up at all on SDA/SCL, which is the family's "open-drain net
+    with no pull-up" case, read from `pins[].role` plus net membership. The internal pull-up never
+    appears in the netlist, so its weakness is not the fact the check depends on.
+
+- id: BUG-0019
+  verdict: in-scope
+  family: erc-pin-role
+  at_risk: >-
+    in-scope on the L9b undeclared-single-pin-net leg only; the fix adds a pull resistor, so a T2 rule keying on "no driver" fires on both versions
+  cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
+  rationale: >-
+    BOOT0 is left unconnected, so it either appears in no net or forms a single-pin net not
+    written with `isolated`. L9b's declared-single-pin-net rule exists precisely so the undeclared
+    case is a violation. No strap semantics are needed — an input-role pin with no driver is
+    flagged whatever the pin means.
+
+- id: BUG-0020
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "vocab:pin_role.output", "vocab:pin_role.input", "d3:pins[].role"]
+  rationale: >-
+    Straight-through wiring produces two violations at once: the TX-TX net has two `output`
+    members (contention) and the RX-RX net has two `input` members with no driver. Both read only
+    the closed PinRole enum and net membership, and the corrected crossover puts exactly one
+    output against one input on each net.
+
+- id: BUG-0021
+  verdict: out-of-scope
+  reason: d3-not-enumerated
+  cites: ["d3:pins[].abs_max.voltage", "syntax:pin_decl"]
+  missing_path: pins[].internal_pull
+  missing_fact: >-
+    whether a GPIO has an internal pull-up, its strength, and whether that path defeats the pin's
+    documented 5 V tolerance
+  rationale: >-
+    The buggy and corrected artifacts are the SAME schematic — 5 V pull-ups and an STM32 in both —
+    differing only in a pin-initialisation register value, so no static rule can separate them.
+    Whether the pin is 5 V-tolerant or not, the rule behaves identically on both. `pin_decl` is a
+    name and a closed-vocabulary role with no configuration attribute, so the clamping path cannot
+    be declared either.
+  carried_at: pins[].characteristics
+  residual_blocker: >-
+    the buggy and corrected artifacts are the same schematic, differing only in a pin-initialisation register value
+  residual_kind: designs-identical
+
+- id: BUG-0022
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
+  rationale: >-
+    The push-pull setting is firmware, but the schematic-level defect the fix addresses is an I2C
+    net with omitted external pull-ups. The peripheral forces open-drain regardless of the
+    register — the source's own diagnosis — so the pin's D3 role is `open_drain` and the rule
+    fires on the netlist alone, with no simulated rise time and no layout fact.
+
+- id: BUG-0023
+  verdict: in-scope
+  family: current-budget
+  at_risk: >-
+    T10 fires only if the part record transcribes a transmit mode; D3 v0 has no pin-class mechanism and the example records populate only what the benchmarks use, so a record can inherit the designer's own omission
+  cites: ["req:T10", "d3:pins[].capability.source_current", "d3:modes[].draw"]
+  rationale: >-
+    T10 in its canonical shape, and the one corpus entry where it genuinely fires: the regulator
+    was sized to a measured ~14 mA average against a documented transmit mode an order of
+    magnitude higher, so summing `modes[].draw` per domain against `capability` separates buggy
+    from corrected by interval arithmetic. BUG-0001 is the near-identical case where it does not.
+
+- id: BUG-0024
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    which pins are latched at reset as configuration straps (GPIO45 selects VDD_SPI, GPIO46 boot
+    mode), and the level each requires
+  rationale: >-
+    Both strap pins are pulled high by peripheral nets, so the pins are driven and the topology —
+    a pull-up plus a peripheral connection — is ordinary and legal. Only reset-time strap semantics
+    separate this from a correct board, and `pins[].role` reports these as plain bidirectional
+    GPIO.
+
+- id: BUG-0025
+  verdict: in-scope
+  family: abs-max-containment
+  cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
+  rationale: >-
+    Two legs, and the second is unambiguous: the STM32's MOSI pin is not 5 V tolerant, so a 5 V
+    expander net against `pins[].abs_max.voltage` is direct interval containment. The VIH-shortfall
+    leg is weaker — a logic threshold is not what `PinLimits` holds — but one static rule
+    separating buggy from corrected is enough.
+
+- id: BUG-0026
+  verdict: in-scope
+  family: erc-pin-role
+  at_risk: >-
+    same L9b-only shape as BUG-0019
+  cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
+  rationale: >-
+    Same shape as BUG-0019 and classified identically: BOOT0 shipped unconnected across a
+    production batch. The undriven-input and undeclared-single-pin-net rules both fire from
+    topology plus role. That the pin is latched before any code runs is what makes it
+    unrecoverable in firmware, and is exactly why a static catch is the only one available.
+
+- id: BUG-0027
+  verdict: in-scope
+  family: abs-max-containment
+  cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
+  rationale: >-
+    The textbook case. A net declared `voltage_domain="5V"` carries the STM32's VDD pin, whose
+    `abs_max.voltage` is about 4.0 V; containment fails immediately and the corrected design
+    interposes a regulator. Decided from one declared attribute and one closed D3 field.
+
+- id: BUG-0028
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    that GPIO15 is latched at reset as a boot-mode strap requiring a low level, and that the level
+    a level-converter output presents at reset is part of that determination
+  rationale: >-
+    The display's level converter drives GPIO15 high at reset, overriding the weak internal
+    pull-down. The pin is driven, so no generic rule fires, and both fixes named in the source —
+    a 2.4k pull-down, or moving CS to another GPIO — are only recognisable as fixes if the strap
+    requirement is known.
+
+- id: BUG-0029
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
+  rationale: >-
+    The FT232RL's TEST pin must be tied to GND and the schematic leaves it uncommitted. That is
+    an input-role pin on no net, caught by the undriven-input and undeclared-single-pin-net rules
+    without knowing what TEST does. The fix — soldering pin 26 to pin 25 — is exactly the edit
+    that clears the diagnostic.
+
+- id: BUG-0030
+  verdict: in-scope
+  family: erc-pin-role
+  at_risk: >-
+    depends on the exposed pad being transcribed with a supply role AND `package.thermal_pad` being set; either omission silences the rule
+  cites: ["req:T2", "ga:GA-16", "d3:pins[].role", "d3:package.thermal_pad", "syntax:isolated_decl"]
+  rationale: >-
+    The exposed pad is pin 69, a ground connection, and it was left unconnected. `package.thermal_pad`
+    and the pad's `power_in` role are both checker-reliable, so a supply-role pin on no net is
+    flagged from topology alone. This is the kind of omission that forced a respin and that a
+    single ERC rule removes.
+
+# --- BUG-0031 .. BUG-0046 -------------------------------------------------
+
+- id: BUG-0031
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    which pins are latched at reset as configuration straps, and the level each valid
+    configuration requires
+  rationale: >-
+    The independent classifier called this in-scope as a floating strap, and the source re-check
+    performed for this issue overturns it. Espressif's boot-mode table states MTDI "has internal
+    pull-down, so unconnected = Low = 3.3V" — the correct level. An unconnected MTDI therefore
+    works, so "could not guarantee low" requires something on the net able to drive it high,
+    which is the driven-strap case, not the floating one. Recorded explicitly because this
+    verdict shrinks the in-scope population and so makes AMB-61's gate easier.
+
+- id: BUG-0032
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  missing_path: pins[].internal_pull
+  gap_class: internal-pull
+  missing_fact: a pin's internal pull-up or pull-down presence and strength
+  rationale: >-
+    A 100K external pull-down was defeated by an internal pull-up that the vendor never
+    documented. Both the buggy and bodged designs are ordinary netlists differing only in resistor
+    value. Worth stating plainly: even with the field, this particular bug stays uncatchable,
+    because the datasheet did not carry the fact either — closing the D3 gap is necessary here
+    but not sufficient.
+  residual_blocker: >-
+    the internal pull-up was undocumented, so no schema field would have carried it either
+  residual_kind: fact-undocumented
+
+- id: BUG-0033
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: []
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the output-capacitor ESR window a regulator requires of its external compensation capacitor
+    (LM1117: 0.3 to 22 ohm)
+  rationale: >-
+    The datasheet states a two-sided numeric window, so with the field this is interval
+    containment and nothing more — instant, no simulation. The output capacitor is present in
+    both designs, so the net-topology presence rule cannot rescue it; only its ESR class differs.
+    Classified identically to BUG-0005 and BUG-0053.
+
+- id: BUG-0034
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl"]
+  rationale: >-
+    Classified against the corrected entry — the source re-check found the original root cause
+    stated backwards, and a check derived from the old wording would not have caught it. What
+    actually happened is that an active-high EN was left unconnected, so the part's internal
+    pull-down held it off. An `input`-role pin on no net is the undriven-input and
+    undeclared-single-pin-net catch, with no knowledge of internal pulls required.
+
+- id: BUG-0035
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["syntax:argument", "d3:pins[].role"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the external companion component value a part requires on a given pin, against which an
+    authored 22nF could be checked and rejected
+  rationale: >-
+    Buggy and corrected differ only in a declared capacitance. Dimensional analysis passes —
+    farads either way — so T3/T4 see nothing; only a part-imposed required value would separate
+    them. Note the entry also carries an unresolved question about whether the wrong value was in
+    the schematic at all or only in the parts fitted; on the assembly reading it fails the
+    corpus's own inclusion rule 3. Out-of-scope on either reading, so the denominator is
+    unaffected.
+
+- id: BUG-0036
+  verdict: in-scope
+  family: net-topology
+  cites: ["syntax:net_decl", "syntax:endpoint"]
+  rationale: >-
+    A two-pin part with both endpoints on one net is shorted out and can never do anything. This
+    is decidable from the netlist alone with no part data whatsoever — the purest member of the
+    family — and it is the exact check SKiDL's ERC was missing. The rule is sound for
+    two-terminal parts specifically; generalising it to any two pins of any part would fire on
+    correct designs, which is why BUG-0043 does not get rescued by it.
+
+- id: BUG-0037
+  verdict: out-of-scope
+  reason: not-expressible
+  cites: ["syntax:instance_decl", "syntax:endpoint"]
+  rationale: >-
+    SKiDL let a part *template* be wired into a circuit. Rhoform's grammar forbids the state:
+    `instance_decl` requires `new`, and an `endpoint` addresses a port or an instance pin, so
+    there is no template to connect and no invalid netlist to produce. This removes a bug the
+    static tier would otherwise have got for free, which makes the AC2 gate marginally harder,
+    not easier — but AC2's in-scope test is conjunctive and this design is not expressible.
+
+- id: BUG-0038
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "vocab:pin_role.open_drain", "d3:pins[].role"]
+  rationale: >-
+    atopile added a `requires_pulls` check for exactly this. In Rhoform it is not a new rule at
+    all: every driver on the net is `open_drain`, nothing pulls the line up, so the net can never
+    reach a high level. Read from the closed PinRole enum plus net membership.
+
+- id: BUG-0039
+  verdict: out-of-scope
+  reason: not-expressible
+  cites: ["syntax:net_decl", "syntax:module_def"]
+  rationale: >-
+    The defect is in atopile's own pass ordering — `attach_net_names` runs after ERC, so the
+    collision check never sees ato-assigned names. There is no user design here to classify. In
+    Rhoform a net's name is its declaration inside `module_def` scope, so two distinct nets cannot
+    be merged into one by a later naming pass; the failure mode has no representation.
+
+- id: BUG-0040
+  verdict: in-scope
+  family: voltage-domain-crossing
+  cites: ["req:T5", "vocab:net_attribute.voltage_domain", "syntax:net_attributes"]
+  rationale: >-
+    Connecting two power interfaces whose declared voltage ranges do not overlap is T5's
+    undeclared crossing verbatim, and the atopile PR that added a solver-backed check for it is
+    direct prior art. Decided from declared `voltage_domain` attributes plus topology, with no
+    part data needed.
+
+- id: BUG-0041
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["req:D1", "syntax:constraint"]
+  gap_class: bus-address
+  missing_path: pins[].bus_address
+  missing_fact: >-
+    the bus address a part presents as a function of its address-strap pin state
+  rationale: >-
+    Classified with BUG-0017 for consistency, since the blocking fact is the same. In the
+    conflicting design every address pin is properly tied, so the netlist is ERC-clean and no
+    generic rule fires; separating buggy from corrected needs the address itself. The
+    "unresolved addressor" half of the entry describes a state of atopile's solver object model
+    that Rhoform has no analogue for.
+
+- id: BUG-0042
+  verdict: in-scope
+  family: net-topology
+  at_risk: >-
+    in-scope on a generic "power_in pin with no capacitor to ground" rule; AC2 also demands zero spurious errors on the benchmarks, and narrowing the rule for precision loses this
+  cites: ["d3:pins[].role", "vocab:pin_role.power_in", "syntax:net_decl"]
+  rationale: >-
+    The capacitor is wholly absent, so the difference is a membership fact rather than a waveform,
+    and the rule is generic over `power_in` pins — a supply net carrying a power_in pin with no
+    capacitor returning to ground — so no part-specific "requires decoupling" field is needed.
+    Flagged as the in-scope entry most likely to strain AC2's zero-spurious-errors clause; see
+    the tuning risk noted in corpus/README.md.
+
+- id: BUG-0043
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["req:D1", "d3:pins[].role"]
+  gap_class: functional-class
+  missing_path: function
+  missing_fact: >-
+    functional part class (is this the adjustable or the fixed-output variant?) and the feedback
+    network an adjustable regulator requires of its external components
+  rationale: >-
+    The tempting rescue is net-topology's shorted-part rule, since FB and VOUT share a net. It
+    fails on scope: that rule covers the two-terminal case, and generalising it to any two pins of
+    any part would flag the legitimate fixed-output RT6150B33, whose FB correctly ties to VOUT —
+    the very part this design was copied from. FB as an `input` fed by a `power_out` net is
+    driven, so erc-pin-role finds nothing either.
+
+- id: BUG-0044
+  verdict: in-scope
+  family: abs-max-containment
+  cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:pin_role.power_in"]
+  rationale: >-
+    The op-amp's V+ and V- supply pins are swapped, so each `power_in` pin sits on a rail outside
+    its `abs_max.voltage` window — containment fails on both, and a negative supply on the
+    positive pin is about as unambiguous as interval arithmetic gets. The source notes no ERC was
+    possible across the two disconnected tools used, which is precisely the gap a single
+    type-checked netlist closes.
+
+- id: BUG-0045
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    which pin carries which strap function, so that a pull-up on IO15 can be told from the one
+    the design meant to place on MTDI/IO12
+  rationale: >-
+    Both boards are electrically ordinary: a pull-up on a GPIO. The defect is that it is on the
+    wrong GPIO, and only per-pin strap-function semantics distinguish IO15 (which silences ROM
+    boot messages) from IO12 (which selects VDD_SDIO). Source re-checked for this issue and the
+    root cause confirmed verbatim.
+
+- id: BUG-0046
+  verdict: in-scope
+  family: erc-pin-role
+  cites: ["req:T2", "req:L9b", "syntax:isolated_decl", "d3:pins[].role"]
+  rationale: >-
+    A typo'd net label leaves an input pin alone on its own net. L9b's `isolated_decl` exists so
+    the intentional single-pin net is *declared*, which is what makes the undeclared one an error
+    by construction rather than a heuristic. That the KiCad 6 regression stopped reporting this
+    is the argument for owning the check rather than delegating it to V8's ERC smoke gate.
+
+# --- BUG-0047 .. BUG-0062 -------------------------------------------------
+
+- id: BUG-0047
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the erratum-mandated external pull a part requires (RP2350-E9: a pull-down of 8.2k or less on
+    every affected input). The internal pull characteristic is secondary: what the schema cannot
+    say is that an external pull is required at all
+  rationale: >-
+    The errata'd pad behaves as a bus-hold and latches at ~2.1 V. The generic undriven-input rule
+    does not reach it, and not because the corrected net looks the same — it differs by a
+    resistor — but because these inputs are driven by buttons and buses in both designs, so
+    neither net is undriven or single-pin. What a plain `input` role does not imply, unlike
+    `open_drain`, is that an external pull is required at all; that implication is the fact the
+    erratum supplies and the schema does not. No ngspice model reproduces an errata'd pad either.
+
+- id: BUG-0048
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["syntax:argument", "d3:pins[].role"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the pull-up or termination resistance a standard interface requires of an external companion
+    component (1.5k on USB D+ for full-speed detection)
+  rationale: >-
+    The pull-up is present in both designs; only its value is wrong, so the presence rule passes
+    on the buggy board. Intent cannot be declared as a fallback either: the closed
+    measurement_kind vocabulary has no resistance kind, so `assert ... static resistance(...)` is
+    not writable and there is nothing for dimension-interval containment to check against.
+
+- id: BUG-0049
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role", "vocab:pin_role.power_out"]
+  gap_class: functional-class
+  missing_path: function
+  missing_fact: >-
+    a part's supply-conditional external-wiring requirement (V3 must tie to VCC at 3.3 V, cap-only
+    at 5 V), including a pin whose effective role changes with the supply configuration
+  rationale: >-
+    `pins[].role` carries one role and cannot encode "power_out at 5 V, power_in at 3.3 V". Worse
+    than merely silent: if V3 is recorded as `power_out`, the T2 contention rule flags the
+    *corrected* design for driving against the VCC rail — so the generic rule distinguishes the
+    two in the wrong direction. A good illustration of why a missing field is not always a
+    conservative absence.
+  residual_kind: counterfactual-inverted
+  residual_blocker: >-
+    adding the fact does not help and can hurt: recorded as `power_out`, the T2 contention rule flags the CORRECTED design, which ties V3 to the VCC rail
+
+- id: BUG-0050
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["syntax:argument", "d3:pins[].role"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the termination-resistance window an interface role requires of external companion components
+    (USB-C UFP Rd = 5.1k on CC1 and CC2)
+  rationale: >-
+    Buggy and corrected differ only in a declared quantity on two otherwise identical resistors.
+    Topology, roles, abs-max and recommended windows and per-mode draw are all identical between
+    them, so the operative test fails on every checker-reliable field at once.
+
+- id: BUG-0051
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: strap-semantics
+  missing_path: pins[].strap
+  missing_fact: >-
+    that a pin doubles as a strap whose required level at reset is constrained (RX_CLK/PHYAD2 must
+    be low at reset for the MAC), and the MAC-side requirement it must satisfy
+  rationale: >-
+    Both designs are ERC-clean netlists differing by one resistor's direction, so no generic role
+    or topology rule separates them. Source re-checked for this issue and corroborated by both
+    vendor datasheets; the fix was a pull-up replaced by a pull-down, not removed. The defect
+    reproduces on other PHYs, so this is a class rather than a one-off.
+
+- id: BUG-0052
+  verdict: out-of-scope
+  reason: d3-not-enumerated
+  cites: ["syntax:constraint", "nongoal:xy-coordinates"]
+  missing_path: load_capacitance
+  missing_fact: >-
+    a crystal's specified load capacitance CL as a checker-reliable field. It lives in
+    `parameters` behind a conventional key, and the maximum drive level with it
+  rationale: >-
+    Reverted with BUG-0010 and for the same reason — an own value behind an unfrozen key is not
+    a readable fact. The entry defeats the flip independently anyway: its root cause is that
+    stray capacitance was IGNORED, and a comparison over declared values reproduces exactly that
+    omission and passes. Stray capacitance is a layout quantity the DSL holds no coordinates for,
+    so even promoting CL leaves this particular failure out of reach.
+  carried_at: parameters
+  residual_blocker: >-
+    the root cause is that stray capacitance was ignored, and stray C is a layout quantity the DSL holds no coordinates for
+  residual_kind: v1-non-goal
+
+- id: BUG-0053
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: []
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the minimum output capacitance and dielectric a regulator requires of its external
+    compensation capacitor (AMS1117: "a minimum of 10uF tantalum capacitor is required")
+  rationale: >-
+    The deciding requirement is the minimum-capacitance-and-dielectric clause, NOT the 0.5 ohm
+    ESR ceiling an earlier draft cited: a ceiling cannot flag a ceramic whose ESR is far below
+    it, which is the failure here. Note also that this entry is a datasheet caveat rather than an
+    observed failure report, so it has a required design and a violating one but no postmortem.
+    Same missing field as BUG-0005 and BUG-0033; three independent entries on one row is the
+    strongest single case in this classification for a specific D3 v1 addition.
+
+- id: BUG-0054
+  verdict: in-scope
+  family: abs-max-containment
+  at_risk: >-
+    the abs-max bound is relative and its qualifying condition lives in `conditions`, an open map this gate now formally declares unreadable
+  cites: ["req:T5", "d3:pins[].abs_max.voltage", "vocab:net_attribute.voltage_domain"]
+  rationale: >-
+    The VBUS abs-max is stated relative to the supply (VDD + 3.6 V with VDD unpowered), and D3's
+    `Bound` is deliberately either a number or a {reference, factor, offset} triple, so this
+    schema can hold it — a case where v0's design specifically enables the catch. Tying 5 V
+    straight to VBUS breaks containment; the corrected design interposes the 47k/24k divider. The
+    qualifying condition itself lives in the open `conditions` map, which is the one soft spot.
+
+- id: BUG-0055
+  verdict: in-scope
+  family: erc-pin-role
+  at_risk: >-
+    the floating-input leg is L9b-only like BUG-0019, but the abs-max leg is independent of it, which makes this the least exposed of the flagged entries
+  cites: ["req:T2", "req:L9b", "d3:pins[].role", "syntax:isolated_decl", "d3:pins[].abs_max.voltage"]
+  rationale: >-
+    Two independent static routes. The TL072's non-inverting `input` pins appear in no net, which
+    is the undriven-input and undeclared-single-pin-net catch; and the 15 V output back-driving a
+    5 V ADC input breaks that pin's `abs_max.voltage`. Either one separates buggy from corrected,
+    so this is among the most securely in-scope entries in the set.
+
+- id: BUG-0056
+  verdict: in-scope
+  family: net-topology
+  at_risk: >-
+    same generic decoupling rule as BUG-0042, and lost with it
+  cites: ["d3:pins[].role", "vocab:pin_role.power_in", "syntax:net_decl"]
+  rationale: >-
+    No decoupling capacitor across pins 1-8 at all, so the difference is membership rather than
+    value — the same generic power_in rule as BUG-0042, and the reason both are in-scope while
+    the value-error entries (BUG-0035, BUG-0048, BUG-0050) are not. The D3 gap would only bite for
+    the required value, and the value was not the defect.
+
+- id: BUG-0057
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role", "vocab:pin_role.input"]
+  gap_class: pin-semantics
+  missing_path: pins[].polarity
+  missing_fact: >-
+    a comparator or amplifier input pin's polarity — which of a part's `input` pins is inverting
+    and which is non-inverting
+  rationale: >-
+    Re-keyed in review from `dynamic-vocabulary`. The buggy and corrected designs differ in which
+    input the divider lands on, which is a netlist difference, not a waveform — so the
+    discriminator sends this to step 6, not step 4. The blocking fact is that the PinRole enum
+    carries no inverting/non-inverting distinction, so both pins present identically as `input`.
+    Pin polarity is published in every datasheet pin table, which is exactly what makes this a
+    schema gap rather than a limit of static analysis.
+
+- id: BUG-0058
+  verdict: out-of-scope
+  reason: v1-non-goal
+  cites: ["nongoal:thermal-analysis"]
+  rationale: >-
+    Vbe falling as the output devices heat while the bias diodes stay at ambient is thermal
+    analysis, the section-3 non-goal, and thermal coupling between two parts has no construct in
+    the frozen syntax at all. The 2-of-9 incidence is device-tolerance spread, which is Monte
+    Carlo and on V2's deferred list as well. Not rescuable by net-topology: recognising a class-AB
+    output stage as needing emitter degeneration is functional knowledge, not a universal
+    companion-element rule.
+
+- id: BUG-0059
+  verdict: in-scope
+  family: erc-pin-role
+  at_risk: >-
+    in-scope only if AREF is transcribed with a driving role; recorded `passive`, the contention rule goes silent
+  cites: ["req:T2", "d3:pins[].role", "vocab:pin_role.power_out"]
+  rationale: >-
+    The buggy design puts two low-impedance drivers on one net — the board's 3V3 rail and the
+    AREF pin, which sources the internal reference — which is the T2 contention case, read from
+    roles plus membership. The catch depends on AREF being transcribed with a driving role; were
+    it recorded `passive`, the rule would stay silent and this would become a D3 gap. Recorded as
+    the in-scope verdict most sensitive to how one part record is authored.
+
+- id: BUG-0060
+  verdict: out-of-scope
+  reason: dynamic-vocabulary
+  cites: ["v2:oscillation-frequency", "v2:ripple"]
+  rationale: >-
+    Nothing static separates the buffer with and without the 400 ohm and 3.3 pF network: roles,
+    domains, abs-max windows and member counts are identical, and "negative real part of input
+    impedance at HF" has no representation in any frozen input. It is dynamic-vocabulary rather
+    than dynamic-deferred because the buggy build sustains an oscillation, which frequency and
+    period decide directly — no phase-margin number is required. Caveat worth carrying: this
+    presumes a macromodel faithful enough to reproduce HF input impedance.
+
+- id: BUG-0061
+  verdict: out-of-scope
+  reason: d3-gap
+  cites: ["d3:pins[].role"]
+  gap_class: companion-requirement
+  missing_path: pins[].requires
+  missing_fact: >-
+    the compensation capacitor a part requires across a large feedback resistance, and the input
+    capacitance that sets it
+  rationale: >-
+    Re-keyed in review from `dynamic-vocabulary`. The entry's evidence is the LTC datasheet
+    stating the requirement outright — "A small capacitor CF in parallel with RF eliminates this
+    problem" — so a published companion requirement decides it, which is step 6 rather than step
+    4. Roles, domains and member counts are identical across the two designs, so nothing in the
+    static families separates them without that requirement.
+
+- id: BUG-0062
+  verdict: out-of-scope
+  reason: dynamic-vocabulary
+  cites: ["v2:operating-point"]
+  rationale: >-
+    A draft re-keyed this to `d3-gap` and it has been put back. No datasheet states "bias the
+    non-inverting input to mid-rail on a single supply" — that is application knowledge, not a
+    published requirement, so step 6's test is not met and step 4's is: the DC solution is what
+    separates the designs, and `operating_point` is the first entry in V2's v1 vocabulary. Tying
+    that input to ground rather than a divider midpoint is otherwise a legal netlist — no undriven
+    input, no role conflict, no abs-max breach.

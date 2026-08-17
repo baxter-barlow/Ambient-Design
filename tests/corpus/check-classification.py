@@ -1,0 +1,1256 @@
+#!/usr/bin/env python3
+"""Gate the AC2 in/out-of-scope classification, and freeze its denominator.
+
+AC2 asks for the corpus to be "classified at freeze time — before checker
+tuning — as in-scope (static-tier domain, expressible in the v1 DSL) or
+out-of-scope, both populations published", and then gates the static tier at
+"≥90% of in-scope" bugs.
+
+The word doing the work is BEFORE. A ratio whose denominator can be edited
+after the numerator is known is not a measurement. Nothing stops a later
+issue — AMB-61 is the one that has the motive — from moving three awkward
+bugs out of scope and reporting a pass. Not from malice: reclassifying feels
+like a correction when a check turns out to be hard, and the corpus README is
+prose that no gate has ever read.
+
+So this gate exists to make the denominator tamper-EVIDENT rather than to make
+it tamper-proof. Reclassifying stays possible and is sometimes right; what it
+cannot be is quiet. Every verdict change moves `decision_hash`, and the commit
+that moves it says so in the diff.
+
+WHAT IS CHECKED, AND AGAINST WHAT:
+
+  coverage        every corpus id classified exactly once, no strays. A bug
+                  appended to bugs.yaml without a verdict is a silent
+                  denominator change, so it fails here.
+  vocabularies    verdict, check family and reason code come from closed
+                  lists. A typo cannot invent a scope category.
+  citations       each verdict cites the frozen artifact that decided it, and
+                  the citation is RESOLVED, not just pattern-matched:
+                    d3:     walked against parts/part-data.schema.json
+                    syntax: resolved against the frozen grammar's own rules
+                    vocab:  resolved against the frozen closed vocabularies
+                  Those three are live. The rest (ga:, req:, v2:, nongoal:)
+                  name clauses in Notion specifications this gate cannot fetch
+                  offline, so they resolve against lists transcribed here and
+                  are reported as transcribed rather than passed off as
+                  verified. See TRANSCRIBED below.
+  sufficiency     a reason code must cite the KIND of clause that justifies
+                  it — `v1-non-goal` must name a non-goal, `dynamic-deferred`
+                  must name something actually on V2's deferred list. This is
+                  what stops a verdict being justified by gesture.
+  gap falsified   `d3-gap` is the largest out-of-scope population, so it is the
+                  code that does the most to shrink the AC2 denominator. Each
+                  one names the field path a checker would need, and the gate
+                  proves that path does NOT resolve. Entries whose fact IS in
+                  D3, behind a conventional key in an open map, use the
+                  `open-map-value` class and name that map in `carried_at`,
+                  which the gate resolves — so "absent" and "present but not
+                  enumerated" are different, checkable states. Without this
+                  the largest out-of-scope population rested on unread prose
+                  while in-scope citations were walked against the schema.
+  freeze          `decision_hash` recomputed from the verdicts themselves.
+  published       the summary block in corpus/README.md regenerated and
+                  compared, so the published populations cannot drift from
+                  the data the way hand-maintained counts do.
+
+`decision_hash` covers id, verdict, key, `gap_class` and `missing_path` — the
+decisions and the falsifiable claims behind them. NOT the rationale prose:
+hashing that would make a typo fix indistinguishable from a reclassification,
+and the predictable result is people updating the hash without reading the
+diff. A freeze everybody learns to bypass is worse than none.
+
+Exit codes follow tests/structure/check-layout.sh: 0 pass, 1 violation, 2 when
+the gate could not run.
+
+    python3 tests/corpus/check-classification.py --self-test  # prove it fails
+    python3 tests/corpus/check-classification.py
+    python3 tests/corpus/check-classification.py --write      # refreeze
+"""
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+BUGS = ROOT / "corpus" / "bugs.yaml"
+CLASSIFICATION = ROOT / "corpus" / "classification.yaml"
+README = ROOT / "corpus" / "README.md"
+PART_SCHEMA = ROOT / "parts" / "part-data.schema.json"
+GRAMMAR_DIR = ROOT / "lang"
+
+VERDICTS = ("in-scope", "out-of-scope")
+
+# The static check families. Every one is a capability the frozen artifacts
+# already support: a family that needs a fact D3 v0 does not carry is not a
+# family, it is a wish.
+FAMILIES = {
+    "erc-pin-role": "T2 pin-role lattice: conflicts, undriven inputs, open-drain nets with no pull-up, undeclared single-pin nets",
+    "abs-max-containment": "T5: declared domain interval against pins[].abs_max",
+    "voltage-domain-crossing": "T5: undeclared crossing between voltage_domain nets",
+    "ground-architecture": "GA-1..GA-17 / RHO4001..RHO4010",
+    "current-budget": "T10: pins[].capability against summed modes[].draw per domain",
+    "dimension-interval": "T3/T4: dimensional and interval containment on declared values",
+    "net-topology": "decidable from the netlist alone, with no part data at all",
+    "part-binding": "D1: constraint conflicts and unresolved abstract parts",
+}
+
+# The out-of-scope reason codes. Each names a pre-existing declared exclusion,
+# never a judgement invented at classification time — which is the only thing
+# keeping the out-of-scope population honest.
+REASONS = {
+    "not-expressible": "the defective design cannot be written in frozen syntax v0.1",
+    "v1-non-goal": "root cause is a declared section-3 non-goal",
+    "ground-arch-excluded": "root cause is a ground-architecture section-7 exclusion",
+    "dynamic-vocabulary": "needs time/frequency-domain behaviour; v1 catches it in the ngspice tier",
+    "dynamic-deferred": "needs a measurement on V2's deferred list; v1 has no tier for it",
+    "d3-gap": "static and expressible, but no checker-reliable D3 v0 field carries the fact",
+    "d3-not-enumerated": "the fact IS in D3 v0, in an open map, but only behind a conventional key spelling nothing freezes — a promotion, not an addition, and necessary rather than sufficient",
+}
+
+# The two D3 codes share all their machinery; only the counterfactual differs.
+D3_CODES = ("d3-gap", "d3-not-enumerated")
+
+# Reason and family codes each demand a citation from a particular space. A
+# verdict citing nothing relevant is the failure mode this table exists for:
+# `v1-non-goal` that names no non-goal is an assertion, not a classification.
+REQUIRED_SPACE = {
+    "not-expressible": ("syntax", "vocab"),
+    "v1-non-goal": ("nongoal",),
+    "ground-arch-excluded": ("ga-excluded",),
+    "dynamic-vocabulary": ("v2",),
+    "dynamic-deferred": ("v2-deferred",),
+    "d3-gap": (),  # carries `missing_path` instead; see check_entry
+    "d3-not-enumerated": (),  # carries `carried_at` as well
+}
+
+# `req:` and `ga:` are deliberately NOT here. Both are transcribed spaces, and
+# an in-scope verdict justified only by "cites T5" names an aspiration rather
+# than a capability. To be in scope a verdict must point at something the
+# frozen artifacts actually hold.
+IN_SCOPE_SPACES = ("d3", "syntax", "vocab")
+
+# The D3 v0 surface a checker may depend on. `parts/README.md` puts
+# `characteristics`, `parameters`, `ratings.*` and `conditions` in open maps
+# whose KEY SPELLINGS are conventional rather than enum-enforced — a checker
+# keyed on one is keyed on an unfrozen name. Those maps are real data and are
+# unit-carrying; what they are not is a name a check may rely on at v0. This
+# allowlist is the operative distinction, and it is enforced rather than
+# described: without it the resolver happily accepted `d3:parameters`, which
+# is precisely the citation the rubric forbids.
+CHECKER_UNRELIABLE_D3 = ("conditions", "characteristics", "parameters", "ratings")
+
+CHECKER_RELIABLE_D3 = (
+    "pins[].role",
+    "pins[].numbers",
+    "pins[].unit",
+    "pins[].abs_max",
+    "pins[].recommended",
+    "pins[].capability",
+    "modes[].draw",
+    "modes[].id",
+    "package",
+    "lifecycle",
+    "units[]",
+    "shared_pins",
+)
+
+# The `d3-gap` classes, closed. Every gap entry names one, so the published
+# "which missing fact blocks how many bugs" table is DERIVED from the verdicts
+# rather than counted by hand in prose — and so the counterfactual population
+# ("close this gap and N entries move in scope") is computable and auditable.
+# The one gap class whose fix is a promotion rather than an addition: the data
+# is already in D3 v0, in an open map. Entries in it must say WHERE, and the
+# gate checks that the open map really is there — otherwise "missing" and
+# "documented but not enumerated" are indistinguishable, which is exactly the
+# error this classification's own finding made in its first draft.
+GAP_CLASSES = {
+    "companion-requirement": "a requirement a part places on an external companion component",
+    "strap-semantics": "which pins latch at reset as configuration straps, and to what level",
+    "functional-class": "what a part IS — regulator, protection diode, undervoltage cutoff",
+    "bus-address": "the bus address a part presents, fixed or strap-selected",
+    "internal-pull": "a pin's internal pull-up or pull-down presence and strength",
+    "pin-semantics": "what a pin MEANS beyond its electrical role — which outputs it gates, its polarity",
+}
+
+# N.B. this is a citation-shape check, not a semantic one: it proves an
+# `abs-max-containment` verdict at least names an abs-max field. It caught a
+# real mislabel — an entry filed under abs-max whose rule was a `recommended`
+# comparison — which is why it is here rather than dismissed as ceremony.
+FAMILY_REQUIRES = {
+    "erc-pin-role": ("d3:pins[].role",),
+    "abs-max-containment": ("d3:pins[].abs_max",),
+    "voltage-domain-crossing": ("vocab:net_attribute.voltage_domain",),
+    "ground-architecture": ("ga:",),
+    "current-budget": ("d3:pins[].capability", "d3:modes[].draw"),
+    "dimension-interval": ("syntax:value", "syntax:constraint", "syntax:argument"),
+    "net-topology": ("syntax:net_decl", "syntax:endpoint"),
+    "part-binding": ("syntax:part_decl", "syntax:constraint"),
+}
+
+# The kinds of thing that survive a D3 change. Closed, because the kind has
+# consequences the prose cannot carry: `fact-undocumented` says the fact is in
+# no source, which contradicts `carried_at` saying where it lives — so that
+# pairing is a gate failure rather than something a reviewer has to notice.
+RESIDUAL_KINDS = {
+    "v1-non-goal": "blocked by a declared section-3 non-goal, so no schema version reaches it",
+    "designs-identical": "the buggy and corrected designs are the same netlist",
+    "not-design-time": "the failure is not a property of the design as authored",
+    "fact-undocumented": "the fact is in no source, so no field could carry it",
+    "counterfactual-inverted": "adding the fact would make the generic rule flag the CORRECTED design",
+    "fact-compound": "the named field is one of several the check needs, so adding it alone is not enough",
+}
+
+# A residual of this kind asserts the fact exists nowhere. `d3-not-enumerated`
+# asserts it exists in an open map. They cannot both be true.
+RESIDUAL_KIND_FORBIDDEN_ON = {"fact-undocumented": ("d3-not-enumerated",)}
+
+ID_PATTERN = re.compile(r"^BUG-\d{4}$")
+
+# ---------------------------------------------------------------------------
+# TRANSCRIBED constants.
+#
+# These name clauses in Notion documents (the requirements and the
+# ground-architecture semantics) and in the requirements' own section 3. A gate
+# that must run offline in CI cannot fetch them, so they are transcribed. That
+# makes them weaker than the live resolvers above and the report says so
+# explicitly rather than letting all citations look equally checked. The
+# failure they still catch is the common one: a citation to a rule id that
+# never existed, or a measurement moved between the v1 and deferred lists.
+# ---------------------------------------------------------------------------
+
+GA_RULES = tuple(f"GA-{n}" for n in range(1, 18)) + ("GA-14b", "GA-14c")
+GA_DIAGNOSTICS = tuple(f"RHO{4000 + n}" for n in range(1, 11))
+
+# Ground-architecture section 7, "Out of scope for v1 (declared honestly)".
+GA_EXCLUSIONS = (
+    "return-path",
+    "current-density",
+    "split-plane",
+    "emi",
+    "creepage",
+    "multi-point-bonding",
+    "surge",
+)
+
+# Requirements section 3, "Non-goals (v1)".
+NON_GOALS = (
+    "placement-routing",
+    "xy-coordinates",
+    "fab-outputs",
+    "thermal-analysis",
+    "emi-analysis",
+    "mechanical-analysis",
+    "digital-simulation",
+    "interchange-format",
+    "turing-complete",
+    "gui-editor",
+    "kicad-import",
+)
+
+# V2's v1 dynamic vocabulary, and V2's deferred list. The split is the whole
+# point of having two dynamic reason codes: one says "v1 catches this, in the
+# other tier", the other says "v1 catches this nowhere".
+V2_VOCABULARY = (
+    "operating-point", "ripple", "oscillation-frequency", "oscillation-period",
+    "duty-cycle", "gain", "bandwidth", "rise-time", "fall-time", "prop-delay",
+    "settling-time", "overshoot", "power-avg", "power-rms", "efficiency",
+)
+V2_DEFERRED = ("phase-margin", "gain-margin", "soa", "thd-fft", "monte-carlo", "corners")
+
+# Requirement ids that may be cited. Deliberately the ids only: this gate
+# checks that a citation names a requirement that exists, not that the
+# requirement says what the rationale claims. A reviewer does the second part.
+REQUIREMENTS = tuple(
+    f"{letter}{n}"
+    for letter, count in (("L", 9), ("T", 10), ("V", 8), ("D", 5), ("I", 10), ("A", 7), ("E", 4), ("P", 7))
+    for n in range(1, count + 1)
+) + ("L9b", "L9c", "AC1", "AC2", "AC3", "AC4", "AC5a", "AC5b", "AC6", "AC7")
+
+SUMMARY_OPEN = "<!-- generated: classification-summary -->"
+SUMMARY_CLOSE = "<!-- /generated -->"
+
+
+class GateUnavailable(Exception):
+    """The gate could not run. Exit 2, never 0 — a missing gate is not a pass."""
+
+
+def load_yaml(path: Path):
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # malformed YAML is "could not run", not "violation"
+        raise GateUnavailable(f"{path} is not readable as YAML: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Live citation resolvers.
+# ---------------------------------------------------------------------------
+
+
+def resolve_d3(pointer: str, schema: dict) -> bool:
+    """Walk a dotted D3 field path against the real schema.
+
+    `pins[].abs_max.voltage` means: property `pins`, its array items, then
+    `abs_max`, then `voltage`. $refs are followed, because every interesting
+    field in that schema sits behind one.
+    """
+    defs = schema.get("$defs", {})
+
+    def deref(node):
+        seen = 0
+        while isinstance(node, dict) and "$ref" in node and seen < 20:
+            ref = node["$ref"]
+            if not ref.startswith("#/$defs/"):
+                return None
+            node = defs.get(ref[len("#/$defs/"):])
+            seen += 1
+        return node
+
+    node = deref(schema)
+    for segment in pointer.split("."):
+        array = segment.endswith("[]")
+        name = segment[:-2] if array else segment
+        if not isinstance(node, dict):
+            return False
+        properties = node.get("properties") or {}
+        if name not in properties:
+            return False
+        node = deref(properties[name])
+        if array:
+            if not isinstance(node, dict) or "items" not in node:
+                return False
+            node = deref(node["items"])
+    return node is not None
+
+
+def checker_reliable(pointer: str) -> bool:
+    """Is this D3 path one a check may depend on at v0?
+
+    Prefix match, so `pins[].abs_max.voltage` is covered by `pins[].abs_max`.
+    """
+    # Deny-list first. `pins[].abs_max.voltage` is reliable, but
+    # `pins[].abs_max.voltage.conditions` reaches an open map THROUGH it, and a
+    # prefix match alone happily allowed that.
+    if any(segment in CHECKER_UNRELIABLE_D3 for segment in pointer.split(".")):
+        return False
+    return any(
+        pointer == allowed or pointer.startswith(allowed + ".")
+        for allowed in CHECKER_RELIABLE_D3
+    )
+
+
+def load_frozen_grammar():
+    """Import the frozen grammar module, or None when it cannot be loaded."""
+    if str(GRAMMAR_DIR) not in sys.path:
+        sys.path.insert(0, str(GRAMMAR_DIR))
+    try:
+        from grammar import rhoform_syntax
+    except Exception as exc:
+        # Report the cause. `lang/` is outside this issue's path claim, so when
+        # it moves under someone else's change this gate goes red and the
+        # message needs to say why rather than shrugging.
+        raise GateUnavailable(
+            f"the frozen grammar module could not be imported ({exc!r}), so "
+            "`syntax:` and `vocab:` citations cannot be resolved"
+        ) from exc
+    return rhoform_syntax
+
+
+def build_resolvers(schema, grammar):
+    """Map citation prefix to a predicate. Live spaces first, transcribed after."""
+    rule_names = {name for name, _doc, _node in grammar.RULES} if grammar else set()
+    terminals = set(grammar.TERMINALS) if grammar else set()
+    keywords = set(grammar.KEYWORDS) if grammar else set()
+    vocabularies = grammar.CLOSED_VOCABULARIES if grammar else {}
+
+    def vocab(token: str) -> bool:
+        name, _, member = token.partition(".")
+        members = vocabularies.get(name)
+        if members is None:
+            return False
+        # A bare vocabulary name is not a citation: naming `pin_role` says
+        # nothing a reader can check. The member is the claim.
+        return bool(member) and member in members
+
+    return {
+        "d3": (lambda t: resolve_d3(t, schema) and checker_reliable(t), "live"),
+        "syntax": (lambda t: t in rule_names or t in terminals or t in keywords, "live"),
+        "vocab": (vocab, "live"),
+        "ga": (lambda t: t in GA_RULES or t in GA_DIAGNOSTICS, "transcribed"),
+        "ga-excluded": (lambda t: t in GA_EXCLUSIONS, "transcribed"),
+        "req": (lambda t: t in REQUIREMENTS, "transcribed"),
+        "v2": (lambda t: t in V2_VOCABULARY, "transcribed"),
+        "v2-deferred": (lambda t: t in V2_DEFERRED, "transcribed"),
+        "nongoal": (lambda t: t in NON_GOALS, "transcribed"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Checks.
+# ---------------------------------------------------------------------------
+
+
+def decision_hash(entries) -> str:
+    """Hash the decisions, and only the decisions.
+
+    Covers the verdict, its key, and — because `d3-gap` is 27 of the 39
+    out-of-scope entries — the falsifiable `gap_class` and `missing_path` that
+    justify it. The rationale prose stays out: hashing it would make a typo fix
+    indistinguishable from a reclassification, and people would learn to update
+    the hash without reading the diff.
+
+    Sorted so file ordering is not load-bearing. Tab-joined AND newline-joined,
+    which only forbids forged record boundaries because `check_entry` pins ids
+    to ID_PATTERN — an id free to contain a tab or a newline could otherwise
+    encode two records as one and change the denominator at a fixed digest.
+    """
+    lines = sorted(
+        "\t".join(
+            (
+                e["id"],
+                e["verdict"],
+                e.get("family") or e.get("reason") or "",
+                e.get("gap_class") or "",
+                e.get("missing_path") or "",
+                e.get("at_risk") or "",
+                e.get("carried_at") or "",
+                e.get("residual_blocker") or "",
+                e.get("residual_kind") or "",
+            )
+        )
+        for e in entries
+    )
+    return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def check_entry(entry, resolvers, schema, problems):
+    entry_id = entry.get("id", "<no id>")
+    if not ID_PATTERN.match(str(entry_id)):
+        problems.append(f"{entry_id!r}: not a well-formed corpus id (expected BUG-NNNN)")
+        return
+    verdict = entry.get("verdict")
+    if verdict not in VERDICTS:
+        problems.append(f"{entry_id}: verdict {verdict!r} is not one of {VERDICTS}")
+        return
+
+    family, reason = entry.get("family"), entry.get("reason")
+    if verdict == "in-scope":
+        if reason is not None:
+            problems.append(f"{entry_id}: in-scope entries carry `family`, not `reason`")
+        if family not in FAMILIES:
+            problems.append(f"{entry_id}: family {family!r} is not a declared check family")
+            return
+    else:
+        if family is not None:
+            problems.append(f"{entry_id}: out-of-scope entries carry `reason`, not `family`")
+        if reason not in REASONS:
+            problems.append(f"{entry_id}: reason {reason!r} is not a declared reason code")
+            return
+
+    if not (entry.get("rationale") or "").strip():
+        problems.append(f"{entry_id}: no rationale")
+
+    # Citations resolve.
+    spaces_used = set()
+    for citation in entry.get("cites") or []:
+        prefix, sep, token = citation.partition(":")
+        if not sep:
+            problems.append(f"{entry_id}: citation {citation!r} has no `space:token` form")
+            continue
+        resolver = resolvers.get(prefix)
+        if resolver is None:
+            problems.append(f"{entry_id}: citation space {prefix!r} is not one of {sorted(resolvers)}")
+            continue
+        if not resolver[0](token):
+            problems.append(
+                f"{entry_id}: citation {citation!r} does not resolve — "
+                f"no such {prefix} entry"
+            )
+            continue
+        spaces_used.add(prefix)
+
+    # Sufficiency: the citation must be of the kind the verdict needs.
+    if verdict == "out-of-scope":
+        if reason in D3_CODES:
+            if not (entry.get("missing_fact") or "").strip():
+                problems.append(
+                    f"{entry_id}: reason `d3-gap` must name the missing fact in "
+                    "`missing_fact` — the gap IS the finding"
+                )
+            # The claim `d3-gap` makes is falsifiable, so falsify it. Without
+            # this the largest out-of-scope population — the one that removes
+            # entries from the AC2 denominator — rested on unread prose, while
+            # in-scope `d3:` citations were being walked against the schema.
+            # That asymmetry pointed the wrong way.
+            missing_path = (entry.get("missing_path") or "").strip()
+            if not missing_path:
+                problems.append(
+                    f"{entry_id}: reason `{reason}` must give `missing_path` — the "
+                    "field path a checker would need, so the gate can prove it is "
+                    "absent rather than take the claim on trust"
+                )
+            elif resolve_d3(missing_path, schema):
+                problems.append(
+                    f"{entry_id}: `missing_path` {missing_path!r} RESOLVES against "
+                    "parts/part-data.schema.json, so the fact is not missing and "
+                    "`d3-gap` is the wrong reason"
+                )
+            elif checker_reliable(missing_path):
+                problems.append(
+                    f"{entry_id}: `missing_path` {missing_path!r} is inside the "
+                    "checker-reliable surface, so claiming it absent contradicts "
+                    "CHECKER_RELIABLE_D3"
+                )
+            carried_at = (entry.get("carried_at") or "").strip()
+            gap_class = entry.get("gap_class") or ""
+            if reason == "d3-not-enumerated":
+                if gap_class:
+                    problems.append(
+                        f"{entry_id}: `gap_class` names a MISSING fact, so it does not "
+                        "apply here — for this code the fact is present, just not "
+                        "enumerated, and `carried_at` says where"
+                    )
+                if not carried_at:
+                    problems.append(
+                        f"{entry_id}: reason `d3-not-enumerated` must give "
+                        "`carried_at` — the open map the value already lives in. "
+                        "Without it this is indistinguishable from `d3-gap`, and the "
+                        "published finding would ask for a field D3 already has."
+                    )
+                elif not resolve_d3(carried_at, schema):
+                    problems.append(
+                        f"{entry_id}: `carried_at` {carried_at!r} does not resolve, so "
+                        "the value is not carried there and the class is wrong"
+                    )
+                elif checker_reliable(carried_at):
+                    problems.append(
+                        f"{entry_id}: `carried_at` {carried_at!r} IS checker-reliable, "
+                        "so there is no gap at all"
+                    )
+                elif carried_at.split(".")[-1].rstrip("[]") not in CHECKER_UNRELIABLE_D3:
+                    # R4: resolving and not-allowlisted is not the same as being an
+                    # open map. `carried_at: notes` satisfied both and means nothing.
+                    problems.append(
+                        f"{entry_id}: `carried_at` {carried_at!r} does not end in an "
+                        f"open map ({', '.join(CHECKER_UNRELIABLE_D3)}), so it does not "
+                        "show the fact is carried anywhere"
+                    )
+                missing_path = (entry.get("missing_path") or "").strip()
+                if (
+                    carried_at
+                    and missing_path.startswith("pins[].")
+                    and not carried_at.startswith("pins[].")
+                ):
+                    problems.append(
+                        f"{entry_id}: `missing_path` is per-pin but `carried_at` "
+                        f"{carried_at!r} is not, so it does not carry that fact"
+                    )
+                if not (entry.get("residual_blocker") or "").strip():
+                    problems.append(
+                        f"{entry_id}: `d3-not-enumerated` must state `residual_blocker` "
+                        "— promotion is necessary, and for every entry in this class so "
+                        "far it has not been sufficient. Saying which further thing "
+                        "blocks it is the point of separating this code."
+                    )
+            elif carried_at:
+                problems.append(
+                    f"{entry_id}: `carried_at` belongs only on a "
+                    "`d3-not-enumerated` entry"
+                )
+            # A residual is OPTIONAL on a plain `d3-gap` and mandatory on a
+            # promotion. Forbidding it on gaps was what left the gap table
+            # asserting one counterfactual over rows it is false for — and, for
+            # BUG-0049, over a row where adding the field flags the CORRECTED
+            # design instead.
+            residual_kind = entry.get("residual_kind") or ""
+            has_residual = bool((entry.get("residual_blocker") or "").strip())
+            if has_residual and not residual_kind:
+                problems.append(
+                    f"{entry_id}: a `residual_blocker` must carry a `residual_kind` "
+                    f"from {sorted(RESIDUAL_KINDS)} — the prose says why, the kind says "
+                    "what sort of thing, and only the kind is checkable"
+                )
+            if residual_kind:
+                if residual_kind not in RESIDUAL_KINDS:
+                    problems.append(
+                        f"{entry_id}: residual_kind {residual_kind!r} is not one of "
+                        f"{sorted(RESIDUAL_KINDS)}"
+                    )
+                elif reason in RESIDUAL_KIND_FORBIDDEN_ON.get(residual_kind, ()):
+                    problems.append(
+                        f"{entry_id}: residual_kind `{residual_kind}` says the fact is "
+                        f"in no source, but reason `{reason}` says it is in an open map "
+                        f"named by `carried_at`. Both cannot hold."
+                    )
+                elif not has_residual:
+                    problems.append(
+                        f"{entry_id}: `residual_kind` without `residual_blocker` states a "
+                        "category and no claim"
+                    )
+                if residual_kind == "v1-non-goal" and not any(
+                    c.startswith(("nongoal:", "ga-excluded:"))
+                    for c in (entry.get("cites") or [])
+                ):
+                    problems.append(
+                        f"{entry_id}: residual_kind `v1-non-goal` must cite the non-goal "
+                        "or ground-architecture exclusion it rests on"
+                    )
+            if reason == "d3-gap" and gap_class not in GAP_CLASSES:
+                problems.append(
+                    f"{entry_id}: gap_class {entry.get('gap_class')!r} is not one of "
+                    f"{sorted(GAP_CLASSES)} — the published gap table is generated "
+                    "from this field, so it cannot be free text"
+                )
+        else:
+            if entry.get("at_risk"):
+                problems.append(f"{entry_id}: `at_risk` annotates in-scope entries only")
+            for stray in ("gap_class", "missing_path", "carried_at", "residual_blocker",
+                          "residual_kind"):
+                if entry.get(stray):
+                    problems.append(
+                        f"{entry_id}: `{stray}` belongs only on a D3 entry "
+                        f"({', '.join(D3_CODES)})"
+                    )
+            required = REQUIRED_SPACE[reason]
+            if required and not spaces_used & set(required):
+                problems.append(
+                    f"{entry_id}: reason {reason!r} must cite one of "
+                    f"{sorted(required)}; cites {sorted(spaces_used) or 'nothing'}"
+                )
+        if entry.get("missing_fact") and reason not in D3_CODES:
+            problems.append(f"{entry_id}: `missing_fact` only belongs on a D3 entry")
+    else:
+        required = FAMILY_REQUIRES.get(family, ())
+        citations = entry.get("cites") or []
+        if required and not any(c.startswith(r) for c in citations for r in required):
+            problems.append(
+                f"{entry_id}: family {family!r} reads {FAMILIES[family]}, but the "
+                f"entry cites none of {list(required)} — a family label the "
+                "citations do not support is a mislabel"
+            )
+        if not spaces_used & set(IN_SCOPE_SPACES):
+            problems.append(
+                f"{entry_id}: an in-scope verdict must cite the frozen capability the "
+                f"check reads (one of {sorted(IN_SCOPE_SPACES)}); cites "
+                f"{sorted(spaces_used) or 'nothing'}"
+            )
+        if entry.get("missing_fact"):
+            problems.append(f"{entry_id}: `missing_fact` only belongs on a `d3-gap` entry")
+
+
+def summary_block(entries) -> str:
+    """The published populations, generated from the data.
+
+    Hand-maintained counts drift; AMB-35's own close-out had to diff three
+    histograms against the YAML by hand to prove they did not. This is the
+    same generated-artifact contract `grammar.rhoform_syntax --check` uses.
+    """
+    in_scope = [e for e in entries if e["verdict"] == "in-scope"]
+    out_scope = [e for e in entries if e["verdict"] == "out-of-scope"]
+    total = len(entries)
+    # The gate rounds UP: catching 89.9% of 39 is not catching 90%.
+    must_catch = -(-len(in_scope) * 9 // 10)
+
+    lines = [
+        "| population | count | share |",
+        "|---|---|---|",
+        f"| **in-scope** (static-tier domain, expressible in the v1 DSL) | {len(in_scope)} | {len(in_scope) / total:.0%} |",
+        f"| **out-of-scope** | {len(out_scope)} | {len(out_scope) / total:.0%} |",
+        f"| total | {total} | |",
+        "",
+        f"AC2 gate: the static tier must catch **{must_catch} of {len(in_scope)}** in-scope bugs (≥90%).",
+        "",
+        "| in-scope check family | count |",
+        "|---|---|",
+    ]
+    for family in sorted(FAMILIES):
+        count = sum(1 for e in in_scope if e.get("family") == family)
+        if count:
+            lines.append(f"| `{family}` | {count} |")
+    lines += ["", "| out-of-scope reason | count |", "|---|---|"]
+    for reason in sorted(REASONS):
+        count = sum(1 for e in out_scope if e.get("reason") == reason)
+        if count:
+            lines.append(f"| `{reason}` | {count} |")
+
+    # Emitted unconditionally. An honest disclosure that vanishes when nobody
+    # fills it in is worse than none: removal shows up in a diff, but an empty
+    # section that was never populated shows up nowhere. Printing "0 flagged"
+    # makes under-population visible as a number.
+    at_risk = [e for e in in_scope if e.get("at_risk")]
+    surviving = len(in_scope) - len(at_risk)
+    lines += [
+        "",
+        f"**Margin.** {len(at_risk)} of {len(in_scope)} in-scope entries are flagged "
+        "`at_risk` — verdicts whose catch is conditioned on an implementation choice, a "
+        "**defensible alternative** part-record transcription, or an open-map fact. The "
+        "defensibility test is what keeps this from covering everything: an I2C pin roled "
+        "`open_drain` has no defensible alternative, while an AREF pin roled `passive` and an "
+        "ESP32 record with no transmit mode both do.",
+        "",
+    ]
+    for entry in sorted(at_risk, key=lambda e: e["id"]):
+        lines.append(f"- `{entry['id']}` — {entry['at_risk']}")
+    if not at_risk:
+        lines.append("- none flagged")
+    if surviving >= must_catch:
+        tail = (
+            f"Lose all {len(at_risk)} and the tier still catches {surviving} of "
+            f"{len(in_scope)} against a bar of {must_catch}, so the margin survives the "
+            "whole risk register."
+        )
+    else:
+        tail = (
+            f"Lose all {len(at_risk)} and the tier catches at most {surviving} of "
+            f"{len(in_scope)}, against a bar of {must_catch}: it **FAILS**. The margin is "
+            "already committed, and AMB-61 should plan against that rather than discover it."
+        )
+    emptied = sorted(
+        {
+            e["family"]
+            for e in at_risk
+            if not any(
+                o.get("family") == e["family"] and not o.get("at_risk") for o in in_scope
+            )
+        }
+    )
+    if emptied:
+        tail += (
+            " Losing them also empties "
+            + ", ".join(f"`{f}`" for f in emptied)
+            + " entirely, so the gate would stop testing "
+            + ("that family" if len(emptied) == 1 else "those families")
+            + " at all — which no count above shows."
+        )
+    lines += ["", tail]
+
+    gaps = [e for e in out_scope if e.get("reason") == "d3-gap"]
+    if gaps:
+        lines += [
+            "",
+            f"The {len(gaps)} `d3-gap` entries by missing fact. Each row is also the "
+            "counterfactual: add that field and those entries become candidates for "
+            "in-scope at the next `schema_version`.",
+            "",
+            "| missing D3 fact | entries | with a residual blocker |",
+            "|---|---|---|",
+        ]
+        for gap_class, description in sorted(
+            GAP_CLASSES.items(),
+            key=lambda kv: (-sum(1 for e in gaps if e.get("gap_class") == kv[0]), kv[0]),
+        ):
+            members = [e["id"] for e in gaps if e.get("gap_class") == gap_class]
+            if members:
+                qualified = [
+                    e["id"] for e in gaps
+                    if e.get("gap_class") == gap_class and e.get("residual_blocker")
+                ]
+                note = ", ".join(f"`{i}`" for i in qualified) if qualified else "—"
+                lines.append(
+                    f"| `{gap_class}` — {description} | {len(members)} | {note} |"
+                )
+        lines += [
+            "",
+            "Entries in the third column carry a blocker that survives adding the field, "
+            "named in `classification.yaml`. For one of them the counterfactual is not "
+            "merely weaker but inverted: adding the fact would make the generic rule flag "
+            "the *corrected* design.",
+        ]
+
+    promotions = [e for e in out_scope if e.get("reason") == "d3-not-enumerated"]
+    if promotions:
+        lines += [
+            "",
+            f"The {len(promotions)} `d3-not-enumerated` entries are a different claim and "
+            "get a different counterfactual. The fact is already in D3 v0, so the fix is to "
+            "promote a key out of an open map — but promotion is **necessary and not "
+            "sufficient**: every one of these carries a further blocker, named per entry, "
+            "which is why they are not counted with the gaps above.",
+            "",
+            "| entry | carried at | what promotion still would not fix |",
+            "|---|---|---|",
+        ]
+        for entry in sorted(promotions, key=lambda e: e["id"]):
+            lines.append(
+                f"| `{entry['id']}` | `{entry.get('carried_at')}` | "
+                f"{entry.get('residual_blocker')} |"
+            )
+    return "\n".join(lines)
+
+
+def replace_summary(text: str, block: str) -> str:
+    pattern = re.compile(
+        re.escape(SUMMARY_OPEN) + r".*?" + re.escape(SUMMARY_CLOSE), re.DOTALL
+    )
+    return pattern.sub(f"{SUMMARY_OPEN}\n\n{block}\n\n{SUMMARY_CLOSE}", text, count=1)
+
+
+def extract_summary(text: str):
+    match = re.search(
+        re.escape(SUMMARY_OPEN) + r"(.*?)" + re.escape(SUMMARY_CLOSE), text, re.DOTALL
+    )
+    return match.group(1).strip() if match else None
+
+
+def run(write: bool, bugs=None, classification=None, readme=None) -> int:
+    """Paths are injectable so the self-test can drive THIS function.
+
+    The alternative — a self-test that exercises `check_entry` and reimplements
+    the wiring — is how a kill switch quietly moves down a layer: every
+    individual matcher proven, and the loop that calls them proven by nobody.
+    """
+    bugs = bugs or BUGS
+    classification = classification or CLASSIFICATION
+    readme = readme or README
+
+    for path in (bugs, classification, readme, PART_SCHEMA):
+        if not path.exists():
+            print(f"corpus-classification: FAIL: {path} is missing", file=sys.stderr)
+            return 2
+
+    corpus = load_yaml(bugs)
+    document = load_yaml(classification)
+    if corpus is None or document is None:
+        print(
+            "corpus-classification: FAIL: PyYAML is unavailable, so the "
+            "classification cannot be read. An unavailable gate is not a pass.",
+            file=sys.stderr,
+        )
+        return 2
+
+    schema = json.loads(PART_SCHEMA.read_text(encoding="utf-8"))
+    resolvers = build_resolvers(schema, load_frozen_grammar())
+
+    entries = document.get("entries") or []
+    problems: list[str] = []
+
+    # Coverage: exact bijection with the corpus.
+    corpus_bugs = corpus.get("bugs") or []
+    if any("id" not in b for b in corpus_bugs):
+        raise GateUnavailable(f"{bugs} has an entry with no `id`")
+    corpus_ids = [b["id"] for b in corpus_bugs]
+
+    # AC2's other two numbers. The freeze protects the denominator's
+    # composition; nothing protected its floor, and the README already
+    # nominates one entry for retirement.
+    if len(corpus_ids) < 50:
+        problems.append(
+            f"the corpus holds {len(corpus_ids)} entries; AC2 requires at least 50"
+        )
+    declared = document.get("classification", {}).get("corpus_entry_count")
+    if declared != len(corpus_ids):
+        problems.append(
+            f"classification declares corpus_entry_count {declared}, but the corpus "
+            f"holds {len(corpus_ids)} — a decorative count inside a frozen artifact "
+            "is worse than none"
+        )
+    classified = [e.get("id") for e in entries]
+    duplicates = sorted({i for i in classified if classified.count(i) > 1})
+    if duplicates:
+        problems.append(f"classified more than once: {', '.join(duplicates)}")
+    missing = sorted(set(corpus_ids) - set(classified))
+    if missing:
+        problems.append(
+            f"in the corpus but not classified: {', '.join(missing)} — an "
+            "unclassified bug silently changes the AC2 denominator"
+        )
+    strays = sorted(set(classified) - set(corpus_ids))
+    if strays:
+        problems.append(f"classified but not in the corpus: {', '.join(strays)}")
+
+    for entry in entries:
+        check_entry(entry, resolvers, schema, problems)
+
+    # Freeze.
+    committed = document.get("classification", {}).get("decision_hash")
+    computed = decision_hash(entries) if not problems else None
+    if computed and committed != computed:
+        if write:
+            text = classification.read_text(encoding="utf-8")
+            rewritten, count = re.subn(
+                r"^(\s*decision_hash:\s*).*$",
+                lambda m: m.group(1) + computed,
+                text,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            if count != 1:
+                problems.append(
+                    "cannot refreeze: classification.yaml has no single "
+                    "`decision_hash:` line to rewrite"
+                )
+            else:
+                classification.write_text(rewritten, encoding="utf-8")
+                print(f"corpus-classification: refroze decision_hash to {computed}")
+                committed = computed
+        else:
+            problems.append(
+                f"decision_hash is {committed}, but the verdicts hash to {computed}. "
+                "A verdict changed. That is allowed and sometimes right — but it "
+                "moves the AC2 denominator, so it must be a deliberate, reviewed "
+                "commit: rerun with --write and say why in the message."
+            )
+
+    # Published populations.
+    if not problems:
+        block = summary_block(entries)
+        text = readme.read_text(encoding="utf-8")
+        if extract_summary(text) is None:
+            problems.append(
+                f"corpus/README.md has no {SUMMARY_OPEN} block, so the populations "
+                "AC2 requires published are not published"
+            )
+        elif extract_summary(text) != block:
+            if write:
+                readme.write_text(replace_summary(text, block), encoding="utf-8")
+                print("corpus-classification: regenerated the README summary block")
+            else:
+                problems.append(
+                    "corpus/README.md's published summary does not match the "
+                    "classification. Regenerate it with --write."
+                )
+
+    for problem in problems:
+        print(f"corpus-classification: FAIL: {problem}", file=sys.stderr)
+    if problems:
+        return 1
+
+    in_scope = sum(1 for e in entries if e["verdict"] == "in-scope")
+    transcribed = sorted(p for p, (_fn, kind) in resolvers.items() if kind == "transcribed")
+    print(
+        f"corpus-classification: unverified: citation spaces {', '.join(transcribed)} "
+        "resolve against lists transcribed from Notion specifications, not against "
+        "the documents themselves — this gate runs offline."
+    )
+    print(
+        f"corpus-classification: PASS: {len(entries)} entries classified exactly once, "
+        f"{in_scope} in scope, every citation resolves, decision_hash matches, "
+        "populations published."
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Self-test.
+# ---------------------------------------------------------------------------
+
+
+def self_test() -> int:
+    """Prove each check fails on the mutation it exists to catch.
+
+    Every check below has a matching mutation. A gate whose failure nobody has
+    watched is a gate nobody knows works — the same argument that put a
+    self-test on the part linter and the IR hash check.
+    """
+    schema = json.loads(PART_SCHEMA.read_text(encoding="utf-8"))
+    grammar = load_frozen_grammar()
+    if grammar is None:
+        print("corpus-classification: FAIL: cannot import the frozen grammar", file=sys.stderr)
+        return 2
+    resolvers = build_resolvers(schema, grammar)
+
+    def problems_for(entry):
+        found: list[str] = []
+        check_entry(entry, resolvers, schema, found)
+        return found
+
+    good_in = {
+        "id": "BUG-0001", "verdict": "in-scope", "family": "erc-pin-role",
+        "cites": ["req:T2", "d3:pins[].role"], "rationale": "ok",
+    }
+    good_out = {
+        "id": "BUG-0002", "verdict": "out-of-scope", "reason": "v1-non-goal",
+        "cites": ["nongoal:thermal-analysis"], "rationale": "ok",
+    }
+    good_gap = {
+        "id": "BUG-0003", "verdict": "out-of-scope", "reason": "d3-gap",
+        "cites": ["d3:pins[].role"], "rationale": "ok",
+        "missing_fact": "reset-time strap semantics",
+        "missing_path": "pins[].strap", "gap_class": "strap-semantics",
+    }
+
+    good_promo = {
+        "id": "BUG-0004", "verdict": "out-of-scope", "reason": "d3-not-enumerated",
+        "cites": [], "rationale": "ok",
+        "missing_fact": "the value behind a conventional key",
+        "missing_path": "pins[].internal_pull",
+        "carried_at": "pins[].characteristics",
+        "residual_blocker": "the designs are the same netlist either way",
+        "residual_kind": "designs-identical",
+    }
+
+    checks = [
+        ("a well-formed in-scope entry passes", not problems_for(good_in)),
+        ("a well-formed out-of-scope entry passes", not problems_for(good_out)),
+        ("a well-formed d3-gap entry passes", not problems_for(good_gap)),
+        ("a malformed id is rejected", problems_for({**good_in, "id": "BUG-1"})),
+        ("an unknown verdict is rejected", problems_for({**good_in, "verdict": "maybe"})),
+        ("an unknown family is rejected", problems_for({**good_in, "family": "vibes"})),
+        ("an unknown reason is rejected", problems_for({**good_out, "reason": "too-hard"})),
+        ("an in-scope entry carrying a reason is rejected",
+         problems_for({**good_in, "reason": "d3-gap"})),
+        ("an out-of-scope entry carrying a family is rejected",
+         problems_for({**good_out, "family": "net-topology"})),
+        ("a missing rationale is rejected", problems_for({**good_in, "rationale": "  "})),
+        ("a citation with no space is rejected", problems_for({**good_in, "cites": ["T2"]})),
+        ("an unknown citation space is rejected",
+         problems_for({**good_in, "cites": ["vibes:T2"]})),
+        # The live resolvers, each against a plausible-looking miss.
+        ("a D3 field that does not exist is rejected",
+         problems_for({**good_in, "cites": ["d3:pins[].strap_level"]})),
+        ("a D3 field reached without the array step is rejected",
+         problems_for({**good_in, "cites": ["d3:pins.role"]})),
+        ("a real D3 field resolves", not problems_for({**good_in, "cites": ["d3:pins[].role", "d3:modes[].draw"]})),
+        ("a nested D3 field resolves",
+         not problems_for({**good_in, "cites": ["d3:pins[].role", "d3:pins[].abs_max.voltage"]})),
+        ("a grammar production that does not exist is rejected",
+         problems_for({**good_in, "cites": ["syntax:strap_decl"]})),
+        ("a real grammar production resolves",
+         not problems_for({**good_in, "cites": ["d3:pins[].role", "syntax:isolated_decl"]})),
+        ("a vocabulary member that does not exist is rejected",
+         problems_for({**good_in, "cites": ["vocab:pin_role.strap"]})),
+        ("a real vocabulary member resolves",
+         not problems_for({**good_in, "cites": ["d3:pins[].role", "vocab:pin_role.open_drain"]})),
+        # Sufficiency: the citation must be of the right KIND.
+        ("a non-goal verdict citing no non-goal is rejected",
+         problems_for({**good_out, "cites": ["req:T5"]})),
+        ("a deferred verdict citing a v1 measurement is rejected",
+         problems_for({**good_out, "reason": "dynamic-deferred", "cites": ["v2:ripple"]})),
+        ("a deferred verdict citing a deferred measurement passes",
+         not problems_for({**good_out, "reason": "dynamic-deferred", "cites": ["v2-deferred:phase-margin"]})),
+        ("a d3-gap with no missing_fact is rejected",
+         problems_for({**good_gap, "missing_fact": ""})),
+        ("a d3-gap with no missing_path is rejected",
+         problems_for({**good_gap, "missing_path": ""})),
+        ("a d3-gap whose missing_path RESOLVES is rejected",
+         problems_for({**good_gap, "missing_path": "pins[].role"})),
+        ("a d3-gap with an unknown gap_class is rejected",
+         problems_for({**good_gap, "gap_class": "vibes"})),
+        ("a well-formed d3-not-enumerated entry passes", not problems_for(good_promo)),
+        ("d3-not-enumerated with no carried_at is rejected",
+         problems_for({**good_promo, "carried_at": ""})),
+        ("d3-not-enumerated whose carried_at does not resolve is rejected",
+         problems_for({**good_promo, "carried_at": "pins[].nope"})),
+        ("d3-not-enumerated whose carried_at is checker-reliable is rejected",
+         problems_for({**good_promo, "carried_at": "pins[].role"})),
+        ("d3-not-enumerated whose carried_at resolves but is not an open map is rejected",
+         problems_for({**good_promo, "carried_at": "notes"})),
+        ("d3-not-enumerated with no residual_blocker is rejected",
+         problems_for({**good_promo, "residual_blocker": ""})),
+        ("d3-not-enumerated carrying a gap_class is rejected",
+         problems_for({**good_promo, "gap_class": "strap-semantics"})),
+        ("carried_at on a plain d3-gap is rejected",
+         problems_for({**good_gap, "carried_at": "parameters"})),
+        ("a residual_blocker on a plain d3-gap is allowed with a kind",
+         not problems_for({**good_gap, "residual_blocker": "still blocked",
+                           "residual_kind": "fact-compound"})),
+        ("a residual_blocker with no residual_kind is rejected",
+         problems_for({**good_gap, "residual_blocker": "still blocked"})),
+        ("an unknown residual_kind is rejected",
+         problems_for({**good_gap, "residual_blocker": "x", "residual_kind": "vibes"})),
+        ("a residual_kind with no residual_blocker is rejected",
+         problems_for({**good_gap, "residual_kind": "fact-compound"})),
+        ("residual_kind v1-non-goal without a non-goal citation is rejected",
+         problems_for({**good_gap, "residual_blocker": "x", "residual_kind": "v1-non-goal"})),
+        ("residual_kind v1-non-goal citing a non-goal passes",
+         not problems_for({**good_gap, "residual_blocker": "x",
+                           "residual_kind": "v1-non-goal",
+                           "cites": ["nongoal:xy-coordinates"]})),
+        ("fact-undocumented on a d3-not-enumerated entry is rejected",
+         problems_for({**good_promo, "residual_kind": "fact-undocumented"})),
+        ("a per-pin missing_path with a part-level carried_at is rejected",
+         problems_for({**good_promo, "carried_at": "parameters"})),
+        ("a d3 path reaching an open map through a reliable prefix is rejected",
+         problems_for({**good_in, "cites": ["d3:pins[].abs_max.voltage.conditions"]})),
+        ("a family whose citations do not support it is rejected",
+         problems_for({**good_in, "family": "abs-max-containment",
+                       "cites": ["d3:pins[].role"]})),
+        ("an unexercised family row still rejects a bad citation",
+         problems_for({**good_in, "family": "part-binding", "cites": ["d3:pins[].role"]})),
+        ("an unexercised family row accepts a good citation",
+         not problems_for({**good_in, "family": "part-binding",
+                           "cites": ["d3:pins[].role", "syntax:part_decl"]})),
+        ("a family whose citations do support it passes",
+         not problems_for({**good_in, "family": "abs-max-containment",
+                           "cites": ["d3:pins[].abs_max.voltage"]})),
+        ("at_risk on an out-of-scope entry is rejected",
+         problems_for({**good_out, "at_risk": "something"})),
+        ("an open-map d3 citation is rejected as not checker-reliable",
+         problems_for({**good_in, "cites": ["d3:parameters"]})),
+        ("a d3 citation into an open map is rejected",
+         problems_for({**good_in, "cites": ["d3:pins[].characteristics"]})),
+        ("a bare vocabulary name is not a citation",
+         problems_for({**good_in, "cites": ["vocab:pin_role"]})),
+        ("an in-scope entry citing only a transcribed requirement is rejected",
+         problems_for({**good_in, "cites": ["req:T2"]})),
+        ("missing_fact on a non-gap entry is rejected",
+         problems_for({**good_out, "missing_fact": "something"})),
+        ("an in-scope entry citing nothing capability-bearing is rejected",
+         problems_for({**good_in, "cites": ["nongoal:thermal-analysis"]})),
+    ]
+
+    # The freeze itself: a changed verdict must move the hash, and reordering
+    # must not.
+    a = [{"id": "A", "verdict": "in-scope", "family": "net-topology"},
+         {"id": "B", "verdict": "out-of-scope", "reason": "d3-gap"}]
+    b = [dict(a[1]), dict(a[0])]
+    c = [dict(a[0]), {**a[1], "reason": "v1-non-goal"}]
+    checks.append(("reordering entries does not move decision_hash", decision_hash(a) == decision_hash(b)))
+    checks.append(("changing one verdict moves decision_hash", decision_hash(a) != decision_hash(c)))
+    for field, value in (("gap_class", "bus-address"), ("missing_path", "pins[].other"),
+                         ("at_risk", "narrowed"), ("carried_at", "parameters"),
+                         ("residual_blocker", "still blocked"),
+                         ("residual_kind", "fact-compound")):
+        moved = [dict(a[0]), {**a[1], field: value}]
+        checks.append((f"changing {field} moves decision_hash",
+                       decision_hash(a) != decision_hash(moved)))
+
+    # And the published-summary contract: the block must be derived, so a
+    # count that no longer matches the data must not survive a round trip.
+    text = f"before\n{SUMMARY_OPEN}\nstale counts\n{SUMMARY_CLOSE}\nafter"
+    rewritten = replace_summary(text, "fresh counts")
+    checks.append(("the summary block is replaceable in place",
+                   extract_summary(rewritten) == "fresh counts" and "before" in rewritten and "after" in rewritten))
+
+    # WIRING. Everything above proves a matcher fires; none of it proves the
+    # shipped entry point CALLS the matchers. That gap is how a kill switch
+    # moves down a layer — each check verified, the loop that runs them
+    # verified by nobody — so these cases drive `run()` itself over a
+    # throwaway tree and assert the exit code.
+    checks.extend(_wiring_checks())
+
+    return _report(checks)
+
+
+def _wiring_checks():
+    """Drive the shipped `run()` over a temp tree, once clean and once mutated."""
+    import contextlib
+    import io
+    import tempfile
+
+    ids = [f"BUG-{n:04d}" for n in range(1, 51)]
+    good_bugs = {"entry_count": len(ids), "bugs": [{"id": i} for i in ids]}
+    good_entries = [
+        {"id": i, "verdict": "in-scope", "family": "net-topology",
+         "cites": ["syntax:net_decl"], "rationale": "ok"}
+        for i in ids[:25]
+    ] + [
+        {"id": i, "verdict": "out-of-scope", "reason": "v1-non-goal",
+         "cites": ["nongoal:thermal-analysis"], "rationale": "ok"}
+        for i in ids[25:]
+    ]
+
+    def render(bugs, entries, digest):
+        bug_text = "entry_count: {}\nbugs:\n".format(bugs["entry_count"]) + "".join(
+            f"- id: {b['id']}\n" for b in bugs["bugs"]
+        )
+        lines = [
+            "classification:",
+            "  corpus_entry_count: {}".format(bugs["entry_count"]),
+            f"  decision_hash: {digest}",
+            "entries:",
+        ]
+        for e in entries:
+            lines.append(f"- id: {e['id']}")
+            lines.append(f"  verdict: {e['verdict']}")
+            key = "family" if "family" in e else "reason"
+            lines.append(f"  {key}: {e[key]}")
+            lines.append("  cites: [{}]".format(", ".join(f'"{c}"' for c in e["cites"])))
+            for extra in ("gap_class", "missing_path", "missing_fact"):
+                if e.get(extra):
+                    lines.append(f"  {extra}: {e[extra]}")
+            lines.append(f"  rationale: {e['rationale']}")
+        return bug_text, "\n".join(lines) + "\n"
+
+    results = []
+    with tempfile.TemporaryDirectory() as raw:
+        tmp = Path(raw)
+
+        def attempt(bugs, entries, digest, readme_block=None):
+            bug_text, cls_text = render(bugs, entries, digest)
+            (tmp / "bugs.yaml").write_text(bug_text, encoding="utf-8")
+            (tmp / "classification.yaml").write_text(cls_text, encoding="utf-8")
+            block = summary_block(entries) if readme_block is None else readme_block
+            (tmp / "README.md").write_text(
+                f"{SUMMARY_OPEN}\n\n{block}\n\n{SUMMARY_CLOSE}\n", encoding="utf-8"
+            )
+            # Swallow the gate's own diagnostics. A self-test that prints
+            # "FAIL:" lines while passing trains people to skim past the
+            # word, which is the one word this file needs them to read.
+            sink = io.StringIO()
+            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+                return run(
+                    write=False,
+                    bugs=tmp / "bugs.yaml",
+                    classification=tmp / "classification.yaml",
+                    readme=tmp / "README.md",
+                )
+
+        digest = decision_hash(good_entries)
+        results.append(("run() passes a well-formed tree", attempt(good_bugs, good_entries, digest) == 0))
+
+        # The single check standing between AMB-61 and a moved denominator.
+        extra = {"entry_count": len(ids) + 1,
+                 "bugs": good_bugs["bugs"] + [{"id": "BUG-0099"}]}
+        results.append(("run() rejects a corpus bug with no verdict",
+                        attempt(extra, good_entries, digest) == 1))
+
+        flipped = [dict(e) for e in good_entries]
+        flipped[-1] = {"id": flipped[-1]["id"], "verdict": "in-scope",
+                       "family": "net-topology", "cites": ["syntax:net_decl"],
+                       "rationale": "ok"}
+        results.append(("run() rejects a verdict change against the committed hash",
+                        attempt(good_bugs, flipped, digest) == 1))
+
+        results.append(("run() rejects a README summary that drifted",
+                        attempt(good_bugs, good_entries, digest, readme_block="| stale |") == 1))
+
+        short_ids = ids[:40]
+        short_bugs = {"entry_count": len(short_ids), "bugs": [{"id": i} for i in short_ids]}
+        short_entries = [e for e in good_entries if e["id"] in set(short_ids)]
+        results.append(("run() rejects a corpus below AC2's floor of 50",
+                        attempt(short_bugs, short_entries, decision_hash(short_entries)) == 1))
+        results.append(("run() rejects a mis-declared corpus_entry_count",
+                        attempt({**good_bugs, "entry_count": 999}, good_entries, digest) == 1))
+    return results
+
+
+def _report(checks) -> int:
+    failed = 0
+    for name, ok in checks:
+        print(f"{'ok  ' if ok else 'FAIL'} {name}")
+        failed += 0 if ok else 1
+    if failed:
+        print(f"corpus-classification: SELF-TEST FAILED: {failed} check(s)", file=sys.stderr)
+        return 1
+    print(f"corpus-classification: self-test PASS: {len(checks)} checks.")
+    return 0
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--self-test", action="store_true", help="prove the checks can fail, then exit")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="refreeze decision_hash and regenerate the README summary",
+    )
+    args = parser.parse_args(argv)
+    try:
+        if args.self_test:
+            return self_test()
+        return run(write=args.write)
+    except GateUnavailable as exc:
+        print(f"corpus-classification: FAIL: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
