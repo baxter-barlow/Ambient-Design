@@ -574,6 +574,13 @@ def self_test():
     return 0
 
 
+# How many checks may legitimately be unperformable across the whole record set.
+# Today: two, both L12 containment on pins whose abs_max is relative. Raise it
+# deliberately and name the record; drifting up is how a rule opts out of
+# itself.
+MAXIMUM_UNCHECKED = 2
+
+
 def main() -> int:
     args = sys.argv[1:]
     if "--self-test" in args:
@@ -618,6 +625,22 @@ def main() -> int:
 
     # Printed on every run, and counted in the pass line, so a growing set of
     # unresolvable bounds is visible rather than silently shrinking coverage.
+    # A CEILING on unperformable checks. L12's containment rule becomes a
+    # printed note whenever an abs_max is relative ({"reference": "VCC"}), and
+    # nothing bounded how many checks could become notes -- so rewriting a
+    # numeric abs_max as a relative one turned a firing L12 into silence, and
+    # a +/-999 V recommended range on a pin whose abs_max is already relative
+    # is indistinguishable from correct data. Four NE555 pins carry relative
+    # bounds legitimately; that is the number this ceiling encodes.
+    if len(unchecked) > MAXIMUM_UNCHECKED:
+        print(f"lint: FAIL: {len(unchecked)} check(s) could not be performed, "
+              f"above the ceiling of {MAXIMUM_UNCHECKED}. A rule that opts out "
+              "of itself by changing the shape of the data it reads is not a "
+              "rule; raise this deliberately and say which record needs it.",
+              file=sys.stderr)
+        for note in unchecked:
+            print(f"  unchecked: {note}", file=sys.stderr)
+        return 1
     for note in unchecked:
         print(f"lint: unchecked: {note}")
 
