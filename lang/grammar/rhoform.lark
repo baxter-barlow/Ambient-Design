@@ -1,0 +1,140 @@
+// Rhoform syntax v0.1 — Lark
+//
+// GENERATED FROM lang/grammar/rhoform_syntax.py. Do not edit it: regenerate
+// with `python3 -m grammar.rhoform_syntax --write`. `make grammar` only CHECKS
+// that this file matches its source, and fails if it does not.
+//
+// The grammar is context-free over the layout-tokenized stream L5 fixes, so
+// INDENT, DEDENT and NEWLINE arrive as terminals and no rule below is sensitive
+// to column position. Every file opens with the L8 pragma `#pragma rhoform-syntax 0.1`.
+//
+// Pin roles, hardware kinds, measurement kinds and net attributes are NOT
+// keywords here: they are plain names checked against a closed list after
+// parsing, because `input` and `output` are pin roles and a design may
+// legitimately name an instance `input`. The four lists are published in the
+// source module as CLOSED_VOCABULARIES.
+//
+
+// A file is the L8 pragma and then modules, nothing else at file scope.
+start: _NEWLINE? PRAGMA _NEWLINE module_def+
+
+// A module groups instances, nets and assertions.
+module_def: "module" FREE_NAME ":" _NEWLINE _INDENT statement+ _DEDENT
+
+// Everything a module body can carry.
+statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl
+
+// This module's own interface port. The role is a pin_role name.
+port_decl: "port" FREE_NAME NAME _NEWLINE
+
+// L9b's intentional single-pin net, declared rather than inferred.
+isolated_decl: "isolated" endpoint _NEWLINE
+
+// A named net and its members, one per line.
+net_decl: "net" FREE_NAME net_attributes? ":" _NEWLINE _INDENT (endpoint _NEWLINE)+ _DEDENT
+
+// Typed net attributes (T5 voltage/ground domains).
+net_attributes: "(" (net_attribute ("," net_attribute)*)? ")"
+
+// A domain label. The attribute is a net_attribute name and the value is a string, never a bare name.
+net_attribute: NAME "=" STRING
+
+// An unnamed net written as a chain of endpoints.
+chain: chain_head ("~" endpoint)+ _NEWLINE
+
+// The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer.
+chain_head: FREE_NAME ("." NAME)?
+
+// Instantiation. Facts about the instance live in its optional body.
+instance_decl: FREE_NAME "=" "new" qualified_name arguments? (instance_body | _NEWLINE)
+
+// The block that carries everything about an instance but its values.
+instance_body: ":" _NEWLINE _INDENT instance_stmt+ _DEDENT
+
+// One fact about the enclosing instance.
+instance_stmt: pin_decl | part_decl | hardware_decl | negated_flag | flag
+
+// A component pin, optionally carrying footprint designators.
+pin_decl: "pin" NAME NAME designator* _NEWLINE
+
+// A footprint pin designator: `7`, or `A1` on a connector.
+designator: NUMBER | NAME
+
+// D1's binding ladder: an abstract constrained part, or a pinned pick.
+part_decl: "part" ("abstract" | STRING) (":" _NEWLINE _INDENT constraint+ _DEDENT | _NEWLINE)
+
+// One resolution constraint.
+constraint: NAME "=" value _NEWLINE
+
+// L9 hardware classification. The kind is a hardware_kind name.
+hardware_decl: "hardware" NAME _NEWLINE
+
+// An explicit false. The bare flag only means true, so denying a library default needs its own spelling.
+negated_flag: "no" ("exclude_from_bom" | "board_only") _NEWLINE
+
+// A fabrication flag set to true (L9c).
+flag: ("dnp" | "exclude_from_bom" | "board_only") _NEWLINE
+
+// L6's columnar sub-syntax for uniform tabular instances.
+table_decl: "table" qualified_name table_binding? "(" column_list? ")" ":" _NEWLINE _INDENT table_row+ _DEDENT
+
+// The part binding shared by every row.
+table_binding: "part" ("abstract" | STRING)
+
+// Column names. `part.<name>` addresses a constraint.
+column_list: column ("," column)*
+
+// A parameter name, or `part.` and a constraint name.
+column: NAME ("." NAME)?
+
+// An instance name and its values. HOW MANY is not a syntactic fact: a row carries one value per column of its header, and no context-free rule can count a preceding declaration. The grammar therefore accepts any number, including none — a table declaring no columns has rows that are a bare name — and the arity check belongs to the checker, which reports the mismatch against the header.
+table_row: FREE_NAME value* _NEWLINE
+
+// A V1 assertion. The tier is written because V1 makes it visible in every diagnostic.
+assertion: "assert" NAME ("static" | "dynamic") NAME "(" NAME ")" bound _NEWLINE
+
+// `within` takes an interval; a dimensionless one is two NUMBERs, since the lexer only forms a QUANTITY around a unit.
+bound: "within" (QUANTITY_INTERVAL | NUMBER "to" NUMBER) | "at" ("least" | "most") (QUANTITY_PLAIN | NUMBER)
+
+// Elaboration parameters, as keyword arguments.
+arguments: "(" (argument ("," argument)*)? ")"
+
+// One named parameter.
+argument: NAME "=" value
+
+// T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole.
+value: QUANTITY | QUANTITY_INTERVAL | STRING | NUMBER | "true" | "false"
+
+// A connectable point: this module's port, or an instance pin.
+endpoint: NAME ("." NAME)?
+
+// A dotted definition path, e.g. `rhoform.lib.passive.Resistor`.
+qualified_name: NAME ("." NAME)*
+
+// Terminals. QUANTITY_INTERVAL outranks QUANTITY so that the
+// `A to B` form lexes as the interval wherever both are legal.
+PRAGMA.2: /\#pragma[^\n]*/
+QUANTITY_INTERVAL.2: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
+QUANTITY.1: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
+QUANTITY_PLAIN: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
+FREE_NAME: /(?!(?:abstract|assert|at|board_only|dnp|dynamic|exclude_from_bom|false|hardware|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
+NAME: /[A-Za-z_][A-Za-z0-9_]*/
+NUMBER: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?/
+STRING: /"[ !#-~]*"/
+
+// A comment runs to end of line. A `#pragma` word is excluded so the L8 header is never swallowed as one — but `#pragmatic` is an ordinary comment, which is why the exclusion ends at a word boundary. ASCII only, like every other lexeme.
+COMMENT: /\#(?!pragma(?![A-Za-z0-9_]))[ -~]*/
+
+// A run of line breaks AND comment lines is ONE newline token. Without the comment alternative a comment-only line leaves two adjacent newlines, which no production accepts — so no file with a standalone comment would parse.
+_NEWLINE: ( /\n[ ]*/ | COMMENT )+
+
+// Ignored between tokens. Spaces only: a tab is a lexical error, because L5 says ASCII with indentation blocks and two files that differ by a tab must not be the same program.
+%ignore /[ ]+/
+%ignore COMMENT
+
+// Manufactured by the layout pass from the leading spaces of each line, suspended inside brackets so a parameter list may wrap.
+%declare _INDENT _DEDENT
+
+// The closing half of INDENT, one per level left.
+
+// The layout pass owes the grammar a newline token at the end of the last line whether or not the file's final byte is one, so that every statement really is newline-terminated. See `conformance.normalize`.

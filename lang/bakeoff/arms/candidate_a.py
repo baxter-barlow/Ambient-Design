@@ -41,6 +41,7 @@ from .base import (
     parse_port_decl,
     parse_role,
     render_assertion,
+    reserved_words_block,
     variant_flags,
 )
 from .shared import (
@@ -517,8 +518,12 @@ def language_card() -> str:
     card exceeds ~3K tokens and still can't express real designs"), so each
     candidate ships one and the bake-off measures it. A candidate that is
     cheaper per design but needs a bigger card to teach has not obviously won.
+
+    The reserved-word list is interpolated from `RESERVED` rather than
+    transcribed, so the card cannot fall behind the parser (see
+    `base.reserved_words_block`).
     """
-    return _LANGUAGE_CARD
+    return _LANGUAGE_CARD.replace("{reserved_words}", reserved_words_block())
 
 
 _LANGUAGE_CARD = '''\
@@ -528,7 +533,7 @@ Declarative electronics design. One fact per statement. ASCII only.
 Blocks are opened by `:` and delimited by 4-space indentation.
 Every file starts with:
 
-    #pragma language "0.1.0"
+    #pragma rhoform-syntax 0.1
 
 ## Modules
 
@@ -601,8 +606,7 @@ A mA uA nA, W mW uW, Hz kHz MHz, s ms us ns, m mm um, degC.
 
 ## Reserved words
 
-module port pin signal net table assert new part abstract hardware dnp
-exclude_from_bom board_only within at least most to static dynamic true false
+{reserved_words}
 
 None of these may be used as an instance, net or module name.
 

@@ -720,9 +720,9 @@ class ReservedWords(unittest.TestCase):
     """A keyword used as a name must say so, not blame the next token."""
 
     SOURCES = {
-        "candidate_a": '#pragma language "0.1.0"\n\nmodule M:\n'
+        "candidate_a": '#pragma rhoform-syntax 0.1\n\nmodule M:\n'
         "    signal = new aed.lib.passive.Resistor\n",
-        "candidate_b": '#pragma language "0.1.0"\n\nmodule M:\n'
+        "candidate_b": '#pragma rhoform-syntax 0.1\n\nmodule M:\n'
         "    net = new aed.lib.passive.Resistor(resistance = 1kohm)\n",
     }
 
@@ -744,15 +744,54 @@ class ReservedWords(unittest.TestCase):
             with self.subTest(word=word):
                 self.assertIn(word, RESERVED)
 
+    @staticmethod
+    def _reserved_paragraph(card: str) -> set[str]:
+        """The word-list paragraph under `## Reserved words`, as a word set.
+
+        Only the list itself, not the sentence after it: the point is to
+        compare a list against a list, and pulling in prose is how the
+        original substring check came to pass on `no` matching `none`.
+        """
+        body = card.split("## Reserved words", 1)[1].lstrip("\n")
+        return set(body.split("\n\n", 1)[0].split())
+
     def test_the_cards_list_the_reserved_words(self):
+        """The card's reserved-word SECTION, matched as words, not substrings.
+
+        This test used to ask `assertIn(word, card)` over the whole card, and
+        both checks it appears to make were vacuous: `no` is a substring of
+        `not`, `none` and `nominal`, and `isolated` appears in the prose
+        describing the `isolated` statement. Both cards had in fact fallen two
+        words behind `RESERVED`, and this test passed the whole time. A model
+        that believes `no` is a usable name emits a file the parser rejects,
+        which is the repair-loop cost P2 is about.
+        """
         from bakeoff.arms.base import RESERVED
 
         for arm in CANDIDATES:
             card = arm.language_card()
             with self.subTest(arm=arm.key):
-                self.assertIn("Reserved words", card)
-                for word in sorted(RESERVED):
-                    self.assertIn(word, card)
+                self.assertIn("## Reserved words", card)
+                self.assertEqual(
+                    set(RESERVED) - self._reserved_paragraph(card),
+                    set(),
+                    "a reserved word the card does not teach",
+                )
+
+    def test_the_cards_reserve_nothing_the_parser_allows(self):
+        """The converse: a word taught as reserved that the parser accepts.
+
+        Over-reporting is the cheaper failure but it is still wrong — it
+        tells a model a name is unavailable when it is, and costs tokens on
+        every card. Checked against the same constant, so the two can only
+        agree.
+        """
+        from bakeoff.arms.base import RESERVED
+
+        for arm in CANDIDATES:
+            card = arm.language_card()
+            with self.subTest(arm=arm.key):
+                self.assertEqual(self._reserved_paragraph(card) - set(RESERVED), set())
 
 
 class CoverageProbe(unittest.TestCase):
@@ -890,7 +929,7 @@ class NamespaceRules(unittest.TestCase):
     def test_a_net_label_colliding_with_a_module_port_is_rejected(self):
         """The own port was silently dropped and the module left severed."""
         source = (
-            '#pragma language "0.1.0"\n\n'
+            '#pragma rhoform-syntax 0.1\n\n'
             "module Leg:\n"
             "    port vin power_in\n"
             "    r = new aed.lib.passive.Resistor\n"
@@ -1001,7 +1040,7 @@ class LanguageCards(unittest.TestCase):
 class Columnar(unittest.TestCase):
     def test_a_short_table_is_rejected(self):
         source = (
-            '#pragma language "0.1.0"\n\n'
+            '#pragma rhoform-syntax 0.1\n\n'
             "module M:\n"
             "    table aed.lib.passive.Resistor part abstract (resistance):\n"
             "        r1  1kohm\n"
@@ -1019,7 +1058,7 @@ class Columnar(unittest.TestCase):
 
     def test_a_row_with_too_many_values_is_rejected(self):
         source = (
-            '#pragma language "0.1.0"\n\n'
+            '#pragma rhoform-syntax 0.1\n\n'
             "module M:\n"
             "    table aed.lib.passive.Resistor part abstract (resistance):\n"
             "        r1  1kohm\n"

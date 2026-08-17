@@ -1,10 +1,58 @@
-# Syntax bake-off
+# Syntax bake-off, and the syntax it froze
 
-Throwaway prototypes for the §8-Q1 syntax bake-off: two L5-conformant
-candidate grammars and the Starlark-restricted-Python baseline §4 names as the
-one fallback. They exist to be measured and then thrown away — AMB-33/R6 picks
-a winner and writes the grammar's real source of truth, AMB-43/R12 generates
-the parser from it, and nothing outside `lang/` may import this package.
+**Decided: candidate B. The frozen grammar is `grammar/`; the bake-off
+prototypes in `bakeoff/` are the evidence it was decided on, and are
+throwaway.** AMB-43/R12 generates the real parser from `grammar/`, and nothing
+outside `lang/` may import `bakeoff`.
+
+Two L5-conformant candidate grammars were measured against each other and
+against the Starlark-restricted-Python baseline §4 names as the one fallback.
+The freeze-basis memo — what was measured, what was not, and what the decision
+does and does not rest on — is [Syntax v0 Freeze Basis](https://app.notion.com/p/3bf627dbcc4281e38431ec227cbdc9f7)
+in Notion; this file is the operational half.
+
+## The frozen syntax (v0.1)
+
+| Path | Role |
+|---|---|
+| `grammar/rhoform_syntax.py` | **the source of truth.** Rules as data, plus both emitters |
+| `grammar/rhoform.ebnf` | generated. Do not edit |
+| `grammar/rhoform.lark` | generated. Do not edit — AMB-43's input |
+| `grammar/conformance.py` | builds a real LALR parser from the artifact |
+
+```
+make grammar                                   # both gates below
+cd lang && python3 -m grammar.rhoform_syntax --check   # artifacts are current
+cd lang && python3 -m grammar.rhoform_syntax --write   # regenerate them
+cd lang && python3 -m grammar.conformance      # the grammar parses the corpus
+```
+
+L5 asks for "EBNF + Lark artifacts generated from one source of truth", and
+the wording is doing work: two hand-maintained files would disagree
+eventually, and the disagreement would surface as a parser accepting what the
+spec forbids. Both artifacts render from one tree, and a test fails if either
+falls behind it.
+
+**The Lark artifact is loaded by Lark and run over the corpus, every CI run.**
+A grammar file nobody parses with is prose — the same mistake as a gate that
+prints "agrees with its anchor" while comparing a refdes list, which this
+repository shipped once already. The conformance gate needs the pinned `lark`
+and **exits 2, not 0, when it is missing**: an unavailable gate is not a pass.
+
+Four things are deliberately *not* keywords: pin roles (T2), hardware kinds
+(L9), measurement kinds (V2) and net attributes (T5). `input` and `output` are
+pin roles, and a grammar that made them keywords would reject `input = new
+...`, which is a legal design. They are closed vocabularies checked after
+parsing, exactly as the prototype checks them, and a test pins that they stay
+usable as names.
+
+The one word the freeze drops from the prototypes' shared reserved set is
+`signal` — candidate A's net declaration, which lost. `RESERVED` is a superset
+of both candidates' keywords because the bake-off needed one, and carrying the
+loser's vocabulary into the frozen language would reserve a useful identifier
+for a syntax that no longer exists.
+
+## The bake-off that decided it
 
 ```
 python3 -m bakeoff check                    # gate: round trip, agreement, anchors
@@ -12,7 +60,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 108 tests, stdlib only
+python3 -m unittest discover -s tests -t .  # 147 tests (24 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
@@ -133,15 +181,35 @@ over each arm's canonical rendering.
 
 | Design | Arm | explicit | inferred | +columnar |
 |---|---|---:|---:|---:|
-| blinker-555 | candidate_a | 1223 | 905 | 905 |
-| blinker-555 | candidate_b | 980 | **747** | 747 |
+| blinker-555 | candidate_a | 1224 | 906 | 906 |
+| blinker-555 | candidate_b | 981 | **748** | 748 |
 | blinker-555 | starlark | 1144 | 822 | — |
-| esp32s3-devboard | candidate_a | 8553 | 6317 | 5130 |
-| esp32s3-devboard | candidate_b | 6630 | **5002** | **4159** |
+| esp32s3-devboard | candidate_a | 8554 | 6318 | 5131 |
+| esp32s3-devboard | candidate_b | 6631 | **5003** | **4160** |
 | esp32s3-devboard | starlark | 7273 | 5064 | — |
 
-Language cards: candidate_a 858, candidate_b 881, starlark 823 tokens — all
+Language cards: candidate_a 863, candidate_b 886, starlark 823 tokens — all
 comfortably inside §4's ~3K flip-criterion budget.
+
+**The decision, on the `inferred` cell** — the realistic one, and the one the
+arms were built to be compared on:
+
+| | (a) blinker | (c) esp32 | (c) +columnar | card | defects | localised |
+|---|---:|---:|---:|---:|---:|---:|
+| candidate_a | 906 | 6318 | 5131 | 863 | 15/15 | 100% |
+| **candidate_b** | **748** | **5003** | **4160** | 886 | **16/16** | 94% |
+| starlark | 822 | 5064 | — | 823 | 14/16 | 100% |
+
+B is 17.4% cheaper than A on (a) and 20.8% on (c), and it is the only arm that
+beats the Starlark baseline on both designs. It detects one defect more than A
+— A cannot express the dropped-bracket mutation on (c) at all — and pays for
+its block scoping with one mis-localised diagnostic in sixteen, which is the
+cost its own docstring predicted. A's 23-token-smaller card decides nothing
+against a ~3K budget.
+
+**What the decision does not rest on: emission accuracy.** No model has been
+near either grammar. AC5a is AMB-33's successor work, and if it contradicts
+this, the flip criterion in §4 is the mechanism, not this table.
 
 **T9 annotation tax: 24-30% in aggregate, and the aggregate is the wrong
 number.** An earlier version of this file called it a lower bound. Decomposing
@@ -287,6 +355,9 @@ for a construct nobody proposed.
 
 | Path | Role |
 |---|---|
+| `grammar/rhoform_syntax.py` | the frozen syntax v0, as data, and both emitters |
+| `grammar/rhoform.ebnf`, `grammar/rhoform.lark` | generated artifacts; never hand-edited |
+| `grammar/conformance.py` | builds a real parser from the Lark artifact |
 | `design-model.schema.json` | the arm-neutral design model, with negative controls under `examples/negative/` |
 | `examples/coverage-probe.design.json` | the synthetic probe that makes the gate's coverage complete |
 | `bakeoff/quantities.py` | the shared literal mini-language, exact decimals |
