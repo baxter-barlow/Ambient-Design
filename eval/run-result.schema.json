@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ambient.science/rhoform/schemas/eval-run-result/0.schema.json",
   "title": "Rhoform evaluation run record v0",
-  "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence \u2014 which matters because the repository ships exactly such a fixture for offline testing.",
+  "description": "The evidence behind an AC5 gate decision or a bake-off measurement. A run record must answer, years later and without its author, what was measured and under what conditions: which model at which sampling parameters, against which gate, under which tokenizer, and under which reading of the iteration budget.\n\nThe load-bearing header and verdict fields are closed and required. Per-trial detail is intentionally permissive: it is diagnostic material whose shape will change as the harness grows, and freezing it would make the harness harder to improve without making any decision safer.\n\nSCHEMA-ENFORCED SAFETY PROPERTY: `authoritative` is false unless the record was produced by a live pinned model AND a gating tokenizer, and a non-authoritative record must carry the reasons why. That makes it impossible for a replayed, scripted or stub-tokenizer run to present itself as gate evidence — which matters because the repository ships exactly such a fixture for offline testing.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -320,7 +320,7 @@
         "minimum_effect_of_interest",
         "power_against_declared_effect"
       ],
-      "description": "The \u00a74 standalone-DSL flip criterion. The power fields are required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.\n\n`minimum_effect_of_interest` and `power_against_declared_effect` are required but NULLABLE. Null means no effect size was declared before the run, and in that case the verdict must be 'inconclusive' \u2014 see the constraint below. Making them required-but-nullable rather than optional forces the record to state the absence explicitly instead of leaving a reader unable to tell 'not declared' from 'not recorded'.",
+      "description": "The §4 standalone-DSL flip criterion. The power fields are required so a non-significant result cannot be reported without the information needed to tell 'no difference' from 'no power to see one'.\n\n`minimum_effect_of_interest` and `power_against_declared_effect` are required but NULLABLE. Null means no effect size was declared before the run, and in that case the verdict must be 'inconclusive' — see the constraint below. Making them required-but-nullable rather than optional forces the record to state the absence explicitly instead of leaving a reader unable to tell 'not declared' from 'not recorded'.",
       "properties": {
         "test": {
           "type": "string",
@@ -511,13 +511,12 @@
           "model": {
             "properties": {
               "kind": {
-                "not": {
-                  "enum": [
-                    "replay",
-                    "scripted",
-                    "stub"
-                  ]
-                }
+                "enum": [
+                  "anthropic",
+                  "openai",
+                  "live"
+                ],
+                "description": "ALLOWLIST of live model kinds. This was a denylist of ('replay','scripted','stub'), which meant an unrecognised kind — 'mock', 'testdouble', a typo — satisfied the authoritative branch. rhoform_eval/results.py was moved to an allowlist and this was not, so the README's claim that 'the schema enforces the same rule independently' was false and the layer that applies to a THIRD-PARTY record, the only one this harness did not produce, was the one still carrying the defect."
               }
             },
             "required": [
@@ -527,13 +526,11 @@
           "gate": {
             "properties": {
               "kind": {
-                "not": {
-                  "enum": [
-                    "replay",
-                    "scripted",
-                    "stub"
-                  ]
-                }
+                "enum": [
+                  "command",
+                  "compiler"
+                ],
+                "description": "ALLOWLIST of live gate kinds. This was a denylist of ('replay','scripted','stub'), which meant an unrecognised kind — 'mock', 'testdouble', a typo — satisfied the authoritative branch. rhoform_eval/results.py was moved to an allowlist and this was not, so the README's claim that 'the schema enforces the same rule independently' was false and the layer that applies to a THIRD-PARTY record, the only one this harness did not produce, was the one still carrying the defect."
               }
             },
             "required": [
