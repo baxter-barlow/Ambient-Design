@@ -153,7 +153,12 @@ def _key_of(needle: str) -> str:
     # `@` FIRST: `uses: actions/checkout@<sha>` must key on
     # `uses: actions/checkout@`, not on `uses: `, or every action line in the
     # file is compared against one action's pin.
-    for separator in ("@", "==", ": ", ":"):
+    # `=` last, after `==`, so `jsonschema==4.26.0` still keys on `jsonschema==`
+    # while `ngspice=46+ds-1` keys on `ngspice=` instead of falling through to
+    # the read-by-key path — where it was reported as "the value itself is not
+    # compared here", which was false, and where it lost the every-occurrence
+    # rule that a second `ngspice=47+ds-1` line would otherwise trip.
+    for separator in ("@", "==", ": ", ":", "="):
         head, found, _ = needle.partition(separator)
         if found:
             return head + found
