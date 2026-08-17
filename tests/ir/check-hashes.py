@@ -79,12 +79,69 @@ IR_EXAMPLES = ROOT / "ir" / "examples"
 #   4. Non-ASCII characters emitted literally rather than \u-escaped, so the
 #      bytes are the text.
 #   5. NaN and Infinity are not representable and are an error, not `NaN`.
-#   6. Arrays keep their order — order is meaning in this IR, and the sort
-#      rules for each array are the schema's business, not the encoder's.
+#   6. Arrays keep their order — order is meaning in this IR. The schema states
+#      a sort rule for each array; clause 6 alone therefore did NOT deliver
+#      "two toolchains agree on one design", because those rules were enforced
+#      by nothing: reversing `connections` gave the same 27 connections a
+#      different design_hash and `make all` stayed green. `sort_problems()`
+#      below enforces every rule the schema states, so one design has one
+#      legal serialization and therefore one hash.
 #
 # The hash is taken with `header.design_hash` set to the empty string, which is
 # unchanged, and is now done structurally rather than by regex.
 CANONICAL_PROFILE = "rhoform-canonical-json/1"
+
+# The sort rule the schema states for each array, as (pointer-ish label, key).
+# `key` returns the tuple the entries must be ascending in.
+SORT_RULES = (
+    ("instances", lambda d: d.get("instances") or [],
+     lambda e: (e.get("path") or "",)),
+    ("nets", lambda d: d.get("nets") or [],
+     lambda e: (e.get("name") or "",)),
+    ("connections", lambda d: d.get("connections") or [],
+     # `port` is a nested {instance, port} object, not two sibling strings.
+     lambda e: (e.get("net") or "",
+                ((e.get("port") or {}).get("instance") or ""),
+                ((e.get("port") or {}).get("port") or ""))),
+    ("assertions", lambda d: d.get("assertions") or [],
+     lambda e: (e.get("path") or "",)),
+)
+
+
+def sort_problems(document, label):
+    """Every array order the schema declares, actually enforced.
+
+    The schema says "Sorted bytewise-ascending by `path` (determinism
+    contract)" and similar on four arrays plus per-instance `ports`. Nothing
+    checked it, and clause 6 of the canonical profile deliberately preserves
+    array order, so one design had as many design_hash values as it had
+    orderings -- which is precisely the property the hash exists to deny.
+    """
+    problems = []
+    for name, pick, key in SORT_RULES:
+        entries = pick(document)
+        keys = [key(e) for e in entries]
+        if keys != sorted(keys):
+            first = next((i for i in range(1, len(keys)) if keys[i] < keys[i - 1]), None)
+            problems.append(
+                f"{label}: `{name}` is not in the order the schema declares "
+                f"(entry {first} sorts before entry {first - 1}: "
+                f"{keys[first]!r} < {keys[first - 1]!r}). Array order is part of "
+                "the canonical serialization, so an unsorted array gives one "
+                "design more than one design_hash.")
+    for instance in document.get("instances") or []:
+        names = [p.get("name") or "" for p in (instance.get("ports") or [])]
+        if names != sorted(names):
+            problems.append(
+                f"{label}: instance {instance.get('path')!r} has `ports` out of "
+                "the bytewise-ascending order the schema declares.")
+        for port in instance.get("ports") or []:
+            pins = port.get("pins")
+            if isinstance(pins, list) and pins != sorted(pins):
+                problems.append(
+                    f"{label}: {instance.get('path')!r}/{port.get('name')!r} has "
+                    "`pins` out of the ascending order the schema declares.")
+    return problems
 
 
 def _canonical_number(value):
@@ -164,6 +221,8 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
             f"hashes under {CANONICAL_PROFILE!r}. A document that names a "
             "different profile is hashed under rules nobody has stated."
         )
+
+    problems.extend(sort_problems(document, rel))
 
     committed = header.get("design_hash")
     try:
@@ -248,6 +307,7 @@ def self_test() -> int:
     checks = []
 
     genuine = design_hash_of(document)
+
     committed = document["header"]["design_hash"]
     checks.append(("the committed example verifies", genuine == committed))
 
@@ -283,6 +343,41 @@ def self_test() -> int:
         "canonical_bytes sorts keys and strips insignificant whitespace",
         canonical_bytes({"b": 1, "a": {"d": 2, "c": 3}})
         == b'{"a":{"c":3,"d":2},"b":1}\n',
+    ))
+    # THE SORT RULES. Clause 6 keeps array order, so the schema's per-array
+    # sort rules are what make one design have one hash -- and they were
+    # enforced by nothing: reversing `connections` gave the same 27 connections
+    # a different design_hash with `make all` green.
+    checks.append((
+        "connections out of their declared order are caught",
+        any("connections" in p for p in sort_problems({"connections": [
+            {"net": "b", "port": {"instance": "i", "port": "p"}},
+            {"net": "a", "port": {"instance": "i", "port": "p"}}]}, "probe")),
+    ))
+    checks.append((
+        "instances out of path order are caught",
+        any("instances" in p for p in sort_problems(
+            {"instances": [{"path": "/b"}, {"path": "/a"}]}, "probe")),
+    ))
+    checks.append((
+        "nets out of name order are caught",
+        any("nets" in p for p in sort_problems(
+            {"nets": [{"name": "B"}, {"name": "A"}]}, "probe")),
+    ))
+    checks.append((
+        "an instance's ports out of order are caught",
+        any("ports" in p for p in sort_problems({"instances": [
+            {"path": "/x", "ports": [{"name": "b"}, {"name": "a"}]}]}, "probe")),
+    ))
+    checks.append((
+        "pin designators out of order are caught",
+        any("pins" in p for p in sort_problems({"instances": [
+            {"path": "/x", "ports": [{"name": "a", "pins": ["2", "1"]}]}]}, "probe")),
+    ))
+    checks.append((
+        "the committed IR satisfies every sort rule the schema states",
+        not sort_problems(json.loads((IR_EXAMPLES / "blinker.ir.json").read_text(
+            encoding="utf-8")), "committed"),
     ))
     checks.append((
         "an integral float and its integer hash the same",
@@ -335,6 +430,23 @@ def self_test() -> int:
                        any("canonicalizes to" in p for p in problems)))
         checks.append(("check_document reports a missing source map",
                        any("no paired source map" in p for p in problems)))
+
+        # WIRING for the sort rules: the cases above call sort_problems
+        # directly, so cutting the one line that calls it from check_document
+        # left every one of them green.
+        permuted = Path(tmp) / "permuted.ir.json"
+        shuffled = json.loads(text)
+        shuffled["connections"].reverse()
+        shuffled["header"]["design_hash"] = ""
+        shuffled["header"]["design_hash"] = design_hash_of(shuffled)
+        permuted.write_text(json.dumps(shuffled), encoding="utf-8")
+        sort_problems_seen, sort_notes = [], []
+        check_document(permuted, sort_problems_seen, sort_notes)
+        checks.append((
+            "check_document reports an array out of its declared order, even "
+            "when the permuted document's own hash is self-consistent",
+            any("not in the order the schema declares" in p
+                for p in sort_problems_seen)))
 
         # The three legs a blind pass could delete with everything still green:
         # the declared-profile check, the source-map design_hash comparison, and
