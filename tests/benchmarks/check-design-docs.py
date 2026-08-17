@@ -50,6 +50,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # and exited 0. These counts are the answer to "how many rows should be here",
 # which the document cannot be trusted to supply.
 REQUIRED = {"blinker-555": 5, "buck-3v3": 5}
+# 2 assertions x 2 artifacts (design.json and the IR).
+MINIMUM_MODEL_WINDOWS = 4
 
 # A row is `| cell | cell | ... |`. The verdict column is the last cell.
 ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$")
@@ -355,6 +357,77 @@ def _missing_doc_probe():
         return problems
 
 
+# design.json / IR assertion windows that must agree with the benchmark's
+# assertions.yaml. Nothing compared them, so `lang/examples/` and
+# `ir/examples/` shipped the SUPERSEDED blinker windows -- 0.524/0.544 duty and
+# 0.932/1.051 Hz -- while assertions.yaml carried the corrected ones. That
+# model is what lang/README.md calls "the design AC5a runs its trials on", and
+# it encoded a duty window this repository's own derivation proves excludes the
+# part's guaranteed THRES corner.
+MODEL_LINKS = (
+    ("blinker-555", ROOT / "lang" / "examples" / "blinker-555.design.json",
+     ROOT / "ir" / "examples" / "blinker.ir.json"),
+)
+# assertions.yaml name -> (measurement, scale from the yaml unit to the model's)
+LINKED_ASSERTIONS = {
+    "duty_cycle_high": ("duty_cycle", 0.01),
+    "osc_frequency": ("frequency", 1.0),
+}
+
+
+def model_problems(problems):
+    """Hold the DSL model and the IR to the benchmark's declared windows."""
+    import json
+    checked = 0
+    for name, model_path, ir_path in MODEL_LINKS:
+        spec_path = ROOT / "benchmarks" / name / "assertions.yaml"
+        if not spec_path.is_file():
+            problems.append(f"{name}: no assertions.yaml to hold the model to")
+            continue
+        try:
+            import yaml
+        except ImportError as exc:
+            raise GateUnavailable(f"PyYAML is required: {exc}") from exc
+        spec = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
+        want = {}
+        for assertion in spec.get("assertions") or []:
+            link = LINKED_ASSERTIONS.get(assertion.get("name"))
+            if link is None:
+                continue
+            window = assertion.get("window")
+            if not isinstance(window, list) or len(window) != 2:
+                continue
+            measurement, scale = link
+            want[measurement] = tuple(
+                float(str(v).split()[0]) * scale for v in window)
+        for path in (model_path, ir_path):
+            if not path.is_file():
+                problems.append(f"{path.name} is missing")
+                continue
+            document = json.loads(path.read_text(encoding="utf-8"))
+            for assertion in document.get("assertions") or []:
+                measurement = assertion.get("measurement")
+                if measurement not in want:
+                    continue
+                bounds = assertion.get("bounds") or {}
+                low, high = float(bounds.get("min")), float(bounds.get("max"))
+                want_low, want_high = want[measurement]
+                if (abs(low - want_low) > 1e-9 or abs(high - want_high) > 1e-9):
+                    problems.append(
+                        f"{path.name}: {measurement} window is [{low}, {high}] "
+                        f"but benchmarks/{name}/assertions.yaml declares "
+                        f"[{want_low}, {want_high}]. The model AC5a runs on and "
+                        "the window the benchmark gates on must be the same "
+                        "numbers.")
+                    continue
+                checked += 1
+    if checked < MINIMUM_MODEL_WINDOWS:
+        problems.append(
+            f"reconciled {checked} model window(s), below the floor of "
+            f"{MINIMUM_MODEL_WINDOWS}.")
+    return checked
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -374,6 +447,7 @@ def main(argv):
     try:
         for case in cases:
             total += check_case(case, problems)
+        windows = model_problems(problems) if not argv else 0
     except GateUnavailable as exc:
         print(f"design-docs: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -384,7 +458,8 @@ def main(argv):
             print(f"  {problem}", file=sys.stderr)
         return 1
     print(f"design-docs: PASS: {total} results row(s) agree with the "
-          "measurements their benchmarks record.")
+          f"measurements their benchmarks record, and {windows} model/IR "
+          "assertion window(s) agree with the benchmark that gates them.")
     return 0
 
 

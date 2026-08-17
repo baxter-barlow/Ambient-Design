@@ -3,7 +3,7 @@
     "ir_version": 0,
     "language_version": "0.1.0",
     "design_name": "blinker_555",
-    "design_hash": "sha256:bc021dab333fc0cd63f4a80993799a37de993a2b53731bc4b59d9e237cc66537",
+    "design_hash": "sha256:b2a4c088018511439166f0c214d70de0546739886191067b27686f4b421cd419",
     "source_hash": "sha256:af59b1271c7a742c1a31cb3e46b3c9e41d7b27ab8d5bf7cd6b1f76accd22a459",
     "generator": {
       "name": "rhoformc",
@@ -737,8 +737,8 @@
       },
       "bounds": {
         "unit": "1",
-        "min": 0.524,
-        "max": 0.544
+        "min": 0.533,
+        "max": 0.558
       }
     },
     {
@@ -750,8 +750,8 @@
       },
       "bounds": {
         "unit": "Hz",
-        "min": 0.932,
-        "max": 1.051
+        "min": 0.923,
+        "max": 1.052
       }
     }
   ]

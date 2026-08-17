@@ -214,7 +214,43 @@ against a ~3K budget.
 near either grammar. AC5a is AMB-33's successor work, and if it contradicts
 this, the flip criterion in §4 is the mechanism, not this table.
 
-**T9 annotation tax: 24-30% in aggregate (23.9-30.1 measured), and the aggregate is the wrong
+**T9 annotation tax: 24-30% in aggregate (23.8-30.1 measured), and the aggregate is the wrong
+number.** An earlier version of this file called it a lower bound. Decomposing
+it per rule shows why that was wrong:
+
+| Design | Arm | T9-1 library pins | T9-2 inference | T9-3 L9 flags | all |
+|---|---|---:|---:|---:|---:|
+| blinker-555 | candidate_a | 15.1% | 7.7% | 3.4% | 26.1% |
+| blinker-555 | candidate_b | 14.3% | 7.0% | 2.5% | 23.8% |
+| blinker-555 | starlark | 20.4% | 4.9% | 2.7% | 28.0% |
+| esp32s3-devboard | candidate_a | 17.3% | 6.0% | 2.9% | 26.1% |
+| esp32s3-devboard | candidate_b | 16.5% | 5.8% | 2.3% | 24.6% |
+| esp32s3-devboard | starlark | 23.3% | 4.2% | 2.6% | 30.1% |
+
+Language cards: candidate_a 865, candidate_b 888, starlark 827 tokens — all
+comfortably inside §4's ~3K flip-criterion budget.
+
+**The decision, on the `inferred` cell** — the realistic one, and the one the
+arms were built to be compared on:
+
+| | (a) blinker | (c) esp32 | (c) +columnar | card | defects | localised |
+|---|---:|---:|---:|---:|---:|---:|
+| candidate_a | 993 | 6318 | 5131 | 865 | 15/15 | 100% |
+| **candidate_b** | **814** | **5003** | **4160** | 888 | **16/16** | 94% |
+| starlark | 901 | 5124 | — | 827 | 14/16 | 100% |
+
+B is 18.0% cheaper than A on (a) and 20.8% on (c), and it is the only arm that
+beats the Starlark baseline on both designs. It detects one defect more than A
+— A cannot express the dropped-bracket mutation on (c) at all — and pays for
+its block scoping with one mis-localised diagnostic in sixteen, which is the
+cost its own docstring predicted. A's 23-token-smaller card decides nothing
+against a ~3K budget.
+
+**What the decision does not rest on: emission accuracy.** No model has been
+near either grammar. AC5a is AMB-33's successor work, and if it contradicts
+this, the flip criterion in §4 is the mechanism, not this table.
+
+**T9 annotation tax: 24-30% in aggregate (23.8-30.1 measured), and the aggregate is the wrong
 number.** An earlier version of this file called it a lower bound. Decomposing
 it per rule shows why that was wrong:
 
@@ -241,7 +277,7 @@ SMD build, so a library carrying one would hand the measurement a number that
 depends on which design is in the corpus — which biases T9-2 DOWN.
 
 **L6 columnar saving: 843-1187 tokens (17-19%) on (c) at the default
-threshold, 45-82 (6-8%) on (a) — but the threshold is a judgement, so the
+threshold, 45-82 (5.5-8.3%) on (a) — but the threshold is a judgement, so the
 report sweeps it.**
 `COLUMNAR_MIN_ROWS = 3` was documented here as "the smallest group where a
 table is shorter than the statements it replaces". Sweeping it showed that is
