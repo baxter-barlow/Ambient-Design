@@ -28,8 +28,8 @@ INTEGER ::= /-?(?:0|[1-9][0-9]*)/
 STRING ::= /"[ !#-~]*"/
 
 (* The lexical layer. *)
-(* KEYWORD BOUNDARY. Every quoted word literal below and in the
-   productions above matches only when NOT followed by [A-Za-z0-9_].
+(* KEYWORD BOUNDARY. Every quoted word literal in the productions
+   of this grammar matches only when NOT followed by [A-Za-z0-9_].
    Without this rule `moduleM:` lexes as `module` + `M` and parses as
    `module M:`; the Lark artifact encodes it per-literal as
    /word(?![A-Za-z0-9_])/. An implementer who ignores this rule builds

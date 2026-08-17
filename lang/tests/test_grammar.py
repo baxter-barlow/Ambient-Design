@@ -613,7 +613,14 @@ class Conformance(unittest.TestCase):
              BODY + "        pinb passive\n"),
             (BODY + "        pin a passive 1\n",
              BODY + "        pina passive 1\n"),
-            (BODY + "        dnp\n", BODY + "        dnpx\n"),
+            # `part` and `most` were load-bearing and pinned by nothing: an
+            # auditor deleted either guard with `make all` green.
+            # `partabstract:` is one of the four constructs the generator's own
+            # comment names as the defect being fixed, and it had no probe.
+            (BODY + "        part abstract:\n            package = \"x\"\n",
+             BODY + "        partabstract:\n            package = \"x\"\n"),
+            (HEAD + "module M:\n    assert A static frequency(N_A) at most 1Hz\n" + NET,
+             HEAD + "module M:\n    assert A static frequency(N_A) at most1Hz\n" + NET),
             (HEAD + "module M:\n    tp1 = new hardware:\n        hardware test_point\n",
              HEAD + "module M:\n    tp1 = new hardware:\n        hardwaretest_point\n"),
             (HEAD + "module M:\n    assert A static frequency(N_A) within 1Hz to 2Hz\n" + NET,

@@ -79,7 +79,7 @@ assertions:
       datasheet_typ: "vdo = 0.34 x 0.3916 = 0.133 V; required = 3.366 + 0.133 = 3.499 V; margin = 3.818 - 3.499 = +0.319 V"
       inhouse_guardband: "vdo = 0.50 x 0.3916 = 0.196 V; required = 3.366 + 0.196 = 3.562 V; margin = 3.818 - 3.562 = +0.257 V"
     secondary_rows:
-      usbc_min_4p75_guardband: "4.335 - 3.562 = +0.774 V"   # mixes usbc-min input (typ current) with worst-current required V_in; conservative
+      usbc_min_4p75_guardband: "4.335 - 3.5618 = +0.773 V"   # mixes usbc-min input (typ current) with worst-current required V_in; conservative
       nominal_5p00_typ_vdo: "4.585 - (3.300 + 0.34 x 0.356 = 3.421) = +1.164 V"
     status: PASS   # passes under both the datasheet-typ and the guardband basis
     caveat: "Datasheet specifies dropout at 1 A as typ-only (340 mV, 2.6-3.3 V row; features page quotes 360 mV) with no max; the 0.50 V/A row is our guardband, not vendor data. SS34 Vf=0.40 V at 0.4 A and PTC R range remain stated assumptions; re-derive from vendor datasheets before freeze"
