@@ -215,7 +215,7 @@ RESIDUAL_KIND_EMPTIES_PROMOTION = (
 )
 
 # `at_risk` entries group into the decisions that would lose them together.
-# Reporting sixteen conditional verdicts as sixteen independent risks both
+# Reporting 17 conditional verdicts as 17 independent risks both
 # overstates the exposure and buries the useful fact: two of these decisions
 # fail AC2 on their own, which is something to go and settle rather than a
 # number to worry about.
@@ -439,7 +439,7 @@ def build_resolvers(schema, grammar):
 def decision_hash(entries) -> str:
     """Hash the decisions, and only the decisions.
 
-    Covers the verdict, its key, and — because `d3-gap` is 27 of the 39
+    Covers the verdict, its key, and — because `d3-gap` is 29 of the 39
     out-of-scope entries — the falsifiable `gap_class` and `missing_path` that
     justify it. The rationale prose stays out: hashing it would make a typo fix
     indistinguishable from a reclassification, and people would learn to update
