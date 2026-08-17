@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ambient.science/rhoform/schemas/netlist-ir/0.schema.json",
   "title": "Rhoform Netlist IR v0",
-  "description": "Versioned JSON intermediate representation of a fully elaborated Rhoform design. This is the single artifact consumed by ALL backends (KiCad export, SPICE emission, rendering, BOM, diagnostics). It is inspectable and versioned, but carries NO external stability promise in v1.0 (requirement P7): only Rhoform's own toolchain may depend on its shape. The document is a canonical serialization: object keys in the fixed order given by this schema, arrays sorted as described on each field, UTF-8, no wall-clock timestamps or host-specific data anywhere (determinism contract). Extension points are restricted to properties matching ^x_ where explicitly allowed.",
+  "description": "Versioned JSON intermediate representation of a fully elaborated Rhoform design. This is the single artifact consumed by ALL backends (KiCad export, SPICE emission, rendering, BOM, diagnostics). It is inspectable and versioned, but carries NO external stability promise in v1.0 (requirement P7): only Rhoform's own toolchain may depend on its shape. The document is a canonical serialization under the `rhoform-canonical-json/1` profile, which tests/ir/check-hashes.py defines and implements: object keys sorted by Unicode code point (NOT schema order -- open maps such as `parameters` have no schema order), arrays keep their given order, UTF-8, one numeric spelling per value, no wall-clock timestamps or host-specific data anywhere (determinism contract). Because the encoder preserves array order, the per-field sort rules below are load-bearing and are enforced by that gate: an unsorted array would give one design more than one hash. Extension points are restricted to properties matching ^x_ where explicitly allowed.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {
@@ -93,7 +93,7 @@
         "canonical_form": {
           "type": "string",
           "minLength": 1,
-          "description": "Identifier of the canonical-serialization profile used to write and hash this document, e.g. \"rhoform-canonical-json/1\" (key order per schema, sorted arrays, LF line endings, UTF-8, no insignificant whitespace variance)."
+          "description": "Identifier of the canonical-serialization profile used to write and hash this document, e.g. \"rhoform-canonical-json/1\". That profile is DEFINED in tests/ir/check-hashes.py and ir/README.md; this field only names it. Do not restate its clauses here -- an earlier version of this description said \"key order per schema\" while the implementation sorts keys by code point, so the repository carried two incompatible definitions of one profile name."
         }
       }
     },
