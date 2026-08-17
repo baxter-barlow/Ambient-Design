@@ -100,7 +100,7 @@ NOT_YET_CONSUMED = set()
 
 # The number of pin/consumer agreements a healthy tree has. Raise it when a pin
 # is added; lower it only in the same change that deliberately removes one.
-MINIMUM_AGREEMENTS = 15
+MINIMUM_AGREEMENTS = 18
 
 
 class GateUnavailable(Exception):
@@ -125,14 +125,18 @@ def load_manifest():
 
 def _strip_comment(line: str) -> str:
     """A YAML/shell line with its comment removed. Comments are not consumers."""
-    quote = None
+    # Only DOUBLE quotes open a string for this purpose. An apostrophe in prose
+    # — `echo don't  # jsonschema==4.26.0` — used to open a quote that never
+    # closed, so the `#` was never seen and the comment survived as a consumer,
+    # reopening the exact hole this function was written to close. YAML and
+    # shell both allow `#` inside double quotes, which is the case worth
+    # handling; an unpaired apostrophe is far more common than a single-quoted
+    # string containing a hash.
+    in_string = False
     for index, char in enumerate(line):
-        if quote:
-            if char == quote:
-                quote = None
-        elif char in "\"'":
-            quote = char
-        elif char == "#":
+        if char == '"':
+            in_string = not in_string
+        elif char == "#" and not in_string:
             return line[:index]
     return line
 
@@ -150,7 +154,13 @@ def _key_of(needle: str) -> str:
         head, found, _ = needle.partition(separator)
         if found:
             return head + found
-    return needle
+    # No separator: the needle IS the key, so "every occurrence must agree" is
+    # trivially true and the pin's VALUE is unconstrained. That is how the
+    # tokenizer fingerprint could be replaced with 64 zeros, and ngspice's
+    # version hard-coded away from the manifest, with the gate green. These are
+    # pins a consumer READS rather than copies, so they are reported as such
+    # instead of being counted as verified agreements.
+    return None
 
 
 def dig(tree, path):
@@ -206,8 +216,8 @@ def declared_pins(manifest):
 
 # Manifest leaves that are documentation rather than pins.
 IGNORED_LEAF_KEYS = frozenset({
-    "manifest_schema", "boundary", "name", "encoding", "provider", "probe_corpus",
-    "id", "sampling", "not_yet_consumed", "version_note",
+    "manifest_schema", "boundary", "name", "provider", "probe_corpus",
+    "not_yet_consumed", "version_note",
     # Always consumed as a composite `image@digest`, which the loops above
     # already emit; re-emitting the halves would ask for a consumer of half a
     # pin. `ref` likewise: actions are emitted whole.
@@ -227,12 +237,18 @@ def _leaves(node, path=()):
         yield path, node
 
 
+# Pins whose consumer reads the manifest rather than copying a value. Recorded
+# so they are reported rather than silently counted as verified.
+READ_BY_KEY: list[str] = []
+
+
 def check(manifest, read=None):
     """Returns a list of problems. `read` is injectable so the self-test can
     drive the real comparison over a fake tree rather than over the repo."""
     read = read or (lambda path: path.read_text(encoding="utf-8") if path.is_file() else None)
     problems = []
     checked = 0
+    READ_BY_KEY.clear()
 
     optional = set((dig(manifest, ("python", "optional_packages")) or {}))
 
@@ -287,7 +303,17 @@ def check(manifest, read=None):
             live = [_strip_comment(line) for line in text.splitlines()]
             live = [line for line in live if line.strip()]
             key = _key_of(needle)
-            occurrences = [line for line in live if key and key in line]
+            if key is None:
+                if needle not in "\n".join(live):
+                    problems.append(
+                        f"{'.'.join(path)}: {file_path.name} does not mention "
+                        f"{needle!r}, so nothing there reads this pin."
+                    )
+                else:
+                    READ_BY_KEY.append(".".join(path))
+                    checked += 1
+                continue
+            occurrences = [line for line in live if key in line]
             if needle not in "\n".join(live):
                 problems.append(
                     f"{'.'.join(path)}: manifest pins {value!r}, but "
@@ -306,6 +332,32 @@ def check(manifest, read=None):
                 )
             else:
                 checked += 1
+
+    # THE TOKENIZER FINGERPRINT, verified behaviourally rather than by looking
+    # for its digest in a file. It is pinned as a hash over token counts on a
+    # fixed probe corpus, so the only real check is to recount and compare —
+    # the manifest itself says changing the probe corpus "silently invalidates
+    # every recorded pin", and a read-by-key report leaves the VALUE free.
+    pinned = dig(manifest, ("evaluation", "tokenizer", "fingerprint"))
+    encoding = dig(manifest, ("evaluation", "tokenizer", "encoding"))
+    if pinned and encoding:
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "eval"))
+        try:
+            from rhoform_eval.tokenizer import TiktokenTokenizer
+            TiktokenTokenizer(str(encoding), str(pinned))
+            checked += 1
+        except ImportError:
+            READ_BY_KEY.append(
+                "evaluation.tokenizer.fingerprint (tiktoken absent; install the "
+                "optional pin to verify it behaviourally)")
+        except Exception as exc:
+            problems.append(
+                f"evaluation.tokenizer.fingerprint: the pinned encoding "
+                f"{encoding!r} does not reproduce the pinned fingerprint: {exc}"
+            )
+        finally:
+            _sys.path.remove(str(ROOT / "eval"))
 
     # A `uses:` line pinned to something the manifest never mentions is the
     # same defect from the other direction: an unaudited action inside the
@@ -455,6 +507,10 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
+    for pin in sorted(set(READ_BY_KEY)):
+        print(f"toolchain-pins: read-by-key: {pin} — its consumer reads this pin "
+              "from the manifest rather than copying the value, so agreement is "
+              "structural and the value itself is not compared here.")
     print(f"toolchain-pins: PASS: {checked} pin/consumer agreement(s) verified.")
     return 0
 

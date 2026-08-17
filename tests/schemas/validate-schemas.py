@@ -62,6 +62,12 @@ SCHEMA_ROOTS = {
 
 NEGATIVE_DIR_NAME = "negative"
 
+# The negative-control population may not shrink by accident. Failing only at
+# ZERO meant 31% of the controls could be deleted with `make all` green — and
+# the JSON count still cleared check-layout.sh's own floor. Raise this in the
+# same change that legitimately removes one.
+MINIMUM_NEGATIVE_CONTROLS = 48
+
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
 #
@@ -328,6 +334,7 @@ def main() -> int:
         print("schemas: no declared schema roots present yet; nothing to validate.")
         return 0
 
+
     try:
         import jsonschema
     except ImportError:
@@ -378,6 +385,14 @@ def main() -> int:
         print(f"schemas: {len(failures)} failure(s).", file=sys.stderr)
         return 1
 
+    if totals[2] < MINIMUM_NEGATIVE_CONTROLS:
+        print(
+            f"schemas: FAIL: {totals[2]} negative control(s), below the floor of "
+            f"{MINIMUM_NEGATIVE_CONTROLS}. Controls are the only evidence these "
+            "schemas reject anything; losing them silently shrinks that evidence.",
+            file=sys.stderr,
+        )
+        return 1
     print(
         f"schemas: PASS: {totals[0]} schema(s) across {len(present)} root(s), "
         f"{totals[1]} valid example(s), "
