@@ -473,6 +473,12 @@ def flip_verdict(
     return {
         "test": test,
         "paired": paired,
+        # The 2x2 table the paired verdict was computed from. It was not
+        # recorded, so a genuinely paired run produced a record this
+        # repository's own gate rejects as unfalsifiable — `paired_by` was an
+        # unusable parameter of the only shipped entry point.
+        "discordant_b": discordant_rhoform_only if paired else None,
+        "discordant_c": discordant_baseline_only if paired else None,
         "p_value": p_value,
         "alpha": alpha,
         "rhoform_rate": rhoform_rate,
