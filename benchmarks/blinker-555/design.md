@@ -136,7 +136,7 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 
 ## AC1a: DSL expressibility
 
-The design is 8 components, 7 nets, 2 assertions. Rendered through the winning
+The design is 9 components, 7 nets, 2 assertions. Rendered through the winning
 bake-off arm from `lang/examples/blinker-555.design.json`, in the frozen v0.1
 syntax:
 

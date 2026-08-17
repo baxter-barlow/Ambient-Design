@@ -25,10 +25,15 @@ TWO MODELS, and they answer different questions.
 
                THRES and TRIG are modelled as taps on ONE internal divider, so
                their errors are correlated. That is a MODELLING CHOICE, not a
-               fact about the part: under it t_low is invariant (ln2*RB*C =
-               0.47134 s at k = 0.72, 1.00 and 1.26 alike), so the whole
-               guaranteed duty spread is carried by t_high, which is what a
-               pure divider-ratio error would do. The real NE555's threshold
+               fact about the part. Under it t_low is invariant ONLY AT
+               ib = 0 (ln2*RB*C = 0.47134 s at k = 0.72, 1.00, 1.26 alike);
+               the model sweeps ib in [0, 250 nA], and at the top of that range
+               t_low runs 0.446069 / 0.452858 / 0.456547 s across the same
+               three k values -- a 2.35% spread. So the guaranteed duty spread
+               is MOSTLY, not wholly, carried by t_high. An earlier revision of
+               this docstring stated the invariance without the ib = 0
+               qualifier, which made it false for the model this file
+               implements. The real NE555's threshold
                spread is dominated by comparator input offset, which is
                INDEPENDENT between the two comparators. An earlier revision of
                this docstring asserted as fact that modelling them independently
@@ -211,11 +216,20 @@ def main(argv):
         # the guaranteed band asserts less than the datasheet already
         # guarantees, so it can never fail on any conforming part.
         g_lo, g_hi = gtd[key]
-        if lo < g_lo and hi > g_hi:
-            problems.append(
-                f"{key} window [{lo}, {hi}] {unit} is wider than the guaranteed "
-                f"band [{g_lo:.4f}, {g_hi:.4f}]; every conforming part passes it, "
-                "so it gates nothing")
+        # PER SIDE. The conjunction only fired when BOTH bounds escaped, so a
+        # one-sided vacuous window passed: duty [0.0, 55.8] and [53.3, 100.0]
+        # each gate nothing in one direction and both returned 0. A window is a
+        # regression check on the deck, so each bound has to be able to fail.
+        for side, bound, guaranteed, worse in (
+                ("lower", lo, g_lo, lo < g_lo),
+                ("upper", hi, g_hi, hi > g_hi)):
+            if worse:
+                problems.append(
+                    f"{key} window's {side} bound {bound} {unit} is outside the "
+                    f"guaranteed band ({guaranteed:.4f}), so no conforming part "
+                    "can fail on that side and the bound gates nothing. The "
+                    "window is a regression check on the deck, not a restatement "
+                    "of the datasheet.")
     if problems:
         for problem in problems:
             print(f"derive-555: FAIL: {problem}", file=sys.stderr)

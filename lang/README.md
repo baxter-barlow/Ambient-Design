@@ -177,12 +177,15 @@ unresolved mapping can be left unresolved; AMB-58 and AMB-65 own the real ones.
 ## Results
 
 Measured with the pinned `o200k_base` tokenizer from `toolchain/versions.yaml`,
-over each arm's canonical rendering.
+over each arm's canonical rendering. Held to the harness by
+`lang/tests/check_readme_numbers.py`: the blinker rows sat two revisions stale
+until AMB-123 because no gate read this file, and the same staleness had
+recorded L6's saving on (a) as 0 when it is 45-82.
 
 | Design | Arm | explicit | inferred | +columnar |
 |---|---|---:|---:|---:|
-| blinker-555 | candidate_a | 1224 | 906 | 906 |
-| blinker-555 | candidate_b | 981 | **748** | 748 |
+| blinker-555 | candidate_a | 1344 | 993 | 911 |
+| blinker-555 | candidate_b | 1069 | **814** | 769 |
 | blinker-555 | starlark | 1144 | 822 | — |
 | esp32s3-devboard | candidate_a | 8554 | 6318 | 5131 |
 | esp32s3-devboard | candidate_b | 6631 | **5003** | **4160** |
@@ -238,29 +241,38 @@ SMD build, so a library carrying one would hand the measurement a number that
 depends on which design is in the corpus — which biases T9-2 DOWN.
 
 **L6 columnar saving: 843-1187 tokens (17-19%) on (c) at the default
-threshold, 0 on (a) — but the threshold is a judgement, so the report sweeps
-it.**
+threshold, 45-82 (5-8%) on (a) — but the threshold is a judgement, so the
+report sweeps it.**
 `COLUMNAR_MIN_ROWS = 3` was documented here as "the smallest group where a
 table is shorter than the statements it replaces". Sweeping it showed that is
 simply false: 2 is cheaper still, on both candidates.
 
 | Design | Arm | ≥2 | ≥3 | ≥4 | ≥5 | ≥6 |
 |---|---|---:|---:|---:|---:|---:|
-| blinker-555 | candidate_a | 72 | 0 | 0 | 0 | 0 |
-| blinker-555 | candidate_b | 40 | 0 | 0 | 0 | 0 |
+| blinker-555 | candidate_a | 112 | 82 | 0 | 0 | 0 |
+| blinker-555 | candidate_b | 65 | 45 | 0 | 0 | 0 |
 | esp32s3-devboard | candidate_a | 1265 | 1187 | 1151 | 1151 | 1151 |
 | esp32s3-devboard | candidate_b | 901 | 843 | 819 | 819 | 819 |
 
 Three stays the default because a two-row table is a header and two lines,
 which reads worse than two statements — a readability judgement, now labelled
-as one. Whichever threshold you pick, the shape of the answer holds: nothing
-in a 555 blinker repeats enough to matter, so L6 is a big-design feature or it
-is nothing, which is itself the answer to whether it earns a place in v1.
+as one. Whichever threshold you pick, the shape of the answer holds: (a) saves
+5-8% where (c) saves 17-19%, so L6 is a big-design feature — worth having, and
+not decided by the small design either way.
+
+This paragraph read "0 on (a)" and the blinker rows read 72/0 and 40/0 until
+AMB-123. Both were measured before 333869c added the bypass capacitor to
+`lang/examples/blinker-555.design.json`; that part gave (a) a third repeated
+group, so the default threshold now clears. The stale figure said L6 buys
+nothing on small designs, which is the stronger claim and the wrong one, and it
+sat in the section this README offers as the basis for whether L6 earns a place
+in v1. No gate reads this file — the numbers above come from
+`python3 -m bakeoff measure`, run in `lang/`.
 
 **Line counts against AC1's ceilings.** Benchmark (c) is budgeted at ~600 DSL
 lines and `design.md` estimates 380-450. Measured: 548 (A, inferred), 513 (B,
 inferred), 408/368 with columnar. The estimate was optimistic without columnar
-and right with it. Benchmark (a) is budgeted at ~150 and comes in at 86/75.
+and right with it. Benchmark (a) is budgeted at ~150 and comes in at 130 explicit / 93 inferred / 82 inferred+columnar, matching benchmarks/blinker-555/design.md sec. AC1a. (This line read 86/75 until AMB-123: 333869c added the bypass cap to lang/examples/blinker-555.design.json without touching this file, and no gate reads this README.)
 
 **Diagnostic quality on nine seeded defects** (P2: the repair loop is the unit
 of design, so this is not a side measurement):
