@@ -2,7 +2,7 @@
 
 Requirements: AC1b, AC3. Every dynamic assertion runs green on stock ngspice
 with an original behavioral switching model, rung 0, total runtime well under
-60 s (measured: 0.38 s canonical run; see `validation.log`).
+60 s (measured: 4.9 s canonical run (2 ns timestep); see `validation.log`).
 
 ## 1. Specification
 
@@ -57,7 +57,7 @@ Choose the standard value **L = 10 uH**, which gives (ideal duty):
     DIL(12 V) = 3.3 x 0.725 / 5.0             = 0.479 App
     DIL(9 V)  = 3.3 x 0.633 / 5.0             = 0.418 App
 
-Measured in the behavioral deck: 0.520 App at 12 V, 0.565 App worst case at
+Measured in the behavioral deck: 0.487 App at 12 V, 0.565 App worst case at
 14 V -- slightly above ideal because the loop regulates duty above D = Vout/Vin
 to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
 
@@ -69,7 +69,7 @@ Part: **Coilcraft XGL6060-103MEC** (10 uH +/-20%, DCR 18.5 mOhm typ /
 20.4 mOhm max, Isat 3.6 A at 10% inductance drop / 5.5 A at 20% / 7.3 A at
 30%, Irms 7.3 A for 20 C rise / 10.0 A for 40 C rise; Coilcraft datasheet
 Document 1621-2, rev. 02/19/26). Saturation margin against the strictest
-rating point: 3.6/2.28 = **1.6x** at the 10%-drop Isat, 5.5/2.28 = 2.4x at
+rating point: 3.6/2.26 = **1.6x** at the 10%-drop Isat, 5.5/2.26 = 2.4x at
 the 20%-drop rating. A 100% overload transient (4.28 A) stays below the
 5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
 gracefully rather than collapsing. RMS heating: Irms ~= 2.0 A vs 7.3 A
@@ -92,14 +92,14 @@ ceramics in parallel: ~2 mOhm.
     DV_ESR = 0.565 x 0.002               = 1.1 mV
     DV_pp  ~= 5 mV  (terms are phase-shifted, not directly additive)
 
-Measured: 7.09 mVpp at 12 V -- **7x margin** against the 50 mV spec. The cap
+Measured: 3.64 mVpp at 12 V -- **13.7x margin** against the 50 mV spec. The cap
 size is actually set by the load-step requirement, not ripple: for a 1 A step
 with loop crossover fc, the droop is approximately
 
     DV_step ~= DI / (2 pi x fc x C) = 1.0 / (2 pi x 30e3 x 36e-6) = 147 mV
 
 which recovers within the band well inside 500 us (measured settling:
-16.0 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
+16.9 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
 spec; 2x22 uF satisfies both with margin.
 
 Input capacitor: worst-case input RMS ripple current
@@ -221,8 +221,8 @@ Original construction, no vendor models:
   fixed losses, so input power is measurable at the V3 source.
 - **Fixture**: `V3` ramps 0 -> 12 V over 200 us (exercises the regulator
   coming up under a rising rail); load is a 3.3 Ohm base (1 A) plus a 1 A
-  PWL current step at t = 1.5 ms; `.tran 100n 2.5m 0 40n` gives 1250 cycles,
-  50 points per cycle.
+  PWL current step at t = 1.5 ms; `.tran 100n 2.5m 0 2n` gives 1250 cycles,
+  1000 points per cycle.
 - **Settling detector**: a B-source flags |Vout - 3.328| > 33.3 mV; the
   `.meas ... FALL=LAST` on that flag implements "enters and stays within
   +/-1%" exactly, immune to multi-crossing ringing.
@@ -238,7 +238,7 @@ belong to higher rungs.
 | Assertion | Window | Measured | Status |
 |---|---|---|---|
 | Mean Vout (2 A) | 3.3 V +/-3% | 3.3280 V (+0.85%) | pass |
-| Output ripple | <= 50 mVpp | 7.09 mVpp | pass |
+| Output ripple | <= 50 mVpp | 3.64 mVpp | pass |
 | Efficiency | >= 85% | 92.95% | pass |
 | Startup overshoot | <= 5% | 0.11% | pass |
 | 1A->2A settling | <= 500 us | 16.0 us | pass |
@@ -273,3 +273,29 @@ converter with no soft-start at all.
 Both are kept because they bound something real (a loss budget, a ripple
 envelope) and both are labelled `informational_at_rung_0` in assertions.yaml so
 that a reader does not mistake either for the check its name suggests.
+
+## Convergence: what 2 ns does and does not buy
+
+The deck ran at 40 ns until AMB-123 and the values it produced were numerical
+artifacts. 2 ns is much closer and is not fully converged:
+
+| tmax | vout_pp | il_pp | overshoot_pct | wall |
+|---|---|---|---|---|
+| 40 ns | 7.090 mV | 0.5200 A | 0.1116 % | 0.4 s |
+| 4 ns | 4.528 mV | 0.4894 A | 0.0507 % | 2.9 s |
+| **2 ns (shipped)** | **3.635 mV** | **0.4872 A** | **0.0477 %** | 4.9 s |
+| 1 ns | 3.553 mV | 0.4869 A | 0.0456 % | 11.9 s |
+| 500 ps | 3.546 mV | 0.4858 A | 0.0445 % | 22.1 s |
+
+`vout_pp` is ~2.5% above its converged value at 2 ns and `overshoot_pct` ~7%.
+Because `check-assertions.py` compares `measured:` at the precision it was
+recorded to, refining further still fails `make sim` until those values are
+re-recorded — the same coupling that made the 40 ns error un-fixable without a
+red gate. That is a deliberate trade, not an oversight: 500 ps costs 22 s
+against a 60 s budget for three digits nothing downstream reads, and the
+alternative is a gate that cannot detect a deck change at all. Anyone refining
+the timestep for a real reason should re-record the five values and say so.
+
+None of the engineering conclusions move across the sweep: `Ipk` 2.26 A,
+saturation margin 1.6x, ripple margin 13.7x, efficiency 0.9295 (timestep
+invariant), settling 16.9 us against a 500 us budget.

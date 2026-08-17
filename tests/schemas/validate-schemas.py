@@ -385,7 +385,10 @@ def main() -> int:
         print(f"schemas: {len(failures)} failure(s).", file=sys.stderr)
         return 1
 
-    if totals[2] < MINIMUM_NEGATIVE_CONTROLS:
+    # Only for THIS repository's population. The floor is a statement about how
+    # many controls this tree has, not a minimum any tree must meet, and the
+    # self-test legitimately drives main() over a two-file root.
+    if root == DEFAULT_ROOT and totals[2] < MINIMUM_NEGATIVE_CONTROLS:
         print(
             f"schemas: FAIL: {totals[2]} negative control(s), below the floor of "
             f"{MINIMUM_NEGATIVE_CONTROLS}. Controls are the only evidence these "

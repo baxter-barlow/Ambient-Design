@@ -14,7 +14,7 @@ assertions:
     signal: v(out)
     kind: trig_targ            # one .meas: RISE=1 -> RISE=2, VAL=3.7 V, TD=2 s
     expected: 1.012 s
-    window: [0.951 s, 1.096 s]   # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
+    window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
     measured: 1.01191 s
     verdict: PASS
 
@@ -23,7 +23,7 @@ assertions:
     signal: v(out)
     kind: derived_param        # 1/t_period from the trig_targ period meas
     expected: 0.988 Hz         # exact ln2 form; 1.44/((RA+2RB)C) = 0.986 Hz
-    window: [0.912 Hz, 1.052 Hz] # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
+    window: [0.923 Hz, 1.052 Hz] # 1% R, 5% C AND Ib in [0, 0.5 uA]; see design.md sec. 6
     measured: 0.98823 Hz
     verdict: PASS
 
@@ -33,15 +33,14 @@ assertions:
     kind: derived_param        # 100*t_on/t_period; t_on is one trig_targ meas
                                #   (RISE=1 -> FALL=1, VAL=3.7 V, TD=2 s)
     expected: 53.42 %          # (RA+RB)/(RA+2RB); passives move it <0.1 pt.
-    window: [53.3 %, 57.9 %]   # Ib in [0, 0.5 uA], one-sided: both timing pins
-                               #   SINK current, so Ib >= 0 and there is no
-                               #   mechanism for the low corner an earlier
-                               #   symmetric +/-0.25 uA window modelled. 0.5 uA
-                               #   is what the datasheet's own RA+RB ceiling
-                               #   implies ((5/3)/3.4M = 0.49 uA), not the
-                               #   250 nA THRES max read alone. See design.md
-                               #   sec. 6; this replaces a [51.2, 55.6] window
-                               #   that excluded its own stated 55.609 corner.
+    window: [53.3 %, 55.8 %]   # Ib in [0, 0.25 uA], one-sided. 0.25 uA is the
+                               #   GUARANTEED THRES max; an earlier revision used
+                               #   0.5 uA, obtained by inverting the datasheet's
+                               #   RA+RB ceiling note -- but that guideline sits at
+                               #   exactly 1.96x/2.00x the 250 nA max at 5 V/15 V,
+                               #   so the 0.5 uA figure IS the guideline's own
+                               #   margin, not a current the vendor stands behind.
+                               #   See design.md sec. "Duty-cycle window".
     measured: 53.45 %
     verdict: PASS
 

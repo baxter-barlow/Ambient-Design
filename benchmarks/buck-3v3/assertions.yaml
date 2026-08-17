@@ -85,6 +85,6 @@ cross_checks:                 # informational, not gating
   - name: inductor_ripple_pp
     meas_id: il_pp
     predicted: 0.479          # Vout*(1-D)/(L*fsw) at Vin=12, ideal D=0.275
-    measured: 0.520
+    measured: 0.487
     note: measured duty exceeds ideal D=Vout/Vin to cover modeled IR drops
       (Ron + DCR ~= 26 mOhm)
