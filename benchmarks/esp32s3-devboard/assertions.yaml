@@ -13,6 +13,10 @@ deck_absent_reason: >-
 
 assertions:
   - id: A1_rail_voltage_containment
+    check: interval-within
+    check_inputs:
+      inner: [3.234, 3.366]
+      outer: [3.0, 3.6]
     kind: voltage-domain containment (Polymorphic Blocks component-mediated transfer)
     expr: "ldo.vout_interval within module.vdd33_recommended"
     inputs: {ldo_vout_v: [3.234, 3.366], module_vdd33_v: [3.0, 3.6]}   # +/-2%; Table 6-2
@@ -21,6 +25,10 @@ assertions:
     status: PASS
 
   - id: A2_vbus_budget_t10
+    check: at-most
+    check_inputs:
+      have: 0.39491
+      limit: 0.5
     kind: current-budget containment (T10), VBUS rail
     expr: "sum(vbus_loads.wifi_tx_peak.worst) <= usb.capability"
     inputs: {sum_worst_a: 0.39491, capability_a: 0.500}
@@ -29,6 +37,10 @@ assertions:
     status: PASS
 
   - id: A3_3v3_source_capability
+    check: at-least
+    check_inputs:
+      have: 1.0
+      need: 0.39166
     kind: current-budget containment, 3.3 V rail
     expr: "ldo.i_rating >= max(sum(p3v3_loads)) AND ldo.i_rating >= module.required_source"
     inputs: {ldo_rating_a: 1.000, worst_rail_a: 0.39166, module_required_a: 0.500}  # Table 6-2 I_VDD min 0.5 A
@@ -37,6 +49,10 @@ assertions:
     note: "AP2112K (600 mA) passes here but fails A5; AMS1117 passes here but fails A4 — intended benchmark traps"
 
   - id: A4_ldo_dropout_at_min_vbus
+    check: at-least
+    check_inputs:
+      have: 3.818
+      need: 3.5618
     kind: dropout margin at minimum input, wifi_tx_peak worst
     expr: "v_ldo_in_min >= vout_max + vdo(i_load)"
     inputs:
@@ -55,6 +71,10 @@ assertions:
     caveat: "Datasheet specifies dropout at 1 A as typ-only (340 mV, 2.6-3.3 V row; features page quotes 360 mV) with no max; the 0.50 V/A row is our guardband, not vendor data. SS34 Vf=0.40 V at 0.4 A and PTC R range remain stated assumptions; re-derive from vendor datasheets before freeze"
 
   - id: A5_ldo_thermal_at_wifi_tx
+    check: at-most
+    check_inputs:
+      have: 121.9
+      limit: 125
     kind: "junction temperature at continuous TX (conservative: peak treated as sustained)"
     expr: "Tj = Ta + P x theta_ja <= Tj_limit ; P = (Vin - Vout) x Iout + Vin x Iq"
     inputs:
@@ -69,6 +89,10 @@ assertions:
     caveat: "The PASS depends on layout: theta_ja 62 C/W assumes SOT-223 on ~1 in^2 outer-layer pour (AN1028 range 40-110 C/W) and is an ASSUMPTION, not vendor data. At the datasheet minimum-pad figure of 110 C/W, Tj = 121.9 C at Ta = 50 C — under the 125 C gate at every stated condition, but with only 3.1 C headroom, and Ta > 53.1 C at minimum pad would breach the gate (Ta_max = 125 - 0.654 x 110 = 53.1 C; at 62 C/W Ta_max = 84.5 C). The layout must provide copper pour at or near the 62 C/W assumption; verify against the actual pour before freeze"
 
   - id: A6_ptc_hold_margin
+    check: at-least
+    check_inputs:
+      have: 0.6
+      need: 0.39491
     kind: series-element rating vs continuous draw
     expr: "ptc.hold_derated(50C) >= vbus_worst_continuous"
     inputs: {hold_derated_a: 0.60, worst_a: 0.39491}
@@ -76,6 +100,10 @@ assertions:
     status: PASS
 
   - id: A7_deep_sleep_rail_current
+    check: at-most
+    check_inputs:
+      have: 9.0e-06
+      limit: 5.0e-05
     kind: measurable low-power gate (maps to future stub sim / bench measurement at J5)
     expr: "i(P3V3_LOAD, deep_sleep) <= 100e-6"
     inputs: {predicted_a: 9.0e-6}   # 8 uA module (Table 6-7) + <=1 uA leakage; excludes LDO Iq and 5V-side PWR LED by construction
@@ -83,6 +111,10 @@ assertions:
     status: PASS
 
   - id: A8_usb_inrush_capacitance
+    check: sum-at-most
+    check_inputs:
+      parts: [4.7e-06, 4.7e-06, 1.0e-07]
+      limit: 1.0e-05
     kind: attach-point bulk capacitance limit
     expr: "sum(vbus_visible_bulk) <= 10e-6"
     inputs: {c1_f: 4.7e-6, c3_f: 4.7e-6, sum_f: 9.4e-6}
@@ -90,6 +122,8 @@ assertions:
     status: PASS
 
   - id: A9_strapping_dc_state
+    not_mechanisable: >-
+      a boot-mode truth table over pull-up/pull-down states, not a numeric relation. Mechanising it needs the strap defaults encoded in the part record, which they are not (AMB-124 territory).
     kind: strapping-node DC solution at EN rising edge (details in pin-plan.md)
     expr: "straps sample to {GPIO0:1, GPIO45:0, GPIO46:0, GPIO3:float} unless BOOT held"
     inputs:
@@ -100,6 +134,8 @@ assertions:
     status: PASS
 
   - id: A10_single_pin_nets_l9b
+    not_mechanisable: >-
+      a claim about what the DSL must declare, checkable by the L9b lint rule once it exists (AMB-52), not by arithmetic over recorded inputs.
     kind: netlist lint expectation (L9b)
     expr: "every single-pin net is explicitly declared mechanical/intentional"
     inputs: "H2, H3, H4 pads (no net); H1 is on GND (multi-pin, exempt)"

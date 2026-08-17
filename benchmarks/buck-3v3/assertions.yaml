@@ -46,6 +46,11 @@ assertions:
 
   - name: efficiency
     kind: meas_ratio          # avg(-v(in)*i(V3)) vs avg(v(out)*i(Vsl)), 2.0m-2.5m
+    informational_at_rung_0: >-
+      Gin injects PFIX/V(in), so eff is a closed form in the hand-entered
+      PFIX = 0.40 W and cannot fail for any PFIX <= 1.07 W. It pins the loss
+      BUDGET, not switching behaviour, which rung 0 does not model. See
+      design.md.
     meas_id: eff
     expected:
       min: 0.85
@@ -56,6 +61,10 @@ assertions:
 
   - name: startup_overshoot
     kind: meas_derived        # (max v(out) 0-1.4m / avg v(out) 1.3m-1.5m - 1)*100
+    informational_at_rung_0: >-
+      Measures the steady-state ripple envelope, not overshoot: the same
+      expression over a transient-free window returns the same value, and true
+      overshoot here is ~0.01 mV. See design.md.
     meas_id: overshoot_pct
     expected:
       max: 5.0

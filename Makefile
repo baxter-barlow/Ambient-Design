@@ -113,6 +113,7 @@ eval-tests:
 # version pinned in toolchain/versions.yaml. Self-test first, as everywhere.
 sim:
 	python3 tests/benchmarks/check-assertions.py --self-test
+	python3 tests/benchmarks/check-hand-assertions.py --self-test
 	bash tests/benchmarks/run-sim.sh
 
 # The gates in .github/workflows/repository-policy.yml. Kept as its own target

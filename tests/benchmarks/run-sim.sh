@@ -62,7 +62,15 @@ for spec in "$BENCH_DIR"/*/assertions.yaml; do
   case "$declared" in
     '' )
       fail_env "$(basename "$case_dir")/assertions.yaml declares no \`deck:\`; a benchmark must say whether it has one, so a deleted deck cannot look like a deliberate absence." ;;
-    null | ~ ) continue ;;
+    null | ~ )
+      # Deck-less, but its hand-computed assertions still have to follow from
+      # their own inputs. Until AMB-123 nothing read them at all: rewriting A3
+      # to "0.001 >= 99.0" with status PASS left `make sim` green.
+      if ! python3 "$SCRIPT_DIR/check-hand-assertions.py" "$case_dir"; then
+        printf 'sim: FAIL: %s hand-computed assertions do not follow from their inputs.\n' "$(basename "$case_dir")" >&2
+        exit 1
+      fi
+      continue ;;
   esac
   expected_decks="$expected_decks$case_dir/$declared
 "
