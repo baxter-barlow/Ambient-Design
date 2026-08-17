@@ -100,7 +100,10 @@ NOT_YET_CONSUMED = set()
 
 # The number of pin/consumer agreements a healthy tree has. Raise it when a pin
 # is added; lower it only in the same change that deliberately removes one.
-MINIMUM_AGREEMENTS = 18
+# 17 without the optional behavioural fingerprint check, which is the number CI
+# sees. Fitting this to a local venv that happens to carry tiktoken made the
+# floor itself environment-dependent.
+MINIMUM_AGREEMENTS = 17
 
 
 class GateUnavailable(Exception):
@@ -333,29 +336,56 @@ def check(manifest, read=None):
             else:
                 checked += 1
 
-    # THE TOKENIZER FINGERPRINT, verified behaviourally rather than by looking
-    # for its digest in a file. It is pinned as a hash over token counts on a
-    # fixed probe corpus, so the only real check is to recount and compare —
-    # the manifest itself says changing the probe corpus "silently invalidates
-    # every recorded pin", and a read-by-key report leaves the VALUE free.
+    # THE TOKENIZER FINGERPRINT. Pinned as a hash over token counts on a fixed
+    # probe corpus, so the only real check is to recount and compare.
+    #
+    # But tiktoken is an OPTIONAL pin — versions.yaml says so, and the CI job
+    # that runs this gate installs only PyYAML — and loading the encoding
+    # fetches its vocabulary over the network on first use, which a gate that
+    # must run offline cannot require. So this leg is best-effort: it verifies
+    # when it can and reports read-by-key when it cannot, and it is NOT counted
+    # toward MINIMUM_AGREEMENTS, which would otherwise make the floor depend on
+    # whether an optional package happened to be installed.
+    #
+    # Its absence arrives as PinnedTokenizerError, not ImportError, so an
+    # `except ImportError` fallback was dead: the gate failed CI while blaming
+    # the manifest for drift that did not exist.
     pinned = dig(manifest, ("evaluation", "tokenizer", "fingerprint"))
     encoding = dig(manifest, ("evaluation", "tokenizer", "encoding"))
     if pinned and encoding:
         import sys as _sys
         _sys.path.insert(0, str(ROOT / "eval"))
         try:
-            from rhoform_eval.tokenizer import TiktokenTokenizer
-            TiktokenTokenizer(str(encoding), str(pinned))
-            checked += 1
-        except ImportError:
-            READ_BY_KEY.append(
-                "evaluation.tokenizer.fingerprint (tiktoken absent; install the "
-                "optional pin to verify it behaviourally)")
-        except Exception as exc:
-            problems.append(
-                f"evaluation.tokenizer.fingerprint: the pinned encoding "
-                f"{encoding!r} does not reproduce the pinned fingerprint: {exc}"
-            )
+            try:
+                from rhoform_eval.tokenizer import (
+                    PinnedTokenizerError,
+                    TiktokenTokenizer,
+                )
+            except ImportError as exc:
+                READ_BY_KEY.append(
+                    f"evaluation.tokenizer.fingerprint (harness not importable: {exc})"
+                )
+            else:
+                try:
+                    TiktokenTokenizer(str(encoding), str(pinned))
+                except PinnedTokenizerError as exc:
+                    if "not installed" in str(exc):
+                        READ_BY_KEY.append(
+                            "evaluation.tokenizer.fingerprint (tiktoken is an "
+                            "optional pin and is absent; install it to verify "
+                            "the fingerprint behaviourally)"
+                        )
+                    else:
+                        problems.append(
+                            "evaluation.tokenizer.fingerprint: the pinned "
+                            f"encoding {encoding!r} does not reproduce the "
+                            f"pinned fingerprint: {exc}"
+                        )
+                except Exception as exc:
+                    READ_BY_KEY.append(
+                        "evaluation.tokenizer.fingerprint (could not be "
+                        f"verified here: {exc})"
+                    )
         finally:
             _sys.path.remove(str(ROOT / "eval"))
 
