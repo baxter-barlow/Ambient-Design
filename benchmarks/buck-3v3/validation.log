@@ -13,6 +13,13 @@ republishing them would have shipped a transcript that does not describe the
 code in this commit. Everything below is captured output from a run made now,
 against this tree.
 
+AMENDED 2026-08-17 under AMB-123: `t_settle_us` and `t_reenter`, both of which the settling band moves. SBAND was 33.3 mV, which
+was 1% of the pre-centring 3.328 V target and 1.010% of the 3.296 V one, so it
+was corrected to 32.96 mV and the settling measurement moved 16.828 -> 16.858 us.
+Nothing else in this transcript changed; the surrounding output is a verbatim
+capture and is NOT regenerated wholesale, because doing that earlier in this
+audit destroyed corner runs and iteration history that other documents cite.
+
 Simulator: ** ngspice-46 : Circuit level simulation program
 Command:   ngspice -b netlist.cir
 Assertions: tests/benchmarks/check-assertions.py compares every .meas result
@@ -86,8 +93,8 @@ eff                 =  9.28644e-01
 vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
 vout_max_startup    =  3.29754e+00 at=  1.11718e-03
 overshoot_pct       =  4.66129e-02
-t_reenter           =   1.51683e-03
-t_settle_us         =  1.68280e+01
+t_reenter           =   1.51686e-03
+t_settle_us         =  1.68580e+01
 
 
 Total analysis time (seconds) = 4.8506
@@ -110,8 +117,8 @@ eff                 =  9.28644e-01
 vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
 vout_max_startup    =  3.29754e+00 at=  1.11718e-03
 overshoot_pct       =  4.66129e-02
-t_reenter           =   1.51683e-03
-t_settle_us         =  1.68280e+01
+t_reenter           =   1.51686e-03
+t_settle_us         =  1.68580e+01
 
 === assertion windows ===
 sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows.

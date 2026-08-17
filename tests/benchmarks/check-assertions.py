@@ -353,6 +353,59 @@ def load_yaml(path):
         raise GateUnavailable(f"{path} is not readable as YAML: {exc}") from exc
 
 
+def transcript_problems(case_dir, fresh_text, problems):
+    """Hold validation.log to the run it claims to be a capture of.
+
+    Five `validation.log` files are cited as committed evidence by nine tracked
+    documents, and NOTHING read them -- the same defect design.md had. It bit
+    immediately: correcting SBAND moved t_settle_us and left the transcript
+    recording the old value, with every gate green.
+
+    A transcript is a verbatim capture, so every `.meas` value in it must equal
+    the value a fresh run produces, at the precision the transcript states.
+    Returns the number of measurements reconciled.
+    """
+    log_path = case_dir / "validation.log"
+    if not log_path.is_file():
+        return 0
+    # ngspice's own `exit` status line matches the meas shape and is not a
+    # measurement. Anything the deck does not declare with `.meas` is excluded
+    # by name rather than by guessing at the format.
+    NOT_A_MEASUREMENT = {"exit"}
+    fresh = {}
+    for line in fresh_text.splitlines():
+        found = MEAS_LINE.match(line)
+        if found:
+            fresh.setdefault(found.group("name").lower(), found.group("value"))
+    reconciled = 0
+    seen = set()
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        found = MEAS_LINE.match(line)
+        if not found:
+            continue
+        name = found.group("name").lower()
+        if name in NOT_A_MEASUREMENT or name in seen:
+            continue
+        seen.add(name)
+        if name not in fresh:
+            problems.append(
+                f"{case_dir.name}/validation.log: records `{name}`, which this "
+                "deck no longer emits. A transcript naming a measurement that "
+                "does not exist is not evidence of anything.")
+            continue
+        recorded, now = float(found.group("value")), float(fresh[name])
+        figures = min(significant_figures(found.group("value")),
+                      significant_figures(fresh[name]))
+        if round_to_significant(recorded, figures) != round_to_significant(now, figures):
+            problems.append(
+                f"{case_dir.name}/validation.log: records {name} = {recorded:.6g}, "
+                f"but this deck now produces {now:.6g}. The file the documents "
+                "cite as evidence describes a deck that no longer exists.")
+            continue
+        reconciled += 1
+    return reconciled
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -376,6 +429,8 @@ def main(argv):
             case_dir.name, spec, log_path.read_text(encoding="utf-8", errors="replace"),
             problems,
         )
+        fresh_text = log_path.read_text(encoding="utf-8", errors="replace")
+        transcript = transcript_problems(case_dir, fresh_text, problems)
     except GateUnavailable as exc:
         print(f"sim-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -385,7 +440,8 @@ def main(argv):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"sim-assert: PASS: {case_dir.name}: {checked} assertion(s) inside their windows.")
+    print(f"sim-assert: PASS: {case_dir.name}: {checked} assertion(s) inside "
+          f"their windows; {transcript} transcript measurement(s) match a fresh run.")
     return 0
 
 
@@ -482,6 +538,31 @@ def self_test():
              "expected": {"min": 0.001, "unit": "s"}, "measured": 1.01191}]}))))
     cases.append(("the assertion floor fires on a one-assertion benchmark", any(
         "floor" in p for p in _floor_probe())))
+
+    # THE TRANSCRIPT LEG. validation.log is cited as evidence by nine tracked
+    # documents and was read by nothing, which is how correcting SBAND left it
+    # recording a settling time the deck no longer produces.
+    import tempfile as _tf
+    def transcript_probe(recorded, fresh):
+        with _tf.TemporaryDirectory() as tmp:
+            case = Path(tmp)
+            (case / "validation.log").write_text(recorded, encoding="utf-8")
+            ps = []
+            transcript_problems(case, fresh, ps)
+            return ps
+
+    cases.append(("a transcript matching a fresh run reports nothing", not
+        transcript_probe("t_period   =  1.01191e+00\n", "t_period   =  1.01191e+00\n")))
+    cases.append(("a stale transcript value is caught", any(
+        "no longer exists" in p for p in transcript_probe(
+            "t_period   =  1.01191e+00\n", "t_period   =  2.00000e+00\n"))))
+    cases.append(("a transcript naming a meas the deck dropped is caught", any(
+        "no longer emits" in p for p in transcript_probe(
+            "t_ghost    =  1.00000e+00\n", "t_period   =  1.01191e+00\n"))))
+    cases.append(("ngspice's own exit line is not read as a measurement", not
+        transcript_probe("exit       =  0.00000e+00\n", "t_period   =  1.01191e+00\n")))
+    cases.append(("a transcript rounded to fewer figures is not failed", not
+        transcript_probe("t_period   =  1.012e+00\n", "t_period   =  1.01191e+00\n")))
 
     # WIRING, as above: main() must turn a finding into a non-zero exit. This
     # drives the real entry point over a benchmark directory whose deck output
