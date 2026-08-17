@@ -17,11 +17,24 @@ between them is the thing four revisions kept eliding.
 TWO MODELS, and they answer different questions.
 
   guaranteed   Every corner the part record permits: R, C and bias current, plus
-               the comparator levels, whose spread the record puts at roughly
-               +/-26% of nominal. THRES and TRIG are taps on ONE internal
-               divider, so their errors are CORRELATED — a divider reading high
-               reads high at both taps — and modelling them independently
-               overstates the spread further still.
+               the comparator levels. The record's spread is NOT symmetric:
+               the divider scale k runs 0.720..1.260, i.e. -28.0%/+26.0%, and
+               "roughly +/-26%" quietly understated the side that WIDENS the
+               window. The number printed is computed from the record, so it
+               cannot drift from this comment again.
+
+               THRES and TRIG are modelled as taps on ONE internal divider, so
+               their errors are correlated. That is a MODELLING CHOICE, not a
+               fact about the part: under it t_low is invariant (ln2*RB*C =
+               0.47134 s at k = 0.72, 1.00 and 1.26 alike), so the whole
+               guaranteed duty spread is carried by t_high, which is what a
+               pure divider-ratio error would do. The real NE555's threshold
+               spread is dominated by comparator input offset, which is
+               INDEPENDENT between the two comparators. An earlier revision of
+               this docstring asserted as fact that modelling them independently
+               "overstates the spread further still"; the direction is not
+               obvious and nothing here establishes it, so the claim is
+               withdrawn rather than restated.
 
                This is the honest answer to "what will any conforming NE555 do",
                and it is far too wide to gate on: duty lands near [38, 71]%.
@@ -33,8 +46,8 @@ TWO MODELS, and they answer different questions.
                nominal divider and draw zero input current.
 
 WHAT IS GATED. The `typical` model, and only it. The deck cannot measure the
-guaranteed corners: it has no comparator tolerance and no bias current, so an
-assertion against them would be untestable by construction — a window nothing
+guaranteed corners: it has no comparator tolerance, so an assertion against
+them would be untestable by construction — a window nothing
 can fail is not an assertion, which is the defect this repository has now found
 in its own gates several times over.
 

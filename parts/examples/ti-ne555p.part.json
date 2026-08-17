@@ -385,10 +385,10 @@
     },
     "/pins": {
       "source_id": "ti-xx555-slfs022k",
-      "locator": "Table 4-1 Pin Functions; Section 5.5 Electrical Characteristics",
+      "locator": "Table 4-1 Pin Functions; Section 5.1 Absolute Maximum Ratings; Section 5.3 Recommended Operating Conditions; Section 5.5 Electrical Characteristics",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "DISCH is recorded with role open_collector because Table 4-1 describes it verbatim as an 'Open collector output'. That role is load-bearing: it tells the ERC lattice this pin drives low only and requires an external pull-up, which is exactly how benchmark (a) uses it."
+      "note": "DISCH is recorded with role open_collector because Table 4-1 describes it verbatim as an 'Open collector output'. That role is load-bearing: it tells the ERC lattice this pin drives low only and requires an external pull-up, which is exactly how benchmark (a) uses it. The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number."
     },
     "/pins/3/capability": {
       "source_id": "ti-xx555-slfs022k",

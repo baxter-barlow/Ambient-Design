@@ -27,7 +27,7 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:8950480b0aaf3158001ec5311cb38f05a400bb4baa68fc9b4cd8ce984dccb0da
+  decision_hash: sha256:8bceef85d5465fd50c2f12857346e0da7c270fbed9bad8d8636247c09f495f5f
   corpus_hash: sha256:7a0dee1f684de095e7532888ca7c53ea6e16c25e628bab5d636b39c2e06b9941
 
 entries:
@@ -818,7 +818,6 @@ entries:
   reason: d3-gap
   cites: ["d3:pins[].abs_max.voltage"]
   gap_class: pin-semantics
-  carried_at: pins[].abs_max.voltage.conditions
   missing_path: pins[].conditional_limits
   compound: single-class
   missing_fact: >-
@@ -838,6 +837,9 @@ entries:
     the frozen syntax has no construct for. Keeping it in scope applied the
     open-map rule less strictly here than the same rubric applied to BUG-0002,
     BUG-0010 and BUG-0052, whose in-scope flips were reverted for it.
+  residual_kind: not-a-postmortem
+  residual_blocker: >-
+    two blockers, either of which is sufficient. The entry states a datasheet requirement rather than reporting an observed failure, in the same words as its twin BUG-0053 -- so there is no buggy board for any check to catch. And the violation exists only in the VDD = 0 state, which the frozen syntax has no construct for, so promoting `conditions` does not reach it. `carried_at` was recorded here and has been dropped: it put the entry in the published counterfactual table as a promotion candidate for the next schema_version, which neither blocker permits.
 
 - id: BUG-0055
   verdict: in-scope

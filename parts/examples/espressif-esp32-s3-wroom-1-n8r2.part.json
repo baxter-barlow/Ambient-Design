@@ -877,9 +877,10 @@
     },
     "/pins": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions) and Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
+      "locator": "Table 3-1 Pin Definitions; Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (pin names, numbers, functions) and Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
       "confidence": "datasheet-stated",
-      "method": "manual"
+      "method": "manual",
+      "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number."
     },
     "/ratings/abs_max": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",

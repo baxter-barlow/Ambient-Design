@@ -599,10 +599,10 @@
     },
     "/pins": {
       "source_id": "ti-sn74hc00-scls181h",
-      "locator": "Table 5-1 Pin Functions (D, DB, N, NS, PW, J, or W package column)",
+      "locator": "Table 5-1 Pin Functions (D, DB, N, NS, PW, J, or W package column); Section 6.1 Absolute Maximum Ratings; Section 6.3 Recommended Operating Conditions; Section 6.5 Electrical Characteristics",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "Pin numbering is the 14-pin column, not the 20-pin FK (LCCC) column in the same table. Note the non-monotonic physical layout: 3Y is pin 8 while 3A and 3B are pins 9 and 10, which is why unit membership must be declared explicitly rather than inferred from pin order."
+      "note": "Pin numbering is the 14-pin column, not the 20-pin FK (LCCC) column in the same table. Note the non-monotonic physical layout: 3Y is pin 8 while 3A and 3B are pins 9 and 10, which is why unit membership must be declared explicitly rather than inferred from pin order. The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number."
     },
     "/pins/2/capability": {
       "source_id": "ti-sn74hc00-scls181h",

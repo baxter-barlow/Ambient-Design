@@ -292,7 +292,7 @@ The 30 `d3-gap` entries by missing fact. Each row is also the counterfactual: ad
 | `companion-requirement` — a requirement a part places on an external companion component | 12 | `BUG-0016`, `BUG-0035`, `BUG-0049`, `BUG-0053` |
 | `strap-semantics` — which pins latch at reset as configuration straps, and to what level | 6 | — |
 | `functional-class` — what a part IS — regulator, protection diode, undervoltage cutoff | 3 | — |
-| `pin-semantics` — what a pin MEANS beyond its electrical role — which outputs it gates, its polarity | 3 | — |
+| `pin-semantics` — what a pin MEANS beyond its electrical role — which outputs it gates, its polarity | 3 | `BUG-0054` |
 | `bus-address` — the bus address a part presents, fixed or strap-selected | 2 | — |
 | `internal-pull` — a pin's internal pull-up or pull-down presence and strength | 2 | `BUG-0021`, `BUG-0032` |
 | `part-own-value` — a part's own defining value that no closed field enumerates | 2 | `BUG-0010`, `BUG-0052` |
@@ -301,12 +301,11 @@ Counted once but blocked by more than one missing fact, so the single row unders
 
 Entries in the third column carry a blocker that survives adding the field, named in `classification.yaml`. For one of them the counterfactual is not merely weaker but inverted: adding the fact would make the generic rule flag the *corrected* design.
 
-2 of those entries make a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code, because a code with one member costs more than it buys.
+1 entry makes a weaker claim: the fact is already in D3 v0, in an open map, so the fix is to **promote** a key rather than add a field. Marked here rather than given a reason code, because a code with one member costs more than it buys.
 
 | entry | carried at | further blocker, if any |
 |---|---|---|
 | `BUG-0052` | `parameters` | the root cause is that stray capacitance was ignored, and stray C is a layout quantity the DSL holds no coordinates for |
-| `BUG-0054` | `pins[].abs_max.voltage.conditions` | — |
 
 <!-- /generated -->
 
