@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check structure schemas lint ir-hashes bakeoff grammar eval-tests sim golden
+.PHONY: all check structure schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
 
 # Everything CI runs.
 all: check sim golden
@@ -11,7 +11,7 @@ all: check sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure schemas lint ir-hashes bakeoff grammar eval-tests
+check: structure schemas lint ir-hashes corpus bakeoff grammar eval-tests
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -43,6 +43,17 @@ lint:
 ir-hashes:
 	python3 tests/ir/check-hashes.py --self-test
 	python3 tests/ir/check-hashes.py
+
+# AC2 corpus classification (corpus/). Proves every bug is classified exactly
+# once, that each verdict's citation RESOLVES against the artifact it names
+# (D3 field paths walked against the schema, grammar tokens against the frozen
+# grammar), and that the verdicts still hash to the committed decision_hash.
+# The hash is the freeze AC2's "before checker tuning" clause needs to be
+# enforceable rather than aspirational: AMB-61 must not be able to move its own
+# denominator quietly. Self-test first, as everywhere else here.
+corpus:
+	python3 tests/corpus/check-classification.py --self-test
+	python3 tests/corpus/check-classification.py
 
 # Syntax bake-off (lang/): the candidate grammars must round-trip their own
 # output, agree with each other on the same design, and agree with the

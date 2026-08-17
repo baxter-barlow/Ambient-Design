@@ -408,17 +408,25 @@ bugs:
     kind: forum_postmortem
     additional_urls:
     - https://docs.espressif.com/projects/esptool/en/latest/esp32/advanced-topics/boot-mode-selection.html
-  symptom: Flash reads worked but write operations failed intermittently on ~100 already-shipped units of a custom
-    Wrover-module PCB — classic 1.8V/3.3V VDD_SDIO brownout signature.
+  symptom: Flash reads worked but write operations failed on ~100 already-shipped units of a custom Wrover-module
+    PCB — classic 1.8V/3.3V VDD_SDIO signature.
   root_cause: Board design couldn't guarantee GPIO12/MTDI low at power-up, so the strap set the internal VDD_SDIO
-    flash regulator to 1.8V for a 3.3V flash; mitigated by burning the flash-voltage eFuse.
+    flash regulator to 1.8V for a 3.3V flash; mitigated by burning the flash-voltage eFuse. Note the pin has an
+    internal pull-down, so an unconnected MTDI reads low and is CORRECT — the fault therefore requires something
+    on the net able to pull it high, not an omission.
   category: floating-strap-pin
   class: strapping-boot
-  evidence: 'Search-snippet confirmed (site bot-walled): OP "made a mistake by not guaranteeing that MTDI was always
-    pulled low during power-up"; Espressif doc: pulling this pin high causes "the flash to brownout" on 3.3V-flash
-    modules.'
+  evidence: 'OP mirkomirko: "made a mistake by not being able to guarantee that the strapping pin MTDI is always
+    pulled low during power-up in order to operate the (wrover-)internal flash with 3.3V instead of 1.8V, as the
+    latter results in failing write ops (reads are fine...)" and "I solved the issue by burning the efuse to override
+    evaluation of MTDI, but the first ~100 are already shipped out". Espressif boot-mode doc: "12 (MTDI) | If driven
+    High, flash voltage (VDD_SDIO) is 1.8V not default 3.3V. Has internal pull-down, so unconnected = Low = 3.3V."'
   collected: '2026-08-14'
-  review: needs-source-recheck
+  corrected: '2026-08-17'
+  correction_note: Re-checked from the source in AMB-36 (the forum's bot challenge has a manual override). Root
+    cause confirmed; the previous `evidence` presented a paraphrase as a quote and "intermittently" was not in
+    the source. The internal-pull-down fact is added because it decides the classification — see
+    corpus/classification.yaml.
 - id: BUG-0032
   title: 'ESP32-TV: 100K reset pull-down defeated by undocumented internal pull-up'
   source:
@@ -448,20 +456,31 @@ bugs:
     to an oscillating LDO."'
   collected: '2026-08-14'
 - id: BUG-0034
-  title: MIC5504 enable pin left floating after regulator substitution
+  title: MIC5504 active-high enable left unconnected, so the regulator never turns on
   source:
     url: https://www.baldengineer.com/5-ldo-regulator-considerations.html
     kind: blog_postmortem
-  symptom: 'Regulator behaves unreliably after a part swap: enable input floats because the new LDO, unlike the
-    old one, has no internal pull-down.'
-  root_cause: Author checked only the electrical-characteristics table, missing the pin-description note that EN
-    must be driven; manufacturers differ on whether EN may float.
+    additional_urls:
+    - https://download.kamami.pl/p569326-MIC550x-300mA-Single-Output-LDO-in-Small-Packages-DS20006006A.pdf
+  symptom: Newly built board's LDO does not turn on. Attaching a passive scope probe to the circuit makes it start,
+    which is what exposed the enable node as the fault.
+  root_cause: EN is active-high and was left unconnected on the PCB. The author read the electrical-characteristics
+    table's "enable pull-down resistor" entry as meaning the part self-enables and skipped the pin-description
+    table, which states EN is active-high; the MIC5503/5504 internal pull-down then held a floating EN in the OFF
+    state. The defect is an active-high enable that is neither driven nor tied to a rail.
   category: floating-enable-pin
   class: pin-config
-  evidence: 'Search-snippet confirmed (direct fetch 403): author admits he "only looked at the electrical characteristics"
-    while "the pin description table told a different story — pin 4 is supposed to float, pin 3 is not."'
+  evidence: 'Body text: "The board''s LDO regulator was not turning on. Adding a passive scope probe to the circuit
+    suddenly fixed the problem." and "The pin description table tells a different story"; a separate image caption
+    reads "Pin 4 is supposed to float. Pin 3 is not." Datasheet DS20006006A, pin table: "EN | Enable Input: Active-High.
+    High = ON; Low = OFF. ... MIC5503 and MIC5504 have an internal pull-down and this pin may be left floating."'
   collected: '2026-08-14'
-  review: needs-source-recheck
+  corrected: '2026-08-17'
+  correction_note: Re-checked from the source in AMB-36. The entry previously described a regulator substitution
+    in which "the new LDO, unlike the old one, has no internal pull-down" — backwards on both counts, and the
+    substitution framing was imported from unrelated generic advice elsewhere in the same article. The MIC5504
+    does have an internal pull-down, and that pull-down is what held the part off. A check derived from the old
+    wording would not have caught the bug the entry cites.
 - id: BUG-0035
   title: 'TUSB2046B hub fails enumeration: 22nF fitted where 22pF intended'
   source:
@@ -469,14 +488,24 @@ bugs:
     kind: qa_site
   symptom: Custom hub board shows "Device failed enumeration" / Unknown USB Device (Port Reset Failed); downstream
     devices never attach.
-  root_cause: Schematic specified a 0.022uF (22nF) capacitor where 22pF was intended in the TUSB2046B/TPS2044 network
-    — a 1000x value error swamping the signal; TI diagnosed via VBUS check and DP/DM scope capture.
+  root_cause: A 0.022uF (22nF) capacitor sat where 22pF was intended in the TUSB2046B/TPS2044 network — a 1000x
+    value error. The source does NOT establish whether the wrong value was captured in the schematic or only in
+    the parts fitted; the poster says the fault was "not ... in my board, but the components I used", which reads
+    as an assembly/BOM error. TI requested the DP/DM capture and flagged the invalid both-lines-high state, but
+    the poster self-diagnosed first.
   category: wrong-component-value
   class: component-selection
-  evidence: 'Search-snippet confirmed (direct fetch 403): root cause was "a 0.022uF (22nF) cap where 22pF was intended";
-    log showed "Unknown USB Device (Port Reset Failed)".'
+  evidence: 'Poster''s closing post: "I used 0.022uF cap in pull-down between TUSB2046 and TPS2044, it is actually
+    22nF, not 22pF. This is how my test failed." and "its not the mistake happened in my board, but the components
+    I used." USB tree dump shows "Connection Status : 0x02 (Device failed enumeration)".'
   collected: '2026-08-14'
-  review: needs-source-recheck
+  corrected: '2026-08-17'
+  review: schematic-vs-assembly-unresolved
+  correction_note: Re-checked from the source in AMB-36; the cited thread loaded in full. Two claims were removed
+    as unsupported — that the *schematic* specified the wrong value, and that TI diagnosed it. On the assembly
+    reading this entry fails the corpus's own inclusion rule 3 (schematic-level) the way BUG-0063 did, so it is
+    a retirement candidate. AMB-36 did not retire it — shrinking the population it was asked to classify is
+    AMB-35's call, not this issue's. Classified out-of-scope either way, so the AC2 denominator is unaffected.
 - id: BUG-0036
   title: Resistor with both pins on the same net passes SKiDL ERC
   source:
@@ -608,16 +637,21 @@ bugs:
   source:
     url: https://www.esp32.com/viewtopic.php?t=2387
     kind: forum_postmortem
-  symptom: VDD_SDIO kept reverting to 3.3V after reboot despite 'bootstrap' pull-up; days lost debugging boot behavior.
-    Thread marked '[own mistake-solved]'.
+  symptom: VDD_SDIO kept reverting to 3.3V after reboot despite a 'bootstrap' pull-up; a long weekend lost to
+    debugging boot behaviour on a DevKitC/WROOM32 bench setup. Thread marked '[own mistake-solved]'.
   root_cause: 'Designer strapped the wrong pin: pull-up on IO15 instead of MTDI/GPIO12, the pin that actually selects
-    1.8V flash VDD_SDIO.'
+    1.8V flash VDD_SDIO. IO15/MTDO only silences ROM boot messages.'
   category: strapping-pin-wrong-pin
   class: strapping-boot
-  evidence: 'Poster rudi: "so all my waste time was cause we did all time the wrong pull up on wrong bootstrap?"
-    (confirmed via search snippet; site bot-walled)'
+  evidence: 'Poster rudi: "so all my waste time was cause we did all time the wrong pull up on wrong bootstrap?",
+    then "we did allways MTDI - yes you full right - it is IO12 / why we did this weekend on IO15?" and "i pulled
+    allways IO15". Correction from WiFive quoting Espressif: "The embedded flash operates at 1.8V. For the ESP32
+    series of chips that contain embedded flash, the MTDI/GPIO12 should be pulled high."'
   collected: '2026-08-14'
-  review: needs-source-recheck
+  corrected: '2026-08-17'
+  correction_note: Re-checked from the source in AMB-36; root cause confirmed and the evidence quote is verbatim
+    in the thread. "days lost" narrowed to one weekend, and the bench-vs-shipped-board distinction recorded — the
+    cost here was engineering time, not a respin.
 - id: BUG-0046
   title: 'KiCad 6 ERC false negative: undriven input pin on typo''d net label'
   source:
@@ -691,16 +725,25 @@ bugs:
   source:
     url: https://www.xcore.com/viewtopic.php?t=8040
     kind: forum_postmortem
+    additional_urls:
+    - https://www.xmos.com/download/xef216-512-tq128-datasheet(1.15).pdf
+    - https://www.farnell.com/datasheets/1913757.pdf
   symptom: Ethernet fine at 100Mbit but gigabit loses roughly 40% of pings with corrupted loopback data between
     PHY and XMOS MAC.
   root_cause: PHY-address bootstrap pull-up on the shared RX_CLK/PHYAD2 pin violated the MAC-side requirement that
-    RX_CLK be low at reset; removing the pull-up (strap via internal pull-downs) fixed it.
+    RX_CLK be low at reset; replacing the pull-up with a pull-down (PHY address becomes 0x03) fixed it. A later
+    poster reports the same defect on KSZ9131 and Marvell 88E6320, so it is not specific to one PHY.
   category: strapping-pin-conflict
   class: strapping-boot
-  evidence: 'OP confirmation in thread (search-snippet verified; direct fetch blocked 406): "Issue was caused by
-    bit-strap PU on RXCLK line!"'
+  evidence: 'OP lorenzochiesi: "Issue was caused by bit-strap PU on RXCLK line! ... Of course our PU violate this
+    condition. We changed with a PD and this magically solves any issue!" XMOS XEF216 datasheet: "The RGMII PHY
+    should be configured so that RX_CLK is low during reset of the xCORE." KSZ9031RNX datasheet, pin 35: "RX_CLK/PHYAD2
+    ... Config mode: The pull-up/pull-down value is latched as PHYAD[2] during power-up/reset."'
   collected: '2026-08-14'
-  review: needs-source-recheck
+  corrected: '2026-08-17'
+  correction_note: Re-checked from the source in AMB-36; root cause confirmed and corroborated by both vendor
+    datasheets. The fix was a pull-up replaced by a pull-down, not a pull-up removed — relying on the MAC's
+    internal pull-downs was a suggestion in-thread, not what shipped.
 - id: BUG-0052
   title: 32.768kHz crystal load-capacitance mismatch prevents startup / causes drift
   source:
@@ -714,6 +757,7 @@ bugs:
   evidence: 'Crystal maker page, verified via WebFetch: with CL too low "the crystal does not receive sufficient
     energy feedback" and oscillation can fail.'
   collected: '2026-08-14'
+  review: caveat-not-postmortem
 - id: BUG-0053
   title: AMS1117 unstable with low-ESR ceramic-only output capacitor
   source:
@@ -732,6 +776,7 @@ bugs:
     response and stability" (p.1); output-capacitor section: "Typically, a 10uF tantalum or 50uF aluminum electrolytic
     is sufficient... It is important that the ESR for this capacitor does not exceed 0.5 Ohm."'
   collected: '2026-08-14'
+  review: caveat-not-postmortem
 - id: BUG-0054
   title: CP2102/9 VBUS tied directly to 5V without required divider (abs-max violation)
   source:

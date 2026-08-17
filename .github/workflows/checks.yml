@@ -42,6 +42,17 @@ jobs:
         run: |
           python3 tests/structure/check-retired-names.py --self-test
           bash tests/structure/check-layout.sh
+      - name: AC2 corpus classification and freeze
+        # Here rather than in the schemas job because this is the job that
+        # already installs PyYAML, which this gate needs. Putting it in
+        # `schemas` would have meant a second PyYAML install and a stale
+        # toolchain/versions.yaml, and that manifest is outside AMB-36's path
+        # claim. The gate's own dependencies beyond PyYAML are stdlib: it reads
+        # parts/part-data.schema.json as JSON and imports the frozen grammar
+        # module, which needs no parser generator.
+        run: |
+          python3 tests/corpus/check-classification.py --self-test
+          python3 tests/corpus/check-classification.py
 
   schemas:
     name: Schemas and part data
