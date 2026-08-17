@@ -1,4 +1,4 @@
-# AED pinned-toolchain manifest.
+# Rhoform pinned-toolchain manifest.
 #
 # Single source of truth for every tool version the harness depends on.
 # Determinism contract P5: identical inputs compiled or simulated with the
@@ -26,7 +26,7 @@ ngspice:
   # desired behavior: no silent upgrades of the simulation engine.
   debian_package: "ngspice=46+ds-1"
   # ngspice is GPL. It stays at a subprocess boundary (batch invocation,
-  # file and exit-code interface); AED never links against it.
+  # file and exit-code interface); Rhoform never links against it.
   boundary: subprocess
 
 kicad:
@@ -86,11 +86,11 @@ evaluation:
     # The BUDGET yardstick: compares candidate grammars against each other
     # and enforces the A4 12K model-facing-context ceiling. It is a common
     # ruler, NOT a claim to reproduce any model's tokenization — which is
-    # unverifiable for a closed tokenizer, so AED does not assert it.
+    # unverifiable for a closed tokenizer, so Rhoform does not assert it.
     encoding: "o200k_base"
     provider: tiktoken
     # Pinned BEHAVIOURALLY: sha256 over the encoding's token counts on the
-    # fixed probe corpus in eval/aed_eval/tokenizer.py, not over a
+    # fixed probe corpus in eval/rhoform_eval/tokenizer.py, not over a
     # downloaded vocabulary file. Behaviour is what changes a count, a
     # re-packaged artifact with identical behaviour should not fail the pin,
     # and a same-named artifact that tokenizes differently must. Verified
@@ -98,7 +98,7 @@ evaluation:
     fingerprint: "sha256:a18d50b14d2be105d104d8284ea8d09bc40f6e42b7767eec313346eb42db29b9"
     # NEVER edit the probe corpus: changing it changes every fingerprint and
     # silently invalidates every recorded pin.
-    probe_corpus: "eval/aed_eval/tokenizer.py:PROBE_CORPUS"
+    probe_corpus: "eval/rhoform_eval/tokenizer.py:PROBE_CORPUS"
   # The COST counter is deliberately absent from this manifest: the AC5
   # 150K-tokens-per-trial budget is measured from the provider's own
   # reported usage, never from a local estimate. There is nothing to pin.

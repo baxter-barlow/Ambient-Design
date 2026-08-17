@@ -1,4 +1,4 @@
-# AED Verification Matrix
+# Rhoform Verification Matrix
 
 Use every row touched by the change. Obtain exact commands from the implemented repository; this matrix defines evidence, not command names.
 

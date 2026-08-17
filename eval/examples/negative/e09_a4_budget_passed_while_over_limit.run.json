@@ -248,7 +248,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -261,7 +261,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -335,7 +335,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -348,7 +348,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -422,7 +422,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -435,7 +435,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -509,7 +509,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -522,7 +522,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -596,7 +596,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -609,7 +609,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -648,7 +648,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -661,7 +661,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -700,7 +700,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -713,7 +713,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -762,7 +762,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -775,7 +775,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -814,7 +814,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -827,7 +827,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -866,7 +866,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -879,7 +879,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1046,7 +1046,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1059,7 +1059,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1133,7 +1133,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1146,7 +1146,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1220,7 +1220,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1233,7 +1233,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1307,7 +1307,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1320,7 +1320,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1394,7 +1394,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1407,7 +1407,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1446,7 +1446,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1459,7 +1459,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1498,7 +1498,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1511,7 +1511,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1560,7 +1560,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1573,7 +1573,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1612,7 +1612,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1625,7 +1625,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1664,7 +1664,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1677,7 +1677,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1726,7 +1726,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1739,7 +1739,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1778,7 +1778,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1791,7 +1791,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1830,7 +1830,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1843,7 +1843,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1892,7 +1892,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1905,7 +1905,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1944,7 +1944,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -1957,7 +1957,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -1996,7 +1996,7 @@
                 "diagnostic_count": 2,
                 "diagnostics": [
                   {
-                    "code": "AED0201",
+                    "code": "RHO0201",
                     "message": "positional argument to component constructor; parameters are named",
                     "params": {
                       "parameter": "resistance",
@@ -2009,7 +2009,7 @@
                     "top_level_severity": null
                   },
                   {
-                    "code": "AED0410",
+                    "code": "RHO0410",
                     "message": "assertion uses '==' on a dimensioned quantity; use a tolerance interval",
                     "params": {
                       "severity": "error",
@@ -2054,7 +2054,7 @@
   "authoritative": false,
   "flip_criterion": {
     "adequate_power_threshold": 0.8,
-    "aed_rate": 0.8,
+    "rhoform_rate": 0.8,
     "alpha": 0.05,
     "baseline_arm": "starlark_baseline",
     "baseline_rate": 0.6,

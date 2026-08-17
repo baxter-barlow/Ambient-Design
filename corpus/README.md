@@ -1,13 +1,13 @@
-# AED AC2 Seeded-Bug Corpus (collection phase, AMB-35)
+# Rhoform AC2 Seeded-Bug Corpus (collection phase, AMB-35)
 
 ## Purpose
 
-This directory is the **collection deliverable for AC2** of the AED bug-corpus work
+This directory is the **collection deliverable for AC2** of the Rhoform bug-corpus work
 (Linear issue AMB-35): a curated set of real, externally documented electronics-design
-bugs that will seed AED's static/dynamic check development and evaluation.
+bugs that will seed Rhoform's static/dynamic check development and evaluation.
 
 **This phase collects only.** Classification of each bug as in-scope or out-of-scope
-for the AED DSL happens later, in **AMB-36**, against the *frozen* AC2 syntax.
+for the Rhoform DSL happens later, in **AMB-36**, against the *frozen* AC2 syntax.
 No in/out-of-scope classification is assigned here, deliberately: the DSL syntax is
 not frozen at collection time, so any scoping judgment made now would be against a
 moving target and would have to be redone. Scoping decisions must be deterministic
@@ -24,12 +24,12 @@ An entry qualifies only if all three hold:
    the causal design error, not just the symptom.
 3. **Schematic-level** — the defect exists in the connectivity, component selection,
    component values, pin roles, or electrical topology of the design (the abstraction
-   level AED's DSL describes). Pure layout, firmware, or process bugs are excluded;
+   level Rhoform's DSL describes). Pure layout, firmware, or process bugs are excluded;
    assembly/DNP errors are included where the schematic-level intent was the defect.
 
 A sub-family of entries (`erc-gap-*`) documents cases where existing code-as-schematic
 tools (SKiDL, atopile, tscircuit, KiCad ERC) *failed to catch* a schematic-level bug —
-these are direct prior art for AED check design.
+these are direct prior art for Rhoform's check design.
 
 ## Entry schema (`bugs.yaml`)
 

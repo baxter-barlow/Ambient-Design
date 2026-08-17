@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ambient.science/aed/schemas/design-model/0.schema.json",
-  "title": "AED Bake-off Design Model v0",
+  "$id": "https://ambient.science/rhoform/schemas/design-model/0.schema.json",
+  "title": "Rhoform Bake-off Design Model v0",
   "description": "ARM-NEUTRAL description of one design, used only by the §8-Q1 syntax bake-off (issue AMB-32 / roadmap R5b). It is the thing every candidate grammar and the Starlark baseline must express, so that a token-cost comparison between them is a comparison of GRAMMARS rather than of designs. Each arm renders a model to source and parses source back to a model; the round trip and the cross-arm agreement are what make the numbers comparable.\n\nTHIS IS NOT THE IR. ir/netlist-ir.schema.json describes a fully ELABORATED design: flattened nets, resolved parameters, content hashes, generator metadata. This describes SOURCE-LEVEL facts before elaboration: module definitions, their instances, their local nets. The vocabularies that both share — pin roles, hardware kinds, measurement kinds, path-safe identifiers — are deliberately identical, and lang/tests/test_bakeoff.py fails if they ever drift apart.\n\nTHIS IS A THROWAWAY FIXTURE FORMAT. R5b's prototypes are explicitly disposable; the frozen grammar's real source of truth lands in AMB-33/R6 and the living benchmark sources in AMB-50/R53. Nothing outside lang/ may depend on this schema.",
   "type": "object",
   "additionalProperties": false,
@@ -95,7 +95,7 @@
     "QualifiedName": {
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*(?![\\s\\S])",
-      "description": "Dotted definition name, matching the IR's `Instance.definition` production exactly, e.g. \"aed.lib.passive.Resistor\"."
+      "description": "Dotted definition name, matching the IR's `Instance.definition` production exactly, e.g. \"rhoform.lib.passive.Resistor\"."
     },
     "NetName": {
       "type": "string",
@@ -356,7 +356,7 @@
         },
         "qualified_name": {
           "$ref": "#/$defs/QualifiedName",
-          "description": "Fully qualified definition name this module elaborates to in the IR (e.g. \"aed.lib.display.LedIndicator\"). Recorded so a model can be checked against an IR anchor whose `definition` fields are qualified, without putting import syntax — L4's business, not L5's — into the bake-off."
+          "description": "Fully qualified definition name this module elaborates to in the IR (e.g. \"rhoform.lib.display.LedIndicator\"). Recorded so a model can be checked against an IR anchor whose `definition` fields are qualified, without putting import syntax — L4's business, not L5's — into the bake-off."
         },
         "ports": {
           "type": "array",

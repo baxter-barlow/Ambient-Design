@@ -5,19 +5,19 @@ capture. Two consumers, about nine months apart:
 
 - the **§8-Q1 syntax bake-off** — candidate grammars measured on token cost
   and emission accuracy, against throwaway prototype parsers;
-- the **AC5a gate run** — the same protocol against the real `aed check`.
+- the **AC5a gate run** — the same protocol against the real `rhoform check`.
 
 The issue says "reused verbatim by the AC5a gate run — build once", so
 nothing here is written against a concrete compiler. A gate is anything that
-can look at emitted source and return a verdict plus diagnostics; `aed check`
+can look at emitted source and return a verdict plus diagnostics; `rhoform check`
 plugs in later as a `CommandGate` with no change to the protocol, the result
 format, or the statistics.
 
 ```
 python3 -m unittest discover -s eval/tests -t eval   # 67 tests, stdlib only
-cd eval && python3 -m aed_eval selftest              # statistics vs closed form
-cd eval && python3 -m aed_eval replay --transcript fixtures/demo-replay.json --allow-stub
-cd eval && python3 -m aed_eval plan --rate-a 0.6 --rate-b 0.9
+cd eval && python3 -m rhoform_eval selftest              # statistics vs closed form
+cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
+cd eval && python3 -m rhoform_eval plan --rate-a 0.6 --rate-b 0.9
 ```
 
 `make check` runs the first three.
@@ -51,7 +51,7 @@ the A4 context fit in 12K?". *Trial tokens* come from the provider's reported
 usage and answer "what did this cost?", which is the only defensible source
 for the AC5 150K-per-trial budget. The local tokenizer is a common ruler, not
 a claim to reproduce any model's tokenization — unverifiable for a closed
-tokenizer, so AED does not assert it.
+tokenizer, so Rhoform does not assert it.
 
 **The tokenizer is pinned by behaviour, not by file hash.** The pin is a
 sha256 over the encoding's token counts on a fixed probe corpus. Behaviour is
@@ -74,7 +74,7 @@ not have. Trust a third-party record exactly as far as you trust whoever
 sent it.
 
 **AC5's iteration budget is ambiguous, and this records which reading it
-used.** "≤3 repair iterations (1 iteration = one write + one `aed check`)"
+used.** "≤3 repair iterations (1 iteration = one write + one `rhoform check`)"
 supports both *3 write+check cycles in total* and *the first emission plus 3
 repairs*. The second is about 33% more generous. Both are expressible, the
 stricter is the default, and every result states which applied — so numbers
@@ -94,7 +94,7 @@ simulation, and it would bias the very pass rate AC5a gates on.
 The statistics module exists because AC5a's ten trials and §4's comparison
 are different questions, and ten trials only answers the first.
 
-`python3 -m aed_eval plan` reports exact power. Against a true 0.60-vs-0.90
+`python3 -m rhoform_eval plan` reports exact power. Against a true 0.60-vs-0.90
 difference — enormous by any standard — the one-sided test at 10 trials per
 arm has:
 

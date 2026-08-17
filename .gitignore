@@ -30,9 +30,9 @@ build/
 dist/
 *.egg-info/
 
-# AED-generated and simulation scratch state
-.aed-cache/
-.aed-build/
+# Rhoform-generated and simulation scratch state
+.rhoform-cache/
+.rhoform-build/
 *.raw
 *.log
 

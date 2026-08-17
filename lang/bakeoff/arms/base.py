@@ -51,7 +51,7 @@ from ..quantities import QuantityError, parse_quantity
 # L8's syntax-version pragma, spelled as the §8-Q2 naming decision fixed it
 # (AMB-30): `#pragma rhoform-syntax <major.minor>`. The placeholder this
 # replaced, `#pragma language "0.1.0"`, predated the decision. Only the
-# pragma moves to the decided vocabulary here — `aed.lib.*` and the AED
+# pragma moves to the decided vocabulary here — `rhoform.lib.*` and the Rhoform
 # diagnostic prefixes belong to the repository-wide rename, which is a
 # different piece of work. Freezing a grammar does not license a rename.
 PRAGMA = "#pragma rhoform-syntax 0.1"
@@ -298,7 +298,7 @@ class Cursor:
             except QuantityError as exc:
                 self.diagnostics.append(
                     Diag(
-                        code="AEDX0005",
+                        code="RHOX0005",
                         message=str(exc),
                         span=token.span(),
                         params={"literal": token.text},

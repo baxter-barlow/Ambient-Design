@@ -1,9 +1,9 @@
 ---
-name: verify-aed-change
-description: Select, run, and report proportionate verification for AED instruction, compiler, DSL, electrical typing, part-data, ngspice, KiCad export, determinism, documentation, and release changes. Use after modifying AED artifacts and before handoff, review, merge, issue completion, or any correctness claim.
+name: verify-rhoform-change
+description: Select, run, and report proportionate verification for Rhoform instruction, compiler, DSL, electrical typing, part-data, ngspice, KiCad export, determinism, documentation, and release changes. Use after modifying Rhoform artifacts and before handoff, review, merge, issue completion, or any correctness claim.
 ---
 
-# Verify AED Change
+# Verify Rhoform Change
 
 Build an evidence chain from acceptance criteria to executable checks. Never report an unavailable, skipped, or manually inspected gate as passing.
 
@@ -22,7 +22,7 @@ Run the narrowest fast checks first, followed by every affected integration and 
 For instruction or skill architecture changes, run:
 
 ```sh
-sh .agents/skills/verify-aed-change/scripts/validate-layout.sh
+sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
 ```
 
 Run the open Agent Skills validator against each changed skill:

@@ -1,4 +1,4 @@
-# AED benchmark (a): dynamic assertions for the 9V 555 LED blinker
+# Rhoform benchmark (a): dynamic assertions for the 9V 555 LED blinker
 # Measurement kinds use the V2 vocabulary; the two headline assertions
 # (frequency, duty) are each backed by ONE .meas TRIG/TARG on v(out).
 # settle window: 2 s (V3 ramped-supply fixture; first high phase ~0.86 s

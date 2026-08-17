@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping build Ambient Design. AED treats reproducibility, verification, and multi-agent collision safety as product requirements.
+Thank you for helping build Rhoform. Rhoform treats reproducibility, verification, and multi-agent collision safety as product requirements.
 
 ## Before changing files
 
@@ -38,7 +38,7 @@ The DCO workflow checks every pull-request commit.
 Run the narrow checks first, then every affected integration and domain gate. At minimum, repository-policy changes must pass:
 
 ```sh
-sh .agents/skills/verify-aed-change/scripts/validate-layout.sh
+sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
 sh -n .github/scripts/check-dco.sh
 ```
 

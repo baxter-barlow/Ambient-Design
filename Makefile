@@ -1,4 +1,4 @@
-# AED repository entrypoints. Each target is a thin wrapper over a
+# Rhoform repository entrypoints. Each target is a thin wrapper over a
 # versioned script under tests/, so local runs and CI
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
@@ -72,8 +72,8 @@ grammar:
 # verdicts.
 eval-tests:
 	python3 -m unittest discover -s eval/tests -t eval
-	cd eval && python3 -m aed_eval selftest
-	cd eval && python3 -m aed_eval replay --transcript fixtures/demo-replay.json --allow-stub
+	cd eval && python3 -m rhoform_eval selftest
+	cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
 
 # ngspice benchmark decks with .meas assertion and time-budget checks.
 # Requires the ngspice version pinned in toolchain/versions.yaml.

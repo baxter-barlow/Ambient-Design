@@ -1,4 +1,4 @@
-# AED benchmark b: 3.3V/2A buck -- dynamic assertions (rung 0, behavioral)
+# Rhoform benchmark b: 3.3V/2A buck -- dynamic assertions (rung 0, behavioral)
 # Windows are the task defaults; none were widened. Measured values are from
 # the canonical `ngspice -b netlist.cir` run recorded in validation.log
 # (ngspice-46, 0.38 s wall, 2026-08-15 fix round).

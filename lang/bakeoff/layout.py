@@ -94,7 +94,7 @@ def tokenize(source: str) -> list[Token]:
             if char == "\t":
                 diagnostics.append(
                     Diag(
-                        code="AEDX0002",
+                        code="RHOX0002",
                         message="tab character; indentation and spacing are spaces only",
                         span=Span(line_number, index + 1, line_start + index),
                         params={"character": "tab"},
@@ -104,7 +104,7 @@ def tokenize(source: str) -> list[Token]:
             elif not (" " <= char <= "~"):
                 diagnostics.append(
                     Diag(
-                        code="AEDX0001",
+                        code="RHOX0001",
                         message=(
                             f"non-ASCII character U+{ord(char):04X}; the surface "
                             "syntax is ASCII only (L5)"
@@ -154,7 +154,7 @@ def tokenize(source: str) -> list[Token]:
                 if indent != indents[-1]:
                     diagnostics.append(
                         Diag(
-                            code="AEDX0003",
+                            code="RHOX0003",
                             message=(
                                 f"indentation of {indent} spaces matches no enclosing "
                                 f"block (open levels: {indents})"
@@ -185,7 +185,7 @@ def tokenize(source: str) -> list[Token]:
                 if end == -1:
                     diagnostics.append(
                         Diag(
-                            code="AEDX0004",
+                            code="RHOX0004",
                             message="unterminated string literal",
                             span=Span(line_number, position + 1, here),
                             params={},
@@ -218,7 +218,7 @@ def tokenize(source: str) -> list[Token]:
                     except QuantityError as exc:
                         diagnostics.append(
                             Diag(
-                                code="AEDX0005",
+                                code="RHOX0005",
                                 message=str(exc),
                                 span=Span(line_number, position + 1, here, len(text)),
                                 params={"literal": text},
@@ -262,7 +262,7 @@ def tokenize(source: str) -> list[Token]:
 
             diagnostics.append(
                 Diag(
-                    code="AEDX0006",
+                    code="RHOX0006",
                     message=f"unexpected character {char!r}",
                     span=Span(line_number, position + 1, here),
                     params={"character": char},
@@ -281,7 +281,7 @@ def tokenize(source: str) -> list[Token]:
         )
         diagnostics.append(
             Diag(
-                code="AEDX0007",
+                code="RHOX0007",
                 message=(
                     f"{bracket_depth} bracket(s) left open; the outermost was "
                     f"opened on line {opened_line} and never closed"

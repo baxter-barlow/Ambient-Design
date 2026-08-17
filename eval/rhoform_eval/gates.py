@@ -3,8 +3,8 @@
 THIS INDIRECTION IS THE POINT OF THE ISSUE. The harness has two consumers
 about nine months apart with different gates. At M0 the bake-off judges
 candidate grammars with a throwaway prototype parser. At AC5a the gate is
-the real `aed check` plus export, which does not exist yet. Writing the
-harness against a concrete `aed check` today would guarantee a rewrite when
+the real `rhoform check` plus export, which does not exist yet. Writing the
+harness against a concrete `rhoform check` today would guarantee a rewrite when
 that day comes, and "reused verbatim by the AC5a gate run - build once" is
 the requirement.
 
@@ -13,7 +13,7 @@ plus diagnostics. Three implementations ship:
 
   CallableGate  - in-process; wraps a prototype parser (M0 bake-off) or a
                   test double.
-  CommandGate   - subprocess; how `aed check` plugs in later with no change
+  CommandGate   - subprocess; how `rhoform check` plugs in later with no change
                   to the protocol, results, or statistics.
   ReplayGate    - returns recorded verdicts, so a whole run replays offline
                   in CI with no compiler and no API spend.
@@ -90,7 +90,7 @@ class CallableGate:
 class CommandGate:
     """Run an external command over a written source file.
 
-    This is the adapter `aed check` will use. It expects the A1 diagnostic
+    This is the adapter `rhoform check` will use. It expects the A1 diagnostic
     contract — newline-delimited JSON objects on stdout — and treats a
     non-zero exit as failure.
 
@@ -106,7 +106,7 @@ class CommandGate:
         argv: list[str],
         name: str,
         version: str = "unknown",
-        source_filename: str = "design.aed",
+        source_filename: str = "design.rhoform",
         timeout_s: int = 120,
         stage: str = "check",
     ):
@@ -210,7 +210,7 @@ class CompositeGate:
     """Run several gates in order as one pipeline stage-set.
 
     AC5a's bar is passing "compile/type-check/export gates" — plural. If
-    `aed` ends up exposing those as separate invocations rather than one
+    `rhoform` ends up exposing those as separate invocations rather than one
     command, a single-command gate cannot express the bar at all, and the
     "reused verbatim by the AC5a gate run" promise would quietly fail at
     exactly the moment it was supposed to pay off. This composes them.

@@ -1,6 +1,6 @@
-* AED benchmark (a): 9V 555 LED blinker, ~1 Hz astable
+* Rhoform benchmark (a): 9V 555 LED blinker, ~1 Hz astable
 * Deck: complete, self-contained, offline, deterministic (no vendor models).
-* NE555 macromodel below is an ORIGINAL behavioral model authored for AED
+* NE555 macromodel below is an ORIGINAL behavioral model authored for Rhoform
 * (comparators as B-sources, B-source SR latch on a state cap, switch-model
 * discharge transistor). Intended license: Apache-2.0 / CC0 (D4 core library seed).
 *
@@ -12,10 +12,10 @@
 *   V1: every .meas must yield a real number; a missed crossing is a failure.
 
 *----------------------------------------------------------------------
-* NE555_AED - original behavioral 555 macromodel
+* NE555_RHOFORM - original behavioral 555 macromodel
 * Pin order matches DIP-8: GND TRIG OUT RST CONT THRES DISCH VCC
 *----------------------------------------------------------------------
-.subckt NE555_AED gnd trig out rst cont thres disch vcc
+.subckt NE555_RHOFORM gnd trig out rst cont thres disch vcc
 
 * Internal 5k/5k/5k divider; CONT pin rides the 2/3 tap (external bypass ok)
 Rdiv1 vcc  cont  5k
@@ -49,14 +49,14 @@ Bqb   qb gnd V = 1-v(q)
 Sdis  disch gnd qb gnd swdis
 .model swdis sw(ron=18 roff=100meg vt=0.5 vh=0.2)
 
-.ends NE555_AED
+.ends NE555_RHOFORM
 
 *----------------------------------------------------------------------
 * Astable blinker: RA=100k, RB=680k, C=1u -> f=1.44/((RA+2RB)C)=0.986 Hz
 * duty=(RA+RB)/(RA+2RB)=53.4% high
 *----------------------------------------------------------------------
 VCC  vcc 0 PWL(0 0 2m 9)                 ; V3: ramped 9 V supply
-XU1  0 nct out vcc cont nct disch vcc NE555_AED
+XU1  0 nct out vcc cont nct disch vcc NE555_RHOFORM
 RA   vcc  disch 100k
 RB   disch nct   680k
 CT   nct  0     1u

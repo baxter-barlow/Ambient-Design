@@ -1,4 +1,4 @@
-* AED benchmark b: 3.3 V / 2 A synchronous buck, 12 V nominal input (9-14 V)
+* Rhoform benchmark b: 3.3 V / 2 A synchronous buck, 12 V nominal input (9-14 V)
 * Fidelity class: BEHAVIORAL (rung 0). Original voltage-mode PWM built from
 * B-sources: sawtooth ramp + comparator + PID error amp (Type-III analog),
 * lossy behavioral switch node (Ron_HS/Ron_LS conduction), explicit input

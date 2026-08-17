@@ -1,11 +1,11 @@
 ---
 name: claim-linear-work
-description: Reserve, confirm, hand off, or release exclusive file and directory ownership in the Agentic Electronic Design Linear project. Use before any AED shared-workspace write, when scope expands, when another agent may touch related paths, or when stopping work so concurrent agents do not collide.
+description: Reserve, confirm, hand off, or release exclusive file and directory ownership in the Agentic Electronic Design Linear project. Use before any Rhoform shared-workspace write, when scope expands, when another agent may touch related paths, or when stopping work so concurrent agents do not collide.
 ---
 
 # Claim Linear Work
 
-Establish a visible, bounded work lease before changing shared AED state. Treat Linear as the ownership ledger; a chat message or local note is not a claim.
+Establish a visible, bounded work lease before changing shared Rhoform state. Treat Linear as the ownership ledger; a chat message or local note is not a claim.
 
 ## Gather inputs
 

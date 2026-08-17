@@ -5,11 +5,11 @@ grammar for a loop, not for a pretty listing. So a prototype that reported
 "syntax error" would leave the most decision-relevant property of a candidate
 unmeasured. These carry a stable code, a byte-accurate span, and structured
 parameters, shaped after the A1 contract so that `lang/bakeoff/measure.py`
-can score them and `aed check` can later emit the same shape.
+can score them and `rhoform check` can later emit the same shape.
 
-CODES ARE PER-ARM AND STABLE. `AEDA0101` is arm A's "expected an indented
-block"; `AEDB0101` is arm B's. Shared failures — a bad quantity literal, an
-unknown unit — use the `AEDX` prefix, because charging one candidate for a
+CODES ARE PER-ARM AND STABLE. `RHOA0101` is arm A's "expected an indented
+block"; `RHOB0101` is arm B's. Shared failures — a bad quantity literal, an
+unknown unit — use the `RHOX` prefix, because charging one candidate for a
 diagnostic every arm emits identically would be measuring the shared layer.
 """
 

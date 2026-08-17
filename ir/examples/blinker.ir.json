@@ -3,13 +3,13 @@
     "ir_version": 0,
     "language_version": "0.1.0",
     "design_name": "blinker_555",
-    "design_hash": "sha256:8c500aaf8dc8a24ebdef92c23f775936f5d4d3685a064f88ff9a727e0a589eb4",
+    "design_hash": "sha256:107d254be3844d52eb1425193d1af86fd597b461e754b59cf9ae77528043a345",
     "source_hash": "sha256:af59b1271c7a742c1a31cb3e46b3c9e41d7b27ab8d5bf7cd6b1f76accd22a459",
     "generator": {
-      "name": "aedc",
+      "name": "rhoformc",
       "version": "0.1.0"
     },
-    "canonical_form": "aed-canonical-json/1"
+    "canonical_form": "rhoform-canonical-json/1"
   },
   "instances": [
     {
@@ -25,7 +25,7 @@
     {
       "path": "/c_ctl",
       "kind": "component",
-      "definition": "aed.lib.passive.Capacitor",
+      "definition": "rhoform.lib.passive.Capacitor",
       "parameters": {
         "capacitance": {
           "value": 10,
@@ -57,7 +57,7 @@
     {
       "path": "/c_t",
       "kind": "component",
-      "definition": "aed.lib.passive.Capacitor",
+      "definition": "rhoform.lib.passive.Capacitor",
       "parameters": {
         "capacitance": {
           "value": 1,
@@ -89,7 +89,7 @@
     {
       "path": "/indicator",
       "kind": "module",
-      "definition": "aed.lib.display.LedIndicator",
+      "definition": "rhoform.lib.display.LedIndicator",
       "parameters": {
         "color": "red",
         "current": {
@@ -109,7 +109,7 @@
     {
       "path": "/indicator/d1",
       "kind": "component",
-      "definition": "aed.lib.semiconductor.Led",
+      "definition": "rhoform.lib.semiconductor.Led",
       "parameters": {
         "color": "red",
         "forward_voltage": {
@@ -136,7 +136,7 @@
     {
       "path": "/indicator/r_lim",
       "kind": "component",
-      "definition": "aed.lib.passive.Resistor",
+      "definition": "rhoform.lib.passive.Resistor",
       "parameters": {
         "resistance": {
           "value": 560,
@@ -167,7 +167,7 @@
     {
       "path": "/j_bat",
       "kind": "component",
-      "definition": "aed.lib.connector.BatteryConnector9V",
+      "definition": "rhoform.lib.connector.BatteryConnector9V",
       "parameters": {},
       "ports": [
         { "name": "neg", "role": "power_out", "pin_numbers": ["2"] },
@@ -184,7 +184,7 @@
     {
       "path": "/mh1",
       "kind": "component",
-      "definition": "aed.lib.mech.MountingHole",
+      "definition": "rhoform.lib.mech.MountingHole",
       "parameters": {
         "diameter": { "value": 3.2, "unit": "mm" }
       },
@@ -197,7 +197,7 @@
     {
       "path": "/r_a",
       "kind": "component",
-      "definition": "aed.lib.passive.Resistor",
+      "definition": "rhoform.lib.passive.Resistor",
       "parameters": {
         "resistance": {
           "value": 100000,
@@ -228,7 +228,7 @@
     {
       "path": "/r_b",
       "kind": "component",
-      "definition": "aed.lib.passive.Resistor",
+      "definition": "rhoform.lib.passive.Resistor",
       "parameters": {
         "resistance": {
           "value": 680000,
@@ -259,7 +259,7 @@
     {
       "path": "/timer",
       "kind": "component",
-      "definition": "aed.lib.timer.Ne555",
+      "definition": "rhoform.lib.timer.Ne555",
       "parameters": {},
       "ports": [
         { "name": "ctl", "role": "passive", "pin_numbers": ["5"] },
@@ -286,7 +286,7 @@
     {
       "path": "/tp_out",
       "kind": "component",
-      "definition": "aed.lib.mech.TestPoint",
+      "definition": "rhoform.lib.mech.TestPoint",
       "parameters": {},
       "ports": [
         { "name": "p", "role": "passive" }

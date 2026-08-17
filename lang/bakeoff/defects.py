@@ -83,7 +83,7 @@ def _connection_lines(source):
     """Lines that state connectivity, in every arm's spelling.
 
     Anchoring here matters: corrupting the first `x.y` anywhere in the file
-    hits `aed.lib.timer.Ne555` — a DEFINITION path — and seeds an
+    hits `rhoform.lib.timer.Ne555` — a DEFINITION path — and seeds an
     unknown-component defect that then gets scored as an unknown-instance one.
     """
     for index, line in enumerate(source.splitlines()):
@@ -144,7 +144,7 @@ def _bad_role(source):
     """Corrupt a role WHERE A ROLE IS WRITTEN, not wherever the word appears.
 
     An earlier version matched the first "passive" in the file, which in the
-    `inferred` cell is inside `aed.lib.passive.Capacitor` — so it was seeding
+    `inferred` cell is inside `rhoform.lib.passive.Capacitor` — so it was seeding
     an unknown-component defect and scoring it as a bad-role defect. The
     lesson generalises: a mutation operator that is not anchored to the
     construct it names measures something else and says nothing about it.

@@ -30,7 +30,7 @@ class Arm:
         return self.module.language_card()
 
     def source_filename(self, design_id: str) -> str:
-        suffix = "py" if self.kind == "baseline" else "aed"
+        suffix = "py" if self.kind == "baseline" else "rhoform"
         return f"{design_id}.{suffix}"
 
 

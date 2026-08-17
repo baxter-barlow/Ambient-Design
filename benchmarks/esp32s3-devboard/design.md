@@ -1,4 +1,4 @@
-# AED Benchmark (c): ESP32-S3 Devboard Reference Design
+# Rhoform Benchmark (c): ESP32-S3 Devboard Reference Design
 
 Benchmark target for AC1c: ~60 components, expressible in <= ~600 DSL lines.
 "Simulates" for this benchmark means the power tree checked against

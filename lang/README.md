@@ -77,7 +77,7 @@ gate.
 
 ```
 # candidate A                         # candidate B
-r_a = new aed.lib.passive.Resistor    r_a = new aed.lib.passive.Resistor(
+r_a = new rhoform.lib.passive.Resistor    r_a = new rhoform.lib.passive.Resistor(
 r_a.resistance = 100kohm +/- 1%           resistance = 100kohm +/- 1%):
 r_a.part.package = "axial_0207"           part abstract:
 signal VCC                                    package = "axial_0207"

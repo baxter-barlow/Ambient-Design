@@ -92,38 +92,38 @@ def _p(name: str, role: str, *pins: str) -> Port:
 # in every arm, which is how a typo in a component name becomes a diagnostic
 # instead of a silently empty component.
 LIBRARY: dict[str, ComponentDef] = {
-    "aed.lib.passive.Resistor": ComponentDef(
+    "rhoform.lib.passive.Resistor": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive")),
         constraint_attributes=frozenset({"resistance"}),
     ),
-    "aed.lib.passive.Capacitor": ComponentDef(
+    "rhoform.lib.passive.Capacitor": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive")),
         constraint_attributes=frozenset({"capacitance"}),
     ),
-    "aed.lib.passive.Inductor": ComponentDef(
+    "rhoform.lib.passive.Inductor": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive")),
         constraint_attributes=frozenset({"inductance"}),
     ),
-    "aed.lib.passive.FerriteBead": ComponentDef(
+    "rhoform.lib.passive.FerriteBead": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive"))
     ),
-    "aed.lib.passive.PtcFuse": ComponentDef(
+    "rhoform.lib.passive.PtcFuse": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive"))
     ),
-    "aed.lib.semiconductor.Led": ComponentDef(
+    "rhoform.lib.semiconductor.Led": ComponentDef(
         ports=(_p("a", "passive"), _p("k", "passive")),
         constraint_attributes=frozenset({"color"}),
     ),
-    "aed.lib.semiconductor.SchottkyDiode": ComponentDef(
+    "rhoform.lib.semiconductor.SchottkyDiode": ComponentDef(
         ports=(_p("a", "passive"), _p("k", "passive"))
     ),
-    "aed.lib.semiconductor.TvsDiode": ComponentDef(
+    "rhoform.lib.semiconductor.TvsDiode": ComponentDef(
         ports=(_p("a", "passive"), _p("k", "passive"))
     ),
-    "aed.lib.connector.BatteryConnector9V": ComponentDef(
+    "rhoform.lib.connector.BatteryConnector9V": ComponentDef(
         ports=(_p("neg", "power_out", "2"), _p("pos", "power_out", "1"))
     ),
-    "aed.lib.timer.Ne555": ComponentDef(
+    "rhoform.lib.timer.Ne555": ComponentDef(
         ports=(
             _p("ctl", "passive", "5"),
             _p("dis", "open_collector", "7"),
@@ -135,7 +135,7 @@ LIBRARY: dict[str, ComponentDef] = {
             _p("vcc", "power_in", "8"),
         )
     ),
-    "aed.lib.connector.UsbCReceptacle16": ComponentDef(
+    "rhoform.lib.connector.UsbCReceptacle16": ComponentDef(
         # One logical port per signal; the multi-pin members are the paired
         # A/B-side contacts a USB-C receptacle commons internally.
         ports=(
@@ -148,22 +148,22 @@ LIBRARY: dict[str, ComponentDef] = {
             _p("vbus", "power_out"),
         )
     ),
-    "aed.lib.connector.PinHeader1x2": ComponentDef(
+    "rhoform.lib.connector.PinHeader1x2": ComponentDef(
         ports=(_p("p1", "passive"), _p("p2", "passive"))
     ),
-    "aed.lib.connector.PinHeader1x6": ComponentDef(
+    "rhoform.lib.connector.PinHeader1x6": ComponentDef(
         ports=tuple(_p(f"p{i}", "passive") for i in range(1, 7))
     ),
-    "aed.lib.connector.PinHeader1x20": ComponentDef(
+    "rhoform.lib.connector.PinHeader1x20": ComponentDef(
         ports=tuple(sorted((_p(f"p{i}", "passive") for i in range(1, 21)), key=lambda p: p.name))
     ),
-    "aed.lib.connector.Shunt2": ComponentDef(
+    "rhoform.lib.connector.Shunt2": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive"))
     ),
-    "aed.lib.switch.TactileSwitch": ComponentDef(
+    "rhoform.lib.switch.TactileSwitch": ComponentDef(
         ports=(_p("a", "passive"), _p("b", "passive"))
     ),
-    "aed.lib.semiconductor.UsbEsdArray": ComponentDef(
+    "rhoform.lib.semiconductor.UsbEsdArray": ComponentDef(
         ports=(
             _p("dm", "bidirectional"),
             _p("dp", "bidirectional"),
@@ -171,7 +171,7 @@ LIBRARY: dict[str, ComponentDef] = {
             _p("vbus", "passive"),
         )
     ),
-    "aed.lib.regulator.LinearRegulator": ComponentDef(
+    "rhoform.lib.regulator.LinearRegulator": ComponentDef(
         # No enable port. The AP7361C's EN treatment is not stated in
         # benchmarks/esp32s3-devboard/, and inventing a connection for it
         # would put a design decision this issue has no business making into
@@ -182,7 +182,7 @@ LIBRARY: dict[str, ComponentDef] = {
             _p("vout", "power_out"),
         )
     ),
-    "aed.lib.module.Esp32S3Wroom1": ComponentDef(
+    "rhoform.lib.module.Esp32S3Wroom1": ComponentDef(
         # Ports carry NO pin designators. The WROOM-1 pinout is a datasheet
         # fact this issue has no datasheet in front of it for, and a plausible
         # guess written into a fixture is worse than an absence: the schema
@@ -203,18 +203,18 @@ LIBRARY: dict[str, ComponentDef] = {
             )
         )
     ),
-    "aed.lib.mech.MountingHole": ComponentDef(
+    "rhoform.lib.mech.MountingHole": ComponentDef(
         ports=(),
         hardware_kind="mounting_hole",
         exclude_from_bom=True,
         board_only=True,
     ),
-    "aed.lib.mech.GroundedMountingHole": ComponentDef(
+    "rhoform.lib.mech.GroundedMountingHole": ComponentDef(
         ports=(_p("p", "passive"),),
         hardware_kind="grounded_mounting_hole",
         exclude_from_bom=True,
     ),
-    "aed.lib.mech.TestPoint": ComponentDef(
+    "rhoform.lib.mech.TestPoint": ComponentDef(
         ports=(_p("p", "passive"),),
         hardware_kind="test_point",
         exclude_from_bom=True,

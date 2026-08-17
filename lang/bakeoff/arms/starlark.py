@@ -71,10 +71,10 @@ from .shared import build_model, module_order
 
 KEY = "starlark"
 TITLE = "S - Starlark baseline"
-CODE_PREFIX = "AEDS"
+CODE_PREFIX = "RHOS"
 
 # Only `explicit` and `inferred`: L6's columnar sub-syntax is a proposal for
-# AED's surface, and Python has no columnar form to compare it against. Saying
+# Rhoform's surface, and Python has no columnar form to compare it against. Saying
 # so is better than inventing one and reporting a number for it.
 VARIANTS = ("explicit", "inferred")
 
@@ -971,7 +971,7 @@ def parse(source: str, variant: str = "explicit") -> DesignModel:
         # A LAST RESORT, and it exists because of a real failure: the
         # evaluator injected `node=` into every attribute-resolved callable,
         # so an ordinary Python method call raised a bare TypeError out of
-        # `parse`. eval/aed_eval/protocol.py calls the gate with no handler
+        # `parse`. eval/rhoform_eval/protocol.py calls the gate with no handler
         # around it, so that exception did not become a scored failure - it
         # aborted the whole AC5 run and discarded every trial in it. Whatever
         # else goes wrong in here must come out as a diagnostic.
@@ -1022,7 +1022,7 @@ def language_card() -> str:
 
 
 _LANGUAGE_CARD = '''\
-# AED Starlark baseline - language card
+# Rhoform Starlark baseline - language card
 
 Designs are written in a restricted Python subset (Starlark-shaped) against a
 builder API. Each module is a function taking the builder `m`. The file ends
@@ -1049,11 +1049,11 @@ whole numbers, string and list concatenation, comparisons, indexing.
 
 ## Instances
 
-    r_a = m.part("r_a", "aed.lib.passive.Resistor", resistance="100kohm +/- 1%")
+    r_a = m.part("r_a", "rhoform.lib.passive.Resistor", resistance="100kohm +/- 1%")
     r_a.pins(("a", "passive"), ("b", "passive"))
     r_a.part(package="axial_0207", power_rating="0.25W")
 
-    timer = m.part("timer", "aed.lib.timer.Ne555")
+    timer = m.part("timer", "rhoform.lib.timer.Ne555")
     timer.part("timer.555/ti-NE555P@2", function="timer_555")
 
     indicator = m.sub("indicator", LedIndicator, color="red")

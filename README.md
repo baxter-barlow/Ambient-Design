@@ -1,12 +1,21 @@
-# Ambient Design (AED)
+# Rhoform
 
-Ambient Design is an open-source, bring-your-own-model agentic electronics-design harness: a small declarative DSL, deterministic electrical checks, reproducible simulation, reviewable schematics, part resolution, and KiCad handoff.
+Rhoform is an open-source, bring-your-own-model agentic electronics-design harness: a small declarative DSL, deterministic electrical checks, reproducible simulation, reviewable schematics, part resolution, and KiCad handoff.
 
 The model makes engineering decisions. Deterministic tooling owns parsing, netlist bookkeeping, type checking, simulation, rendering, and file-format emission.
 
+## Names
+
+The language, the compiler and the CLI are **Rhoform**; sources are `.rhoform`.
+The company is Ambient Labs. The GitHub repository, the Linear project and the
+Notion project are still called *Ambient Design* — renaming those is a separate
+piece of work from renaming what ships, and each needs its own review, so this
+repository deliberately still answers to the old project name in those three
+places and nowhere else.
+
 ## Status
 
-AED is in its foundation phase. The requirements and v1 roadmap are approved; the compiler and runtime are not implemented yet.
+Rhoform is in its foundation phase. The requirements and v1 roadmap are approved; the compiler and runtime are not implemented yet.
 
 Start with:
 

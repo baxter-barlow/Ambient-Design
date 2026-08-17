@@ -1,6 +1,6 @@
 # Golden-file harness
 
-Golden tests pin the byte-exact output of AED's deterministic tooling:
+Golden tests pin the byte-exact output of Rhoform's deterministic tooling:
 compiled netlist IR, rendered schematics, exported KiCad artifacts,
 diagnostic reports. If a change alters any output byte, the harness fails
 and the change must either be fixed or the golden files must be

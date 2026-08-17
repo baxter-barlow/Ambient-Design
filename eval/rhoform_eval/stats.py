@@ -164,7 +164,7 @@ def fisher_exact_one_sided(a: int, b: int, c: int, d: int) -> float:
     Returns P(observing a success count for arm A this low or lower, given
     the margins), i.e. the p-value for the alternative "A's success rate is
     BELOW B's". That direction is the one §4 asks about: the flip criterion
-    fires when AED is worse than the Starlark baseline, so a two-sided test
+    fires when Rhoform is worse than the Starlark baseline, so a two-sided test
     would spend half its significance budget on an outcome nobody proposed
     to act on.
 
@@ -324,11 +324,11 @@ def power_paired(n_pairs: int, p_discordant: float, p_a_given_discordant: float,
 
 
 def flip_verdict(
-    aed_successes: int,
-    aed_trials: int,
+    rhoform_successes: int,
+    rhoform_trials: int,
     baseline_successes: int,
     baseline_trials: int,
-    discordant_aed_only: int | None = None,
+    discordant_rhoform_only: int | None = None,
     discordant_baseline_only: int | None = None,
     alpha: float = 0.05,
     minimum_effect_of_interest: tuple[float, float] | None = None,
@@ -343,7 +343,7 @@ def flip_verdict(
     power" is only meaningful relative to an effect size someone committed
     to caring about, and it must be chosen BEFORE seeing the data — picking
     it afterwards is choosing the standard that gives the answer you already
-    saw. So `minimum_effect_of_interest` is an explicit (aed_rate,
+    saw. So `minimum_effect_of_interest` is an explicit (rhoform_rate,
     baseline_rate) pair with NO default.
 
     An earlier version computed power against a hardcoded 0.60-vs-0.90
@@ -358,36 +358,36 @@ def flip_verdict(
     "inconclusive". Refusing to certify adequacy you were never given the
     means to assess is the correct behaviour, not a limitation.
     """
-    _check_trials(aed_trials, "aed_trials")
+    _check_trials(rhoform_trials, "rhoform_trials")
     _check_trials(baseline_trials, "baseline_trials")
-    if not 0 <= aed_successes <= aed_trials:
-        raise ValueError(f"aed_successes must lie in [0, {aed_trials}]")
+    if not 0 <= rhoform_successes <= rhoform_trials:
+        raise ValueError(f"rhoform_successes must lie in [0, {rhoform_trials}]")
     if not 0 <= baseline_successes <= baseline_trials:
         raise ValueError(f"baseline_successes must lie in [0, {baseline_trials}]")
     _check_alpha(alpha)
 
-    paired = discordant_aed_only is not None and discordant_baseline_only is not None
+    paired = discordant_rhoform_only is not None and discordant_baseline_only is not None
     if paired:
-        if discordant_aed_only < 0 or discordant_baseline_only < 0:
+        if discordant_rhoform_only < 0 or discordant_baseline_only < 0:
             raise ValueError("discordant counts must be non-negative")
-        n_disc = discordant_aed_only + discordant_baseline_only
-        if n_disc > aed_trials:
+        n_disc = discordant_rhoform_only + discordant_baseline_only
+        if n_disc > rhoform_trials:
             raise ValueError(
                 f"discordant pairs ({n_disc}) cannot exceed the number of paired "
-                f"trials ({aed_trials})"
+                f"trials ({rhoform_trials})"
             )
-        p_value = mcnemar_exact(discordant_aed_only, discordant_baseline_only)
+        p_value = mcnemar_exact(discordant_rhoform_only, discordant_baseline_only)
         test = "mcnemar_exact_one_sided"
     else:
         p_value = fisher_exact_one_sided(
-            aed_successes,
-            aed_trials - aed_successes,
+            rhoform_successes,
+            rhoform_trials - rhoform_successes,
             baseline_successes,
             baseline_trials - baseline_successes,
         )
         test = "fisher_exact_one_sided"
 
-    aed_rate = aed_successes / aed_trials
+    rhoform_rate = rhoform_successes / rhoform_trials
     baseline_rate = baseline_successes / baseline_trials
 
     # Power against the DECLARED effect, when one was declared.
@@ -407,9 +407,9 @@ def flip_verdict(
             share = 0.5 if n_disc_expected == 0 else max(
                 0.0, min(1.0, (n_disc_expected - abs(ma - mb)) / (2 * n_disc_expected))
             )
-            declared_power = power_paired(aed_trials, n_disc_expected, share, alpha)
+            declared_power = power_paired(rhoform_trials, n_disc_expected, share, alpha)
         else:
-            declared_power = power_unpaired(aed_trials, baseline_trials, ma, mb, alpha)
+            declared_power = power_unpaired(rhoform_trials, baseline_trials, ma, mb, alpha)
 
     # Power against the effect actually observed. Informational only: it is
     # computed from the data, so it cannot justify an adequacy claim
@@ -417,19 +417,19 @@ def flip_verdict(
     # information beyond it). Reported because seeing it next to the
     # declared figure is what makes an underpowered run obvious.
     observed_power = power_unpaired(
-        aed_trials, baseline_trials, aed_rate, baseline_rate, alpha
+        rhoform_trials, baseline_trials, rhoform_rate, baseline_rate, alpha
     )
 
     if p_value <= alpha:
         verdict = "flip_criterion_met"
         interpretation = (
-            "AED is statistically below the Starlark baseline; §4 says re-evaluate "
+            "Rhoform is statistically below the Starlark baseline; §4 says re-evaluate "
             "the standalone-DSL decision."
         )
     elif declared_power is not None and declared_power >= adequate_power:
         verdict = "flip_criterion_not_met"
         interpretation = (
-            f"No evidence AED is below the baseline, and the run had "
+            f"No evidence Rhoform is below the baseline, and the run had "
             f"{declared_power:.2f} power against the declared minimum effect of "
             f"interest ({minimum_effect_of_interest[0]:.2f} vs "
             f"{minimum_effect_of_interest[1]:.2f}), so a difference that large "
@@ -457,7 +457,7 @@ def flip_verdict(
         "paired": paired,
         "p_value": p_value,
         "alpha": alpha,
-        "aed_rate": aed_rate,
+        "rhoform_rate": rhoform_rate,
         "baseline_rate": baseline_rate,
         "minimum_effect_of_interest": (
             list(minimum_effect_of_interest) if minimum_effect_of_interest else None

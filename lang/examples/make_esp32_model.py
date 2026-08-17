@@ -45,9 +45,9 @@ OUT = Path(__file__).resolve().parent / "esp32s3-devboard.design.json"
 # Components, from parts.yaml. (ref, definition, parameters, constraints)
 # --------------------------------------------------------------------------
 
-RESISTOR = "aed.lib.passive.Resistor"
-CAPACITOR = "aed.lib.passive.Capacitor"
-LED = "aed.lib.semiconductor.Led"
+RESISTOR = "rhoform.lib.passive.Resistor"
+CAPACITOR = "rhoform.lib.passive.Capacitor"
+LED = "rhoform.lib.semiconductor.Led"
 
 # ref -> (value, mpn). Tolerance letters: Yageo F = 1%, J = 5%.
 RESISTORS = {
@@ -176,54 +176,54 @@ def build():
 
     # -- module, regulator ------------------------------------------------
     add("U1", component(
-        "u1", "aed.lib.module.Esp32S3Wroom1",
+        "u1", "rhoform.lib.module.Esp32S3Wroom1",
         constraints={"mpn": s("ESP32-S3-WROOM-1-N8R2"),
                      "package": s("XCVR_ESP32-S3-WROOM-1")}))
     add("U2", component(
-        "u2", "aed.lib.regulator.LinearRegulator",
+        "u2", "rhoform.lib.regulator.LinearRegulator",
         parameters={"output_voltage": q("3.3V"), "output_current": q("1A")},
         constraints={"mpn": s("AP7361C-33E-13"), "package": s("SOT-223")}))
 
     # -- connectors -------------------------------------------------------
     add("J1", component(
-        "j1", "aed.lib.connector.UsbCReceptacle16",
+        "j1", "rhoform.lib.connector.UsbCReceptacle16",
         constraints={"mpn": s("GCT USB4105-GF-A"), "package": s("USB-C-16P-HYBRID")}))
     for ref, name in (("J2", "j2"), ("J3", "j3")):
         add(ref, component(
-            ref.lower(), "aed.lib.connector.PinHeader1x20",
+            ref.lower(), "rhoform.lib.connector.PinHeader1x20",
             constraints={"mpn": s("Sullins PRPC020SAAN-RC"),
                          "package": s("PinHeader_1x20_P2.54")}))
     add("J4", component(
-        "j4", "aed.lib.connector.PinHeader1x6",
+        "j4", "rhoform.lib.connector.PinHeader1x6",
         constraints={"mpn": s("Sullins PRPC006SAAN-RC"),
                      "package": s("PinHeader_1x6_P2.54")},
         dnp=True))
     add("J5", component(
-        "j5", "aed.lib.connector.PinHeader1x2",
+        "j5", "rhoform.lib.connector.PinHeader1x2",
         constraints={"mpn": s("Sullins PRPC002SAAN-RC"),
                      "package": s("PinHeader_1x2_P2.54")}))
     add("JP1", component(
-        "jp1", "aed.lib.connector.Shunt2",
+        "jp1", "rhoform.lib.connector.Shunt2",
         constraints={"mpn": s("Sullins SPC02SYAN"), "package": s("Shunt_2.54")}))
 
     # -- protection, filtering, diodes, LEDs ------------------------------
     add("F1", component(
-        "f1", "aed.lib.passive.PtcFuse",
+        "f1", "rhoform.lib.passive.PtcFuse",
         parameters={"hold_current": q("0.75A"), "trip_current": q("1.5A")},
         constraints={"mpn": s("Littelfuse 1206L075YR"), "package": s("1206")}))
     add("FB1", component(
-        "fb1", "aed.lib.passive.FerriteBead",
+        "fb1", "rhoform.lib.passive.FerriteBead",
         parameters={"impedance": q("600ohm")},
         constraints={"mpn": s("Murata BLM31PG601SN1L"), "package": s("1206")}))
     add("D1", component(
-        "d1", "aed.lib.semiconductor.SchottkyDiode",
+        "d1", "rhoform.lib.semiconductor.SchottkyDiode",
         parameters={"reverse_voltage": q("40V"), "forward_current": q("3A")},
         constraints={"mpn": s("SS34-E3/57T"), "package": s("SMA (DO-214AC)")}))
     add("D2", component(
-        "d2", "aed.lib.semiconductor.UsbEsdArray",
+        "d2", "rhoform.lib.semiconductor.UsbEsdArray",
         constraints={"mpn": s("STMicro USBLC6-2SC6"), "package": s("SOT-23-6")}))
     add("D3", component(
-        "d3", "aed.lib.semiconductor.TvsDiode",
+        "d3", "rhoform.lib.semiconductor.TvsDiode",
         parameters={"standoff_voltage": q("5V")},
         constraints={"mpn": s("Littelfuse SMF5.0A"), "package": s("SOD-123FL")}))
     add("D4", component(
@@ -238,7 +238,7 @@ def build():
     # -- buttons ----------------------------------------------------------
     for ref in ("SW1", "SW2"):
         add(ref, component(
-            ref.lower(), "aed.lib.switch.TactileSwitch",
+            ref.lower(), "rhoform.lib.switch.TactileSwitch",
             constraints={"mpn": s("C&K PTS645SM43SMTR92"), "package": s("SW_SMD_6x6")}))
 
     # -- mounting holes ---------------------------------------------------
@@ -247,19 +247,19 @@ def build():
     # design.md section 7 says the lint must accept only when declared
     # mechanical.
     add("H1", component(
-        "h1", "aed.lib.mech.GroundedMountingHole",
+        "h1", "rhoform.lib.mech.GroundedMountingHole",
         parameters={"diameter": q("3.2mm")},
         hardware_kind="grounded_mounting_hole", exclude_from_bom=True))
     for ref in ("H2", "H3", "H4"):
         add(ref, component(
-            ref.lower(), "aed.lib.mech.MountingHole",
+            ref.lower(), "rhoform.lib.mech.MountingHole",
             parameters={"diameter": q("3.2mm")},
             hardware_kind="mounting_hole", exclude_from_bom=True, board_only=True))
 
     # -- test points ------------------------------------------------------
     for ref in TEST_POINTS:
         add(ref, component(
-            ref.lower(), "aed.lib.mech.TestPoint",
+            ref.lower(), "rhoform.lib.mech.TestPoint",
             constraints={"mpn": s("Keystone 5015"),
                          "package": s("TestPoint_Keystone_5015")},
             hardware_kind="test_point", exclude_from_bom=True))

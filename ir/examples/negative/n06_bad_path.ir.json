@@ -6,8 +6,8 @@
     "design_name": "neg",
     "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "generator": { "name": "aedc", "version": "0.1.0" },
-    "canonical_form": "aed-canonical-json/1"
+    "generator": { "name": "rhoformc", "version": "0.1.0" },
+    "canonical_form": "rhoform-canonical-json/1"
   },
   "instances": [
     {
@@ -23,7 +23,7 @@
     {
       "path": "r_a",
       "kind": "component",
-      "definition": "aed.lib.passive.Resistor",
+      "definition": "rhoform.lib.passive.Resistor",
       "parameters": {},
       "ports": [
         { "name": "a", "role": "passive" },

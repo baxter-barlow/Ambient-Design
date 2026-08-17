@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Enforces AED monorepo layout invariants:
+# Enforces Rhoform monorepo layout invariants:
 #   - top-level directories are limited to a declared allowlist;
 #   - root-level Markdown is limited to operational files (product specs
 #     and research live in Notion per LICENSES.md);
@@ -118,5 +118,5 @@ if [ "$json_parser" = "python3" ] && python3 -c 'import yaml' 2>/dev/null; then
   yaml_check="parsed"
 fi
 
-printf 'PASS: AED layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s).\n' \
+printf 'PASS: Rhoform layout is structurally valid (%s root Markdown files, %s JSON files under [%s], versions.yaml %s).\n' \
   "$md_count" "$json_count" "$JSON_ROOTS" "$yaml_check"

@@ -1,14 +1,14 @@
 {
   "sourcemap_version": 0,
   "ir_version": 0,
-  "design_hash": "sha256:8c500aaf8dc8a24ebdef92c23f775936f5d4d3685a064f88ff9a727e0a589eb4",
+  "design_hash": "sha256:107d254be3844d52eb1425193d1af86fd597b461e754b59cf9ae77528043a345",
   "files": [
     {
-      "path": "examples/blinker.aed",
+      "path": "examples/blinker.rhoform",
       "sha256": "c65fae0174616b55620ba6539c41d29bf8724d5497df981ab29e764ecf202c2a"
     },
     {
-      "path": "examples/lib/indicator.aed",
+      "path": "examples/lib/indicator.rhoform",
       "sha256": "7a0af331bb5b0c8ae2d3a8d677f530fad943697963dc375fe02e70deb5bf8960"
     }
   ],

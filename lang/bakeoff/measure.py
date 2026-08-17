@@ -47,7 +47,7 @@ def load_tokenizer(allow_stub: bool = False):
     a re-pin cannot leave the bake-off counting with the old encoding while
     claiming the new one.
     """
-    from aed_eval.tokenizer import PinnedTokenizerError, StubTokenizer, TiktokenTokenizer
+    from rhoform_eval.tokenizer import PinnedTokenizerError, StubTokenizer, TiktokenTokenizer
 
     encoding, fingerprint = _read_pin()
     try:

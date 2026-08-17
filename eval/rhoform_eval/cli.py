@@ -1,9 +1,9 @@
 """Command-line entry points for the measurement harness.
 
-    python3 -m aed_eval tokens --part card=card.md --part skill=skill.md
-    python3 -m aed_eval replay --transcript fixtures/demo-replay.json
-    python3 -m aed_eval plan --rate-a 0.6 --rate-b 0.9
-    python3 -m aed_eval selftest
+    python3 -m rhoform_eval tokens --part card=card.md --part skill=skill.md
+    python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json
+    python3 -m rhoform_eval plan --rate-a 0.6 --rate-b 0.9
+    python3 -m rhoform_eval selftest
 
 `plan` is deliberately prominent. It answers "how many trials would this
 comparison actually need?" BEFORE any tokens are spent, which at roughly
@@ -215,7 +215,7 @@ def cmd_selftest(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aed_eval", description=__doc__)
+    parser = argparse.ArgumentParser(prog="rhoform_eval", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_tokenizer_flags(p):

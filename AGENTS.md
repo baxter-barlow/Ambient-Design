@@ -2,7 +2,7 @@
 
 ## Scope and mission
 
-This policy applies to every agent working in this workspace. AED is an open-source, bring-your-own-model electronics-design harness centered on a small declarative DSL. The agent makes engineering decisions; deterministic tooling owns parsing, electrical checks, simulation, rendering, part resolution, and export.
+This policy applies to every agent working in this workspace. Rhoform is an open-source, bring-your-own-model electronics-design harness centered on a small declarative DSL. The agent makes engineering decisions; deterministic tooling owns parsing, electrical checks, simulation, rendering, part resolution, and export.
 
 At session start, run `git rev-parse --show-toplevel` read-only. If it fails, treat the directory as a planning surface: do not initialize Git, install dependencies, or invent build commands unless a dedicated Linear issue and the user explicitly authorize repository bootstrap.
 
@@ -23,7 +23,7 @@ If sources conflict, stop and surface the conflict in Linear. Do not silently ch
 3. Before any write, use `claim-linear-work` to record exact files or directory prefixes in Linear and check for overlaps.
 4. Use an independent writable clone for code work whenever another agent may be active. A shared non-Git planning directory is read-only except for explicitly claimed coordination/bootstrap paths.
 5. Keep changes inside the claimed paths and acceptance criteria. Stop if the required scope expands.
-6. Use `verify-aed-change` to select and run proportionate checks. A missing or unavailable gate is not a pass.
+6. Use `verify-rhoform-change` to select and run proportionate checks. A missing or unavailable gate is not a pass.
 7. Record verification evidence and remaining risk in Linear. Put durable analysis in Notion. Use `release-evidence` for milestone or release decisions.
 8. Release or hand off the path claim when work stops.
 
@@ -40,13 +40,13 @@ If sources conflict, stop and surface the conflict in Linear. Do not silently ch
 
 ## Product invariants
 
-- The AED DSL is the circuit-design source of truth. Generated netlists, reports, schematics, and project files are reproducible artifacts.
+- The Rhoform DSL is the circuit-design source of truth. Generated netlists, reports, schematics, and project files are reproducible artifacts.
 - Compilation is total, terminating, hermetic, effect-free, deterministic, and offline.
 - The DSL contains no placement or routing coordinates in v1.
-- AED-owned schematic-side artifacts may be regenerated with divergence protection. A user-owned `.kicad_pcb` is scaffolded once and must never be overwritten.
+- Rhoform-owned schematic-side artifacts may be regenerated with divergence protection. A user-owned `.kicad_pcb` is scaffolded once and must never be overwritten.
 - Static and dynamic checks produce structured, source-mapped diagnostics. A declared assertion that cannot be measured is gating unless explicitly waived.
 - Never silently retry simulation to green, silently re-resolve parts, or hide degraded coverage.
-- Keep GPL tools such as KiCad CLI and ngspice at subprocess boundaries; do not link their code into AED.
+- Keep GPL tools such as KiCad CLI and ngspice at subprocess boundaries; do not link their code into Rhoform.
 - Preserve deterministic identities and rename continuity; unledgered identity changes are errors.
 
 ## Change boundaries
@@ -77,7 +77,7 @@ Do not declare success based only on code inspection. Do not weaken checks to ma
 
 - **`claim-linear-work`:** required before shared-workspace writes, scope expansion, handoff, or claim release.
 - **`isolated-agent-checkout`:** required when preparing a writable checkout for concurrent implementation or review.
-- **`verify-aed-change`:** required after a change and before handoff, review, merge, or completion.
+- **`verify-rhoform-change`:** required after a change and before handoff, review, merge, or completion.
 - **`release-evidence`:** required for milestone gates, release candidates, freeze decisions, or public readiness claims.
 
 Canonical project skills live in `.agents/skills/`. `.claude/skills/` exposes reviewed links to the same directories; never maintain copied skill bodies. Keep each skill focused and portable, with only `name` and `description` in `SKILL.md` frontmatter.

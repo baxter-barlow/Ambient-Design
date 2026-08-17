@@ -1,6 +1,6 @@
 ---
 name: release-evidence
-description: Evaluate an immutable AED milestone or release candidate, assemble reproducibility and acceptance-gate evidence, obtain independent review, and publish the decision through Notion, Linear, and the Ambient Labs Slack channel. Use for milestone gates, freezes, release candidates, readiness claims, or blocked release decisions.
+description: Evaluate an immutable Rhoform milestone or release candidate, assemble reproducibility and acceptance-gate evidence, obtain independent review, and publish the decision through Notion, Linear, and the Ambient Labs Slack channel. Use for milestone gates, freezes, release candidates, readiness claims, or blocked release decisions.
 ---
 
 # Release Evidence
@@ -18,7 +18,7 @@ If the candidate is mutable, the repository is absent, ownership is unclear, or 
 
 ## Run the gate set
 
-Use `verify-aed-change` to execute every change-class gate plus the milestone acceptance script. Regenerate evidence from the frozen candidate after any fix; never splice pre-fix and post-fix results together.
+Use `verify-rhoform-change` to execute every change-class gate plus the milestone acceptance script. Regenerate evidence from the frozen candidate after any fix; never splice pre-fix and post-fix results together.
 
 Capture:
 

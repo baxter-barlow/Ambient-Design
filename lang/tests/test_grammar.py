@@ -294,7 +294,7 @@ class Conformance(unittest.TestCase):
         except conformance.LarkUnavailable as exc:
             raise unittest.SkipTest(str(exc))
 
-    RESISTOR = "aed.lib.passive.Resistor"
+    RESISTOR = "rhoform.lib.passive.Resistor"
 
     def _accepts(self, source: str) -> bool:
         try:
@@ -359,8 +359,8 @@ class Conformance(unittest.TestCase):
             f"{PRAGMA_TEXT}\n"
             "\n"
             "module M:\n"
-            "    input = new aed.lib.passive.Resistor(resistance = 1kohm)\n"
-            "    output = new aed.lib.passive.Resistor(resistance = 1kohm)\n"
+            "    input = new rhoform.lib.passive.Resistor(resistance = 1kohm)\n"
+            "    output = new rhoform.lib.passive.Resistor(resistance = 1kohm)\n"
             "    input.a ~ output.a\n"
         )
         self.assertTrue(self._accepts(source))

@@ -1,4 +1,4 @@
-# AED benchmark (c) ESP32-S3 devboard — full BOM
+# Rhoform benchmark (c) ESP32-S3 devboard — full BOM
 # Count: 60 total placements = 57 fitted + 3 DNP (J4, R6, R10).
 # dnp is only stated where true; absence means fitted.
 meta:

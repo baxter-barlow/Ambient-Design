@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ambient.science/aed/schemas/part-data/0.schema.json",
-  "title": "AED Part Data (D3) v0",
-  "description": "One part record: the typed, provenance-carrying description of a single physical component that AED's static tier checks against (requirement D3). A record is INPUT DATA, not a generated artifact \u2014 unlike the netlist IR it may carry retrieval timestamps, because provenance requires them; determinism is preserved by hashing the record into the design lockfile, not by forbidding wall-clock fields here. The record carries facts EXTRACTED FROM a datasheet plus a citation to it; it never embeds or redistributes the datasheet itself (D3: PDFs are fetch-on-demand absent a vendor redistribution agreement). SCHEMA STABILITY: version 0 is versioned but explicitly UNSTABLE \u2014 `stability` is pinned to \"unstable\" by this schema so no consumer can claim a stability guarantee that v1.0 does not make. Promotion to a third-party contract happens at 1.x against the criteria in open question 8-Q3. Extension points are restricted to properties matching ^x_ where explicitly allowed; every other object is closed so that a typo is an error rather than silently discarded data.",
+  "$id": "https://ambient.science/rhoform/schemas/part-data/0.schema.json",
+  "title": "Rhoform Part Data (D3) v0",
+  "description": "One part record: the typed, provenance-carrying description of a single physical component that Rhoform's static tier checks against (requirement D3). A record is INPUT DATA, not a generated artifact \u2014 unlike the netlist IR it may carry retrieval timestamps, because provenance requires them; determinism is preserved by hashing the record into the design lockfile, not by forbidding wall-clock fields here. The record carries facts EXTRACTED FROM a datasheet plus a citation to it; it never embeds or redistributes the datasheet itself (D3: PDFs are fetch-on-demand absent a vendor redistribution agreement). SCHEMA STABILITY: version 0 is versioned but explicitly UNSTABLE \u2014 `stability` is pinned to \"unstable\" by this schema so no consumer can claim a stability guarantee that v1.0 does not make. Promotion to a third-party contract happens at 1.x against the criteria in open question 8-Q3. Extension points are restricted to properties matching ^x_ where explicitly allowed; every other object is closed so that a typo is an error rather than silently discarded data.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {
@@ -54,7 +54,7 @@
     "part_id": {
       "type": "string",
       "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?(?![\\s\\S])",
-      "description": "Stable two-segment identity `<vendor-slug>/<part-slug>`, deliberately matching the two-segment DNS-label shape used by the AED package-identity rules so part and package namespaces read alike. This is a SLUG, not the manufacturer part number: `mpn` carries the exact vendor string including characters (slash, comma, spaces) that are not permitted here. Unique within a part library; the design lockfile keys resolved picks by this value."
+      "description": "Stable two-segment identity `<vendor-slug>/<part-slug>`, deliberately matching the two-segment DNS-label shape used by the Rhoform package-identity rules so part and package namespaces read alike. This is a SLUG, not the manufacturer part number: `mpn` carries the exact vendor string including characters (slash, comma, spaces) that are not permitted here. Unique within a part library; the design lockfile keys resolved picks by this value."
     },
     "manufacturer": {
       "type": "string",
@@ -134,7 +134,7 @@
     "sources": {
       "type": "array",
       "minItems": 1,
-      "description": "The documents this record's facts were extracted from. Deliberately shaped to match the SourceRecord emitted by the AED datasheet-knowledge pipeline, which is the upstream producer of these records: same two-level identity (byte hash locates, content hash means), same closed license vocabulary, same origin restriction. Sorted bytewise-ascending by `source_id`.",
+      "description": "The documents this record's facts were extracted from. Deliberately shaped to match the SourceRecord emitted by the Rhoform datasheet-knowledge pipeline, which is the upstream producer of these records: same two-level identity (byte hash locates, content hash means), same closed license vocabulary, same origin restriction. Sorted bytewise-ascending by `source_id`.",
       "items": {
         "$ref": "#/$defs/Source"
       }
@@ -170,7 +170,7 @@
         "vendor-agreement",
         "open-cc"
       ],
-      "description": "Closed license vocabulary, adopted verbatim from the AED datasheet-knowledge pipeline so records cross the two systems without translation. \"vendor-public\": published by the vendor without access restriction. \"vendor-agreement\": obtained under an agreement permitting this use. \"open-cc\": openly licensed under a Creative Commons or equivalent grant.\n\nThe pipeline's vocabulary has a FOURTH member, \"restricted-nda\", which is deliberately absent here: that material is never ingested, and the pipeline raises rather than constructing a record for it. Omitting it from this enum makes the same red line unrepresentable in a part record instead of merely discouraged.",
+      "description": "Closed license vocabulary, adopted verbatim from the Rhoform datasheet-knowledge pipeline so records cross the two systems without translation. \"vendor-public\": published by the vendor without access restriction. \"vendor-agreement\": obtained under an agreement permitting this use. \"open-cc\": openly licensed under a Creative Commons or equivalent grant.\n\nThe pipeline's vocabulary has a FOURTH member, \"restricted-nda\", which is deliberately absent here: that material is never ingested, and the pipeline raises rather than constructing a record for it. Omitting it from this enum makes the same red line unrepresentable in a part record instead of merely discouraged.",
       "$comment": "Mirrors LicenseClass in the aed-part-data pipeline (sources.py) minus RESTRICTED_NDA, which is rejected at construction there."
     },
     "Bound": {
@@ -355,7 +355,7 @@
         "footprint_ref": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*:[A-Za-z0-9_.\\-]+$",
-          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. AED's own originally-authored library is `ael:`. Absent means the part has no footprint bound yet \u2014 legitimate for a D2 stub part, which can still be netlisted and type-checked."
+          "description": "Library-qualified CAD footprint reference, `<library>:<footprint>`. Rhoform's own originally-authored library is `ael:`. Absent means the part has no footprint bound yet \u2014 legitimate for a D2 stub part, which can still be netlisted and type-checked."
         },
         "thermal_pad": {
           "type": "boolean",
@@ -377,7 +377,7 @@
         "output",
         "nc"
       ],
-      "description": "Electrical role, from the T2 pin-role lattice. This enum is IDENTICAL, member for member, to PinRole in the AED netlist IR schema: part data supplies the roles that the IR carries and the ERC checks, so any divergence between the two lists would be a defect that only shows up at check time. Extending the lattice is a coordinated change to both schemas."
+      "description": "Electrical role, from the T2 pin-role lattice. This enum is IDENTICAL, member for member, to PinRole in the Rhoform netlist IR schema: part data supplies the roles that the IR carries and the ERC checks, so any divergence between the two lists would be a defect that only shows up at check time. Extending the lattice is a coordinated change to both schemas."
     },
     "Pin": {
       "type": "object",
@@ -684,7 +684,7 @@
         "origin",
         "license_class"
       ],
-      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES \u2014 only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by AED (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what removes the SANCTIONED payload slot - the x_ namespace every tool is told to preserve. It does not, and no schema over free text can, stop someone base64-ing a PDF into a typed string field; every free-text field here carries a maxLength so the obvious attempts fail, but a determined producer can always abuse `mpn`. The guarantee this makes is narrow and worth stating exactly: there is no field here whose PURPOSE is to carry opaque data.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump \u2014 which is the review a redistribution-adjacent field should get.",
+      "description": "A cited source document. CONTAINS NO DOCUMENT BYTES \u2014 only the locator, the hashes, and the license basis; datasheets are fetched on demand and never redistributed by Rhoform (requirement D3).\n\nTHIS IS THE ONE OBJECT IN THE SCHEMA WITH NO `^x_` EXTENSION POINT, and the omission is deliberate. Everywhere else `^x_` is an unconstrained escape hatch, which is what an extension point is for. Here it would have been a hole straight through the no-redistribution guarantee this $def claims to make: `x_pdf` could carry a base64 datasheet and still validate, so the guarantee would have been enforced by nobody. Review found exactly that, and found that negative control n10 was therefore proving less than it claimed. A closed property set with no escape hatch is what removes the SANCTIONED payload slot - the x_ namespace every tool is told to preserve. It does not, and no schema over free text can, stop someone base64-ing a PDF into a typed string field; every free-text field here carries a maxLength so the obvious attempts fail, but a determined producer can always abuse `mpn`. The guarantee this makes is narrow and worth stating exactly: there is no field here whose PURPOSE is to carry opaque data.\n\nIf a future source really needs an extra field, add it to this schema behind a version bump \u2014 which is the review a redistribution-adjacent field should get.",
       "properties": {
         "source_id": {
           "type": "string",
@@ -787,7 +787,7 @@
     "Sha256": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
-      "description": "Algorithm-prefixed lowercase hex SHA-256, matching the hash spelling used by the AED netlist IR (design_hash, source_hash) so hashes are recognizable across AED artifacts. NOTE for pipeline integration: the datasheet pipeline emits bare hexdigests; the writer that turns pipeline SourceRecords into part records adds the `sha256:` prefix."
+      "description": "Algorithm-prefixed lowercase hex SHA-256, matching the hash spelling used by the Rhoform netlist IR (design_hash, source_hash) so hashes are recognizable across Rhoform artifacts. NOTE for pipeline integration: the datasheet pipeline emits bare hexdigests; the writer that turns pipeline SourceRecords into part records adds the `sha256:` prefix."
     },
     "Provenance": {
       "type": "object",

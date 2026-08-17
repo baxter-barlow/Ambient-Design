@@ -1,4 +1,4 @@
-# AED benchmark (c) — power-tree assertions. All inputs traceable to
+# Rhoform benchmark (c) — power-tree assertions. All inputs traceable to
 # power-tree.yaml; module data from ESP32-S3-WROOM-1 Datasheet v1.8 (tables
 # cited inline). These are the gating checks; no ngspice run is required.
 

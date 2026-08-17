@@ -88,7 +88,7 @@ class TiktokenTokenizer:
 
     Requires the `tiktoken` package and, on first use for a given encoding,
     network access to fetch the vocabulary (cached thereafter). That network
-    dependency is acceptable here and nowhere else in AED: this is an
+    dependency is acceptable here and nowhere else in Rhoform: this is an
     offline measurement tool, not the compiler, whose hermeticity contract
     (I3) is unaffected.
     """

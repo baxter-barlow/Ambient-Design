@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ambient.science/aed/schemas/source-map/0.schema.json",
-  "title": "AED IR Source Map v0",
-  "description": "Sidecar artifact mapping every IR entity back to DSL source (requirement I9: DSL line <-> IR node <-> diagnostic). DIAGNOSTIC-ANCHOR RULE: every diagnostic emitted by any AED tool references an IR entity identity (instance/assertion path or net name) — never a raw file position. Renderers and editors resolve that identity to source spans through this map. This keeps diagnostics stable under reformatting and lets one diagnostic point at both the declaration and the instantiation chain that produced the offending elaborated entity.",
+  "$id": "https://ambient.science/rhoform/schemas/source-map/0.schema.json",
+  "title": "Rhoform IR Source Map v0",
+  "description": "Sidecar artifact mapping every IR entity back to DSL source (requirement I9: DSL line <-> IR node <-> diagnostic). DIAGNOSTIC-ANCHOR RULE: every diagnostic emitted by any Rhoform tool references an IR entity identity (instance/assertion path or net name) — never a raw file position. Renderers and editors resolve that identity to source spans through this map. This keeps diagnostics stable under reformatting and lets one diagnostic point at both the declaration and the instantiation chain that produced the offending elaborated entity.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {

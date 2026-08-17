@@ -1,6 +1,6 @@
 """Candidate B — `block`: facts scoped under what they describe.
 
-    r_a = new aed.lib.passive.Resistor(resistance = 100kohm +/- 1%):
+    r_a = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
         part abstract:
             package = "axial_0207"
     net VCC:
@@ -54,7 +54,7 @@ from .shared import (
 
 KEY = "candidate_b"
 TITLE = "B - block"
-CODE_PREFIX = "AEDB"
+CODE_PREFIX = "RHOB"
 FLAGS = ("dnp", "exclude_from_bom", "board_only")
 # The L9 flags T9-3 infers. `dnp` is NOT one of them: it is never inferred
 # from the library, so writing it must not count as "the source stated its
@@ -556,7 +556,7 @@ def language_card() -> str:
 
 
 _LANGUAGE_CARD = '''\
-# AED candidate B - language card
+# Rhoform candidate B - language card
 
 Declarative electronics design. Facts live inside the scope of what they
 describe. ASCII only. Blocks are opened by `:` and delimited by 4-space
@@ -574,9 +574,9 @@ interface port that the enclosing design connects to.
 
 ## Instances
 
-    r_a = new aed.lib.passive.Resistor(resistance = 100kohm +/- 1%)
+    r_a = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%)
 
-    timer = new aed.lib.timer.Ne555:
+    timer = new rhoform.lib.timer.Ne555:
         pin out output 3
         part "timer.555/ti-NE555P@2":
             function = "timer_555"
@@ -641,7 +641,7 @@ None of these may be used as an instance, net or module name.
 
 ## Tables
 
-    table aed.lib.passive.Capacitor part abstract (capacitance, part.package):
+    table rhoform.lib.passive.Capacitor part abstract (capacitance, part.package):
         c12  100nF +/- 10%  "0402"
         c13  100nF +/- 10%  "0402"
         c14  100nF +/- 10%  "0402"

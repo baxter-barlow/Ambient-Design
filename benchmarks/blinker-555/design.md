@@ -1,4 +1,4 @@
-# AED Benchmark (a): 9 V 555 LED Blinker (~1 Hz astable)
+# Rhoform Benchmark (a): 9 V 555 LED Blinker (~1 Hz astable)
 
 Reference design for requirement AC1a: a complete blinker expressible in well
 under ~150 DSL lines, with two gating dynamic assertions — oscillation
@@ -126,7 +126,7 @@ benchmark (a). (The AC3 <60 s budget governs benchmark (b).)
 
 ## Behavioral NE555 macromodel (original, D4 core-library seed)
 
-`NE555_AED` in `netlist.cir` is written from the device's block diagram, not
+`NE555_RHOFORM` in `netlist.cir` is written from the device's block diagram, not
 from any vendor or textbook deck: 5k/5k/5k divider (CONT rides the 2/3 tap),
 two tanh-smoothed B-source comparators, a set-dominant SR latch realized as a
 B current source on a 100 pF state cap with a weak tanh positive-feedback hold
@@ -136,10 +136,10 @@ Pinout matches the DIP-8 order. Intended license: Apache-2.0/CC0.
 
 ## AC1a: DSL expressibility
 
-The design is 8 components, 7 nets, 2 assertions — an illustrative AED DSL
+The design is 8 components, 7 nets, 2 assertions — an illustrative Rhoform DSL
 rendering fits in ~30 lines, far under the ~150-line budget:
 
-```aed
+```rhoform
 design blinker_555 {
   supply V9 { rail vcc 9V ramp 2ms }
   part U1  NE555      { }
