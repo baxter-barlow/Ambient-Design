@@ -480,11 +480,43 @@ def decision_hash(entries) -> str:
                 e.get("residual_kind") or "",
                 sorted(e.get("gap_class_also") or ()),
                 e.get("compound") or "",
+                # The CITATION. The gate calls this "the falsifiable claim" and
+                # the README says each verdict carries "the citation that
+                # decided it" — and it was outside the freeze, so a
+                # current-budget verdict could be repointed at a mounting-hole
+                # vocabulary member at an unchanged digest.
+                sorted(e.get("cites") or ()),
+                # The falsifiable gap claim, for the same reason.
+                e.get("missing_fact") or "",
             ],
             ensure_ascii=True,
             sort_keys=True,
         )
         for e in entries
+    )
+    return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
+
+
+def corpus_hash(bugs) -> str:
+    """Hash the CORPUS TEXT, not just the verdicts about it.
+
+    `decision_hash` covers classification.yaml alone, so an entry's title,
+    source, symptom, root cause and evidence could all be rewritten into an
+    unrelated bug while its frozen in-scope verdict stayed put and the digest
+    did not move. tests/corpus/check-corpus.py closed the gutted-record half of
+    that (required fields); this closes the rewritten-record half.
+
+    Same JSON-list encoding as `decision_hash`, for the same reason: no field
+    value can forge a record boundary.
+    """
+    lines = sorted(
+        json.dumps(
+            [b.get("id", ""), b.get("title", ""), (b.get("source") or {}).get("url", ""),
+             b.get("symptom", ""), b.get("root_cause", ""), b.get("category", ""),
+             b.get("class", ""), b.get("evidence", "")],
+            ensure_ascii=True, sort_keys=True,
+        )
+        for b in bugs
     )
     return "sha256:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
@@ -1081,6 +1113,40 @@ def run(write: bool, bugs=None, classification=None, readme=None) -> int:
                 "commit: rerun with --write and say why in the message."
             )
 
+    # And the CORPUS TEXT. `decision_hash` covers classification.yaml alone, so
+    # a bug's title, source, symptom, root cause and evidence could all be
+    # rewritten into an unrelated defect while its frozen verdict stayed put and
+    # the digest did not move. A verdict sitting on a different bug is exactly
+    # the thing "frozen" is supposed to rule out.
+    committed_corpus = document.get("classification", {}).get("corpus_hash")
+    computed_corpus = corpus_hash(corpus_bugs) if not problems else None
+    if computed_corpus and committed_corpus != computed_corpus:
+        if write:
+            text = classification.read_text(encoding="utf-8")
+            if "corpus_hash:" in text:
+                rewritten, count = re.subn(
+                    r"^(\s*corpus_hash:\s*).*$",
+                    lambda m: m.group(1) + computed_corpus,
+                    text, count=1, flags=re.MULTILINE)
+            else:
+                rewritten, count = re.subn(
+                    r"^(\s*decision_hash:\s*.*)$",
+                    lambda m: m.group(1) + "\n  corpus_hash: " + computed_corpus,
+                    text, count=1, flags=re.MULTILINE)
+            if count != 1:
+                problems.append("cannot refreeze: no place to write `corpus_hash:`")
+            else:
+                classification.write_text(rewritten, encoding="utf-8")
+                print(f"corpus-classification: refroze corpus_hash to {computed_corpus}")
+        else:
+            problems.append(
+                f"corpus_hash is {committed_corpus}, but corpus/bugs.yaml hashes "
+                f"to {computed_corpus}. A bug's TEXT changed under a frozen "
+                "verdict. Correcting an entry is allowed — AMB-36 corrected five "
+                "— but it must be deliberate: rerun with --write and say what "
+                "changed and why."
+            )
+
     # Published populations.
     if not problems:
         block = summary_block(entries)
@@ -1331,6 +1397,24 @@ def self_test() -> int:
         [victim["id"], victim["verdict"], victim["family"],
          "", "", "", "", "", "", "", [], ""])}]
     checks.append((
+        "changing a citation moves decision_hash",
+        decision_hash([{"id": "BUG-0001", "verdict": "in-scope", "family": "erc-pin-role",
+                        "cites": ["d3:pins[].role"]}])
+        != decision_hash([{"id": "BUG-0001", "verdict": "in-scope", "family": "erc-pin-role",
+                           "cites": ["d3:pins[].abs_max"]}]),
+    ))
+    checks.append((
+        "rewriting a bug's text moves corpus_hash",
+        corpus_hash([{"id": "BUG-0001", "title": "a real bug"}])
+        != corpus_hash([{"id": "BUG-0001", "title": "a ceiling fan wobble"}]),
+    ))
+    checks.append((
+        "a field value cannot forge a record boundary in corpus_hash",
+        corpus_hash([{"id": "BUG-0001", "title": "x"}, {"id": "BUG-0002", "title": "y"}])
+        != corpus_hash([{"id": "BUG-0001",
+                         "title": "x\n" + json.dumps(["BUG-0002", "y", "", "", "", "", "", ""])}]),
+    ))
+    checks.append((
         "a field value cannot forge a record boundary in decision_hash",
         decision_hash([victim, survivor]) != decision_hash(forged),
     ))
@@ -1387,6 +1471,7 @@ def _wiring_checks():
             "classification:",
             "  corpus_entry_count: {}".format(bugs["entry_count"]),
             f"  decision_hash: {digest}",
+            f"  corpus_hash: {corpus_hash(bugs['bugs'])}",
             "entries:",
         ]
         for e in entries:
@@ -1405,8 +1490,12 @@ def _wiring_checks():
     with tempfile.TemporaryDirectory() as raw:
         tmp = Path(raw)
 
-        def attempt(bugs, entries, digest, readme_block=None):
+        def attempt(bugs, entries, digest, readme_block=None, stale_corpus_hash=None):
             bug_text, cls_text = render(bugs, entries, digest)
+            if stale_corpus_hash:
+                cls_text = re.sub(r"^(\s*corpus_hash:\s*).*$",
+                                  lambda m: m.group(1) + stale_corpus_hash,
+                                  cls_text, count=1, flags=re.MULTILINE)
             (tmp / "bugs.yaml").write_text(bug_text, encoding="utf-8")
             (tmp / "classification.yaml").write_text(cls_text, encoding="utf-8")
             block = summary_block(entries) if readme_block is None else readme_block
@@ -1440,6 +1529,15 @@ def _wiring_checks():
                        "rationale": "ok"}
         results.append(("run() rejects a verdict change against the committed hash",
                         attempt(good_bugs, flipped, digest) == 1))
+
+        # A stale corpus_hash must fail run(), whatever moved it. Driven by
+        # planting the wrong digest rather than by rewriting a bug, because this
+        # fixture's bugs carry only an `id` — the real rewritten-bug case is
+        # covered by the three corpus_hash cases above and was demonstrated
+        # end-to-end against the committed corpus.
+        results.append(("run() rejects a stale corpus_hash",
+                        attempt(good_bugs, good_entries, digest,
+                                stale_corpus_hash="sha256:" + "0" * 64) == 1))
 
         results.append(("run() rejects a README summary that drifted",
                         attempt(good_bugs, good_entries, digest, readme_block="| stale |") == 1))

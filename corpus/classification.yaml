@@ -27,7 +27,8 @@ classification:
   frozen: '2026-08-17'
   corpus: corpus/bugs.yaml
   corpus_entry_count: 61
-  decision_hash: sha256:da6dfe69ddf18cdb99ee21eb8ebb8d8c1ac8c324aebd9b81a9b79d1a10ac9ae9
+  decision_hash: sha256:6ee6e22657971c0d5f738ea9953aa4377f4de48b8fd5a7a6e1cb9b8a0c20407f
+  corpus_hash: sha256:4ebc12f2beb5f81002a33bff166cf714c96916783c5c5be77fee35c328b5eb1d
 
 entries:
 
