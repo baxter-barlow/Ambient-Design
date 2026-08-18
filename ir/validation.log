@@ -27,7 +27,7 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 38 checks.
+ir-hashes: self-test PASS: 52 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
@@ -52,3 +52,38 @@ schemas: ir/examples/negative/n07_static_tier_dynamic_kind.ir.json: invalid as e
 schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
 exit=0
+
+=== design_hash refrozen, 2026-08-18 (AMB-123 round 14) ===
+The committed design_hash moved, deliberately:
+
+  sha256:b2a4c088018511439166f0c214d70de0546739886191067b27686f4b421cd419
+  sha256:8d056aa1c1f5075974ed5cd6cc1f4be4ffa826c4851c9b1f70bcbc73c3ef2330
+
+Not one byte of the design changed. Two defects in the profile did.
+
+1. Clause 7 pinned integral floats and then said "the shortest form that
+   round-trips" for everything else, which is not a specification -- it is
+   whichever spelling the host language uses. Python pads a one-digit exponent
+   (1e-07 against JavaScript's 1e-7) and switches to exponential below 1e-4
+   where JavaScript switches below 1e-6 (1e-05 against 0.00001). That is the
+   whole nF/uF/nA/us band expressed in base SI. An auditor wrote a conforming
+   implementation in six lines of JavaScript, expressed one 100 nF capacitor
+   as 1e-7 F -- which netlist-ir.schema.json invites by saying "the compiler
+   normalizes units" -- and got a different design_hash for a document both
+   implementations accept. Clause 7 now specifies ECMA-262 Number::toString
+   and the self-test pins eleven values against `node -e JSON.stringify`.
+
+2. design_hash covered header.generator and header.source_hash, so an
+   unchanged netlist got a new content address every time the compiler was
+   rebuilt, and another one for a comment-only edit to the DSL source. Both
+   are blanked out of the preimage now, alongside design_hash itself.
+
+The refreeze was verified by re-running the auditor's own reproduction: the
+independent JavaScript implementation and this gate now agree on the committed
+example (8d056aa1...) and on the base-SI variant (8aaee4da...).
+
+The transcript above is the current one; both summary lines in it were updated
+in this commit rather than re-quoted down here. check-layout.sh reads only the
+first occurrence of each, so a second copy appended below would be the stale
+one nobody reads -- which is the failure that gate was written for, and which
+it caught me committing while writing this very section.

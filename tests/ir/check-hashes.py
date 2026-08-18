@@ -47,6 +47,7 @@ import hashlib
 import json
 import re
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -151,7 +152,7 @@ def sort_problems(document, label):
     return problems
 
 
-def _canonical_number(value):
+def _canonical_number(value) -> str:
     """Clause 7: one spelling per numeric VALUE, independent of language.
 
     The profile pinned encoding, key order, whitespace, escaping, NaN and array
@@ -161,42 +162,104 @@ def _canonical_number(value):
     that "two toolchains agree on one design" has to pin this or it does not
     deliver the thing it is for.
 
-    The rule: a float whose value is integral is written as that integer, and
-    every other float is written by `repr`, which is the shortest string that
-    round-trips. Integers are already unambiguous. `-0.0` normalizes to `0`,
-    because a design has no signed zero.
+    THAT FIX WENT HALF THE DISTANCE. It handled integral floats and then
+    delegated everything else to "the shortest string that round-trips", which
+    is `repr` — a PYTHON spelling, not a specified one. Python pads a
+    single-digit exponent to two (`1e-07`) where JavaScript does not (`1e-7`),
+    and Python switches to exponential below 1e-4 where JavaScript switches
+    below 1e-6 (`1e-05` against `0.00001`). That is the whole nF/uF/nA/us band
+    in base SI — the numbers an electronics IR is made of. An auditor wrote a
+    second conforming implementation in 6 lines of JavaScript, expressed one
+    100 nF capacitor as 1e-7 F, and got a different design_hash for a document
+    the schema validates and this gate accepts.
+
+    So the spelling is now SPECIFIED rather than inherited: ECMA-262's
+    Number::toString (§6.1.6.1.20), which is the algorithm behind
+    JSON.stringify. Given the shortest round-tripping digits `s` (length k) and
+    the exponent n with value = 0.s x 10^n:
+
+        k <= n <= 21   digits, then n-k zeros              1500
+        0 < n <= 21    digits with a point after n of them 1.5
+        -6 < n <= 0    "0.", -n zeros, then digits         0.0015
+        otherwise      d[.rest] "e" (+|-) |n-1|            1.5e-7
+
+    It is a real specification an implementer in any language can follow, which
+    is what clause 7 claimed to be.
     """
     if isinstance(value, bool):
-        return value
-    if isinstance(value, float):
-        if value != value or value in (float("inf"), float("-inf")):
-            raise ValueError("NaN and Infinity are not representable")
-        if value == int(value):
-            return int(value)
-    return value
+        raise TypeError("booleans are not numbers")
+    if isinstance(value, int):
+        return str(value)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError("NaN and Infinity are not representable")
+    if value == 0:
+        # A design has no signed zero: -0.0 and 0.0 are one value.
+        return "0"
+    sign, digits, exponent = Decimal(repr(value)).as_tuple()
+    n = exponent + len(digits)
+    s = "".join(str(digit) for digit in digits).rstrip("0") or "0"
+    k = len(s)
+    if k <= n <= 21:
+        text = s + "0" * (n - k)
+    elif 0 < n <= 21:
+        text = s[:n] + "." + s[n:]
+    elif -6 < n <= 0:
+        text = "0." + "0" * (-n) + s
+    else:
+        mantissa = s if k == 1 else s[0] + "." + s[1:]
+        power = n - 1
+        text = f"{mantissa}e{'+' if power >= 0 else '-'}{abs(power)}"
+    return "-" + text if sign else text
 
 
-def _canonicalize(node):
-    if isinstance(node, dict):
-        return {key: _canonicalize(sub) for key, sub in node.items()}
+def _encode(node) -> str:
+    """rhoform-canonical-json/1, written out rather than configured.
+
+    `json.dumps` was doing the numbers, and its float spelling is Python's. The
+    structural clauses are four lines; the number clause is the one that had to
+    stop being inherited. String escaping still goes through `json.dumps`,
+    which is unambiguous for JSON and identical across implementations.
+    """
+    if node is None:
+        return "null"
+    if isinstance(node, bool):
+        return "true" if node else "false"
+    if isinstance(node, (int, float)):
+        return _canonical_number(node)
+    if isinstance(node, str):
+        return json.dumps(node, ensure_ascii=False)
     if isinstance(node, list):
-        return [_canonicalize(sub) for sub in node]
-    return _canonical_number(node)
+        return "[" + ",".join(_encode(item) for item in node) + "]"
+    if isinstance(node, dict):
+        return "{" + ",".join(
+            json.dumps(key, ensure_ascii=False) + ":" + _encode(value)
+            for key, value in sorted(node.items())) + "}"
+    raise TypeError(f"{type(node).__name__} is not representable in JSON")
 
 
 def canonical_bytes(document) -> bytes:
     """Serialize per rhoform-canonical-json/1."""
-    return json.dumps(
-        _canonicalize(document),
-        sort_keys=True,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8") + b"\n"
+    return _encode(document).encode("utf-8") + b"\n"
+
+
+# Header fields that describe HOW the document was produced, not WHAT it
+# describes. They are blanked out of the preimage for the same reason
+# `design_hash` itself is: a content address that moves when the compiler is
+# rebuilt is not a content address for the design.
+#
+# `design_hash` used to cover both, so `rhoformc 0.1.0` and `rhoformc 0.1.1`
+# gave one unchanged netlist two different addresses -- and so did a
+# comment-only edit to the DSL source, through `source_hash`. The README says
+# the profile exists because "two conforming implementations could produce
+# different design_hash values for the same design"; hashing the generator's
+# own name guaranteed they would, whatever the serialization did. The (IR,
+# source map) pairing rule binds on this value, so as shipped a source map
+# from one toolchain could never pair with an IR from another.
+NON_DESIGN_HEADER_FIELDS = ("design_hash", "generator", "source_hash")
 
 
 def design_hash_of(document) -> str:
-    """The hash of `document` with its own `design_hash` blanked.
+    """The hash of `document` over its design-bearing content.
 
     Takes the PARSED document, so re-indenting a committed file, reordering its
     keys, or writing a Quantity inline instead of expanded does not move the
@@ -207,7 +270,9 @@ def design_hash_of(document) -> str:
     if "design_hash" not in document["header"]:
         raise ValueError("document has no single `design_hash` field to blank")
     blanked = json.loads(json.dumps(document))
-    blanked["header"]["design_hash"] = ""
+    for field in NON_DESIGN_HEADER_FIELDS:
+        if field in blanked["header"]:
+            blanked["header"][field] = ""
     return "sha256:" + hashlib.sha256(canonical_bytes(blanked)).hexdigest()
 
 
@@ -525,6 +590,33 @@ def self_test() -> int:
         "canonical_bytes refuses NaN rather than emitting it",
         _raises(lambda: canonical_bytes({"x": float("nan")}), ValueError),
     ))
+    # THE VALUES A SECOND IMPLEMENTATION SPELLS DIFFERENTLY. The cases above
+    # pin 1e3, 1e16, -0.0 and 0.1 -- the four values that were wrong once --
+    # and not one value where Python's float repr and JavaScript's disagree.
+    # That is testing the shape of the previous defect rather than the
+    # property, and it left the whole nF/uF/nA/us band in base SI open: an
+    # auditor expressed one 100 nF capacitor as 1e-7 F and got a different
+    # design_hash from a six-line conforming implementation.
+    #
+    # Every expected string here was taken from `node -e JSON.stringify(v)`,
+    # not from Python.
+    for value, expected in (
+            (1e-7, "1e-7"),          # python repr: 1e-07
+            (9e-8, "9e-8"),          # python repr: 9e-08
+            (2.5e-7, "2.5e-7"),      # python repr: 2.5e-07
+            (1e-5, "0.00001"),       # python repr: 1e-05
+            (4.7e-6, "0.0000047"),   # python repr: 4.7e-06
+            (1e-6, "0.000001"),      # python repr: 1e-06
+            (1e-10, "1e-10"),        # agrees, and pins the boundary
+            (1e21, "1e+21"),         # the top of the plain-integer range
+            (1500.0, "1500"),
+            (0.0015, "0.0015"),
+            (-2.5e-8, "-2.5e-8"),
+    ):
+        checks.append((
+            f"clause 7 spells {value!r} the way JSON.stringify does ({expected})",
+            canonical_bytes({"v": value}) == b'{"v":' + expected.encode() + b'}\n',
+        ))
     checks.append((
         "the example declares the profile this gate hashes under",
         document["header"].get("canonical_form") == CANONICAL_PROFILE,
@@ -536,6 +628,26 @@ def self_test() -> int:
     rehashed = json.loads(text)
     rehashed["header"]["design_hash"] = "sha256:" + "0" * 64
     checks.append(("blanking ignores the old hash", design_hash_of(rehashed) == genuine))
+
+    # WHICH COMPILER BUILT IT IS NOT PART OF THE DESIGN. design_hash covered
+    # header.generator and header.source_hash, so `rhoformc 0.1.1` addressed an
+    # unchanged netlist differently from `rhoformc 0.1.0` -- and so did a
+    # comment-only edit to the DSL source. The README's whole justification for
+    # this profile is that two conforming implementations must agree on one
+    # design; hashing the producer's own name guaranteed they could not.
+    for field, value in (("generator", {"name": "otherc", "version": "9.9.9"}),
+                         ("source_hash", "sha256:" + "f" * 64)):
+        moved = json.loads(text)
+        moved["header"][field] = value
+        checks.append((
+            f"design_hash ignores header.{field}",
+            design_hash_of(moved) == genuine,
+        ))
+    # And it is not simply ignoring the header: a real change still moves it.
+    changed = json.loads(text)
+    changed["header"]["design_name"] = "something_else"
+    checks.append(("design_hash still moves for a header field that IS the design",
+                   design_hash_of(changed) != genuine))
 
     checks.append(("a document with no design_hash is rejected",
                    _raises(lambda: design_hash_of({"header": {}}), ValueError)))

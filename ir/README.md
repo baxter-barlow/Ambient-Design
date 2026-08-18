@@ -34,19 +34,45 @@ values for the same design, which is the one thing "IR v0" had to nail down.
 5. `NaN` and `Infinity` are not representable and are an error.
 6. Arrays keep their order. Order is meaning here; each array's sort rule is
    stated on its own field and is not the encoder's business.
-7. **Numbers have one spelling per value.** A float whose value is integral is
-   written as that integer, every other float is written in the shortest form
-   that round-trips, and `-0.0` normalizes to `0`. Without this clause the
-   profile did not deliver the cross-implementation agreement it exists for:
-   `1000` and `1e3` are the same value and hashed differently, and `1e16`
-   serialized as `1e+16` here against `10000000000000000` from
-   JavaScript's `JSON.stringify`.
+7. **Numbers have one spelling per value**, and that spelling is
+   **ECMA-262 `Number::toString`** (§6.1.6.1.20) — the algorithm behind
+   `JSON.stringify`. Given the shortest round-tripping digit string `s` of
+   length `k`, and the exponent `n` such that the value is `0.s × 10ⁿ`:
 
-`design_hash` is the SHA-256 of that serialization with `header.design_hash`
-set to `""`. Because it is computed from the parsed document, re-indenting a
-committed file or reordering its keys does not move it, while any change to the
-data does. `tests/ir/check-hashes.py` implements the profile and its self-test
-asserts all three invariances.
+   | condition | form | example |
+   | --- | --- | --- |
+   | `k ≤ n ≤ 21` | digits, then `n−k` zeros | `1500` |
+   | `0 < n ≤ 21` | digits with a point after `n` of them | `1.5` |
+   | `−6 < n ≤ 0` | `0.`, `−n` zeros, then digits | `0.0015` |
+   | otherwise | `d[.rest]e(+|−)|n−1|` | `1.5e-7` |
+
+   `-0.0` normalizes to `0`: a design has no signed zero.
+
+   The first version of this clause said "the shortest form that round-trips"
+   and left it there. That is not a specification, it is whichever spelling the
+   host language happens to use — and Python and JavaScript differ across
+   exactly the band an electronics IR lives in. Python pads a one-digit
+   exponent (`1e-07` against `1e-7`) and switches to exponential below 1e-4
+   where JavaScript switches below 1e-6 (`1e-05` against `0.00001`). Express
+   one 100 nF capacitor as `1e-7` F, which `netlist-ir.schema.json` invites by
+   saying "the compiler normalizes units", and two conforming implementations
+   produce different `design_hash` values for a document both accept. That is
+   the precise failure this profile exists to prevent, surviving inside the
+   clause written to prevent it.
+
+`design_hash` is the SHA-256 of that serialization with `header.design_hash`,
+`header.generator` and `header.source_hash` set to `""`. The last two are
+excluded for the same reason the first is: they describe **how** the document
+was produced, not **what** it describes. Hashing `generator.version` gave one
+unchanged netlist a new content address every time the compiler was rebuilt,
+and hashing `source_hash` gave it a new one for a comment-only edit to the DSL
+source — so a source map produced by one toolchain could never pair with an IR
+produced by another, which is the interoperability the profile is for.
+
+Because it is computed from the parsed document, re-indenting a committed file
+or reordering its keys does not move it, while any change to the data does.
+`tests/ir/check-hashes.py` implements the profile and its self-test asserts all
+three invariances.
 
 
 ## Versioning policy
@@ -205,7 +231,7 @@ m=importlib.util.module_from_spec(s); s.loader.exec_module(m)
 d=json.loads(pathlib.Path("examples/blinker.ir.json").read_text())
 d["header"]["design_hash"]=""
 print(m.design_hash_of(d))'
-# -> sha256:b2a4c088018511439166f0c214d70de0546739886191067b27686f4b421cd419
+# -> sha256:8d056aa1c1f5075974ed5cd6cc1f4be4ffa826c4851c9b1f70bcbc73c3ef2330
 ```
 
 That is the value committed in `examples/blinker.ir.json` and mirrored in the
