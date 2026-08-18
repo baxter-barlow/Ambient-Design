@@ -109,7 +109,7 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 CEILINGS = {
     "lang/tests/check_readme_numbers.py": (24, 16),
     "parts/lint-part-data.py": (30, 5),
-    "tests/benchmarks/check-assertions.py": (14, 3),
+    "tests/benchmarks/check-assertions.py": (18, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),

@@ -121,5 +121,5 @@ t_reenter           =   1.51686e-03
 t_settle_us         =  1.68580e+01
 
 === assertion windows ===
-sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows; 22 transcript measurement(s) match a fresh run.
+sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows; 22 transcript measurement(s) match a fresh run; 0 deck passive(s) carry their parts.yaml value.
 exit=0

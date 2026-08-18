@@ -92,5 +92,5 @@ i_led_on            =  9.25678e-03 at=  2.34169e+00
 v_out_high          =  7.19860e+00 at=  2.34169e+00
 
 === assertion windows ===
-sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows; 12 transcript measurement(s) match a fresh run.
+sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows; 12 transcript measurement(s) match a fresh run; 6 deck passive(s) carry their parts.yaml value.
 exit=0

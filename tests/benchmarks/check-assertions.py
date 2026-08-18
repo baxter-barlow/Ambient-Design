@@ -432,6 +432,82 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
     return reconciled
 
 
+# THE DECK MUST BE THE CIRCUIT THE BOM DECLARES. Nothing compared them. An
+# auditor changed the blinker deck's RB from 680k to 700k -- not an E24 or E96
+# value, and absent from parts.yaml, design.md, the IR and the DSL model, all
+# of which still said 680k -- re-recorded the five measured values, and
+# `make all` exited 0. `measured:` pins a number; nothing pinned the property
+# that the number came from the declared circuit. Both benchmarks' parts.yaml
+# were read by no code at all.
+# benchmark -> how many deck passives MUST carry their parts.yaml value.
+#
+# buck-3v3 is 0 ON PURPOSE, and the zero is declared here rather than arrived
+# at silently. Its deck is an averaged behavioural model: the inductor and
+# output cap are `{LVAL}`/`{CEFF}` parameters, and the feedback divider is
+# `Rfb1`/`Rfb2` where the BOM says `R1`/`R2`. Nothing in the deck claims to be
+# a component-level realisation of that BOM, so demanding a refdes match would
+# be inventing a correspondence the design never asserted. What must not happen
+# is a benchmark reconciling zero because a refdes quietly stopped matching --
+# hence the floor, and hence the failure below for a benchmark absent from this
+# table entirely.
+MINIMUM_BOM_PASSIVES = {"blinker-555": 6, "buck-3v3": 0}
+
+
+def deck_bom_problems(case_dir, problems, minimum=None):
+    """Every passive the deck instantiates must carry the BOM's value."""
+    deck = case_dir / "netlist.cir"
+    bom = case_dir / "parts.yaml"
+    if not deck.is_file() or not bom.is_file():
+        return 0
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_derive555", Path(__file__).with_name("derive-555-windows.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    declared = load_yaml(bom).get("parts") or []
+    deck_values = module.passives_from_deck(
+        deck.read_text(encoding="utf-8", errors="replace"))
+    reconciled = 0
+    for part in declared:
+        ref = str(part.get("ref") or "").upper()
+        raw = str(part.get("value") or "")
+        if ref not in deck_values or not raw:
+            continue
+        try:
+            want = module.spice_value(raw)
+        except ValueError:
+            problems.append(
+                f"{case_dir.name}/parts.yaml: {ref} declares value {raw!r}, "
+                "which carries no number the deck could be compared against.")
+            continue
+        got = deck_values[ref]
+        if abs(got - want) > 1e-9 * max(abs(want), 1.0):
+            problems.append(
+                f"{case_dir.name}: netlist.cir instantiates {ref} at {got:g} "
+                f"but parts.yaml declares {raw!r} ({want:g}). The deck is "
+                "supposed to be the simulated realisation of the declared "
+                "design; a value in one and not the other means the "
+                "measurements gate a circuit nobody specified.")
+            continue
+        reconciled += 1
+    if minimum is None and case_dir.name not in MINIMUM_BOM_PASSIVES:
+        problems.append(
+            f"{case_dir.name}: no deck/BOM reconciliation floor is declared "
+            "for this benchmark. A new benchmark whose refdes happen not to "
+            "match would reconcile zero and pass, which is the state both "
+            "parts.yaml files were in when nothing read them.")
+        return reconciled
+    floor = (MINIMUM_BOM_PASSIVES.get(case_dir.name) if minimum is None
+             else minimum)
+    if floor is not None and reconciled < floor:
+        problems.append(
+            f"{case_dir.name}: reconciled {reconciled} deck passive(s) against "
+            f"parts.yaml, below the floor of {floor}. A refdes that stops "
+            "matching leaves the comparison silently, which is how parts.yaml "
+            "came to be read by nothing at all.")
+    return reconciled
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -470,6 +546,7 @@ def main(argv):
         transcript = transcript_problems(
             case_dir, fresh_text, problems,
             minimum_measurements=len(declared) or None)
+        passives = deck_bom_problems(case_dir, problems)
     except GateUnavailable as exc:
         print(f"sim-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -480,7 +557,8 @@ def main(argv):
             print(f"  {problem}", file=sys.stderr)
         return 1
     print(f"sim-assert: PASS: {case_dir.name}: {checked} assertion(s) inside "
-          f"their windows; {transcript} transcript measurement(s) match a fresh run.")
+          f"their windows; {transcript} transcript measurement(s) match a fresh "
+          f"run; {passives} deck passive(s) carry their parts.yaml value.")
     return 0
 
 
@@ -628,6 +706,63 @@ def self_test():
             _clean = main([str(_case), str(_log)])
     cases.append(("main() exits 1 on a value outside its window", _planted == 1))
     cases.append(("main() exits 0 on a value inside it", _clean == 0))
+
+    # THE DECK MUST BE THE CIRCUIT THE BOM DECLARES. Nothing compared them, and
+    # an auditor retimed the blinker by changing its dominant resistor to a
+    # value no document in the repository names.
+    import tempfile as _tempfile
+
+    def bom_probe(deck_text, bom_text, minimum=0):
+        with _tempfile.TemporaryDirectory() as tmp:
+            case = Path(tmp) / "case"
+            case.mkdir()
+            (case / "netlist.cir").write_text(deck_text, encoding="utf-8")
+            (case / "parts.yaml").write_text(bom_text, encoding="utf-8")
+            problems = []
+            count = deck_bom_problems(case, problems, minimum=minimum)
+            return problems, count
+
+    DECK = "RA vcc disch 100k\nRB disch nct 680k\nCT nct 0 1u\n"
+    BOM = ("parts:\n"
+           "  - ref: RA\n    value: 100k 1% 0.25W\n"
+           "  - ref: RB\n    value: 680k 1% 0.25W\n"
+           "  - ref: CT\n    value: 1uF 5% 63V\n")
+    agreeing, agreed_count = bom_probe(DECK, BOM)
+    cases.append(("a deck matching its BOM reconciles every passive",
+                  not agreeing and agreed_count == 3))
+    retimed, _ = bom_probe(DECK.replace("680k", "700k"), BOM)
+    cases.append(("a deck value the BOM does not declare is caught", any(
+        "instantiates RB" in p for p in retimed)))
+    rescaled, _ = bom_probe(DECK.replace("1u", "1n"), BOM)
+    cases.append(("a wrong magnitude suffix is caught", any(
+        "instantiates CT" in p for p in rescaled)))
+    short_problems, short_count = bom_probe("RA vcc disch 100k\n", BOM)
+    cases.append(("only the refdes present in the deck are compared",
+                  not short_problems and short_count == 1))
+    cases.append(("a benchmark reconciling fewer than its floor is caught", any(
+        "below the floor" in p for p in bom_probe(
+            "RA vcc disch 100k\n", BOM, minimum=3)[0])))
+    # A space before the unit is the BOM's other spelling, and reading only the
+    # first token made `10 uF` ten farads -- a 1e6 error in the direction that
+    # passes every comparison.
+    spaced, spaced_count = bom_probe(
+        "C1 a b 10u\n", "parts:\n  - ref: C1\n    value: 10 uF +/-10%, 25 V\n")
+    cases.append(("a BOM value with a space before its unit is read",
+                  not spaced and spaced_count == 1))
+    unnamed, _ = bom_probe(DECK, "parts:\n  - ref: RA\n    value: a resistor\n")
+    cases.append(("a BOM value with no number is caught", any(
+        "carries no number" in p for p in unnamed)))
+    # And a benchmark with no declared floor at all must not pass by
+    # reconciling nothing, which is how both parts.yaml came to be unread.
+    with _tempfile.TemporaryDirectory() as tmp:
+        case = Path(tmp) / "unknown-benchmark"
+        case.mkdir()
+        (case / "netlist.cir").write_text("RX a b 1k\n", encoding="utf-8")
+        (case / "parts.yaml").write_text("parts: []\n", encoding="utf-8")
+        undeclared = []
+        deck_bom_problems(case, undeclared)
+    cases.append(("a benchmark with no declared floor is caught", any(
+        "no deck/BOM reconciliation floor" in p for p in undeclared)))
 
     failures = 0
     for name, ok in cases:
