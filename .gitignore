@@ -35,6 +35,9 @@ dist/
 .rhoform-build/
 *.raw
 *.log
+# Left behind only if check-gate-coverage.py is SIGKILLed mid-run; the finally
+# clause cannot run then, so the gate it was measuring stays mutated too.
+*.coverage-backup
 # ...but NOT the evidence files, which are deliberately authored deliverables
 # that happen to end in `.log`. `*.log` was written for ngspice scratch output
 # and silently swallowed all of them: five `validation.log` files that nine

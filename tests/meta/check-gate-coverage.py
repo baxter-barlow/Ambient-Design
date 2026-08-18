@@ -59,49 +59,128 @@ ROOT = Path(__file__).resolve().parents[2]
 # chosen. Lower these; do not raise them.
 CEILINGS = {
     "lang/tests/check_readme_numbers.py": 16,
+    "parts/lint-part-data.py": 5,
+    "tests/benchmarks/check-assertions.py": 3,
     "tests/benchmarks/check-corners.py": 9,
-    "tests/benchmarks/check-design-docs.py": 5,
-    "tests/benchmarks/check-hand-assertions.py": 10,
+    "tests/benchmarks/check-design-docs.py": 17,
+    "tests/benchmarks/check-hand-assertions.py": 15,
     "tests/corpus/check-classification.py": 18,
     "tests/corpus/check-corpus.py": 3,
-    "tests/eval/check-run-records.py": 8,
-    "tests/ir/check-hashes.py": 2,
+    "tests/eval/check-run-records.py": 9,
+    "tests/ir/check-hashes.py": 4,
+    "tests/toolchain/check-pins.py": 7,
 }
 
-REPORT_SITE = re.compile(
-    r"^[ \t]*(?:problems\.append\(|bad\(|out\.append\(|problems_out\.append\()",
-    re.MULTILINE)
+REPORT_NAMES = ("append", "bad")
 
 # A gate must have at least this many report sites for the measurement to mean
 # anything; a gate that reports nothing would otherwise score a perfect zero.
 MINIMUM_SITES = 5
+
+# Gates with fewer than MINIMUM_SITES report sites, listed so their absence
+# from CEILINGS is a recorded decision rather than an omission. A gate that
+# reports almost nothing scores a perfect coverage number, so measuring it
+# would be worse than not measuring it.
+TOO_FEW_SITES = (
+    "tests/schemas/validate-schemas.py",
+    "tests/structure/check-retired-names.py",
+    "tests/meta/check-gate-coverage.py",
+)
+
+
+def self_testing_gates():
+    """Every gate in the tree that has a --self-test, found rather than listed.
+
+    CEILINGS named eight of thirteen. check-pins.py -- which the Makefile says
+    P5 determinism rests on -- was unlisted at 7 of 11 unpinned, and so were
+    the sim assertion gate and the part linter. A new gate could ship with zero
+    coverage and this gate would stay silent: a floor scoped to the wrong
+    population, which is the defect shape it exists to catch.
+    """
+    found = []
+    for path in sorted(ROOT.rglob("*.py")):
+        rel = path.relative_to(ROOT).as_posix()
+        if ".git" in rel or rel.startswith("eval/rhoform_eval"):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "--self-test" in text and "def self_test" in text:
+            found.append(rel)
+    return found
 
 
 class GateUnavailable(Exception):
     """The measurement could not be performed. Never reported as a pass."""
 
 
+def _last_line(result) -> str:
+    """The most informative line of a failed run, or a stand-in if it printed
+    nothing. Indexing [-1] of an empty split is how this crashed once."""
+    text = (result.stderr or result.stdout or "").strip()
+    return text.splitlines()[-1][:120] if text else "(no output)"
+
+
 def report_sites(source: str) -> list[int]:
-    """Line numbers of report sites outside the gate's own self_test()."""
-    limit = source.find("def self_test(")
-    if limit == -1:
-        limit = len(source)
-    return [source[:m.start()].count("\n")
-            for m in REPORT_SITE.finditer(source) if m.start() < limit]
+    """Line numbers of report calls outside the gate's own self_test().
+
+    Parsed, not searched. The first version took `source.find("def self_test(")`
+    as the limit, which is a TEXTUAL position: every check function defined
+    BELOW self_test in the file was invisible. check-design-docs.py defines
+    model_problems, line_count_problems and mode_table_problems after it, so 14
+    of its 23 sites were never measured and its published ceiling was 5 against
+    a real 17. The gate also scored ZERO of its own three sites, because the
+    string literal on line 74 was the first match.
+    """
+    import ast
+    tree = ast.parse(source)
+    excluded = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("_") is False \
+                and node.name in ("self_test",):
+            excluded.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
+    sites = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = getattr(func, "attr", None) or getattr(func, "id", None)
+        if name not in REPORT_NAMES:
+            continue
+        if name == "append":
+            owner = getattr(getattr(func, "value", None), "id", None)
+            if owner not in ("problems", "out", "problems_out", "notes",
+                             "found", "problems_seen"):
+                continue
+        if node.lineno in excluded:
+            continue
+        sites.append(node.lineno - 1)
+    return sorted(set(sites))
 
 
 def blank_site(source: str, line_no: int) -> str:
-    """Replace the call starting at `line_no` with `pass`, spanning its parens."""
+    """Replace the call at `line_no` with `pass`, using its PARSED extent.
+
+    Counting parentheses per line is lexical: a paren inside a string literal
+    over-blanks and eats the next independent check, and a `#` comment
+    containing `)` ends the span early and leaves an orphan continuation. Both
+    make the mutant MORE damaged, so the self-test fails and the site scores as
+    covered -- the number improves without the gate improving.
+    """
+    import ast
+    tree = ast.parse(source)
+    extent = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and node.lineno - 1 == line_no:
+            end = node.end_lineno or node.lineno
+            if extent is None or end > extent:
+                extent = end
     lines = source.splitlines(keepends=True)
     indent = len(lines[line_no]) - len(lines[line_no].lstrip())
-    depth = 0
-    index = line_no
-    while index < len(lines):
-        depth += lines[index].count("(") - lines[index].count(")")
-        lines[index] = " " * indent + ("pass\n" if index == line_no else "pass\n")
-        if depth <= 0:
-            break
-        index += 1
+    last = (extent or (line_no + 1)) - 1
+    for index in range(line_no, last + 1):
+        lines[index] = " " * indent + "pass\n"
     return "".join(lines)
 
 
@@ -109,6 +188,20 @@ def surviving_sites(gate: Path) -> tuple[int, int, list[int]]:
     """(sites, survivors, survivor line numbers) for one gate."""
     source = gate.read_text(encoding="utf-8")
     sites = report_sites(source)
+    # THE BASELINE MUST PASS FIRST. Nothing checked that the UNMUTATED gate's
+    # self-test exits 0, so a self-test that cannot run at all -- PyYAML absent,
+    # which is true of four of these gates in CI's schemas job -- made every
+    # blanked site score as "caught" and the gate report perfect coverage. It
+    # then told the maintainer to pin those fabricated zeros. An unavailable
+    # measurement is not a measurement.
+    baseline = subprocess.run([sys.executable, str(gate), "--self-test"],
+                              capture_output=True, text=True, cwd=ROOT, timeout=300)
+    if baseline.returncode != 0:
+        raise GateUnavailable(
+            f"{gate.relative_to(ROOT)}: its own --self-test exits "
+            f"{baseline.returncode} before any mutation, so every site would "
+            "score as caught. Install the pinned dependencies and re-run: "
+            f"{_last_line(baseline)}")
     survivors = []
     backup = gate.with_suffix(gate.suffix + ".coverage-backup")
     shutil.copy(gate, backup)
@@ -203,18 +296,79 @@ def self_test() -> int:
         cases.append(("the gate is restored after measurement",
                       probe.read_text(encoding="utf-8") == SAMPLE))
 
-        problems = []
-        check(problems, ceilings={str(probe.relative_to(ROOT))
-                                  if probe.is_relative_to(ROOT) else "probe.py": 0})
-        cases.append(("a gate above its ceiling is reported",
-                      any("survive being blanked" in p or "not present" in p
-                          for p in problems)))
+        # THE ENFORCEMENT BRANCH ITSELF. The first version keyed the probe on
+        # `probe.relative_to(ROOT) if probe.is_relative_to(ROOT) else "probe.py"`
+        # -- and probe lives in a TemporaryDirectory, so that is ALWAYS
+        # "probe.py", a path under ROOT that never exists. The case named "a
+        # gate above its ceiling is reported" passed on the `not present`
+        # branch while the ceiling comparison was never reached, and both it
+        # and the MINIMUM_SITES branch could be replaced by `pass` with all
+        # cases green. That is the defect this whole file exists to detect, in
+        # this file, in a case whose name asserts the property.
+        #
+        # Measured inside ROOT so the branch is genuinely exercised.
+        # BIG ENOUGH TO REACH THE CEILING BRANCH. SAMPLE has 2 sites, under
+        # MINIMUM_SITES, so a probe built from it lands on the too-few branch
+        # and the ceiling comparison is never exercised -- which is how the
+        # first version of these cases passed without touching the code they
+        # name.
+        BIGGER = ("import sys\n"
+                  "def check(problems):\n"
+                  + "".join(f"    if {i} > 99:\n"
+                            f"        problems.append('dead {i}')\n"
+                            for i in range(5))
+                  + "    if 2 > 1:\n"
+                    "        problems.append('always')\n"
+                    "def self_test():\n"
+                    "    problems = []\n"
+                    "    check(problems)\n"
+                    "    return 0 if problems else 1\n"
+                    "if __name__ == '__main__':\n"
+                    "    raise SystemExit(self_test() if '--self-test' in sys.argv else 0)\n")
+        inside = ROOT / "tests" / "meta" / ".coverage-probe.py"
+        inside.write_text(BIGGER, encoding="utf-8")
+        try:
+            over = []
+            check(over, ceilings={inside.relative_to(ROOT).as_posix(): 0})
+            cases.append(("a gate above its ceiling is reported", any(
+                "survive being blanked" in p and "above the ceiling of 0" in p
+                for p in over)))
+            under = []
+            check(under, ceilings={inside.relative_to(ROOT).as_posix(): 9})
+            cases.append(("a gate under its ceiling is not reported",
+                          not under))
+            few = ROOT / "tests" / "meta" / ".coverage-probe-small.py"
+            few.write_text(
+                "import sys\n"
+                "def check(problems):\n"
+                "    if 2 > 1:\n"
+                "        problems.append('always')\n"
+                "def self_test():\n"
+                "    problems = []\n"
+                "    check(problems)\n"
+                "    return 0 if problems else 1\n"
+                "if __name__ == '__main__':\n"
+                "    raise SystemExit(self_test() if '--self-test' in sys.argv else 0)\n",
+                encoding="utf-8")
+            try:
+                small = []
+                check(small, ceilings={few.relative_to(ROOT).as_posix(): 0})
+                cases.append(("a gate with too few report sites is reported", any(
+                    "below the" in p and "measurement needs" in p for p in small)))
+            finally:
+                few.unlink()
+        finally:
+            inside.unlink()
 
     # WIRING over the real gates: the shipped ceilings must hold.
     real = []
     measured = check(real)
     cases.append(("every shipped gate is at or under its ceiling", not real))
     cases.append(("every named gate was measured", measured == len(CEILINGS)))
+    unlisted = [g for g in self_testing_gates()
+                if g not in CEILINGS and g not in TOO_FEW_SITES]
+    cases.append((f"every self-testing gate is listed or excused ({unlisted})",
+                  not unlisted))
 
     failures = 0
     for name, ok in cases:

@@ -128,18 +128,18 @@ sim:
 	python3 lang/tests/check_readme_numbers.py
 	bash tests/benchmarks/run-sim.sh
 
-# The gates in .github/workflows/repository-policy.yml. Kept as its own target
-# rather than folded into `check` because the whitespace leg needs a commit
-# range, which only exists once something is committed.
 # How much of each gate is pinned by its own --self-test. Slow (it re-runs
 # every gate's self-test once per report site), which is why it is the last
 # thing `check` does. Across twelve audit rounds "a check with no case" was the
 # most common finding; this makes the number visible and refuses to let it
-# grow.
+# grow. Thirteen rounds in, it found four blockers in itself.
 gate-coverage:
 	python3 tests/meta/check-gate-coverage.py --self-test
 	python3 tests/meta/check-gate-coverage.py
 
+# The gates in .github/workflows/repository-policy.yml. Kept as its own target
+# rather than folded into `check` because the whitespace leg needs a commit
+# range, which only exists once something is committed.
 policy:
 	sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
 	# The COMMIT, not the working tree. `git diff --check HEAD` compares the
