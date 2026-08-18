@@ -123,7 +123,7 @@ CEILINGS = {
     "tests/meta/check-gate-coverage.py": (10, 5),
     "tests/schemas/validate-schemas.py": (11, 2),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (17, 13),
+    "tests/toolchain/check-pins.py": (18, 12),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -175,7 +175,8 @@ OWNERS = {
         # unverified reads like a pin that passed), tracked against the
         # tiktoken offline guard rather than papered over by counting it here.
         {"problems", "missing_jobs"},
-        {"cases", "pins", "parsed_refs", "READ_BY_KEY"}),
+        {"cases", "pins", "parsed_refs", "READ_BY_KEY", "joined",
+         "required", "computed"}),
 }
 
 # Calls that report by name rather than through an accumulator.
