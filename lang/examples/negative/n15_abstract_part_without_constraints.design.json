@@ -33,13 +33,7 @@
             }
           ],
           "part": {
-            "binding": "abstract",
-            "lockfile_key": "x/y@1",
-            "constraints": {
-              "resistance": {
-                "q": "10kohm +/- 1%"
-              }
-            }
+            "binding": "abstract"
           }
         }
       ],
@@ -54,6 +48,6 @@
       ]
     }
   ],
-  "notes": "EXPECTED-INVALID control: an abstract part is unresolved by definition and has no pick to point at. It carries a constraint set so the lockfile key is its ONLY defect -- without one it also violated `required: [constraints]`, and removing the lockfile key left it rejected, so it could not detect the loss of the rule it is named for.",
-  "x_negative_control": "REJECTED at /modules/0/instances/0/part: abstract part with lockfile key"
+  "notes": "EXPECTED-INVALID control: an abstract part states only its constraint set, so a binding with neither constraints nor a lockfile key names nothing at all. The sibling n13 pins the other half of the same `then` clause.",
+  "x_negative_control": "REJECTED at /modules/0/instances/0/part: abstract part with no constraint set"
 }

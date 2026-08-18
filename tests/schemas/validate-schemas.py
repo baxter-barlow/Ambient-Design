@@ -66,7 +66,7 @@ NEGATIVE_DIR_NAME = "negative"
 # ZERO meant 31% of the controls could be deleted with `make all` green — and
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
 # same change that legitimately removes one.
-MINIMUM_NEGATIVE_CONTROLS = 48
+MINIMUM_NEGATIVE_CONTROLS = 49
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
@@ -240,7 +240,7 @@ def self_test() -> int:
     """Prove this gate can fail, over a throwaway tree.
 
     Every sibling gate runs a self-test first and the Makefile says so four
-    times. The gate that owns all 48 negative controls had none, so its
+    times. The gate that owns all 49 negative controls had none, so its
     location comparison could be deleted and a fixture pointed at a location it
     does not fail at with `make check` still green. That is the exact shape the
     declaration mechanism was added to close, one level up.
