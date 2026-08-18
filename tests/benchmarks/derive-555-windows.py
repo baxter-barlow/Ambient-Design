@@ -65,18 +65,98 @@ gated, so nobody reads the narrow window as a claim about the part.
 
 import itertools
 import json
+import re
 import sys
 from math import log
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RECORD = ROOT / "parts" / "examples" / "ti-ne555p.part.json"
-ASSERTIONS = ROOT / "benchmarks" / "blinker-555" / "assertions.yaml"
+CASE = ROOT / "benchmarks" / "blinker-555"
+ASSERTIONS = CASE / "assertions.yaml"
+DECK = CASE / "netlist.cir"
+BOM = CASE / "parts.yaml"
 
 VCC = 9.0
-RA, RA_TOL = 100e3, 0.01
-RB, RB_TOL = 680e3, 0.01
-C, C_TOL = 1e-6, 0.05
+# Tolerances come from the BOM, which is where a 1% resistor is declared to be
+# a 1% resistor. The VALUES come from the deck -- see passives_from_deck.
+RA_TOL, RB_TOL, C_TOL = 0.01, 0.01, 0.05
+
+# SPICE magnitude suffixes, longest first so `meg` is not read as `m`.
+SPICE_SUFFIX = (("meg", 1e6), ("mil", 25.4e-6), ("k", 1e3), ("g", 1e9),
+                ("t", 1e12), ("m", 1e-3), ("u", 1e-6), ("n", 1e-9),
+                ("p", 1e-12), ("f", 1e-15))
+
+
+def spice_value(text: str) -> float:
+    """`680k` -> 680000.0, `1u` -> 1e-6, `560` -> 560.0.
+
+    Also reads the BOM's spelling (`680k 1% 0.25W`, `1uF 5% 63V`): the number
+    and its suffix are the leading token, and the unit letter that may follow
+    (`F`, `ohm`, `R`) is not a magnitude.
+    """
+    tokens = text.strip().lower().split()
+    if not tokens:
+        raise ValueError(f"{text!r} carries no number")
+    match = re.match(r"([-+]?\d*\.?\d+(?:e[-+]?\d+)?)(.*)", tokens[0])
+    if not match:
+        raise ValueError(f"{text!r} carries no number")
+    number, rest = float(match.group(1)), match.group(2)
+    # The BOM sometimes puts a space before the unit -- `10 uF`, `31.2 kOhm`,
+    # `100 nF` -- so the magnitude can be the first token or the second. Reading
+    # only the first token turned `10 uF` into 10 farads, which is a 1e6 error
+    # in the direction that passes.
+    if not rest and len(tokens) > 1:
+        rest = tokens[1]
+    for suffix, scale in SPICE_SUFFIX:
+        if rest.startswith(suffix):
+            return number * scale
+    return number
+
+
+def passives_from_deck(deck_text: str) -> dict:
+    """{refdes: value} for every R/C/L element card in a deck.
+
+    WHY THIS IS READ RATHER THAN WRITTEN DOWN. RA, RB and C used to be module
+    constants here, and this file's docstring says it derives the windows
+    MECHANICALLY from the values the project stands behind. It did not read the
+    deck, and neither did anything else: an auditor changed the deck's RB from
+    680k to 700k -- not an E24 or E96 value, and absent from parts.yaml,
+    design.md, the IR and the DSL model, all of which still said 680k -- re-
+    recorded the five measured values, and `make all` exited 0. The dominant
+    timing element of the benchmark could be anything at all.
+    """
+    values = {}
+    for line in deck_text.splitlines():
+        stripped = line.split(";", 1)[0].strip()
+        if not stripped or stripped[0] not in "RrCcLl":
+            continue
+        fields = stripped.split()
+        if len(fields) < 4:
+            continue
+        try:
+            values[fields[0].upper()] = spice_value(fields[3])
+        except ValueError:
+            continue
+    return values
+
+
+def _deck_passives():
+    found = passives_from_deck(DECK.read_text(encoding="utf-8"))
+    missing = [ref for ref in ("RA", "RB", "CT") if ref not in found]
+    if missing:
+        raise ValueError(
+            f"{DECK.name} declares no value for {missing}; the timing model "
+            "cannot be derived from a deck that does not state its own "
+            "timing components.")
+    return found
+
+
+try:
+    _PASSIVES = _deck_passives()
+    RA, RB, C = _PASSIVES["RA"], _PASSIVES["RB"], _PASSIVES["CT"]
+except (OSError, ValueError):  # reported by main(); constants keep import safe
+    RA, RB, C = 100e3, 680e3, 1e-6
 
 
 def _record():
