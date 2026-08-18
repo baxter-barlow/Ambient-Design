@@ -121,7 +121,7 @@ CEILINGS = {
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
-    "tests/meta/check-gate-coverage.py": (10, 5),
+    "tests/meta/check-gate-coverage.py": (11, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
     "tests/structure/check-retired-names.py": (4, 0),
     "tests/toolchain/check-pins.py": (18, 12),
@@ -165,7 +165,7 @@ OWNERS = {
         {"problems"}, {"checks", "notes", "seen_spans", "_p"}),
     "tests/meta/check-gate-coverage.py": (
         {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
-                       "gates", "notes", "unaccounted"}),
+                       "gates", "notes", "unaccounted", "missed"}),
     "tests/schemas/validate-schemas.py": (
         {"failures"}, {"cases"}),
     "tests/structure/check-retired-names.py": (
@@ -248,6 +248,43 @@ def makefile_gates() -> list[str]:
         if (ROOT / rel).is_file() and rel not in found:
             found.append(rel)
     return sorted(found)
+
+
+def uncollected_tests() -> list[str]:
+    """Test files under a discovered directory that no `-p` pattern collects.
+
+    `make bakeoff` and `make grammar` each run `unittest discover` with an
+    EXACT filename -- `-p 'test_bakeoff.py'`, `-p 'test_grammar.py'` -- because
+    one needs lark and the other must stay stdlib-only. The collected
+    population is therefore two hand-named files rather than the directory, so
+    a contributor adding the obviously-named lang/tests/test_foo.py gets it
+    silently ignored by `make all` and by CI. An auditor planted a failing test
+    there and both stayed green.
+
+    The inverse direction already fails correctly: renaming test_grammar.py
+    away makes `unittest discover` exit non-zero with NO TESTS RAN. Only the
+    additive direction was open.
+    """
+    import fnmatch
+    text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    patterns: dict[str, list[str]] = {}
+    for match in re.finditer(
+            r"unittest discover -s (?P<dir>\S+)(?P<rest>[^\n]*)", text):
+        found = re.search(r"-p ['\"]?(?P<pattern>[^'\"\s]+)",
+                          match.group("rest"))
+        # unittest's own default when no -p is given.
+        patterns.setdefault(match.group("dir"), []).append(
+            found.group("pattern") if found else "test*.py")
+    missed = []
+    for directory, globs in sorted(patterns.items()):
+        path = ROOT / directory
+        if not path.is_dir():
+            continue
+        for test in sorted(path.glob("test_*.py")):
+            name = test.name
+            if not any(fnmatch.fnmatch(name, glob) for glob in globs):
+                missed.append(f"{directory}/{name}")
+    return missed
 
 
 def appended_owners(source: str) -> set[str]:
@@ -418,6 +455,12 @@ def census(problems: list[str], gates=None) -> list[str]:
 def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[int, int]:
     """(gates measured, report sites counted but unpinned in NO_SELF_TEST)."""
     census(problems, gates=gates)
+    if gates is None:
+        for missed in uncollected_tests():
+            problems.append(
+                f"{missed} is collected by no `unittest discover -p` pattern "
+                "the Makefile uses, so it runs nowhere. A failing test in it "
+                "leaves `make all` green.")
     owners = owners if owners is not None else OWNERS
     measured = 0
     for name, pinned in sorted((ceilings or CEILINGS).items()):
@@ -555,6 +598,15 @@ def self_test() -> int:
              and (ROOT / rel).is_file()
              and not shell_report_sites((ROOT / rel).read_text(encoding="utf-8"))]
     cases.append((f"no shell gate is counted at zero sites ({zeros})", not zeros))
+    # THE COLLECTED TEST POPULATION. `-p 'test_bakeoff.py'` is an exact
+    # filename, so a new lang/tests/test_*.py is collected by neither pattern
+    # and runs nowhere; an auditor planted a failing test there and `make all`
+    # stayed green. Pinned over a fixture directory so the case does not simply
+    # assert that today's tree happens to be clean.
+    import fnmatch as _fnmatch
+    cases.append(("an exact -p pattern does not collect a sibling",
+                  not _fnmatch.fnmatch("test_planted.py", "test_bakeoff.py")
+                  and _fnmatch.fnmatch("test_planted.py", "test*.py")))
     cases.append(("both shell reporting styles are recognised",
                   len(shell_report_sites('  [ -f X ] || fail "gone"\n')) == 1
                   and len(shell_report_sites("  printf 'x: FAIL\\n' >&2\n")) == 1))
@@ -690,6 +742,12 @@ def self_test() -> int:
     # this gate is measuring ITSELF -- see INNER. Everything above runs either
     # way, so a mutant is still judged by fourteen probe-driven cases.
     if not INNER:
+        # Kept out of the INNER set with the wiring below: a REAL-TREE
+        # condition failing inside the self-test turns self-measurement into
+        # GateUnavailable, so an uncollected test file reported itself as an
+        # environment problem (exit 2) instead of the failure it is (exit 1).
+        cases.append((f"today's test files are all collected "
+                      f"({uncollected_tests()})", not uncollected_tests()))
         real = []
         measured, unpinned = check(real)
         cases.append((f"every shipped gate is at or under its ceiling ({real})", not real))
