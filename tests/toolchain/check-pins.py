@@ -143,21 +143,76 @@ REQUIRED_JOBS = {
 # property (the gate runs). A job kept with `if: false`, or with every gate step
 # replaced by `run: true`, satisfied the name check while check-run-records ran
 # nowhere in CI -- the identical outcome deleting the job produced.
-REQUIRED_CI_COMMANDS = (
-    "tests/structure/check-layout.sh",
-    "tests/schemas/validate-schemas.py",
-    "tests/corpus/check-corpus.py",
-    "tests/corpus/check-classification.py",
-    "tests/toolchain/check-pins.py",
-    "tests/ir/check-hashes.py",
-    "tests/eval/check-run-records.py",
-    "tests/benchmarks/run-sim.sh",
-    "tests/benchmarks/check-corners.py",
-    "tests/benchmarks/check-design-docs.py",
-    "lang/tests/check_readme_numbers.py",
-    "parts/lint-part-data.py",
-    "tests/meta/check-gate-coverage.py",
-)
+#
+# THAT LIST IS NOW READ OUT OF THE MAKEFILE. Hand-written, it named 13 of the
+# 28 commands `make all` runs, and the fifteen it missed were not a random
+# fifteen: the whole frozen-grammar verification, the entire syntax bake-off,
+# all three eval-harness legs and the golden harness could each be replaced by
+# `run: 'true'` in checks.yml with this gate -- the gate whose comment above
+# says the property is "the gate runs" -- still printing PASS. `MAKEFILE` was
+# already bound at the top of this file and used nowhere, which is what a
+# parity check looks like when it was named and never wired up.
+
+
+def makefile_commands():
+    """(commands CI must run, commands whose spelling differs by design)
+
+    The second list is every recipe line that invokes `git` or substitutes
+    `$$(...)`. Those are the commit-range checks -- `git diff --check` and
+    check-dco.sh -- and CI runs them over base..head on purpose, so they cannot
+    match textually and are held by REQUIRED_JOBS instead. The rule is DERIVED
+    from the line, so the exclusion cannot quietly grow to cover a gate: a new
+    `python3 tests/...` recipe line lands in the required half whatever anyone
+    intended.
+
+    Continuations are joined first. A recipe split across lines with a trailing
+    backslash is one command, and treating each fragment as its own command
+    demanded that CI contain the string '|| git merge-base HEAD main'.
+    """
+    required, computed = [], []
+    joined, pending = [], ""
+    for raw in MAKEFILE.read_text(encoding="utf-8").splitlines():
+        if not raw.startswith("\t"):
+            pending = ""
+            continue
+        line = _strip_comment(raw).rstrip()
+        if pending:
+            line = pending + " " + line.strip()
+            pending = ""
+        if line.endswith("\\"):
+            pending = line[:-1].rstrip()
+            continue
+        line = " ".join(line.split())
+        if line:
+            joined.append(line)
+    for line in joined:
+        computed_args = "$$(" in line or line.startswith("git ")
+        (computed if computed_args else required).append(line)
+    return sorted(set(required)), sorted(set(computed))
+
+
+# The Makefile runs well over this many commands. The floor exists because the
+# comparison is `command not in workflow_text`: an EMPTY required list reports
+# no problem at all, so "CI runs everything" and "we compared CI against
+# nothing" print the same PASS -- which is precisely how a hand-written list of
+# 13 went unnoticed against a real population of 28.
+MINIMUM_CI_COMMANDS = 20
+
+
+def ci_command_problems(required, workflow_text) -> list[str]:
+    """Every gate `make all` runs must appear in a live CI step."""
+    problems = []
+    if len(required) < MINIMUM_CI_COMMANDS:
+        problems.append(
+            f"only {len(required)} command(s) were read out of the Makefile, "
+            f"below the floor of {MINIMUM_CI_COMMANDS}. An empty comparison "
+            "reports no missing command, so this passes by finding nothing.")
+    for command in required:
+        if command not in workflow_text:
+            problems.append(
+                f"no live CI job runs {command!r}. A gate that runs only in "
+                "`make all` is not enforced on a pull request.")
+    return problems
 
 
 class _SkipFingerprint(Exception):
@@ -715,6 +770,39 @@ def self_test():
     cases.append(("main() exits non-zero when check() reports a problem", planted == 1))
     cases.append(("main() exits zero when check() reports none", clean == 0))
 
+    # THE CI-PARITY POPULATION. It used to be thirteen hand-written paths, and
+    # the fifteen it missed included the whole grammar freeze, the bake-off,
+    # every eval-harness leg and the golden harness -- each replaceable by
+    # `run: 'true'` with this gate green. Pin the discovery itself: a reader of
+    # `not missing` cannot tell "CI runs everything" from "we compared CI
+    # against nothing", which is how the old list stayed unnoticed.
+    required, computed = makefile_commands()
+    cases.append((f"the Makefile's commands are discovered ({len(required)})",
+                  len(required) >= 20))
+    cases.append(("the discovered set contains the gates it exists for", all(
+        any(fragment in command for command in required) for fragment in (
+            "grammar.rhoform_syntax", "grammar.conformance", "bakeoff check",
+            "rhoform_eval selftest", "tests/golden/run.sh",
+            "tests/meta/check-gate-coverage.py"))))
+    # And the exclusion stays what it says it is: commit-range checks only.
+    cases.append(("only commit-range commands are excluded from the parity", all(
+        "$$(" in command or command.startswith("git ") for command in computed)))
+    cases.append(("no gate script hides in the excluded half", not [
+        command for command in computed
+        if "tests/" in command and "check-dco" not in command]))
+
+    # And the comparison itself, over fixtures rather than over the real
+    # workflows, so both directions are pinned.
+    many = [f"python3 gate{i}.py" for i in range(MINIMUM_CI_COMMANDS)]
+    cases.append(("a command absent from CI is caught", any(
+        "gate3.py" in p for p in ci_command_problems(
+            many, "\n".join(c for c in many if c != "python3 gate3.py")))))
+    cases.append(("commands all present in CI report nothing",
+                  not ci_command_problems(many, "\n".join(many))))
+    cases.append(("an empty comparison is caught rather than passing", any(
+        "passes by finding nothing" in p
+        for p in ci_command_problems([], "anything at all"))))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1
@@ -813,12 +901,13 @@ def main(argv):
                         # not a command that runs.
                         if not stripped or stripped.startswith(("echo ", "if false")):
                             continue
-                        workflow_text += "\n" + stripped
-    for command in REQUIRED_CI_COMMANDS:
-        if command not in workflow_text:
-            missing_jobs.append(
-                f"no live CI job runs {command!r}. A gate that runs only in "
-                "`make all` is not enforced on a pull request.")
+                        workflow_text += "\n" + " ".join(stripped.split())
+    required, computed = makefile_commands()
+    missing_jobs.extend(ci_command_problems(required, workflow_text))
+    for command in computed:
+        print(f"toolchain-pins: args-computed: {command!r} runs in CI with a "
+              "different commit range, so it is matched by job name rather "
+              "than by text.")
     if missing_jobs:
         print("toolchain-pins: FAIL: CI job(s) removed:", file=sys.stderr)
         for entry in missing_jobs:
