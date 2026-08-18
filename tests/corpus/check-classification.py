@@ -447,7 +447,7 @@ def build_resolvers(schema, grammar):
 def decision_hash(entries) -> str:
     """Hash the decisions, and only the decisions.
 
-    Covers the verdict, its key, and — because `d3-gap` is 29 of the 39
+    Covers the verdict, its key, and — because `d3-gap` is 30 of the 40
     out-of-scope entries — the falsifiable `gap_class` and `missing_path` that
     justify it. The rationale prose stays out: hashing it would make a typo fix
     indistinguishable from a reclassification, and people would learn to update

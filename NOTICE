@@ -58,14 +58,15 @@ parts/examples/*.part.json
     block, and a table or section for nearly all of them. Provenance is keyed
     by JSON-pointer prefix with a record-level default that names no table, so
     a field covered only by that default has a document and revision and no
-    table: 6 of the 140 measured values across the five records, of which 4 are
-    ratings and all 4 are in ti-ne555p. The other four records have none.
+    table: 5 of the 118 measured values across the five records, of which 4 are
+    ratings.
 
-    Two earlier revisions of this sentence were wrong in opposite directions --
-    one claimed a table per field, the next generalised ti-ne555p's shape to
-    all five records. Recount before editing it: walk each record for objects
-    carrying a `unit`, resolve each against the longest matching provenance
-    pointer, and count the ones that land on "".
+    Those three numbers are COMPUTED AND GATED by parts/lint-part-data.py, not
+    maintained by hand. Three successive revisions of this sentence were wrong
+    -- a table-per-field claim, a generalisation of one record's shape to all
+    five, and a count that was internally unsatisfiable -- and the third
+    carried a recount procedure that did not reproduce it. Change the records
+    and the gate will tell you the new numbers.
 
     Individual numbers are facts and are not themselves
     copyrightable; the datasheets they were read from are not redistributed and

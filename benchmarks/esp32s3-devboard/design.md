@@ -9,7 +9,7 @@ stub whose values come from `power-tree.yaml`.
 ## 1. Block architecture
 
 ```
-USB-C (J1) --[F1 PTC]--[FB1 bead]--> VBUS_PROT --[D1 Schottky]--> P5V0
+USB-C (J1) --[F1 PTC]--> VBUS_PROT --[FB1 bead]--> VBUS_FILT --[D1 Schottky]--> P5V0
    |  |                                                             |
    CC1/CC2: R1/R2 5.1k Rd            D3 SMF5.0A TVS            D4+R7 PWR LED
    D+/D-: D2 USBLC6-2SC6, R11/R12 0R                                |

@@ -139,7 +139,7 @@ from aed_part_data.identity import compute_identity
 print(compute_identity(open('datasheet.pdf','rb').read(), [], '2026.08.0'))"
 ```
 
-The empty stamp-strip list is correct for these five vendors: Espressif,
+The empty stamp-strip list is correct for these four vendors: Espressif,
 Diodes, TI and Vishay have no entry in that registry yet, so no patterns are
 applied. A reviewer without that repository can verify the byte hashes and
 must treat the content hashes as unverified — which is exactly why the schema
