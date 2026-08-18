@@ -94,6 +94,96 @@ def _scale_of(cell):
     return SI[found.group("prefix")] if found else 1.0
 
 
+# THE PREDICTED-WINDOW COLUMN. This gate's docstring says the results table is
+# "the part a reader treats as authoritative, so that is the part held to the
+# data" -- and it read only the Measured cell. The window IS the assertion, and
+# ten window cells across the two gated design.md files were read by nothing:
+# an auditor changed f_osc's published window to 88.923 - 99.052 Hz, ninety
+# times outside the measurement in the very next cell, and `make all` exited 0
+# with the row still marked PASS. model_problems() below does exactly this
+# comparison for the two JSON artifacts; the population was scoped to those and
+# left out the Markdown table this gate exists for.
+RANGE = re.compile(
+    r"(?P<lo>[-+]?\d[\d.]*(?:[eE][-+]?\d+)?)\s*[–—-]\s*"
+    r"(?P<hi>[-+]?\d[\d.]*(?:[eE][-+]?\d+)?)")
+AT_MOST = re.compile(r"<=\s*(?P<value>[-+]?\d[\d.]*(?:[eE][-+]?\d+)?)")
+AT_LEAST = re.compile(r">=\s*(?P<value>[-+]?\d[\d.]*(?:[eE][-+]?\d+)?)")
+TOLERANCE = re.compile(
+    r"(?P<centre>[-+]?\d[\d.]*)\s*(?P<unit>[A-Za-z]*)\s*"
+    r"(?:\+/-|±)\s*(?P<span>\d[\d.]*)\s*%")
+
+
+def _percent_scale(cell):
+    """Percent cells carry their own factor; `%` and `percent` both mean 1/100.
+
+    The buck states efficiency as ">= 85%" and declares it as 0.85 `ratio`, and
+    states overshoot as "<= 5%" against 5.0 `percent`. Both are the same number
+    once percent is a scale rather than a spelling.
+    """
+    return 0.01 if "%" in cell or "percent" in cell.lower() else 1.0
+
+
+def published_window(cell):
+    """(low, high) in base units from a design.md window cell.
+
+    `None` on either side means the document states no bound there. `(None,
+    None)` means the cell carries no window this can read, which the caller
+    reports rather than skipping.
+    """
+    text = cell.strip()
+    if not text:
+        return (None, None)
+    tolerance = TOLERANCE.search(text)
+    if tolerance:
+        centre = float(tolerance.group("centre")) * _scale_of(
+            tolerance.group("centre") + tolerance.group("unit"))
+        span = float(tolerance.group("span")) / 100.0
+        return (centre * (1 - span), centre * (1 + span))
+    scale = _scale_of(text) * _percent_scale(text)
+    spread = RANGE.search(text)
+    if spread:
+        return (float(spread.group("lo")) * scale,
+                float(spread.group("hi")) * scale)
+    most = AT_MOST.search(text)
+    if most:
+        return (None, float(most.group("value")) * scale)
+    least = AT_LEAST.search(text)
+    if least:
+        return (float(least.group("value")) * scale, None)
+    return (None, None)
+
+
+def declared_window(assertion):
+    """(low, high) in base units from an assertions.yaml entry."""
+    window = assertion.get("window")
+    if isinstance(window, list) and len(window) == 2:
+        return tuple(
+            float(str(bound).split()[0]) * _scale_of(str(bound))
+            * _percent_scale(str(bound)) for bound in window)
+    expected = assertion.get("expected")
+    if isinstance(expected, dict):
+        unit = str(expected.get("unit") or "")
+        scale = _scale_of("0" + unit) * _percent_scale(unit)
+        low = expected.get("min")
+        high = expected.get("max")
+        return (None if low is None else float(low) * scale,
+                None if high is None else float(high) * scale)
+    return (None, None)
+
+
+def _agree(a, b):
+    """Two bounds agree when both are absent, or equal to the digits published.
+
+    The document rounds: the buck publishes `3.3 V +/-3%` where the spec says
+    3.201/3.399, and `<= 50 mVpp` where it says 0.05 V. A relative tolerance
+    absorbs the rounding without absorbing a wrong number -- the smallest real
+    error found in this table was 100x.
+    """
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(a - b) <= 1e-6 * max(1.0, abs(a), abs(b))
+
+
 # Significant digits: leading zeros are not significant, TRAILING ONES ARE.
 SIGNIFICANT = re.compile(r"\d[\d.]*")
 
@@ -167,6 +257,7 @@ def check_case(case_dir, problems, minimum=None):
         return 0
 
     reconciled = 0
+    windows_reconciled = set()
     for cells in rows:
         label = cells[0]
         match = None
@@ -184,6 +275,31 @@ def check_case(case_dir, problems, minimum=None):
                 "assertion by meas_id, name or id. Either the row is stale or an "
                 "assertion was renamed; both are the drift this gate exists for.")
             continue
+
+        # THE PREDICTED-WINDOW COLUMN, third from the right. See the comment on
+        # published_window: this is the number a reader acts on and it was held
+        # to nothing.
+        if len(cells) >= 4:
+            stated = published_window(cells[-3])
+            spec_window = declared_window(match)
+            if stated == (None, None) and spec_window != (None, None):
+                problems.append(
+                    f"{case_dir.name}/design.md: row {label!r} publishes "
+                    f"{cells[-3]!r} in the window column, which states no bound "
+                    "this gate can read, while assertions.yaml declares "
+                    f"{spec_window}. A window a reader cannot check against the "
+                    "spec is the column being decorative.")
+            elif not (_agree(stated[0], spec_window[0])
+                      and _agree(stated[1], spec_window[1])):
+                problems.append(
+                    f"{case_dir.name}/design.md: row {label!r} publishes window "
+                    f"{cells[-3]!r} = {stated} but assertions.yaml declares "
+                    f"{spec_window} (base units). The published window IS the "
+                    "assertion; a document and a gate stating different ones is "
+                    "the drift this table exists to prevent.")
+            else:
+                windows_reconciled.add((case_dir.name, label))
+
         recorded = match.get("measured")
         if recorded is None:
             continue
@@ -259,6 +375,15 @@ def check_case(case_dir, problems, minimum=None):
         problems.append(
             f"{case_dir.name}/design.md: only {reconciled} of {len(rows)} "
             f"results row(s) reconciled against assertions.yaml.")
+    # The window column gets its own floor, over DISTINCT labels, for the same
+    # reason the measured column does. Sharing one counter would let a
+    # reconciled measurement pay for an unread window.
+    if len(windows_reconciled) < floor:
+        problems.append(
+            f"{case_dir.name}/design.md: only {len(windows_reconciled)} of "
+            f"{len(rows)} published window(s) reconciled against "
+            "assertions.yaml. A window column nothing reads is the column a "
+            "reader trusts most.")
     return reconciled
 
 
@@ -267,8 +392,10 @@ def self_test():
 
     SPEC = (
         "assertions:\n"
-        "  - name: osc_period\n    meas_id: t_period\n    measured: 1.01191 s\n"
-        "  - name: duty_cycle_high\n    meas_id: duty_pct\n    measured: 53.45 %\n"
+        "  - name: osc_period\n    meas_id: t_period\n"
+        "    window: ['0.951 s', '1.083 s']\n    measured: 1.01191 s\n"
+        "  - name: duty_cycle_high\n    meas_id: duty_pct\n"
+        "    window: ['53.3 %', '55.8 %']\n    measured: 53.45 %\n"
     )
 
     def probe(doc_body, spec=SPEC):
@@ -281,6 +408,11 @@ def self_test():
             check_case(case, problems)
             return problems
 
+    def _card_probe(card_text):
+        problems = []
+        card_problems(problems, cards={"probe": card_text})
+        return problems
+
     agreeing = (
         "| Assertion | Window | Measured | Verdict |\n"
         "|---|---|---|---|\n"
@@ -292,6 +424,41 @@ def self_test():
         ("a stale measured value is caught", any(
             "disagrees with the run" in p for p in probe(
                 agreeing.replace("1.01191 s", "1.07300 s")))),
+        # THE WINDOW COLUMN. An auditor widened f_osc's published window to
+        # ninety times outside its own measurement in the next cell and every
+        # gate stayed green: only the Measured cell was ever read.
+        ("a published window the spec does not declare is caught", any(
+            "publishes window" in p for p in probe(
+                agreeing.replace("0.951 - 1.083 s", "0.710 - 1.638 s")))),
+        ("a widened window is caught in the other direction too", any(
+            "publishes window" in p for p in probe(
+                agreeing.replace("53.3 - 55.8 %", "1.0 - 99.0 %")))),
+        ("a window cell with no readable bound is caught", any(
+            "states no bound" in p for p in probe(
+                agreeing.replace("0.951 - 1.083 s", "see below")))),
+        ("the window floor fires when a row loses its window column", any(
+            "published window(s) reconciled" in p for p in probe(
+                "| Assertion | Measured | Verdict |\n"
+                "|---|---|---|\n"
+                "| t_period | 1.01191 s | PASS |\n"
+                "| duty_pct | 53.45 % | PASS |\n"))),
+        # THE LANGUAGE CARDS, both directions over a fixture. The shipped three
+        # agree today, so a wiring case over them alone cannot tell "the cards
+        # are right" from "nothing looked".
+        ("a card teaching an undeclared window is caught", any(
+            "which is not a bound" in p and "9.923" in p
+            for p in _card_probe(
+                "## Assertions\n\n"
+                "    assert f dynamic frequency(OUT) within 9.923Hz to 91.052Hz\n"
+                "    assert d dynamic duty_cycle(OUT) within 0.533 to 0.558\n"))),
+        ("a card teaching the declared windows passes", not _card_probe(
+            "## Assertions\n\n"
+            "    assert f dynamic frequency(OUT) within 0.923Hz to 1.052Hz\n"
+            "    assert d dynamic duty_cycle(OUT) within 0.533 to 0.558\n"
+            "    m.check(min=\"0.951\", max=\"1.083\")\n")),
+        ("a card whose Assertions section lost its numbers is caught", any(
+            "states no window at all" in p or "below the floor" in p
+            for p in _card_probe("## Assertions\n\nnothing numeric here\n"))),
         # THE ACTUAL DEFECT: buck's doc kept the pre-divider figures.
         ("the buck's real drift shape is caught", any(
             "disagrees with the run" in p for p in probe(
@@ -483,6 +650,97 @@ def model_problems(problems):
             f"reconciled {len(checked)} distinct model window(s), below the floor of "
             f"{MINIMUM_MODEL_WINDOWS}.")
     return len(checked)
+
+
+# THE LANGUAGE CARDS. `bakeoff card` is the A4 language card, and
+# test_bakeoff.py makes it the AC5 trial's system_context -- the teaching
+# payload a model is given before it writes a design. All three arms state the
+# blinker's frequency and duty windows as literal text in their card, and
+# nothing held them to benchmarks/blinker-555/assertions.yaml. A prior round
+# found three cards teaching superseded windows; that fix corrected the
+# literals and pinned nothing, so an auditor taught the model a 9.923-91.052 Hz
+# oscillator for a ~1 Hz blinker, ran the file's own documented `--write`
+# remedy, and every gate stayed green.
+#
+# The rule is deliberately not a per-arm parser: EVERY number in a card's
+# Assertions section must be a bound the benchmark declares. Three arms spell
+# the same window three ways (`within 0.923Hz to 1.052Hz`, `min="0.923"`), and
+# a parser per spelling is three more things to keep in step. A number that is
+# not a declared bound has no business being taught as one.
+CARD_WINDOW_SOURCE = "blinker-555"
+MINIMUM_CARD_NUMBERS = 6
+
+
+def card_problems(problems, cards=None):
+    """Hold every number in each arm's card Assertions section to the spec.
+
+    `cards` is injectable so the self-test can drive both directions over a
+    fixture rather than only over the three shipped arms, which agree today.
+    """
+    import sys as _sys
+    if str(ROOT / "lang") not in _sys.path:
+        _sys.path.insert(0, str(ROOT / "lang"))
+    try:
+        from bakeoff.arms import ARMS
+    except ImportError as exc:
+        raise GateUnavailable(f"the bake-off arms are not importable: {exc}") from exc
+    try:
+        import yaml
+    except ImportError as exc:
+        raise GateUnavailable(f"PyYAML is required: {exc}") from exc
+
+    spec_path = ROOT / "benchmarks" / CARD_WINDOW_SOURCE / "assertions.yaml"
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
+    allowed = set()
+    for assertion in spec.get("assertions") or []:
+        for bound in declared_window(assertion):
+            if bound is not None:
+                allowed.add(round(bound, 12))
+    if len(allowed) < 4:
+        problems.append(
+            f"{CARD_WINDOW_SOURCE}/assertions.yaml yielded {len(allowed)} "
+            "declared bound(s); the cards would be compared against almost "
+            "nothing.")
+        return 0
+
+    checked = 0
+    texts = (cards if cards is not None
+             else {name: arm.language_card() for name, arm in ARMS.items()})
+    for name, card in sorted(texts.items()):
+        start = card.find("## Assertions")
+        if start < 0:
+            problems.append(
+                f"the {name} language card has no `## Assertions` section, so "
+                "the windows it teaches are read by nothing.")
+            continue
+        end = card.find("\n## ", start + 1)
+        section = card[start:end if end > 0 else len(card)]
+        numbers = [float(n) for n in NUMBER.findall(section)]
+        if not numbers:
+            problems.append(
+                f"the {name} language card's Assertions section states no "
+                "window at all; a card that teaches no bound cannot be checked "
+                "against one.")
+            continue
+        for value in numbers:
+            # Percent-free: the cards state duty as a fraction, as the spec's
+            # base units do.
+            if not any(abs(value - bound) <= 1e-9 * max(1.0, abs(bound))
+                       for bound in allowed):
+                problems.append(
+                    f"the {name} language card teaches {value!r} in its "
+                    f"Assertions section, which is not a bound "
+                    f"benchmarks/{CARD_WINDOW_SOURCE}/assertions.yaml declares "
+                    f"({sorted(allowed)}). The card is the AC5 trial's system "
+                    "context: this is the window a model is taught to write.")
+                continue
+            checked += 1
+    if checked < MINIMUM_CARD_NUMBERS:
+        problems.append(
+            f"reconciled {checked} card window number(s), below the floor of "
+            f"{MINIMUM_CARD_NUMBERS}. A card whose Assertions section lost its "
+            "numbers would otherwise reconcile perfectly.")
+    return checked
 
 
 # design.md's AC1a line-count table publishes the same measurement
@@ -789,6 +1047,7 @@ def main(argv):
         windows = model_problems(problems) if not argv else 0
         modes = mode_table_problems(problems) if not argv else 0
         lines_ok = line_count_problems(problems) if not argv else 0
+        cards = card_problems(problems) if not argv else 0
     except GateUnavailable as exc:
         print(f"design-docs: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -801,8 +1060,9 @@ def main(argv):
     print(f"design-docs: PASS: {total} results row(s) agree with the "
           f"measurements their benchmarks record, {modes} mode-current "
           f"row(s) agree with the part record, and {windows} model/IR "
-          f"assertion window(s) and {lines_ok} AC1a line count(s) agree "
-          "with the artifacts that produce them.")
+          f"assertion window(s), {cards} language-card window number(s) and "
+          f"{lines_ok} AC1a line count(s) agree with the artifacts that "
+          "produce them.")
     return 0
 
 

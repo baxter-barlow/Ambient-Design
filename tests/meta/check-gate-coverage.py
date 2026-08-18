@@ -111,7 +111,7 @@ CEILINGS = {
     "parts/lint-part-data.py": (30, 5),
     "tests/benchmarks/check-assertions.py": (14, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
-    "tests/benchmarks/check-design-docs.py": (23, 17),
+    "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (15, 3),
