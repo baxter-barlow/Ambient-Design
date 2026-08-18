@@ -268,6 +268,22 @@ def self_test() -> int:
             "only this script is exempt wholesale",
             EXEMPT_FILES == {"tests/structure/check-retired-names.py"},
         ),
+        # THE PATH HIT MUST BE REPORTED, not merely matched. `path_cases`
+        # below call `scan_path` directly, so they prove the matcher works
+        # while saying nothing about whether `scan_files` passes its answer
+        # on. Round 14 measured that: `hits.append(path_hit)` could be
+        # replaced with `pass` -- a tracked file at eval/aed_eval/x.json goes
+        # unreported, the gate prints PASS, all 46 cases stay green and
+        # `make all` exits 0. This is the AMB-122 rename guard's path half.
+        (
+            "a path-only hit is reported through scan_files",
+            scan_files([("eval/aed_eval/x.json", "nothing to see\n")])
+            == ["eval/aed_eval/x.json  (path)"],
+        ),
+        (
+            "a clean path with clean text reports nothing",
+            scan_files([("eval/rhoform_eval/x.json", "nothing to see\n")]) == [],
+        ),
     ]
 
     # And the READING layer, over a real temporary tree. Everything above
@@ -292,6 +308,29 @@ def self_test() -> int:
             wiring_cases = [
                 ("scan_repository finds a planted hit", found == ["dirty.md:1"]),
             ]
+
+            # THE TWO UNREADABLE LEGS. Both were unpinned: blanking either
+            # `hits.append` left the suite green, and both exist so that a
+            # file the scanner cannot read is REPORTED rather than skipped in
+            # silence -- which is the same failure as not looking at paths.
+            (ROOT / "blob.bin").write_bytes(b"\xff\xfe ael:DIP-8 \x00")
+            globals()["tracked_files"] = lambda: ["blob.bin"]
+            binary_found = scan_repository()
+            wiring_cases.append(
+                ("an undecodable file is reported, not skipped",
+                 any("(binary, not scanned)" in h for h in binary_found)))
+
+            locked = ROOT / "locked.md"
+            locked.write_text("clean\n", encoding="utf-8")
+            locked.chmod(0o000)
+            globals()["tracked_files"] = lambda: ["locked.md"]
+            try:
+                unreadable_found = scan_repository()
+            finally:
+                locked.chmod(0o644)
+            wiring_cases.append(
+                ("an unreadable file is reported, not skipped",
+                 any("not scanned" in h for h in unreadable_found)))
     finally:
         ROOT = real_root
         globals()["tracked_files"] = real_tracked
