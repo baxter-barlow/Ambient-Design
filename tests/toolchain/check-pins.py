@@ -156,6 +156,7 @@ REQUIRED_CI_COMMANDS = (
     "tests/benchmarks/check-design-docs.py",
     "lang/tests/check_readme_numbers.py",
     "parts/lint-part-data.py",
+    "tests/meta/check-gate-coverage.py",
 )
 
 

@@ -103,6 +103,15 @@ jobs:
         # membership, sort order, licence containment. Stdlib only.
         run: python3 parts/lint-part-data.py
 
+      - name: Gates are pinned by their own self-tests
+        # Blanks each report site in each gate and re-runs that gate's
+        # --self-test. A site that survives is a check deletable with
+        # everything green -- the most common finding across twelve audit
+        # rounds. Ceilings are measured values and may only go down.
+        run: |
+          python3 tests/meta/check-gate-coverage.py --self-test
+          python3 tests/meta/check-gate-coverage.py
+
   bakeoff:
     name: Syntax bake-off
     runs-on: ubuntu-24.04

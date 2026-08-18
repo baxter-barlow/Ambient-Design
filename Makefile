@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests sim golden
+.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests gate-coverage sim golden
 
 # Everything CI runs, with ONE stated exception: checks.yml's "Resolve the
 # pinned KiCad digests" step needs network (`docker manifest inspect`) and so
@@ -19,7 +19,7 @@ all: check policy sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests
+check: structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests gate-coverage
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -131,6 +131,15 @@ sim:
 # The gates in .github/workflows/repository-policy.yml. Kept as its own target
 # rather than folded into `check` because the whitespace leg needs a commit
 # range, which only exists once something is committed.
+# How much of each gate is pinned by its own --self-test. Slow (it re-runs
+# every gate's self-test once per report site), which is why it is the last
+# thing `check` does. Across twelve audit rounds "a check with no case" was the
+# most common finding; this makes the number visible and refuses to let it
+# grow.
+gate-coverage:
+	python3 tests/meta/check-gate-coverage.py --self-test
+	python3 tests/meta/check-gate-coverage.py
+
 policy:
 	sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
 	# The COMMIT, not the working tree. `git diff --check HEAD` compares the
