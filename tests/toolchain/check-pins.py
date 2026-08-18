@@ -33,6 +33,7 @@ Exit codes: 0 pass, 1 a pin and its consumer disagree, 2 environment failure.
     python3 tests/toolchain/check-pins.py
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -217,6 +218,82 @@ def ci_command_problems(required, workflow_text) -> list[str]:
 
 class _SkipFingerprint(Exception):
     """Internal: the behavioural fingerprint cannot be checked offline."""
+
+
+# Loaded in a CHILD process under an audit hook that refuses every socket call.
+# The question this leg has to answer is "can the pinned encoding be resolved
+# from this machine's disk", and the way to answer it is to try with the
+# network hard-disabled -- not to guess at a cache directory.
+#
+# PRECISELY WHAT "hard-disabled" MEANS. `sys.audit` fires at the START of
+# socket.getaddrinfo and socket.connect, before either does any work, so a hook
+# that raises aborts the call there: no name is resolved, no connection is
+# opened, no byte is transferred. An observer auditing the same events sees the
+# ATTEMPT -- one getaddrinfo for openaipublic.blob.core.windows.net -- and
+# that is the whole of it. Verified against the auditor's own reproduction: a
+# cache directory warmed for a different encoding, which used to pull 3.6 MB,
+# now ends the run with only the file that was `touch`ed into it.
+#
+# The guess it replaces was `TIKTOKEN_CACHE_DIR is set, is a directory, and is
+# non-empty`, which is wrong in both directions. Too permissive: a cache warmed
+# for a DIFFERENT encoding, or holding any unrelated file, satisfied it, and
+# `make pins` then fetched 3.6 MB from openaipublic.blob.core.windows.net --
+# an outbound request from a gate whose contract is that it is offline, in the
+# leg whose own comment says so, found by an auditor with a `touch`ed file.
+# Too strict: when the vocabulary genuinely IS in tiktoken's default cache,
+# TIKTOKEN_CACHE_DIR is unset, so the guard declared it uncached and the pin
+# went unverified in exactly the case where it could have been checked for
+# free. It is verified here now, and counts toward the agreement total.
+_FINGERPRINT_CHILD = r'''
+import sys
+def _no_network(event, args):
+    if event in ("socket.connect", "socket.getaddrinfo", "socket.gethostbyname",
+                 "http.client.connect", "urllib.Request"):
+        raise RuntimeError("network use is blocked in this gate")
+sys.addaudithook(_no_network)
+sys.path.insert(0, sys.argv[1])
+try:
+    from rhoform_eval.tokenizer import PinnedTokenizerError, TiktokenTokenizer
+except Exception as exc:
+    print("unverifiable\tthe harness is not importable: %s" % exc)
+    raise SystemExit(0)
+try:
+    TiktokenTokenizer(sys.argv[2], sys.argv[3])
+except PinnedTokenizerError as exc:
+    kind = "mismatch" if "does not match its pin" in str(exc) else "unverifiable"
+    print("%s\t%s" % (kind, exc))
+except Exception as exc:
+    print("unverifiable\t%s" % exc)
+else:
+    print("match\tloaded offline and reproduced the pinned fingerprint")
+'''
+
+
+def tokenizer_fingerprint_outcome(encoding: str, pinned: str, run=None):
+    """('match'|'mismatch'|'unverifiable', detail), with no network use.
+
+    `run` is injectable so the self-test can drive all three outcomes without
+    depending on which encodings happen to be cached on this machine.
+    """
+    runner = run or (lambda argv: subprocess.run(
+        argv, capture_output=True, text=True, timeout=300))
+    result = runner([sys.executable, "-c", _FINGERPRINT_CHILD,
+                     str(ROOT / "eval"), encoding, pinned])
+    line = (result.stdout or "").strip().splitlines()
+    if result.returncode != 0 or not line:
+        detail = (result.stderr or "").strip().splitlines()
+        return ("unverifiable",
+                f"the offline probe exited {result.returncode}: "
+                f"{detail[-1][:160] if detail else 'no output'}")
+    kind, _, detail = line[-1].partition("\t")
+    if kind not in ("match", "mismatch", "unverifiable"):
+        return ("unverifiable", f"the offline probe printed {line[-1][:160]!r}")
+    if kind == "unverifiable" and "network use is blocked" in detail:
+        detail = ("tiktoken's vocabulary for this encoding is not on this "
+                  "machine; loading it would fetch over the network, which a "
+                  "gate that must run offline cannot do. Warm the cache and "
+                  "re-run to verify this pin behaviourally.")
+    return (kind, detail)
 
 
 class GateUnavailable(Exception):
@@ -498,49 +575,27 @@ def check(manifest, read=None):
                     f"evaluation.tokenizer.fingerprint (harness not importable: {exc})"
                 )
             else:
-                # ONLY IF THE VOCABULARY IS ALREADY LOCAL. tiktoken fetches it
-                # on first use, so this leg was initiating an outbound request
-                # from a gate whose contract is that it is offline -- the
-                # previous fix made that failure non-fatal without making the
-                # fetch conditional. Nothing downloaded in testing only because
-                # the network happened to be blocked.
-                import os as _os
-                cache_dir = _os.environ.get("TIKTOKEN_CACHE_DIR") or ""
-                cached = bool(cache_dir) and _os.path.isdir(cache_dir) and any(
-                    _os.scandir(cache_dir))
-                if not cached:
-                    READ_BY_KEY.append(
-                        "evaluation.tokenizer.fingerprint (tiktoken's encoding "
-                        "vocabulary is not in a local cache; loading it would "
-                        "fetch over the network, which a gate that must run "
-                        "offline cannot do. Set TIKTOKEN_CACHE_DIR to a warmed "
-                        "cache to verify this pin behaviourally.)")
-                    raise _SkipFingerprint
-                try:
-                    TiktokenTokenizer(str(encoding), str(pinned))
-                except PinnedTokenizerError as exc:
-                    # A MISMATCH is a real finding; anything else about LOADING
-                    # is not. My previous fix special-cased only "not
-                    # installed", so tiktoken present with a cold cache and no
-                    # network still turned `make all` red — and with network it
-                    # silently fetched 3.6 MB inside a gate that must run
-                    # offline. Only the mismatch text is a finding now.
-                    if "does not match its pin" in str(exc):
-                        problems.append(
-                            "evaluation.tokenizer.fingerprint: the pinned "
-                            f"encoding {encoding!r} does not reproduce the "
-                            f"pinned fingerprint: {exc}"
-                        )
-                    else:
-                        READ_BY_KEY.append(
-                            f"evaluation.tokenizer.fingerprint (not verifiable "
-                            f"here: {exc})"
-                        )
-                except Exception as exc:
-                    READ_BY_KEY.append(
-                        "evaluation.tokenizer.fingerprint (could not be "
-                        f"verified here: {exc})"
+                del PinnedTokenizerError, TiktokenTokenizer  # loaded in a child
+                outcome, detail = tokenizer_fingerprint_outcome(
+                    str(encoding), str(pinned))
+                if outcome == "mismatch":
+                    problems.append(
+                        "evaluation.tokenizer.fingerprint: the pinned "
+                        f"encoding {encoding!r} does not reproduce the "
+                        f"pinned fingerprint: {detail}"
                     )
+                elif outcome == "match":
+                    # Reported, deliberately NOT counted toward `checked`.
+                    # tiktoken is an optional pin, so counting it would make
+                    # this gate's own summary line depend on whether the
+                    # machine happens to carry it -- and MINIMUM_AGREEMENTS
+                    # already carries a comment about exactly that mistake.
+                    print("toolchain-pins: verified offline: "
+                          "evaluation.tokenizer.fingerprint reproduces its pin "
+                          "from a local vocabulary, with no network use.")
+                else:
+                    READ_BY_KEY.append(
+                        f"evaluation.tokenizer.fingerprint ({detail})")
         except _SkipFingerprint:
             pass
         finally:
@@ -802,6 +857,37 @@ def self_test():
     cases.append(("an empty comparison is caught rather than passing", any(
         "passes by finding nothing" in p
         for p in ci_command_problems([], "anything at all"))))
+
+    # THE TOKENIZER LEG, all three outcomes. The guard this replaced tested
+    # "TIKTOKEN_CACHE_DIR is a non-empty directory", which is not the property
+    # -- an auditor `touch`ed one unrelated file in it and `make pins` fetched
+    # 3.6 MB from openaipublic.blob.core.windows.net. No case existed for this
+    # leg at all, in either direction.
+    class _Fake:
+        def __init__(self, out="", err="", code=0):
+            self.stdout, self.stderr, self.returncode = out, err, code
+
+    cases.append(("a reproduced fingerprint reports match",
+                  tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
+                      "match\tloaded offline"))[0] == "match"))
+    cases.append(("a fingerprint mismatch reports mismatch",
+                  tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
+                      "mismatch\tdoes not match its pin"))[0] == "mismatch"))
+    blocked = tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
+        "unverifiable\tRuntimeError: network use is blocked in this gate"))
+    cases.append(("a blocked network read is unverifiable, not a failure",
+                  blocked[0] == "unverifiable" and "not on this machine" in blocked[1]))
+    cases.append(("a crashed probe is unverifiable rather than a silent pass",
+                  tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
+                      "", "Traceback", 1))[0] == "unverifiable"))
+    cases.append(("an unrecognised probe answer is not trusted",
+                  tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
+                      "everything is fine"))[0] == "unverifiable"))
+    # And the child really does refuse the network: run it against an encoding
+    # whose vocabulary cannot be local under any circumstances.
+    unknown = tokenizer_fingerprint_outcome("no_such_encoding_ever", "sha256:0")
+    cases.append(("an unknown encoding does not reach the network",
+                  unknown[0] == "unverifiable"))
 
     failures = 0
     for name, ok in cases:
