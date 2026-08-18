@@ -316,12 +316,17 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
                                    declaration.get("byte_end", 0), name))
         seen_spans.sort()
         for left, right in zip(seen_spans, seen_spans[1:]):
-            if left[0] == right[0] and left[2] >= right[1]:
+            # `>` not `>=`: byte_end is END-EXCLUSIVE per the Span schema, so
+            # [496,519) and [519,543) are adjacent, not overlapping. The first
+            # version reported that pair as an overlap, with a message about
+            # two statements beginning at the same position -- which is not
+            # what the predicate tested.
+            if left[0] == right[0] and left[2] > right[1]:
                 problems.append(
                     f"{source_map_path.name}: the declarations of {left[3]} and "
                     f"{right[3]} overlap in file {left[0]} "
-                    f"({left[1]}-{left[2]} against {right[1]}-{right[2]}). Two "
-                    "statements cannot begin at the same source position.")
+                    f"([{left[1]}, {left[2]}) against [{right[1]}, "
+                    f"{right[2]})). Two declarations cannot share source bytes.")
         uncovered = sorted(identities - set(nodes))
         if uncovered:
             problems.append(
@@ -620,6 +625,21 @@ def self_test() -> int:
                            for p in _map_probe(_add_stray))))
         checks.append(("two declarations at the same source position are caught",
                        any("overlap in file" in p for p in _map_probe(_overlap))))
+        def _bad_order(side):
+            side["nodes"]["/c_byp"]["declaration"]["byte_end"] = 1
+
+        def _bad_file(side):
+            side["nodes"]["/c_byp"]["declaration"]["file"] = 7
+
+        checks.append(("a span ending before it starts is caught",
+                       any("ending before it starts" in p
+                           for p in _map_probe(_bad_order))))
+        checks.append(("a span naming a file index the table lacks is caught",
+                       any("which the `files` table does not have" in p
+                           for p in _map_probe(_bad_file))))
+        checks.append(("adjacent spans are NOT reported as overlapping",
+                       not any("share source bytes" in p
+                               for p in _map_probe(lambda side: None))))
         checks.append(("a source map with no nodes object is caught",
                        any("has no `nodes` object" in p for p in _map_probe(_no_nodes))))
 
