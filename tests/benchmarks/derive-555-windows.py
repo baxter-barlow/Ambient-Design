@@ -171,21 +171,40 @@ def main(argv):
     if "--check" not in argv:
         return 0
 
-    # THE GATED WINDOWS, checked in BOTH directions. Previously this read the
-    # file with re.search over raw text: it matched YAML comments, took only the
-    # first match per unit, and so a decoy comment above the real window let
-    # `[10.0 %, 11.0 %]` pass. It also implemented only half of what this
-    # comment claimed -- the "must not claim to contain the guaranteed band"
-    # half did not exist, so `[0.0 %, 160.0 %]`, a range a duty cycle cannot
-    # leave, passed. Both halves are here now, over parsed YAML keyed by
-    # assertion name.
-    problems = []
     try:
         import yaml
     except ImportError as exc:
         print(f"derive-555: UNAVAILABLE: PyYAML is required: {exc}", file=sys.stderr)
         return 2
     spec = yaml.safe_load(ASSERTIONS.read_text(encoding="utf-8"))
+    problems = window_problems(spec, m)
+    if problems:
+        for problem in problems:
+            print(f"derive-555: FAIL: {problem}", file=sys.stderr)
+        return 1
+    print("\nderive-555: PASS: 3 window(s) contain the typical model and\n            are narrower than the guaranteed band.")
+    return 0
+
+
+def window_problems(spec, m):
+    """THE GATED WINDOWS, checked in BOTH directions.
+
+    Previously this read the file with re.search over raw text: it matched YAML
+    comments, took only the first match per unit, and so a decoy comment above
+    the real window let `[10.0 %, 11.0 %]` pass. It also implemented only half
+    of what its comment claimed -- the "must not claim to contain the
+    guaranteed band" half did not exist, so `[0.0 %, 160.0 %]`, a range a duty
+    cycle cannot leave, passed. Both halves are here now, over parsed YAML
+    keyed by assertion name.
+
+    SPLIT OUT OF main() so a self-test can drive it. Every other gate the
+    Makefile runs is invoked with `--self-test` first; this one never had one,
+    so all five of its report sites were unpinned and an auditor turned both
+    substantive comparisons into `if False:` with `make all` green. It was also
+    invisible to tests/meta/check-gate-coverage.py, whose population was
+    "files that already have a self-test".
+    """
+    problems = []
     by_name = {a.get("name"): a for a in (spec.get("assertions") or [])}
     typ, gtd = _fmt(m["typical"]), _fmt(m["guaranteed"])
     for key, name, unit in (
@@ -230,13 +249,76 @@ def main(argv):
                     "can fail on that side and the bound gates nothing. The "
                     "window is a regression check on the deck, not a restatement "
                     "of the datasheet.")
-    if problems:
-        for problem in problems:
-            print(f"derive-555: FAIL: {problem}", file=sys.stderr)
+    return problems
+
+
+def self_test() -> int:
+    """One case per report site, and both directions on each comparison."""
+    m = models()
+    typ, gtd = _fmt(m["typical"]), _fmt(m["guaranteed"])
+
+    def spec_with(**windows):
+        """A spec whose three windows are the shipped ones unless overridden."""
+        shipped = {
+            "duty_cycle_high": [f"{typ['duty'][0] - 0.05} %",
+                                f"{typ['duty'][1] + 0.05} %"],
+            "osc_period": [f"{typ['period'][0] - 0.001} s",
+                           f"{typ['period'][1] + 0.001} s"],
+            "osc_frequency": [f"{typ['frequency'][0] - 0.001} Hz",
+                              f"{typ['frequency'][1] + 0.001} Hz"],
+        }
+        shipped.update(windows)
+        return {"assertions": [{"name": name, "window": window}
+                               for name, window in shipped.items()
+                               if window is not None]}
+
+    cases = [
+        ("windows containing the typical model and inside the guaranteed band pass",
+         not window_problems(spec_with(), m)),
+        ("a window that excludes the typical model is caught", any(
+            "does not contain the typical model" in p for p in window_problems(
+                spec_with(duty_cycle_high=["10.0 %", "11.0 %"]), m))),
+        # PER SIDE. The conjunction only fired when BOTH bounds escaped, so a
+        # one-sided vacuous window passed and returned 0.
+        ("a lower bound outside the guaranteed band is caught", any(
+            "lower bound" in p and "gates nothing" in p for p in window_problems(
+                spec_with(duty_cycle_high=[f"{gtd['duty'][0] - 1} %",
+                                           f"{typ['duty'][1] + 0.05} %"]), m))),
+        ("an upper bound outside the guaranteed band is caught", any(
+            "upper bound" in p and "gates nothing" in p for p in window_problems(
+                spec_with(duty_cycle_high=[f"{typ['duty'][0] - 0.05} %",
+                                           f"{gtd['duty'][1] + 1} %"]), m))),
+        ("a missing assertion is caught", any(
+            "declares no assertion named" in p for p in window_problems(
+                spec_with(osc_period=None), m))),
+        ("a window that is not a two-element list is caught", any(
+            "no two-element" in p for p in window_problems(
+                spec_with(osc_period="0.9 s"), m))),
+        ("a window whose entries are not numbers is caught", any(
+            "is not two numbers" in p for p in window_problems(
+                spec_with(osc_period=["about a second", "a bit more"]), m))),
+        # And the shipped spec itself, so the wiring is not only fixtures.
+        ("the committed assertions.yaml passes", not _shipped_problems(m)),
+    ]
+
+    failures = 0
+    for name, ok in cases:
+        failures += 0 if ok else 1
+        print(f"{'ok  ' if ok else 'FAIL'} {name}")
+    if failures:
+        print(f"derive-555: SELF-TEST FAILED: {failures} case(s)", file=sys.stderr)
         return 1
-    print("\nderive-555: PASS: 3 window(s) contain the typical model and\n            are narrower than the guaranteed band.")
+    print(f"derive-555: self-test PASS: {len(cases)} cases.")
     return 0
 
 
+def _shipped_problems(m):
+    import yaml
+    return window_problems(
+        yaml.safe_load(ASSERTIONS.read_text(encoding="utf-8")), m)
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv[1:]:
+        raise SystemExit(self_test())
     raise SystemExit(main(sys.argv[1:]))
