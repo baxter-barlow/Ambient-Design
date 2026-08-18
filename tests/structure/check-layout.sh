@@ -171,42 +171,69 @@ fi
 # written, in a commit titled "loudly", and nothing read the file, so it
 # outlived the fix. Each pair is (evidence file, command whose summary it quotes).
 transcripts_checked=0
+# Every evidence file that transcribes a gate summary. The list used to hold
+# two of the four, and the floor was the size of the LIST rather than of the
+# population -- so the two benchmark transcripts quoted a sim-assert line the
+# gate had stopped printing, and nothing could notice.
 for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
-            "ir/validation.log:tests/ir/check-hashes.py"; do
+            "ir/validation.log:tests/ir/check-hashes.py" \
+            "benchmarks/blinker-555/validation.log:tests/benchmarks/run-sim.sh:sim-assert: PASS: blinker-555:" \
+            "benchmarks/buck-3v3/validation.log:tests/benchmarks/run-sim.sh:sim-assert: PASS: buck-3v3:"; do
   evidence="$ROOT/${pair%%:*}"
-  command="$ROOT/${pair##*:}"
+  rest="${pair#*:}"
+  # An optional third field pins WHICH summary line to compare, for a command
+  # that prints one per benchmark.
+  case "$rest" in
+    */*.sh:*|*/*.py:*) command="$ROOT/${rest%%:*}"; pattern="${rest#*:}" ;;
+    *) command="$ROOT/$rest"; pattern="" ;;
+  esac
   [ -f "$evidence" ] && [ -f "$command" ] || continue
   # BOTH summary lines. The first version grepped for "$prefix: PASS", which
   # does not match "$prefix: self-test PASS", so the self-test line above it
   # was free -- and both files were stale on exactly that line, by 4 and 27
   # checks. The round-9 fix reconciled the line the round-9 defect was on.
-  fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
+  if [ -n "$pattern" ]; then
+    case "$command" in
+      *.sh) fresh=$(bash "$command" 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
+      *)    fresh=$(python3 "$command" 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
+    esac
+  else
+    fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
+  fi
   fresh_self=$(python3 "$command" --self-test 2>/dev/null | grep -m1 ": self-test PASS" || true)
   if [ -z "$fresh" ]; then
     printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' \
       "${pair##*:}" "${pair%%:*}" >&2
     exit 1
   fi
-  prefix=${fresh%%:*}
+  if [ -n "$pattern" ]; then prefix="$pattern"; else prefix="${fresh%%:*}"; fi
   # Anchor-free and whitespace-tolerant. `^prefix: PASS` let a transcript
   # escape by indenting the line by one space or deleting it outright, and the
   # `[ -n "$quoted" ]` guard then failed OPEN -- in a script whose own comment
   # says a self-reported statistic is not an assertion.
-  matches=$(grep -c "$prefix: PASS" "$evidence" || true)
+  if [ -n "$pattern" ]; then
+    matches=$(grep -c -- "$prefix" "$evidence" || true)
+  else
+    matches=$(grep -c "$prefix: PASS" "$evidence" || true)
+  fi
   if [ "$matches" -gt 1 ]; then
     printf 'FAIL: %s carries %s "%s: PASS" lines. Only the first is read, so a\n' \
       "${pair%%:*}" "$matches" "$prefix" >&2
     printf 'stale copy appended below a fresh one would be unread.\n' >&2
     exit 1
   fi
-  quoted=$(grep -m1 "$prefix: PASS" "$evidence" | sed 's/^[[:space:]]*//' || true)
+  if [ -n "$pattern" ]; then
+    quoted=$(grep -m1 -- "$prefix" "$evidence" | sed 's/^[[:space:]]*//' || true)
+  else
+    quoted=$(grep -m1 "$prefix: PASS" "$evidence" | sed 's/^[[:space:]]*//' || true)
+  fi
   if [ -z "$quoted" ]; then
     printf 'FAIL: %s carries no "%s: PASS" line to compare.\n' "${pair%%:*}" "$prefix" >&2
     printf 'Deleting the quoted summary is not a way to stop disagreeing with the gate.\n' >&2
     exit 1
   fi
   transcripts_checked=$((transcripts_checked + 1))
-  if [ -n "$fresh_self" ]; then
+  if [ -z "$pattern" ] && [ -n "$fresh_self" ]; then
     self_matches=$(grep -c "$prefix: self-test PASS" "$evidence" || true)
     if [ "$self_matches" -gt 1 ]; then
       printf 'FAIL: %s carries %s "%s: self-test PASS" lines; only the first is read.\n' \
@@ -235,8 +262,8 @@ for pair in "corpus/validation.log:tests/corpus/check-classification.py" \
     exit 1
   fi
 done
-if [ "$transcripts_checked" -lt 4 ]; then
-  printf 'FAIL: reconciled %s evidence summary line(s), expected 4. A leg that\n' \
+if [ "$transcripts_checked" -lt 6 ]; then
+  printf 'FAIL: reconciled %s evidence summary line(s), expected 6. A leg that\n' \
     "$transcripts_checked" >&2
   printf 'quietly checks nothing is indistinguishable from one that passes.\n' >&2
   exit 1

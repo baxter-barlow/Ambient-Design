@@ -90,12 +90,6 @@ CELL_NUMBER = re.compile(r"-?\d+")
 # stops being checked, so the count is pinned rather than counted.
 # DISTINCT (design, arm) rows, not cells: the floor counted cells, so
 # duplicating a correct row paid for one that had stopped parsing.
-# Distinct (table, row) identities that must reconcile: 5 token rows + 3
-# decision rows + 3 card entries. The token table has SIX rows, not five, so
-# 11 left one row's worth of slack -- and it was only caught by an unrelated
-# cell count, which is a floor tripping in place of the check it backstops. The self-test's floor was `reconciled >= 20`
-# against a population of 30 -- ten cells of slack -- and MINIMUM_DISTINCT_ROWS
-# was dead because that slack always fired first.
 # PER CATEGORY. One total let the token table detach from its locator on a
 # blank line -- taking six rows with it -- and be paid for by the T9 rows the
 # comment never counted. Every locator stops at the first non-table line, so
@@ -109,11 +103,15 @@ MINIMUM_ROWS_BY_KIND = {
     "t9": 6,
     "lines": 3,
 }
-MINIMUM_DISTINCT_ROWS = sum(MINIMUM_ROWS_BY_KIND.values())
+
 # 6 rows x 3 rules, counted as DISTINCT (design, arm, rule) identities: six
 # copies of one correct row met a cell count of 18 while five real rows left
 # the document, which is the third recurrence of this exact defect here.
-MINIMUM_T9_CELLS = 24  # 6 rows x (3 rules + the `all` column)
+MINIMUM_T9_CELLS = 24
+# The exact population the shipped README publishes: 16 token + 11 decision
+# + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts. A total, not a floor:
+# any leg detaching drops it.
+MINIMUM_TOTAL_COUNTS = 77  # 6 rows x (3 rules + the `all` column)
 # 4 rows x 5 thresholds.
 MINIMUM_SWEEP_CELLS = 20
 
@@ -608,6 +606,12 @@ def verify_artifact():
     return 0
 
 
+def _full_run():
+    """(problems, reconciled) over the real README and artifact."""
+    problems = []
+    return problems, check(problems)
+
+
 def self_test():
     HEADER = ("| Design | Arm | explicit | inferred | +columnar |\n"
               "|---|---|---:|---:|---:|\n")
@@ -681,6 +685,14 @@ def self_test():
         ("a missing language-card line is caught", any(
             "checked by nothing" in p for p in probe(
                 TABLE[:TABLE.index("\nLanguage cards:")]))),
+        # THREE LEGS THAT DELETED CLEANLY. The only wiring assertion was
+        # `reconciled >= 30` against a real population of 77, so 47 cells of
+        # slack absorbed the removal of the L6 sweep, the AC1a prose line
+        # counts, or the T9 `all` column -- each of which the docstring names
+        # as something this file exists to hold.
+        ("main() reconciles every published count", (lambda: (
+            lambda ps, n: not ps and n == MINIMUM_TOTAL_COUNTS)(
+                *_full_run()))()),
         ("a stale T9 cell is caught", any(
             "the T9 table publishes" in p for p in probe(
                 TABLE.replace("| 1.5% | 2.5%", "| 9.9% | 2.5%")))),

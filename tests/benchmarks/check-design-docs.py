@@ -235,6 +235,18 @@ def check_case(case_dir, problems, minimum=None):
             continue
         reconciled += 1
 
+    # DISTINCT LABELS, not row count. Deleting the buck's efficiency row and
+    # duplicating its ripple row left "10 results row(s) agree" -- the sibling
+    # gate has a case named "a duplicated row cannot pay for a missing one" and
+    # MINIMUM_MODEL_WINDOWS in this same file counts distinct identities for
+    # exactly this reason; check_case was left counting rows.
+    labels = [r[0] for r in rows]
+    duplicates = sorted({l for l in labels if labels.count(l) > 1})
+    if duplicates:
+        problems.append(
+            f"{case_dir.name}/design.md: the results table publishes "
+            f"{duplicates} more than once. A duplicate row can pay for a "
+            "deleted one while the reported count stays honest-looking.")
     expected = REQUIRED.get(case_dir.name) if minimum is None else minimum
     if expected is not None and len(rows) < expected:
         problems.append(
@@ -326,6 +338,15 @@ def self_test():
     default_text = _out.getvalue()
     cases.append(("main() with no arguments checks the real benchmarks",
                   default_code == 0 and "PASS: 10 results row(s)" in default_text))
+    # EVERY COUNT IN THE SUMMARY, not just the first. Each of the other three
+    # legs could be unwired -- `x = leg(problems) if not argv else 0` rewritten
+    # to `x = 0` -- with all 18 cases green, because the case above reads one
+    # clause of a sentence that reports four numbers.
+    for _count, _noun in ((MINIMUM_MODE_ROWS, "mode-current row(s)"),
+                          (MINIMUM_MODEL_WINDOWS, "model/IR assertion window(s)"),
+                          (3, "AC1a line count(s)")):
+        cases.append((f"main() reports {_count} {_noun}",
+                      f"{_count} {_noun}" in default_text))
     # Narrowing VERDICT back to ^(pass|PASS)$ breaks no real row, because no
     # real row uses `Pass` -- which is exactly why a row could escape by
     # adopting one. Pinned directly.
@@ -568,7 +589,18 @@ def mode_table_problems(problems):
         # part record holds the 280 uA total, and both are correct. Reading
         # only the first number made the gate report a disagreement that was
         # its own.
+        # THE HEADLINE TERM MUST STAND ALONE. Summing every current in the
+        # cell let a wrong number be "decomposed" into terms adding to the
+        # right total: `**35 mA** (320 mA is transient)` reconciled against the
+        # recorded 355 mA while the number a reader takes away is 10x low, and
+        # `0.5 uA (plus 7.5 uA of leakage we do not count)` did the same at
+        # 16x. Only an explicit `+` continuation is a decomposition -- which is
+        # what the light-sleep row actually writes.
         terms = re.findall(r"([\d.]+)\s*(uA|mA|A)\b", cells[1])
+        additive = re.findall(r"([\d.]+)\s*(uA|mA|A)\b",
+                              re.sub(r"\((?!\s*\+)[^)]*\)", "", cells[1]))
+        if len(additive) < len(terms):
+            terms = additive
         if not terms:
             problems.append(
                 f"{doc.parent.name}/design.md: the {fragment!r} row publishes no "
