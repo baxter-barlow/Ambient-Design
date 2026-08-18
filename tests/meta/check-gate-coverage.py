@@ -24,10 +24,22 @@ regresses fails. Lowering one is a deliberate commit; drifting up is not
 possible without this gate going red. Ceilings above zero are honest: they
 record uncovered legs rather than pretending they do not exist.
 
-WHAT THIS DOES NOT MEASURE. A site can be "covered" by a case that reaches it
-for the wrong reason, and a case can assert something weaker than the check
-does. Surviving-site count is a floor on what is unpinned, not a proof that the
-rest is well pinned.
+WHAT THIS DOES NOT MEASURE, demonstrated rather than supposed:
+
+  1. PER SITE, NOT PER BRANCH. A new condition added inside an
+     already-covered report site is invisible here. Round 13 found the
+     mode-table decomposition rule -- five lines, three escape routes, no case
+     -- and this gate scored the file unchanged before and after those cases
+     were added. If a fix adds a branch rather than a site, expect no movement
+     and do not read that as coverage.
+  2. A site can be reached by a case for the wrong reason, and a case can
+     assert something weaker than the check does.
+  3. Report paths that are not `problems.append`/`bad`/`out.append` -- a helper
+     that appends, a returned value, a raised exception -- are not counted at
+     all, so a gate could score well while most of its reporting is unseen.
+
+Surviving-site count is a floor on what is unpinned. It is not a coverage
+percentage and must not be quoted as one.
 
 Exit codes: 0 every gate at or under its ceiling, 1 a regression, 2 environment.
 

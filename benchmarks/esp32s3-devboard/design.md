@@ -38,12 +38,12 @@ All current numbers below are from the **ESP32-S3-WROOM-1 & ESP32-S3-WROOM-1U
 Datasheet v1.8 (Espressif)**, Section 6, measured at 3.3 V supply, 25 C
 ambient; TX rated at 100% duty cycle:
 
-| Mode | Value (typ) | Source table |
+| Mode | Value (Table 6-4 rows are peak; Table 6-6/6-7 rows are typ) | Source table |
 |---|---|---|
 | Wi-Fi TX 802.11b 1 Mbps @20.5 dBm (peak) | **355 mA** | Table 6-4 "Current Consumption for Wi-Fi (2.4 GHz) in Active Mode" |
-| Wi-Fi TX 802.11g 54 Mbps @18 dBm | 297 mA | Table 6-4 |
-| Wi-Fi TX 802.11n HT20 MCS7 @17.5 dBm | 286 mA | Table 6-4 |
-| Wi-Fi RX 802.11b/g/n HT20 | 95 mA | Table 6-4 |
+| Wi-Fi TX 802.11g 54 Mbps @18 dBm (peak) | 297 mA | Table 6-4 |
+| Wi-Fi TX 802.11n HT20 MCS7 @17.5 dBm (peak) | 286 mA | Table 6-4 |
+| Wi-Fi RX 802.11b/g/n HT20 (peak) | 95 mA | Table 6-4 |
 | Modem-sleep, 240 MHz, WAITI, peripheral clocks enabled | 47.6 mA | Table 6-6 "Current Consumption in Modem-sleep Mode" |
 | Modem-sleep worst row (240 MHz dual-core 128-bit, clocks enabled) | 107.9 mA | Table 6-6 |
 | Light-sleep | 240 uA (+40 uA for 2 MB quad PSRAM, footnote 1) | Table 6-7 "Current Consumption in Low-Power Modes" |

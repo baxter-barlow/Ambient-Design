@@ -58,7 +58,7 @@ parts/examples/*.part.json
     block, and a table or section for nearly all of them. Provenance is keyed
     by JSON-pointer prefix with a record-level default that names no table, so
     a field covered only by that default has a document and revision and no
-    table: 5 of the 118 measured values across the five records, of which 4 are
+    table: 5 of the 130 measured values across the five records, of which 4 are
     ratings.
 
     Those three numbers are COMPUTED AND GATED by parts/lint-part-data.py, not

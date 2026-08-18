@@ -111,7 +111,7 @@ MINIMUM_T9_CELLS = 24
 # The exact population the shipped README publishes: 16 token + 11 decision
 # + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts. A total, not a floor:
 # any leg detaching drops it.
-MINIMUM_TOTAL_COUNTS = 77  # 6 rows x (3 rules + the `all` column)
+MINIMUM_TOTAL_COUNTS = 77  # 16 token + 11 decision + 3 card + 24 T9 + 20 L6 + 3 AC1a
 # 4 rows x 5 thresholds.
 MINIMUM_SWEEP_CELLS = 20
 

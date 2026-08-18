@@ -951,7 +951,7 @@
       "locator": "Table 6-7 \"Current Consumption in Low-Power Modes\", power-off (EN low) row.",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "note": "Table 6-7's column is headed 'Typ (uA)', so this is recorded as typ. An earlier revision carried the RF-mode note here by copy, which cited Table 6-4 and called the value a peak; power-off is neither.",
       "target": "power_off_en_low"
     },
     "/modes/6": {
