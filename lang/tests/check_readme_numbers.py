@@ -104,9 +104,16 @@ MINIMUM_ROWS_BY_KIND = {
     "lines": 3,
 }
 
-# 6 rows x 3 rules, counted as DISTINCT (design, arm, rule) identities: six
-# copies of one correct row met a cell count of 18 while five real rows left
-# the document, which is the third recurrence of this exact defect here.
+# 6 rows x (3 rules + the `all` column), counted as DISTINCT (design, arm,
+# rule) identities: six copies of one correct row met a cell count of 18 while
+# five real rows left the document, which is the third recurrence of this exact
+# defect here.
+#
+# The comment used to derive it as "6 rows x 3 rules", which is 18 against a
+# constant of 24 -- the `all` column was added and the arithmetic behind the
+# number was not. A maintainer trusting the comment and "correcting" 24 to 18
+# would have un-pinned six cells, including the whole `all` column the README
+# quotes its headline range from, with make all green.
 MINIMUM_T9_CELLS = 24
 # The exact population the shipped README publishes: 16 token + 11 decision
 # + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts. A total, not a floor:
@@ -229,6 +236,24 @@ def inputs_fingerprint():
     for path in sources:
         digest.update(path.relative_to(ROOT).as_posix().encode("utf-8"))
         digest.update(path.read_bytes())
+    # AND THE DEFINITION OF THE MEASUREMENT ITSELF. `measure_now()` decides
+    # what each key MEANS: the line-count rule behind the sixteen `lines|`
+    # keys, the `round(value * 1000)` T9 scaling, the `t9all` tax formula, the
+    # L6 sweep keys. The arms and the manifest were hashed and this was not, so
+    # redefining a measured quantity -- counting non-blank lines instead of all
+    # lines, which shifts every `lines|` key by one or two -- left the
+    # fingerprint byte-identical, the artifact and the README agreeing with
+    # each other and both stale, every gate green. That is the same "measured
+    # once, published forever" failure the docstring above says this ends, one
+    # function up from where it was last chased, and `--verify` runs in no
+    # target and no CI job so nothing else could notice.
+    #
+    # The FUNCTION's source, not the whole file: editing a comment down here
+    # would otherwise invalidate a measurement it cannot affect, and a gate
+    # that cries wolf on every edit is a gate someone eventually widens.
+    import inspect
+    digest.update(inspect.getsource(measure_now).encode("utf-8"))
+    digest.update(repr((DESIGNS, VARIANTS)).encode("utf-8"))
     return "sha256:" + digest.hexdigest()
 
 
