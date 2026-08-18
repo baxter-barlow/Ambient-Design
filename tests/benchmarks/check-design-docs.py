@@ -348,7 +348,7 @@ def self_test():
                   any("records" in p and "for mode" in p
                       for p in _planted_mode_problems())))
     cases.append(("MODE_TABLE names every mode row the document publishes",
-                  len(MODE_TABLE["rows"]) == MINIMUM_MODE_ROWS))
+                  not _unmapped_mode_rows()))
 
     # A PLANTED WRONG WINDOW. The leg was pinned only by a count, and the count
     # survives the reporting branch being deleted -- so both directions of the
@@ -526,9 +526,12 @@ MODE_TABLE = {
         ("dual-core 128-bit", "modem_sleep_240mhz_dualcore_128bit"),
         ("Light-sleep", "light_sleep"),
         ("Deep-sleep", "deep_sleep_rtc_mem_and_periph"),
+        ("802.11g 54 Mbps", "wifi_tx_802_11g_54mbps"),
+        ("802.11n HT20 MCS7", "wifi_tx_802_11n_ht20_mcs7"),
+        ("Power off (EN low)", "power_off_en_low"),
     ),
 }
-MINIMUM_MODE_ROWS = 6
+MINIMUM_MODE_ROWS = 9
 
 
 def mode_table_problems(problems):
@@ -586,6 +589,11 @@ def mode_table_problems(problems):
                 f"{want:.6g} A for mode {mode_id!r}.")
             continue
         checked += 1
+    for label in _unmapped_mode_rows():
+        problems.append(
+            f"{doc.parent.name}/design.md: the mode row {label!r} publishes a "
+            "current that MODE_TABLE does not map to the part record, so it is "
+            "read by nothing.")
     if checked < MINIMUM_MODE_ROWS:
         problems.append(
             f"{doc.parent.name}/design.md: reconciled {checked} mode-current "
@@ -593,23 +601,70 @@ def mode_table_problems(problems):
     return checked
 
 
+def _unmapped_mode_rows():
+    """Rows of the document's mode table that MODE_TABLE does not name.
+
+    The case here used to assert `len(MODE_TABLE["rows"]) == MINIMUM_MODE_ROWS`
+    -- a constant against a constant three lines below it in the same file,
+    which is true no matter what the document publishes. The document has NINE
+    rows; six were mapped, and the three that were not (802.11g 297 mA,
+    802.11n 286 mA, power-off 1 uA) were read by nothing.
+    """
+    doc = ROOT / "benchmarks" / MODE_TABLE["benchmark"] / "design.md"
+    if not doc.is_file():
+        return ["design.md is missing"]
+    inside, unmapped = False, []
+    for line in doc.read_text(encoding="utf-8").splitlines():
+        if line.startswith("| Mode |"):
+            inside = True
+            continue
+        if inside:
+            if not line.startswith("|"):
+                break
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) < 2 or set(cells[0]) <= set("-: "):
+                continue
+            if not re.search(r"[\d.]+\s*(uA|mA|A)\b", cells[1]):
+                continue
+            if not any(fragment in line for fragment, _ in MODE_TABLE["rows"]):
+                unmapped.append(cells[0])
+    return unmapped
+
+
 def _planted_mode_problems():
-    """Drive mode_table_problems against a record with one current changed."""
-    import json, tempfile, shutil
+    """Drive mode_table_problems against a record with one current changed.
+
+    In a TEMPORARY tree. The first version wrote to the real tracked part
+    record and restored it in `finally`, which makes `make sim` non-re-entrant
+    and leaves `"typ": 999` committed if the process dies in between -- the
+    shared-writable-state hazard AGENTS.md forbids, introduced by the probe for
+    a leg written to close an ungated-document finding.
+    """
+    import json, tempfile
     record = ROOT / "parts" / "examples" / MODE_TABLE["record"]
-    original = record.read_text(encoding="utf-8")
-    document = json.loads(original)
+    document = json.loads(record.read_text(encoding="utf-8"))
     for mode in document.get("modes") or []:
         if mode.get("id") == "deep_sleep_rtc_mem_and_periph":
             for draw in mode.get("draw") or []:
                 draw["current"]["typ"] = 999
-    try:
-        record.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-        problems = []
-        mode_table_problems(problems)
-        return problems
-    finally:
-        record.write_text(original, encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "parts" / "examples").mkdir(parents=True)
+        (root / "parts" / "examples" / MODE_TABLE["record"]).write_text(
+            json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        case = root / "benchmarks" / MODE_TABLE["benchmark"]
+        case.mkdir(parents=True)
+        (case / "design.md").write_text(
+            (ROOT / "benchmarks" / MODE_TABLE["benchmark"] / "design.md").read_text(
+                encoding="utf-8"), encoding="utf-8")
+        saved = globals()["ROOT"]
+        globals()["ROOT"] = root
+        try:
+            problems = []
+            mode_table_problems(problems)
+            return problems
+        finally:
+            globals()["ROOT"] = saved
 
 
 def _planted_window_problems():

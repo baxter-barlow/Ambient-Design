@@ -44,7 +44,7 @@ discharge-transistor current at 9 V. CT is capped at 1 µF because that is the
 largest value with broad 5 % film availability (e.g. the 5 mm B32529 series
 tops out well below 10 µF); RA/RB scale up ×10 to hold f ≈ 1 Hz. The higher
 timing resistance is still safe for a bipolar 555: threshold input current is
-0.1 µA typ / 0.25 µA max, which datasheets translate to an RA+RB ceiling of
+30 nA typ / 250 nA max, which datasheets translate to an RA+RB ceiling of
 3.4 MΩ at VCC = 5 V (10 MΩ at 15 V) — 780 kΩ at 9 V has >4× margin even
 against the 5 V limit. Chosen E24 values:
 
@@ -232,7 +232,7 @@ At the shipped values (RA 100k, RB 680k, C 1uF, Vcc 9 V):
 | +0.10 uA | 54.298 % |
 | +0.25 uA | 55.609 % |
 
-The NE555 datasheet specifies threshold current 0.1 uA typ / **0.25 uA max**, so
+The NE555 datasheet specifies threshold current 30 nA typ / **250 nA max**, so
 the part's own guaranteed corner lands outside the old window. At the
 pre-rescale values the same +/-0.25 uA gives 53.21-53.64 %, about ten times the
 margin -- which is what "unchanged" was true of.

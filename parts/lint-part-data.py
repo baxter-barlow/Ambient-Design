@@ -594,6 +594,91 @@ REQUIRED_RECORDS = (
 )
 
 
+def provenance_coverage():
+    """(measured values, values covered only by the record default, of which ratings).
+
+    NOTICE publishes these three numbers. They have now been wrong in three
+    successive revisions -- a table-per-field claim, a generalisation of one
+    record's shape to all five, and a count that was internally unsatisfiable.
+    The paragraph even carries a recount procedure, and following it did not
+    reproduce the number it guards. So the gate computes them and holds NOTICE
+    to the result.
+
+    `conditions` sub-objects are EXCLUDED: they state the operating point at
+    which a value was measured, not a transcribed rating, and counting them
+    made "measured values" mean something no reader would guess.
+    """
+    import json
+    total = default_only = ratings = 0
+    for path in sorted(DEFAULT_TARGET.glob("*.part.json")):
+        document = json.loads(path.read_text(encoding="utf-8"))
+        pointers = list(document.get("provenance", {}))
+
+        def covered(pointer):
+            best = ""
+            for candidate in pointers:
+                if candidate and (pointer == candidate
+                                  or pointer.startswith(candidate + "/")):
+                    if len(candidate) > len(best):
+                        best = candidate
+            return best
+
+        def walk(node, pointer):
+            nonlocal total, default_only, ratings
+            if isinstance(node, dict):
+                if "unit" in node:
+                    total += 1
+                    if covered(pointer) == "":
+                        default_only += 1
+                        if pointer.startswith("/ratings"):
+                            ratings += 1
+                    return
+                for key, value in node.items():
+                    if key == "conditions":
+                        continue
+                    walk(value, f"{pointer}/{key}")
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    walk(value, f"{pointer}/{index}")
+
+        walk(document, "")
+    return total, default_only, ratings
+
+
+def notice_problems(problems):
+    """Hold NOTICE's provenance-coverage numbers to the records."""
+    import re
+    notice = DEFAULT_TARGET.parents[1] / "NOTICE"
+    if not notice.is_file():
+        problems.append("NOTICE is missing")
+        return 0
+    total, default_only, ratings = provenance_coverage()
+    text = notice.read_text(encoding="utf-8")
+    # Whitespace-tolerant: the sentence wraps, and the first version of this
+    # regex missed its own text because of a line break.
+    collapsed = re.sub(r"\s+", " ", text)
+    found = re.search(
+        r"(\d+) of the (\d+) measured values across the five records, "
+        r"of which (\d+) are ratings", collapsed)
+    if found is None:
+        problems.append(
+            "NOTICE no longer states its provenance-coverage numbers in the form "
+            "this gate reads. That paragraph has been wrong three times; it is "
+            "gated on purpose. Publish: "
+            f"{default_only} of the {total} measured values across the five "
+            f"records, of which {ratings} are ratings.")
+        return 0
+    published = tuple(int(g) for g in found.groups())
+    if published != (default_only, total, ratings):
+        problems.append(
+            f"NOTICE publishes {published[0]} of {published[1]} measured values "
+            f"covered only by the record default, {published[2]} of them "
+            f"ratings. The records give {default_only} of {total}, {ratings} "
+            "ratings.")
+        return 0
+    return 3
+
+
 def main() -> int:
     args = sys.argv[1:]
     if "--self-test" in args:
@@ -619,6 +704,15 @@ def main() -> int:
               "records legitimately moved, point this gate at them.",
               file=sys.stderr)
         return 1
+
+    if not args:
+        notice_found = []
+        notice_problems(notice_found)
+        if notice_found:
+            print("lint: FAIL:", file=sys.stderr)
+            for problem in notice_found:
+                print(f"  {problem}", file=sys.stderr)
+            return 1
 
     # Each named record must be among the files being linted. A count that can
     # shrink silently is the same defect as a floor with slack in it.
@@ -676,7 +770,8 @@ def main() -> int:
 
     print(
         f"lint: PASS: {len([f for f in files if 'negative' not in f.parts])} "
-        f"record(s) consistent, {len(unchecked)} check(s) not performable on the "
+        f"record(s) consistent, NOTICE's provenance-coverage numbers verified, "
+        f"{len(unchecked)} check(s) not performable on the "
         "data as modelled."
     )
     return 0

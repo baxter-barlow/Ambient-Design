@@ -744,6 +744,30 @@
       ]
     },
     {
+      "id": "power_off_en_low",
+      "description": "Power off: EN held low. RTC domain unpowered.",
+      "kind": "sleep",
+      "conditions": {
+        "vdd": {
+          "unit": "V",
+          "typ": 3.3
+        },
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        }
+      },
+      "draw": [
+        {
+          "pin": "3V3",
+          "current": {
+            "unit": "uA",
+            "typ": 1
+          }
+        }
+      ]
+    },
+    {
       "id": "wifi_rx_802_11bgn_ht20",
       "description": "Wi-Fi receive, 802.11 b/g/n HT20, peripherals disabled and CPU idle",
       "kind": "active",
@@ -798,6 +822,70 @@
           }
         }
       ]
+    },
+    {
+      "id": "wifi_tx_802_11g_54mbps",
+      "description": "Wi-Fi transmit, 802.11g 54 Mbps at 18 dBm.",
+      "kind": "active",
+      "conditions": {
+        "vdd": {
+          "unit": "V",
+          "typ": 3.3
+        },
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        },
+        "tx_power": {
+          "unit": "dBm",
+          "typ": 18
+        },
+        "duty_cycle": {
+          "unit": "1",
+          "typ": 1.0
+        }
+      },
+      "draw": [
+        {
+          "pin": "3V3",
+          "current": {
+            "unit": "mA",
+            "peak": 297
+          }
+        }
+      ]
+    },
+    {
+      "id": "wifi_tx_802_11n_ht20_mcs7",
+      "description": "Wi-Fi transmit, 802.11n HT20 MCS7 at 17.5 dBm.",
+      "kind": "active",
+      "conditions": {
+        "vdd": {
+          "unit": "V",
+          "typ": 3.3
+        },
+        "ta": {
+          "unit": "degC",
+          "typ": 25
+        },
+        "tx_power": {
+          "unit": "dBm",
+          "typ": 17.5
+        },
+        "duty_cycle": {
+          "unit": "1",
+          "typ": 1.0
+        }
+      },
+      "draw": [
+        {
+          "pin": "3V3",
+          "current": {
+            "unit": "mA",
+            "peak": 286
+          }
+        }
+      ]
     }
   ],
   "sources": [
@@ -823,20 +911,19 @@
       "method": "manual",
       "note": "Record default: every value is transcribed from the cited datasheet unless a more specific provenance entry overrides this one."
     },
+    "/pins": {
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions); Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it."
+    },
     "/modes/0": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "locator": "Table 6-7 Current Consumption in Low-Power Modes, row 'RTC memory and RTC peripherals are powered up'",
       "confidence": "datasheet-stated",
       "method": "manual",
       "target": "deep_sleep_rtc_mem_and_periph"
-    },
-    "/modes/1/draw/0/current": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-7 Light-sleep row (240 uA) plus footnote 1 (add 40 uA for 2 MB 4-line PSRAM at 3.3 V)",
-      "confidence": "datasheet-derived",
-      "method": "manual",
-      "note": "240 uA + 40 uA = 280 uA. Derived by applying the datasheet's own PSRAM footnote to the base light-sleep figure, because this orderable part (N8R2) embeds 2 MB quad-line PSRAM. Neither number alone describes this part.",
-      "target": "light_sleep"
     },
     "/modes/2": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
@@ -861,13 +948,21 @@
     },
     "/modes/5": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "locator": "Table 6-7 \"Current Consumption in Low-Power Modes\", power-off (EN low) row.",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "target": "power_off_en_low"
+    },
+    "/modes/6": {
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "locator": "Table 6-4 Current Consumption for Wi-Fi (2.4 GHz) in Active Mode, RX 802.11b/g/n HT20 row",
       "confidence": "datasheet-stated",
       "method": "manual",
       "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
       "target": "wifi_rx_802_11bgn_ht20"
     },
-    "/modes/6": {
+    "/modes/7": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "locator": "Table 6-4, TX 802.11b 1 Mbps @20.5 dBm row; TX current is rated at 100% duty cycle",
       "confidence": "datasheet-stated",
@@ -875,12 +970,21 @@
       "note": "Recorded as peak for the same reason as the RX mode. A current budget that needs a guaranteed bound must add its own declared guardband on top of this figure.",
       "target": "wifi_tx_802_11b_1mbps"
     },
-    "/pins": {
+    "/modes/8": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions); Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
+      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11g 54 Mbps 18 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it."
+      "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "target": "wifi_tx_802_11g_54mbps"
+    },
+    "/modes/9": {
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11n HT20 MCS7 17.5 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "target": "wifi_tx_802_11n_ht20_mcs7"
     },
     "/ratings/abs_max": {
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
@@ -894,6 +998,14 @@
       "confidence": "datasheet-stated",
       "method": "manual",
       "note": "Taken from the PART-NUMBER table, not from Table 6-2. Table 6-2 lists the 65/85/105 C grades generically without saying which orderable part is which; reading a grade from there instead of Table 1-1 is how this record previously carried 65 C, which is the Octal-PSRAM band and wrong for N8R2."
+    },
+    "/modes/1/draw/0/current": {
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "locator": "Table 6-7 Light-sleep row (240 uA) plus footnote 1 (add 40 uA for 2 MB 4-line PSRAM at 3.3 V)",
+      "confidence": "datasheet-derived",
+      "method": "manual",
+      "note": "240 uA + 40 uA = 280 uA. Derived by applying the datasheet's own PSRAM footnote to the base light-sleep figure, because this orderable part (N8R2) embeds 2 MB quad-line PSRAM. Neither number alone describes this part.",
+      "target": "light_sleep"
     }
   },
   "license_class": "vendor-public",
