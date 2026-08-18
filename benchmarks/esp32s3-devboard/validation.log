@@ -142,3 +142,42 @@ vendor-verified): SS34 Vf = 0.40 V at 0.4 A; PTC initial-resistance range
 "~250 C/W" and AMS1117 "1.1-1.3 V dropout" asides in design.md sec. 4 are
 rejected-alternative color and were NOT verified against those datasheets
 this round; they should be sourced or dropped before the design is frozen.
+
+=== Reproducibility correction, 2026-08-18 (AMB-123 round 14) ===
+Nothing above is retracted. What follows corrects how it can be CHECKED.
+
+Two of the re-checks above cite artifacts that a reader cannot open:
+
+  - "Arithmetic re-check (python3 script, run 2026-08-15): 17/17 checks PASS"
+    names no file at all.
+  - "Re-run: python3 <scratchpad>/fixround2-verify.py ... Raw output in
+    scratchpad/fixround2-out.log" names a path under a per-session
+    scratchpad directory. That directory is transient and is gone; the
+    script and its output went with it.
+
+So the two tallies -- 17/17, and 34 checks / 31 PASS / 3 FAIL -- are not
+reproducible by anyone, including their author. That is exactly the standard
+AMB-120 was filed to enforce, and this file sits in the same directory as the
+logs that issue fixed. It is also the only tracked file in the repository that
+names a session scratchpad path, which AGENTS.md forbids outright.
+
+The reproducible artifact is tests/benchmarks/check-hand-assertions.py. It
+re-derives A1-A8 from assertions.yaml, power-tree.yaml and the part records,
+reconciles three design.md figures against them, runs under `make all`, and
+prints:
+
+  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their
+  inputs; 3 design.md figure(s) reconcile against them.
+
+It also names the two it cannot mechanise and why -- A9_strapping_dc_state
+(a boot-mode truth table, not a numeric relation) and A10_single_pin_nets_l9b
+(a claim about what the DSL must declare, for the L9b lint rule under AMB-52).
+
+That summary line used to read "11 assertion(s) follow from their inputs",
+summing the two populations. There are ten assertions, so eleven of them was
+never possible; three of the eleven were document figures. Worse than the
+wrong noun: one total means a newly reconciled figure silently pays for a
+deleted assertion. Split in the same commit as this correction.
+
+Read the tallies above as a record of what was done on 2026-08-15, not as
+evidence you can re-run. The evidence you can re-run is the gate.
