@@ -341,6 +341,15 @@ def self_test():
     cases.append(("MODEL_LINKS names the blinker model AND its IR",
                   {(m.name, i.name) for _, m, i in MODEL_LINKS} ==
                   {("blinker-555.design.json", "blinker.ir.json")}))
+    # THE MODE TABLE, planted wrong. Adding a leg without a case is the defect
+    # this audit has found in four consecutive rounds, including twice in legs
+    # written to close a previous round's finding.
+    cases.append(("a mode-current row disagreeing with the part record is caught",
+                  any("records" in p and "for mode" in p
+                      for p in _planted_mode_problems())))
+    cases.append(("MODE_TABLE names every mode row the document publishes",
+                  len(MODE_TABLE["rows"]) == MINIMUM_MODE_ROWS))
+
     # A PLANTED WRONG WINDOW. The leg was pinned only by a count, and the count
     # survives the reporting branch being deleted -- so both directions of the
     # comparison could be cut with `--self-test` green.
@@ -499,6 +508,110 @@ def line_count_problems(problems):
     return checked
 
 
+# benchmark (c)'s design.md was measured at 167 published numbers with NOTHING
+# reading any of them: an auditor changed every number in the file at once with
+# `make all` green, and at one point it published `4.7 + 4.7 = 9.5`. The mode
+# table is the part of it that is mechanically checkable -- every current in it
+# is a `modes[].draw[].current` in the part record -- so that is what this
+# holds. The rest of the file is prose and hand-derivation that
+# check-hand-assertions.py gates through assertions.yaml.
+MODE_TABLE = {
+    "benchmark": "esp32s3-devboard",
+    "record": "espressif-esp32-s3-wroom-1-n8r2.part.json",
+    # design.md row label fragment -> mode id in the part record
+    "rows": (
+        ("802.11b 1 Mbps", "wifi_tx_802_11b_1mbps"),
+        ("802.11b/g/n HT20", "wifi_rx_802_11bgn_ht20"),
+        ("WAITI, peripheral clocks enabled", "modem_sleep_240mhz_waiti"),
+        ("dual-core 128-bit", "modem_sleep_240mhz_dualcore_128bit"),
+        ("Light-sleep", "light_sleep"),
+        ("Deep-sleep", "deep_sleep_rtc_mem_and_periph"),
+    ),
+}
+MINIMUM_MODE_ROWS = 6
+
+
+def mode_table_problems(problems):
+    """Hold benchmark (c)'s mode-current table to the part record."""
+    import json
+    doc = ROOT / "benchmarks" / MODE_TABLE["benchmark"] / "design.md"
+    record = ROOT / "parts" / "examples" / MODE_TABLE["record"]
+    if not doc.is_file() or not record.is_file():
+        problems.append(f"{MODE_TABLE['benchmark']}: design.md or its part record is missing")
+        return 0
+    modes = {}
+    for mode in json.loads(record.read_text(encoding="utf-8")).get("modes") or []:
+        for draw in mode.get("draw") or []:
+            current = draw.get("current") or {}
+            value = current.get("typ", current.get("peak", current.get("max")))
+            if value is not None:
+                scale = {"uA": 1e-6, "mA": 1e-3, "A": 1.0}.get(current.get("unit"), 1.0)
+                modes[mode["id"]] = float(value) * scale
+    text = doc.read_text(encoding="utf-8")
+    checked = 0
+    for fragment, mode_id in MODE_TABLE["rows"]:
+        row = next((l for l in text.splitlines()
+                    if l.startswith("|") and fragment in l), None)
+        if row is None:
+            problems.append(
+                f"{doc.parent.name}/design.md: no mode-current row mentioning "
+                f"{fragment!r}. The row that carries {mode_id} left the table.")
+            continue
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        # SUM the cell's currents. The light-sleep row publishes a
+        # decomposition -- "240 uA (+40 uA for 2 MB quad PSRAM)" -- where the
+        # part record holds the 280 uA total, and both are correct. Reading
+        # only the first number made the gate report a disagreement that was
+        # its own.
+        terms = re.findall(r"([\d.]+)\s*(uA|mA|A)\b", cells[1])
+        if not terms:
+            problems.append(
+                f"{doc.parent.name}/design.md: the {fragment!r} row publishes no "
+                "current with a unit.")
+            continue
+        published = sum(float(v) * {"uA": 1e-6, "mA": 1e-3, "A": 1.0}[u]
+                        for v, u in terms)
+        want = modes.get(mode_id)
+        if want is None:
+            problems.append(
+                f"{MODE_TABLE['record']} records no current for mode {mode_id!r}.")
+            continue
+        if abs(published - want) > abs(want) * 1e-9:
+            problems.append(
+                f"{doc.parent.name}/design.md: publishes "
+                f"{' + '.join(v + ' ' + u for v, u in terms)} for "
+                f"{fragment!r}, but {MODE_TABLE['record']} records "
+                f"{want:.6g} A for mode {mode_id!r}.")
+            continue
+        checked += 1
+    if checked < MINIMUM_MODE_ROWS:
+        problems.append(
+            f"{doc.parent.name}/design.md: reconciled {checked} mode-current "
+            f"row(s), below the floor of {MINIMUM_MODE_ROWS}.")
+    return checked
+
+
+def _planted_mode_problems():
+    """Drive mode_table_problems against a record with one current changed."""
+    import json, tempfile, shutil
+    record = ROOT / "parts" / "examples" / MODE_TABLE["record"]
+    original = record.read_text(encoding="utf-8")
+    document = json.loads(original)
+    for mode in document.get("modes") or []:
+        if mode.get("id") == "deep_sleep_rtc_mem_and_periph":
+            for draw in mode.get("draw") or []:
+                draw["current"]["typ"] = 999
+    try:
+        record.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        problems = []
+        mode_table_problems(problems)
+        return problems
+    finally:
+        record.write_text(original, encoding="utf-8")
+
+
 def _planted_window_problems():
     """Drive model_problems over a copy of the IR with a superseded window."""
     import json, tempfile
@@ -541,6 +654,7 @@ def main(argv):
         for case in cases:
             total += check_case(case, problems)
         windows = model_problems(problems) if not argv else 0
+        modes = mode_table_problems(problems) if not argv else 0
         lines_ok = line_count_problems(problems) if not argv else 0
     except GateUnavailable as exc:
         print(f"design-docs: UNAVAILABLE: {exc}", file=sys.stderr)
@@ -552,7 +666,8 @@ def main(argv):
             print(f"  {problem}", file=sys.stderr)
         return 1
     print(f"design-docs: PASS: {total} results row(s) agree with the "
-          f"measurements their benchmarks record, and {windows} model/IR "
+          f"measurements their benchmarks record, {modes} mode-current "
+          f"row(s) agree with the part record, and {windows} model/IR "
           f"assertion window(s) and {lines_ok} AC1a line count(s) agree "
           "with the artifacts that produce them.")
     return 0
