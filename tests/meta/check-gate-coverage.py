@@ -113,6 +113,7 @@ CEILINGS = {
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
+    "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (15, 3),
     "tests/eval/check-run-records.py": (62, 9),
@@ -199,7 +200,6 @@ SMALL_POPULATION = 5
 NO_SELF_TEST = (
     ".agents/skills/verify-rhoform-change/scripts/validate-layout.sh",
     ".github/scripts/check-dco.sh",
-    "tests/benchmarks/derive-555-windows.py",
     "tests/benchmarks/run-sim.sh",
     "tests/golden/run.sh",
     "tests/structure/check-layout.sh",
