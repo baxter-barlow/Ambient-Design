@@ -570,6 +570,29 @@ def self_test():
     if failures:
         print(f"\nself-test: {failures} check(s) did not fire.")
         return 1
+    # THE MEASURE PREDICATE used by provenance_coverage(), whose three numbers
+    # NOTICE publishes. It had its own weaker copy -- `"unit" in node` -- ten
+    # lines from walk_measures, which correctly also requires one of
+    # min/typ/max/peak. That counted the SN74HC00D's twelve PIN objects (whose
+    # `unit` is the L5 gate id) and returned before the 24 real measures inside
+    # them, so the published total was wrong by exactly 24 - 12.
+    import json as _json
+    _hc = _json.loads((DEFAULT_TARGET / "ti-sn74hc00d.part.json").read_text(
+        encoding="utf-8"))
+    _pin_paths = {f"/pins/{i}" for i in range(len(_hc.get("pins") or []))}
+    _measured = {path for path, _ in walk_measures(_hc)}
+    if _pin_paths & _measured:
+        print(f"FAIL pin objects counted as measured values: "
+              f"{sorted(_pin_paths & _measured)}", file=sys.stderr)
+        return 1
+    _total, _default, _ratings = provenance_coverage()
+    if (_total, _default, _ratings) != (130, 5, 4):
+        print(f"FAIL provenance_coverage() gives {(_total, _default, _ratings)}, "
+              "expected (130, 5, 4). NOTICE publishes these; if the records "
+              "legitimately changed, update both in one commit.", file=sys.stderr)
+        return 1
+    print("ok   provenance coverage counts only real Measures (130, 5, 4)")
+
     print(f"\nself-test PASS: reference record lints clean; {len(cases)} defect cases all detected.")
     return 0
 
@@ -623,25 +646,24 @@ def provenance_coverage():
                         best = candidate
             return best
 
-        def walk(node, pointer):
-            nonlocal total, default_only, ratings
-            if isinstance(node, dict):
-                if "unit" in node:
-                    total += 1
-                    if covered(pointer) == "":
-                        default_only += 1
-                        if pointer.startswith("/ratings"):
-                            ratings += 1
-                    return
-                for key, value in node.items():
-                    if key == "conditions":
-                        continue
-                    walk(value, f"{pointer}/{key}")
-            elif isinstance(node, list):
-                for index, value in enumerate(node):
-                    walk(value, f"{pointer}/{index}")
+        # USE THE FILE'S OWN MEASURE PREDICATE. I wrote a second one here --
+        # `"unit" in node` -- ten lines from `walk_measures`, which correctly
+        # also requires one of min/typ/max/peak. The SN74HC00D's twelve PIN
+        # objects carry `unit` as the L5 gate id ("1".."4"), so each was counted
+        # as a measured value AND the walk returned before reaching the 24 real
+        # measures inside them: 130 - 24 + 12 = 118, exactly the number NOTICE
+        # published. The paragraph's whole defence is that the numbers are
+        # computed rather than hand-maintained, and nobody hand-checks a
+        # computed number.
+        for pointer, _measure in walk_measures(document):
+            if "/conditions/" in pointer:
+                continue
+            total += 1
+            if covered(pointer) == "":
+                default_only += 1
+                if pointer.startswith("/ratings"):
+                    ratings += 1
 
-        walk(document, "")
     return total, default_only, ratings
 
 

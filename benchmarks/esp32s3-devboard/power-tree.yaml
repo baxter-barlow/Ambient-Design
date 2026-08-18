@@ -84,7 +84,10 @@ loads:
     modes: {all: {i_a: 0.000060}}
   pwr_led_d4:
     node: P5V0
-    modes: {all: {i_a: 0.0030}}        # (5.0-2.0)/1k at nom; 3.25 mA at VBUS max — worst rows use 0.00325
+    modes: {all: {i_a: 0.0030}}        # (4.585-2.0)/1k = 2.59 mA at nom; (4.903-2.0)/1k = 2.90 mA at P5V0 max.
+  # Budgeted at 3.0/3.25 mA, which is the LED taken at VBUS rather than at
+  # P5V0 where it is declared -- conservative by ~0.35 mA, kept because the
+  # A2 margin is quoted against it — worst rows use 0.00325
   tvs_esd_leakage:
     node: VBUS_PROT
     modes: {all: {i_a: 0.000002}}
