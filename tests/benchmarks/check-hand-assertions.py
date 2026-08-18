@@ -876,8 +876,13 @@ def main(argv):
     problems = []
     try:
         spec = load_yaml(spec_path)
-        checked = check_spec(spec, case_dir.name, problems)
-        checked += doc_problems(case_dir, spec, problems)
+        # TWO POPULATIONS, COUNTED SEPARATELY. These used to be summed into one
+        # `checked` printed as "N assertion(s)", which was wrong twice over: 3
+        # of the 11 were design.md figure reconciliations, not assertions, and a
+        # single total means a new figure pays for a deleted assertion. That is
+        # the increment-counting shape this audit has found repeatedly.
+        asserts_checked = check_spec(spec, case_dir.name, problems)
+        figures_checked = doc_problems(case_dir, spec, problems)
     except GateUnavailable as exc:
         print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -886,7 +891,9 @@ def main(argv):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"hand-assert: PASS: {case_dir.name}: {checked} assertion(s) follow from their inputs.")
+    print(f"hand-assert: PASS: {case_dir.name}: {asserts_checked} assertion(s) "
+          f"follow from their inputs; {figures_checked} design.md figure(s) "
+          "reconcile against them.")
     return 0
 
 
