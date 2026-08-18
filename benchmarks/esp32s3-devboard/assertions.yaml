@@ -106,7 +106,7 @@ assertions:
       worst: {vin_v: 4.903, vout_v: 3.234, iout_a: 0.3916, ta_c: 50, theta_ja_c_w: 62}
       typ:   {vin_v: 4.585, vout_v: 3.300, iout_a: 0.3561, ta_c: 25}
       theta_ja_datasheet_c_w: 110   # AP7361C DS37274 Rev. 5-2 thermal table, SOT223, Note 9: "mounted on FR-4 substrate PC board, with minimum recommended pad layout" (note states no airflow condition and no board size for SOT223)
-    calc_worst: "P = 1.669 x 0.3916 + 4.903 x 60e-6 = 0.6534 + 0.0003 = 0.654 W; Tj = 50 + 0.654 x 62 = 90.5 C"
+    calc_worst: "P = 1.669 x 0.3916 + 4.903 x 60e-6 = 0.65358 + 0.00029 = 0.654 W; Tj = 50 + 0.654 x 62 = 90.5 C"
     calc_typ:   "P = 1.285 x 0.3561 = 0.458 W; Tj = 25 + 0.458 x 62 = 53.4 C"
     calc_worst_datasheet_theta: "same P = 0.654 W; Tj = 50 + 0.654 x 110 = 121.9 C  -> +3.1 C to the 125 C gate"
     margin: "worst +34.5 C at 62 C/W (pour assumed); only +3.1 C at the datasheet 110 C/W minimum-pad figure. 125 C is the design gate (datasheet operating Tj range extends to 150 C; thermal shutdown ~150 C)"

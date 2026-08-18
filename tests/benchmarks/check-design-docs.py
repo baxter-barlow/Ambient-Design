@@ -371,6 +371,18 @@ def self_test():
     cases.append(("MODE_TABLE names every mode row the document publishes",
                   not _unmapped_mode_rows()))
 
+    # THE DECOMPOSITION RULE, in all three forms that previously got through.
+    # gate-coverage cannot see this: its measurement is per REPORT SITE, and a
+    # new branch inside an already-covered site is invisible to it.
+    for _form in ("**35 mA** typical, 320 mA transient",
+                  "**35 mA** (320 mA is transient)",
+                  "**35 mA** (+320 mA transient, not budgeted)"):
+        cases.append((f"a decomposed headline is caught: {_form[:34]}",
+                      any("records" in p and "for mode" in p
+                          for p in _decomposed_mode_problems(_form))))
+    cases.append(("a genuinely additive row still reconciles",
+                  not any("Light-sleep" in p for p in _decomposed_mode_problems(None))))
+
     # A PLANTED WRONG WINDOW. The leg was pinned only by a count, and the count
     # survives the reporting branch being deleted -- so both directions of the
     # comparison could be cut with `--self-test` green.
@@ -553,6 +565,10 @@ MODE_TABLE = {
     ),
 }
 MINIMUM_MODE_ROWS = 9
+# Rows whose cell legitimately publishes a decomposition rather than one value.
+# Named per row, not detected by pattern: a rule that recognises decompositions
+# is a rule any wrong number can dress up as one.
+ADDITIVE_ROWS = ("Light-sleep",)
 
 
 def mode_table_problems(problems):
@@ -589,23 +605,27 @@ def mode_table_problems(problems):
         # part record holds the 280 uA total, and both are correct. Reading
         # only the first number made the gate report a disagreement that was
         # its own.
-        # THE HEADLINE TERM MUST STAND ALONE. Summing every current in the
-        # cell let a wrong number be "decomposed" into terms adding to the
-        # right total: `**35 mA** (320 mA is transient)` reconciled against the
-        # recorded 355 mA while the number a reader takes away is 10x low, and
-        # `0.5 uA (plus 7.5 uA of leakage we do not count)` did the same at
-        # 16x. Only an explicit `+` continuation is a decomposition -- which is
-        # what the light-sleep row actually writes.
+        # THE HEADLINE TERM IS THE FIRST ONE, FULL STOP. Two previous versions
+        # tested the SHAPE of the last defect instead of the property. Summing
+        # everything let `**35 mA** (320 mA is transient)` reconcile against a
+        # recorded 355 mA; stripping non-`+` parentheses let the same 10x error
+        # through written with a comma -- `**35 mA** typical, 320 mA transient`
+        # -- and left `(+320 mA ...)` open as well.
+        #
+        # The property is: the number a reader takes away must be the recorded
+        # value. So the FIRST current in the cell is compared alone. A row that
+        # genuinely decomposes says so with an explicit `+` on the continuation
+        # and declares its terms in ADDITIVE_ROWS, which is a per-row decision
+        # rather than a pattern any cell can adopt.
         terms = re.findall(r"([\d.]+)\s*(uA|mA|A)\b", cells[1])
-        additive = re.findall(r"([\d.]+)\s*(uA|mA|A)\b",
-                              re.sub(r"\((?!\s*\+)[^)]*\)", "", cells[1]))
-        if len(additive) < len(terms):
-            terms = additive
-        if not terms:
-            problems.append(
-                f"{doc.parent.name}/design.md: the {fragment!r} row publishes no "
-                "current with a unit.")
-            continue
+        if fragment in ADDITIVE_ROWS:
+            if len(terms) < 2:
+                problems.append(
+                    f"{doc.parent.name}/design.md: the {fragment!r} row is "
+                    "declared additive but publishes one term.")
+                continue
+        else:
+            terms = terms[:1]
         published = sum(float(v) * {"uA": 1e-6, "mA": 1e-3, "A": 1.0}[u]
                         for v, u in terms)
         want = modes.get(mode_id)
@@ -661,6 +681,32 @@ def _unmapped_mode_rows():
             if not any(fragment in line for fragment, _ in MODE_TABLE["rows"]):
                 unmapped.append(cells[0])
     return unmapped
+
+
+def _decomposed_mode_problems(form):
+    """Drive mode_table_problems over a design.md with one row rewritten."""
+    import tempfile
+    doc = ROOT / "benchmarks" / MODE_TABLE["benchmark"] / "design.md"
+    text = doc.read_text(encoding="utf-8")
+    if form is not None:
+        text = text.replace("**355 mA**", form, 1)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        (root / "parts" / "examples").mkdir(parents=True)
+        (root / "parts" / "examples" / MODE_TABLE["record"]).write_text(
+            (ROOT / "parts" / "examples" / MODE_TABLE["record"]).read_text(
+                encoding="utf-8"), encoding="utf-8")
+        case = root / "benchmarks" / MODE_TABLE["benchmark"]
+        case.mkdir(parents=True)
+        (case / "design.md").write_text(text, encoding="utf-8")
+        saved = globals()["ROOT"]
+        globals()["ROOT"] = root
+        try:
+            problems = []
+            mode_table_problems(problems)
+            return problems
+        finally:
+            globals()["ROOT"] = saved
 
 
 def _planted_mode_problems():
