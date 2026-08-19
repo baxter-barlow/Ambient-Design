@@ -115,8 +115,8 @@ CEILINGS = {
     "tests/benchmarks/check-assertions.py": (30, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
-    "tests/benchmarks/check-hand-assertions.py": (31, 15),
-    "tests/benchmarks/run-sim.sh": (18, 0),
+    "tests/benchmarks/check-hand-assertions.py": (38, 15),
+    "tests/benchmarks/run-sim.sh": (20, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
@@ -130,7 +130,7 @@ CEILINGS = {
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (23, 10),
+    "tests/toolchain/check-pins.py": (25, 10),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -161,7 +161,9 @@ OWNERS = {
     "tests/benchmarks/check-design-docs.py": (
         {"problems"}, {"cases", "unmapped", "rows"}),
     "tests/benchmarks/check-hand-assertions.py": (
-        {"problems"}, {"cases", "parts", "shape"}),
+        # `current` and `parts` assemble a shown-work fragment being split;
+        # neither reports anything.
+        {"problems"}, {"cases", "parts", "shape", "current"}),
     "tests/benchmarks/derive-555-windows.py": (
         {"problems"}, {"cases"}),
     "tests/corpus/check-classification.py": (
@@ -179,7 +181,7 @@ OWNERS = {
     "tests/meta/check-gate-coverage.py": (
         {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
                        "gates", "notes", "unaccounted", "missed",
-                       "_TREE_DIGEST_MEMO", "current"}),
+                       "_TREE_DIGEST_MEMO", "current", "packages"}),
     "tests/schemas/validate-schemas.py": (
         {"failures"}, {"cases"}),
     "tests/structure/check-retired-names.py": (
@@ -191,7 +193,7 @@ OWNERS = {
         # tiktoken offline guard rather than papered over by counting it here.
         {"problems", "missing_jobs"},
         {"cases", "pins", "parsed_refs", "READ_BY_KEY", "joined",
-         "required", "computed"}),
+         "required", "computed", "notes"}),
 }
 
 # Calls that report by name rather than through an accumulator.
@@ -644,7 +646,20 @@ def _tool_identity() -> str:
                                  timeout=30).stdout.splitlines()[:2]
     except (OSError, subprocess.TimeoutExpired, IndexError):
         ngspice = ["<no ngspice>"]
-    return sys.version + "|" + " ".join(ngspice)
+    # Distribution metadata, not the module attribute: jsonschema deprecated
+    # `__version__` and warns on every read, so the attribute route both
+    # printed a DeprecationWarning per gate and was on course to degrade to
+    # "?" -- an identity that stops distinguishing versions is worse than no
+    # identity, because it looks like one.
+    import importlib.metadata
+    packages = []
+    for dist_name in ("PyYAML", "jsonschema", "lark"):
+        try:
+            packages.append(f"{dist_name}="
+                            f"{importlib.metadata.version(dist_name)}")
+        except importlib.metadata.PackageNotFoundError:
+            packages.append(f"{dist_name}=absent")
+    return sys.version + "|" + " ".join(ngspice) + "|" + ",".join(packages)
 
 
 def _cache_key(source: str, report_owners: set[str], tree) -> str:
@@ -653,6 +668,60 @@ def _cache_key(source: str, report_owners: set[str], tree) -> str:
         (source + repr(sorted(report_owners)) + str(tree)
          + _tool_identity() + _machinery_salt())
         .encode("utf-8")).hexdigest()
+
+
+def _restore_stray_mutants(root=None) -> int:
+    """Recover from a killed measurement before measuring anything.
+
+    A SIGKILLed run leaves the mutant swapped into the tracked gate and its
+    .coverage-backup beside it; the next run then measured a blanked tree
+    and the failure message misdiagnosed it as missing dependencies (round
+    19). The backup is the original -- it carries the file's tracked mode,
+    which the 0644 scratch mutant does not -- so restore it, loudly, and
+    count.
+
+    `root` is a parameter because this gate measures ITSELF: the mutation
+    loop runs `check-gate-coverage.py --self-test` as a child while the
+    parent holds a live .coverage-backup, and a self-test that swept the
+    real tree destroyed the parent's backup mid-loop. The self-test sweeps
+    a temp directory instead, the same shape the measurement lock needed."""
+    root = ROOT if root is None else root
+    restored = 0
+    for stray in sorted(root.rglob("*.coverage-backup")):
+        original = stray.with_name(stray.name[:-len(".coverage-backup")])
+        os.replace(stray, original)
+        print(f"gate-coverage: restored {original.relative_to(root)} "
+              "from a leftover mutation backup (a previous measurement "
+              "was killed mid-swap); measuring the restored tree.")
+        restored += 1
+    for stray in sorted(root.rglob("*.coverage-mutant")):
+        stray.unlink()
+    return restored
+
+
+def _git_dir(root=None):
+    """The repository's git directory, worktree-aware, or None.
+
+    In a linked worktree `.git` is a FILE holding `gitdir: <path>`, so the
+    round-18 `.git.is_dir()` test silently disabled both the cache and the
+    mutation flock exactly where concurrent agents are most likely (round
+    19); AGENTS.md contemplates worktrees even while preferring clones."""
+    root = ROOT if root is None else root
+    dotgit = root / ".git"
+    if dotgit.is_dir():
+        return dotgit
+    if dotgit.is_file():
+        try:
+            text = dotgit.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        if text.startswith("gitdir:"):
+            target = Path(text.split(":", 1)[1].strip())
+            if not target.is_absolute():
+                target = (root / target).resolve()
+            if target.is_dir():
+                return target
+    return None
 
 
 def _mutation_cache_path():
@@ -665,19 +734,24 @@ def _mutation_cache_path():
     whoever can already rewrite the repository, which is the right trust
     boundary; no .git, no cache. Not committed: a committed file would
     assert results for machines that never ran them."""
-    git_dir = ROOT / ".git"
-    if not git_dir.is_dir():
+    git_dir = _git_dir()
+    if git_dir is None:
         return None
     return git_dir / "rhoform-gate-coverage-cache.json"
 
 
 def _valid_cache_entry(value) -> bool:
-    """(sites, survivors, [lines]) and nothing else."""
-    return (isinstance(value, (list, tuple)) and len(value) == 3
-            and isinstance(value[0], int) and isinstance(value[1], int)
-            and isinstance(value[2], list)
-            and all(isinstance(line, int) for line in value[2])
-            and 0 <= value[1] <= value[0])
+    """[site_count, [survivor line numbers]] -- the shape the writer stores
+    and the reader unpacks. The round-18 validator demanded a THREE-element
+    shape neither side used, so every persisted entry was dropped on load
+    and the ~6-minute mutation loop was silently re-paid on every run; the
+    self-test's cases pinned the two contradictory shapes instead of the
+    round trip (round 19). The round-trip case below is the pin now."""
+    return (isinstance(value, (list, tuple)) and len(value) == 2
+            and isinstance(value[0], int)
+            and isinstance(value[1], list)
+            and all(isinstance(line, int) for line in value[1])
+            and 0 <= len(value[1]) <= value[0])
 
 
 def _acquire_measurement_lock(lock_path=None):
@@ -690,9 +764,9 @@ def _acquire_measurement_lock(lock_path=None):
     .git; without .git the measurement runs unlocked, which matches the
     cacheless fallback (a bare tree has no concurrent-make story to protect).
     Returns the open file handle to hold, or None when no .git exists."""
-    git_dir = ROOT / ".git"
     if lock_path is None:
-        if not git_dir.is_dir():
+        git_dir = _git_dir()
+        if git_dir is None:
             return None
         lock_path = git_dir / "rhoform-gate-coverage.lock"
     import fcntl
@@ -840,7 +914,8 @@ def has_self_test(path: Path) -> bool:
     return "--self-test" in text and ("def self_test" in text or "self_test()" in text)
 
 
-def self_test_only_gates(makefile_text, bucket_gates, population):
+def self_test_only_gates(makefile_text, bucket_gates, population,
+                         harness_texts=None):
     """Bucket gates whose every reachable invocation is `--self-test`.
 
     Round 18 reduced a gate's Makefile line to its self-test alone: the
@@ -849,17 +924,39 @@ def self_test_only_gates(makefile_text, bucket_gates, population):
     reachable live lines AND the shell harnesses it runs, whose lines are
     reachable execution too (run-sim dispatches check-assertions; the layout
     engine runs the retired-name scan)."""
-    run_lines = list(_live_makefile_lines(_reachable_from_all(makefile_text)))
+    run_lines = [(None, line) for line in
+                 _live_makefile_lines(_reachable_from_all(makefile_text))]
     for rel in population:
-        if rel.endswith(".sh") and (ROOT / rel).is_file():
-            run_lines.extend((ROOT / rel).read_text(
-                encoding="utf-8", errors="replace").splitlines())
+        if not rel.endswith(".sh"):
+            continue
+        if harness_texts is not None:
+            text = harness_texts.get(rel)
+        elif (ROOT / rel).is_file():
+            text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        else:
+            text = None
+        if text is not None:
+            run_lines.extend((rel, line) for line in text.splitlines())
     real_runs = set()
-    for line in run_lines:
+    for harness, line in run_lines:
         if "--self-test" in line:
             continue
         for rel in bucket_gates:
-            if rel in line:
+            if rel == harness:
+                # A file's own lines cannot witness its real run: the layout
+                # engine's sandbox invocations of its own copy self-attested.
+                continue
+            # An INVOCATION of the gate, not any mention: the bare substring
+            # test was satisfied by self-test fixture-write lines
+            # (`> "$st_root/tests/.../gate.py"`) while the real harness
+            # dispatches spell the path through variables
+            # (`python3 "$SCRIPT_DIR/check-assertions.py"`) and were
+            # invisible (round 19). A verb followed by anything ending in
+            # the gate's basename is the witness.
+            basename = rel.rsplit("/", 1)[-1]
+            if re.search(
+                    rf"(?:python3?|bash|sh)\s+\S*{re.escape(basename)}\b",
+                    line):
                 real_runs.add(rel)
     return sorted(rel for rel in bucket_gates
                   if rel in population and rel not in real_runs)
@@ -962,6 +1059,8 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
     # (gates=[...]) mutate tmp fixtures only, and taking the real lock there
     # deadlocked the measurement against its own baseline self-test.
     measurement_lock = _acquire_measurement_lock() if gates is None else None
+    if gates is None:
+        _restore_stray_mutants()
     mutation_cache = _load_mutation_cache()
     for name, pinned in sorted((ceilings or CEILINGS).items()):
         recorded_sites, ceiling = pinned
@@ -992,6 +1091,13 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                                                       cache=mutation_cache)
         except subprocess.TimeoutExpired:
             raise GateUnavailable(f"{name}: --self-test did not terminate")
+        # FLUSH PER GATE. A single store after all nineteen meant a killed
+        # run (CI cancellation, OOM, the 600 s timeout that has caught this
+        # measurement here) persisted nothing and the next run paid the
+        # whole ~6 minutes again. Each gate's result is complete the moment
+        # it is measured; write it then.
+        if gates is None:
+            _store_mutation_cache(mutation_cache)
         # A gate with NO report sites scores a perfect zero for free. That is
         # the only size that invalidates the number.
         if sites == 0:
@@ -1188,6 +1294,33 @@ def self_test() -> int:
                       "\tpython3 tests/schemas/validate-schemas.py\n",
                       {"tests/schemas/validate-schemas.py"},
                       ["tests/schemas/validate-schemas.py"]) == []))
+    # THE HARNESS SIDE, both directions. A gate whose only mention in a
+    # harness is a self-test FIXTURE WRITE has no real run; the round-18
+    # substring test counted exactly those lines and was blind to the
+    # `$SCRIPT_DIR`-spelled dispatches that do the work (round 19).
+    _HARNESS = "tests/benchmarks/run-sim.sh"
+    _GATE = "tests/benchmarks/check-assertions.py"
+    cases.append(("a fixture-write line is not a real run",
+                  self_test_only_gates(
+                      "all: a\n\na:\n\tbash tests/benchmarks/run-sim.sh\n",
+                      {_GATE}, [_GATE, _HARNESS],
+                      harness_texts={_HARNESS: (
+                          'printf x > "$sandbox/tree/tests/benchmarks/'
+                          'check-assertions.py"\n')}) == [_GATE]))
+    cases.append(("a $SCRIPT_DIR-spelled dispatch IS a real run",
+                  self_test_only_gates(
+                      "all: a\n\na:\n\tbash tests/benchmarks/run-sim.sh\n",
+                      {_GATE}, [_GATE, _HARNESS],
+                      harness_texts={_HARNESS: (
+                          'if ! python3 "$SCRIPT_DIR/check-assertions.py" '
+                          '"$deck_dir" "$log"; then\n')}) == []))
+    cases.append(("a harness cannot witness its OWN real run",
+                  self_test_only_gates(
+                      "all: a\n\na:\n\techo nothing\n",
+                      {_HARNESS}, [_HARNESS],
+                      harness_texts={_HARNESS: (
+                          'bash "$sandbox/tree/tests/benchmarks/run-sim.sh"\n'
+                      )}) == [_HARNESS]))
     cases.append(("python-without-3 and direct execution count as invocations",
                   makefile_gates("all: a\n\na:\n"
                                  "\tpython tests/structure/check-retired-names.py\n"
@@ -1291,10 +1424,68 @@ def self_test() -> int:
         # self-test's fixtures live outside the gate file, and round 15
         # served a stale measurement through exactly that gap.
         cases.append(("a forged or malformed cache entry is dropped on load",
-                      not _valid_cache_entry([5, "x", []])
-                      and not _valid_cache_entry([1, 5, []])
+                      not _valid_cache_entry([5, "x"])
+                      and not _valid_cache_entry([1, [2, 3, 4]])
                       and not _valid_cache_entry({"sites": 5})
-                      and _valid_cache_entry([5, 1, [3, 7]])))
+                      and _valid_cache_entry([5, [3, 7]])))
+        # THE ROUND TRIP, through the REAL writer, json dump/load and
+        # loader-validation path: an entry stored by one run must hit on the
+        # next. Round 18 shipped a writer and validator that had never been
+        # in the same room.
+        import json as _json
+        _rt_cache = {}
+        _rt_first = surviving_sites(probe, set(), cache=_rt_cache)
+        _rt_reloaded = {k: v for k, v in _json.loads(
+            _json.dumps(_rt_cache)).items() if _valid_cache_entry(v)}
+        cases.append(("a stored entry survives dump, load and validation",
+                      len(_rt_reloaded) == 1))
+        _rt_second = surviving_sites(probe, set(), cache=_rt_reloaded)
+        cases.append(("the reloaded entry is HIT and agrees",
+                      _rt_second == _rt_first))
+        import contextlib
+        import io
+        # KILLED-RUN RECOVERY: a stray backup pair is restored, not measured,
+        # and the restored file keeps the tracked mode the 0644 scratch
+        # mutant lost. Swept in a TEMP tree: this gate measures itself, so a
+        # sweep of the real tree would eat the parent loop's live backup.
+        import tempfile
+        _probe_orig = b"# recovery probe original\n"
+        with tempfile.TemporaryDirectory() as _rec:
+            _root = Path(_rec)
+            _victim = _root / "nested" / "gate.sh"
+            _victim.parent.mkdir()
+            _victim.write_bytes(b"# blanked by a killed run\n")
+            _backup = _victim.with_name(_victim.name + ".coverage-backup")
+            _backup.write_bytes(_probe_orig)
+            _backup.chmod(0o755)
+            (_root / "nested" / "gate.sh.coverage-mutant").write_bytes(b"x\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                _restored_count = _restore_stray_mutants(_root)
+            cases.append(("a leftover mutant is restored before measuring",
+                          _restored_count == 1
+                          and _victim.read_bytes() == _probe_orig
+                          and _victim.stat().st_mode & 0o111
+                          and not (_root / "nested"
+                                   / "gate.sh.coverage-mutant").exists()))
+        # A LINKED WORKTREE's `.git` is a gitfile, and the round-18 is_dir()
+        # test turned off both the cache and the mutation flock there -- the
+        # one checkout shape where two agents are most likely to collide.
+        with tempfile.TemporaryDirectory() as _wt:
+            _wt_root = Path(_wt) / "worktree"
+            _wt_root.mkdir()
+            _real_git = Path(_wt) / "real" / "worktrees" / "wt"
+            _real_git.mkdir(parents=True)
+            (_wt_root / ".git").write_text(f"gitdir: {_real_git}\n",
+                                           encoding="utf-8")
+            cases.append(("a worktree's gitfile resolves to its git dir",
+                          _git_dir(_wt_root) == _real_git))
+            (_wt_root / ".git").write_text("gitdir: /nonexistent/elsewhere\n",
+                                           encoding="utf-8")
+            cases.append(("a gitfile pointing nowhere is not trusted",
+                          _git_dir(_wt_root) is None))
+            (_wt_root / ".git").unlink()
+            cases.append(("a tree with no .git at all has no cache location",
+                          _git_dir(_wt_root) is None))
         cases.append(("the cache lives in .git, not the shared temp dir",
                       _mutation_cache_path() is not None
                       and ".git" in str(_mutation_cache_path())))
