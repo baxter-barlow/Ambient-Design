@@ -55,7 +55,7 @@ Public contributors can start with a GitHub issue. Before implementation begins,
 - `lang/` — the §8-Q1 syntax bake-off: two candidate grammars, the Starlark-restricted-Python baseline, and the corpus each expresses identically. Throwaway prototypes, checked against the IR example and the benchmark BOM so their reference designs are not self-certified.
 - `eval/` — the measurement harness: pinned token counting, the AC5 repair-loop trial protocol, exact small-sample statistics, and result capture. Built against gate and model adapters so the syntax bake-off and the later AC5a gate run share one rig.
 - `toolchain/` — `versions.yaml`, the single pinned-toolchain manifest every local run and CI job resolves versions from.
-- `tests/` — repository gates: layout invariants (`structure/`), schema validation (`schemas/`), the simulation runner (`benchmarks/`), and the golden-file harness (`golden/`).
+- `tests/` — repository gates: layout and retired-name invariants (`structure/`), toolchain-pin agreement (`toolchain/`), schema validation (`schemas/`), corpus and classification freezes (`corpus/`), IR canonical hashing (`ir/`), the simulation runner and benchmark reconciliations (`benchmarks/`), the eval-harness record checks (`eval/`), the golden-file harness (`golden/`), and the gate-coverage measurement (`meta/`).
 
 Run the gates locally with `make check` (layout, schemas, part-data lint), `make sim` (benchmark decks), or `make all`.
 
