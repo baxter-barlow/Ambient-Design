@@ -112,14 +112,14 @@ CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
     "parts/lint-part-data.py": (30, 5),
-    "tests/benchmarks/check-assertions.py": (18, 3),
+    "tests/benchmarks/check-assertions.py": (25, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
-    "tests/benchmarks/run-sim.sh": (11, 0),
+    "tests/benchmarks/run-sim.sh": (18, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
-    "tests/corpus/check-corpus.py": (27, 3),
+    "tests/corpus/check-corpus.py": (37, 3),
     "tests/eval/check-run-records.py": (62, 9),
     "tests/ir/check-hashes.py": (19, 2),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
@@ -127,10 +127,10 @@ CEILINGS = {
     # which the version that excused itself as "too few sites" did not.
     "tests/meta/check-gate-coverage.py": (12, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
-    "tests/golden/run.sh": (6, 0),
+    "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (18, 12),
+    "tests/toolchain/check-pins.py": (19, 12),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -179,7 +179,7 @@ OWNERS = {
     "tests/meta/check-gate-coverage.py": (
         {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
                        "gates", "notes", "unaccounted", "missed",
-                       "_TREE_DIGEST_MEMO"}),
+                       "_TREE_DIGEST_MEMO", "current"}),
     "tests/schemas/validate-schemas.py": (
         {"failures"}, {"cases"}),
     "tests/structure/check-retired-names.py": (
@@ -236,7 +236,13 @@ NO_SELF_TEST = (
 # site per LINE where the Python side counts one per CALL. The shell number is
 # therefore an over-count of distinct checks -- the conservative direction for
 # a figure whose claim is "pinned by nothing".
-SHELL_SITE = re.compile(r"""(\bfail\s+["'$]|>&2\s*\\?\s*$)""")
+# Any fail-family helper invocation with a message argument, or a line that
+# reports to stderr. `\bfail\s` alone missed run-sim's seven fail_env sites
+# and golden's usage_fail sites entirely -- round 16 deleted round 15's own
+# joining-direction gate plus its self-test case with everything green,
+# because the site was never in the mutation population, falsifying the
+# docstring's "the shell number is an over-count" claim.
+SHELL_SITE = re.compile(r"""(\b[a-z_]*fail[a-z_]*\s+["'$]|>&2\s*\\?\s*$)""")
 
 
 class GateUnavailable(Exception):
@@ -259,13 +265,7 @@ def makefile_gates(text=None) -> list[str]:
     if text is None:
         text = (ROOT / "Makefile").read_text(encoding="utf-8")
     found = []
-    for line in text.splitlines():
-        # Comments are not invocations. The regex used to run over the whole
-        # file, so `#`-ing a recipe line out DISABLED the gate while the
-        # census still listed it as covered -- the exact silent unhooking the
-        # census exists to catch, hidden by its own parser.
-        if line.lstrip().startswith("#"):
-            continue
+    for line in _live_makefile_lines(_reachable_from_all(text)):
         for match in re.finditer(r"(?:python3|bash|sh)\s+(\S+\.(?:py|sh))", line):
             rel = match.group(1)
             if (ROOT / rel).is_file() and rel not in found:
@@ -273,7 +273,74 @@ def makefile_gates(text=None) -> list[str]:
     return sorted(found)
 
 
-def uncollected_tests() -> list[str]:
+def _reachable_from_all(text):
+    """The Makefile text scoped to targets reachable from `all`.
+
+    The population was recipe-line-scoped: a gate moved into an orphan
+    target -- one nothing prerequisite-links to `all` -- kept counting as an
+    invocation while `make all` never ran it (round 16). Reachability is
+    computed over the prerequisite graph; when the text declares no `all`
+    target at all (fixtures, exotic makefiles) the whole text is used, which
+    is the conservative direction. Recipe lines are joined to their targets
+    by make's own syntax: a TAB-indented line belongs to the most recent
+    rule header.
+    """
+    targets = {}
+    current = []
+    for line in text.splitlines():
+        if line.startswith("\t"):
+            for name in current:
+                targets[name][1].append(line)
+            continue
+        if line.lstrip().startswith("#") or ":=" in line or "?=" in line:
+            continue
+        header = re.match(r"^([A-Za-z0-9_./ -]+):(?!=)\s*(.*)$", line)
+        if header is None:
+            continue
+        current = []
+        prereqs = [word for word in header.group(2).split()
+                   if not word.startswith("#")]
+        for name in header.group(1).split():
+            entry = targets.setdefault(name, ([], []))
+            entry[0].extend(prereqs)
+            current.append(name)
+    if "all" not in targets:
+        return text
+    reachable, queue = set(), ["all"]
+    while queue:
+        name = queue.pop()
+        if name in reachable or name not in targets:
+            continue
+        reachable.add(name)
+        queue.extend(targets[name][0])
+    lines = []
+    for name in sorted(reachable):
+        lines.extend(targets[name][1])
+    return "\n".join(lines)
+
+
+def _live_makefile_lines(text):
+    """The Makefile's lines whose effective shell command is real.
+
+    Make strips leading `@`, `-` and `+` prefixes before handing a recipe
+    line to the shell, so a line spelled `\t@# python3 ...` EXECUTES a shell
+    comment -- nothing -- while still containing the invocation text. Round
+    15's guard skipped only lines lstripping to `#`, which pinned that
+    round's spelling: the `@#` spelling disabled a 62-site gate with the
+    census, the collection check and CI parity all green (round 16). The
+    property is "what does the shell run", so the prefixes are stripped the
+    way make strips them before the comment test.
+    """
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        while stripped[:1] in ("@", "-", "+"):
+            stripped = stripped[1:].lstrip()
+        if stripped.startswith("#"):
+            continue
+        yield line
+
+
+def uncollected_tests(text=None) -> list[str]:
     """Test files under a discovered directory that no `-p` pattern collects.
 
     `make bakeoff` and `make grammar` each run `unittest discover` with an
@@ -289,16 +356,37 @@ def uncollected_tests() -> list[str]:
     additive direction was open.
     """
     import fnmatch
-    text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    if text is None:
+        text = (ROOT / "Makefile").read_text(encoding="utf-8")
     patterns: dict[str, list[str]] = {}
-    for match in re.finditer(
-            r"unittest discover -s (?P<dir>\S+)(?P<rest>[^\n]*)", text):
+    # Live lines only: a commented-out discover line still contributed its
+    # -p pattern, so the file it used to collect was reported as collected
+    # while running nowhere (round 16, the @#-census hole's twin).
+    for line in _live_makefile_lines(_reachable_from_all(text)):
+        match = re.search(
+            r"unittest discover -s (?P<dir>\S+)(?P<rest>[^\n]*)", line)
+        if match is None:
+            continue
         found = re.search(r"-p ['\"]?(?P<pattern>[^'\"\s]+)",
                           match.group("rest"))
         # unittest's own default when no -p is given.
         patterns.setdefault(match.group("dir"), []).append(
             found.group("pattern") if found else "test*.py")
     missed = []
+    # THE DIRECTORY POPULATION IS THE FILESYSTEM'S, not the Makefile's.
+    # With every discover line for a directory commented out, the pattern
+    # map simply lost the directory and the per-file check below had nothing
+    # to compare -- a whole suite running nowhere with this check green.
+    # Any non-hidden */tests directory holding test_*.py files must be
+    # collected by at least one live discover run.
+    for tests_dir in sorted(ROOT.glob("*/tests")):
+        rel = tests_dir.relative_to(ROOT).as_posix()
+        if rel.startswith(".") or not any(tests_dir.glob("test_*.py")):
+            continue
+        if rel not in patterns:
+            missed.append(
+                f"{rel} holds test files and no live `unittest discover` "
+                "run collects the directory at all")
     for directory, globs in sorted(patterns.items()):
         path = ROOT / directory
         if not path.is_dir():
@@ -632,6 +720,15 @@ def has_self_test(path: Path) -> bool:
     return "--self-test" in text and ("def self_test" in text or "self_test()" in text)
 
 
+def serial_problems(makefile_text):
+    """The Makefile must forbid parallel execution while mutants exist."""
+    if ".NOTPARALLEL" in makefile_text:
+        return []
+    return ["the Makefile no longer declares .NOTPARALLEL. The coverage "
+            "measurement mutates gate files in place, so a parallel make "
+            "races real gate runs against blanked mutants."]
+
+
 def census(problems: list[str], gates=None, ceilings=None,
            no_self_test=None) -> list[str]:
     """Every Makefile gate lands in exactly one bucket, or this fails.
@@ -661,6 +758,14 @@ def census(problems: list[str], gates=None, ceilings=None,
                 "for it. Add it to CEILINGS with a measured (sites, ceiling), "
                 "or to NO_SELF_TEST if it has none. A gate that is in no bucket "
                 "is a gate whose coverage nobody has looked at.")
+    # THE SERIAL GUARANTEE. surviving_sites() swaps mutants into real gate
+    # files; under `make -j` another target can execute a gate while its
+    # mutant is on disk. .NOTPARALLEL is the isolation boundary, and round 16
+    # found it pinned by nothing.
+    if gates is None:
+        problems.extend(serial_problems(
+            (ROOT / "Makefile").read_text(encoding="utf-8")))
+
     # THE REVERSE DIRECTION, which round 15 demonstrated was open end to end:
     # deleting a gate's invocations from the Makefile and CI left the gate
     # running NOWHERE while this census (population = the Makefile's), the
@@ -846,9 +951,22 @@ def self_test() -> int:
     cases.append(("both shell reporting styles are recognised",
                   len(shell_report_sites('  [ -f X ] || fail "gone"\n')) == 1
                   and len(shell_report_sites("  printf 'x: FAIL\\n' >&2\n")) == 1))
+    cases.append(("fail-family helpers are counted, not just `fail`",
+                  len(shell_report_sites('  [ -f X ] || fail_env "gone"\n')) == 1
+                  and len(shell_report_sites('  usage_fail "two args"\n')) == 1))
     cases.append(("a report line inside a shell self_test is not counted",
                   shell_report_sites(
                       'self_test() {\n  fail "mine"\n}\nfail "real"\n') == [3]))
+    cases.append(("a Makefile without .NOTPARALLEL is reported",
+                  any(".NOTPARALLEL" in x
+                      for x in serial_problems("all: check\n"))))
+    cases.append(("a Makefile declaring .NOTPARALLEL is not reported",
+                  not serial_problems(".NOTPARALLEL:\nall: check\n")))
+    cases.append(("a gate in a target unreachable from `all` is not counted",
+                  makefile_gates("all: alpha\n\nalpha:\n"
+                                 "\tbash tests/structure/check-layout.sh\n\n"
+                                 "orphan:\n\tbash tests/golden/run.sh\n")
+                  == ["tests/structure/check-layout.sh"]))
     cases.append(("a one-line self_test does not swallow later sites",
                   shell_report_sites(
                       'self_test() { :; }\nfail "real"\n') == [1]))
