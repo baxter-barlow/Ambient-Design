@@ -26,16 +26,24 @@ Rdiv3 ref13 gnd  5k
 Bset  s 0 V = 0.5*(1+tanh(400*(v(ref13)-v(trig))))
 * Threshold comparator: Rth=1 when V(thres) > 2/3 Vcc
 Bthr  rth 0 V = 0.5*(1+tanh(400*(v(thres)-v(cont))))
-* RESET pin (active low, ~0.7 V threshold); OR'ed with threshold comparator
+* RESET pin (active low, ~0.7 V threshold)
 Brst  rrs 0 V = 0.5*(1+tanh(20*(0.7-v(rst))))
-Bres  r 0 V = 1-(1-v(rth))*(1-v(rrs))
 
-* SR latch: state cap q in [0,1]; set-dominant (real 555 TRIG overrides THRES);
-* weak tanh positive-feedback term holds state when S=R=0.
+* SR latch: state cap q in [0,1]. Set-dominance applies to TRIG vs THRES
+* only (real 555: TRIG overrides THRES); RESET has the HIGHEST priority per
+* the SLFS022 function table -- RESET low forces OUT low regardless of TRIG.
+* An earlier revision OR'ed rrs into the threshold term, so the (1-s)
+* set-dominance factor silently extended to RESET and an asserted TRIG drove
+* OUT to Voh through an asserted RESET (round 16, reproduced by simulation).
+* Now the set term is gated off by rrs and the rrs discharge term carries no
+* (1-s) factor. With RST tied high (as in this benchmark) rrs = 0 and the
+* latch is identical to the previous revision, so no measured value moves.
+* Weak tanh positive-feedback term holds state when S=R=0.
 * Node order gnd->q so positive expression current CHARGES the state cap
 * (SPICE convention: current flows node1 -> node2 through the source).
 Cq    q gnd 100p
-Bq    gnd q I = 50u*v(s)*(1-v(q)) - 50u*v(r)*(1-v(s))*v(q)
+Bq    gnd q I = 50u*v(s)*(1-v(rrs))*(1-v(q))
++             - 50u*(v(rth)*(1-v(s))+v(rrs))*v(q)
 +             + 10u*(0.5*(1+tanh(40*(v(q)-0.5))) - v(q))
 
 * Totem-pole output: high ~ Vcc-1.7 (bipolar 555 Voh), low ~ 0.15 V sat.
