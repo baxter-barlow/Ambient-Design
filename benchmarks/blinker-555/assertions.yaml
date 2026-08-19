@@ -42,7 +42,7 @@ assertions:
     expected: 1.012 s
     window: [0.951 s, 1.083 s]   # 1% R, 5% C AND Ib in [0, 0.25 uA]; see
                                #   design.md sec. "Duty-cycle window"
-    measured: 1.01191 s
+    measured: 1.01166 s
     verdict: PASS
 
   - name: osc_frequency
@@ -56,7 +56,7 @@ assertions:
                                #   this window would FAIL: at 0.5 uA the joint
                                #   corner gives f_min 0.91285 Hz, below the
                                #   0.923 floor on the same line.
-    measured: 0.98823 Hz
+    measured: 0.988474 Hz
     verdict: PASS
 
   - name: duty_cycle_high
@@ -88,7 +88,7 @@ assertions:
                                #   so the 0.5 uA figure IS the guideline's own
                                #   margin, not a current the vendor stands behind.
                                #   See design.md sec. "Duty-cycle window".
-    measured: 53.45 %
+    measured: 53.4641 %
     verdict: PASS
 
   - name: led_on_current
@@ -98,7 +98,7 @@ assertions:
     kind: envelope_max         # MAX over the settled window 2..5 s
     expected: 9.5 mA
     window: [8.0 mA, 10.5 mA]  # Vf 1.8-2.2 V, Voh 7.0-7.5 V, RL +/-1%
-    measured: 9.257 mA
+    measured: 9.25223 mA
     verdict: PASS
 
   - name: out_high_level
@@ -107,5 +107,5 @@ assertions:
     kind: envelope_max         # supplementary sanity check, MAX over 2..5 s
     expected: 7.2 V            # Vcc - 1.7 V minus 12-ohm output-stage drop
     window: [6.8 V, 7.6 V]
-    measured: 7.19860 V
+    measured: 7.19602 V
     verdict: PASS

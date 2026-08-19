@@ -101,11 +101,11 @@ RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
 
 | Assertion | Predicted window | Measured | Verdict |
 |---|---|---|---|
-| f_osc | 0.923 – 1.052 Hz | 0.98823 Hz | PASS |
-| duty_pct | 53.3 – 55.8 % | 53.45 % | PASS |
-| t_period | 0.951 – 1.083 s | 1.01191 s | PASS |
-| i_led_on | 8.0 – 10.5 mA | 9.257 mA | PASS |
-| v_out_high | 6.8 – 7.6 V | 7.199 V | PASS |
+| f_osc | 0.923 – 1.052 Hz | 0.988474 Hz | PASS |
+| duty_pct | 53.3 – 55.8 % | 53.4641 % | PASS |
+| t_period | 0.951 – 1.083 s | 1.01166 s | PASS |
+| i_led_on | 8.0 – 10.5 mA | 9.25223 mA | PASS |
+| v_out_high | 6.8 – 7.6 V | 7.19602 V | PASS |
 
 Full transcript, exact command, and iteration history: `validation.log`.
 Wallclock 0.25 s — stated as engineering context (the sim is cheap enough for
@@ -272,7 +272,15 @@ wrong in three ways worth recording:
 
 Corners are now swept over `RA +/-1 %`, `RB +/-1 %`, `C +/-5 %` and
 `Ib in [0, 0.25 uA]` jointly, and rounded OUTWARD, which is what sec. "LED drive" already
-does for the LED window. The old number was computed from an incomplete model of the
+does for the LED window. Three shipped bounds carry ONE EXTRA outward step
+beyond the tightest such rounding, kept deliberately as slack against
+timestep sensitivity rather than re-frozen: the swept corners are duty max
+55.6544 % (tightest outward 55.7, shipped 55.8), period max 1.08199 s
+(tightest 1.082, shipped 1.083), and the frequency window follows from the
+SHIPPED period/duty bounds as [0.923, 1.052] where the swept corners alone
+give [0.924, 1.051]. Round 16 flagged the step as reproducible-from-nothing;
+it is now a statement rather than a residue, and `derive-555-windows.py`
+still holds every bound inside the guaranteed band. The old number was computed from an incomplete model of the
 same circuit; nothing about the circuit got worse and no measurement was made to
 fit. The rescale itself is kept: a 1 uF film part has far better tolerance and
 leakage than a 10 uF electrolytic, which is worth more than duty precision in a
@@ -280,7 +288,7 @@ blinker.
 
 The simulation cannot see any of this. `Bset`/`Bthr` in `netlist.cir` are B-source
 voltage expressions and draw exactly zero input current, so the deck measures the
-Ib = 0 row (53.45 %) and always will. That is a stated limit of the rung-0
+Ib = 0 row (53.46 %) and always will. That is a stated limit of the rung-0
 macromodel, not a passing result.
 
 ### The same term moves the frequency and period windows

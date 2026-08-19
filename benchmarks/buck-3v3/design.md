@@ -204,7 +204,9 @@ Plant: duty-to-Vout gain Vin with the LC double pole at
 
 ESR zero at 1/(2 pi x C x ESR) = 2.2 MHz -- too high to help, hence Type-III.
 Design: place a double zero on the LC resonance, crossover fc = 30 kHz
-(fsw/16). Required compensator gain at fc, with divider gain h = 0.8/3.3 =
+(about fsw/17; a previous revision printed "fsw/16", which is 31.25 kHz --
+every downstream number is computed from 30 kHz and is unaffected).
+Required compensator gain at fc, with divider gain h = 0.8/3.3 =
 0.242 and |P(fc)| ~= (f0/fc)^2 = 0.078:
 
     |Gc(fc)| = 1 / (12 x 0.242 x 0.078) = 4.4
