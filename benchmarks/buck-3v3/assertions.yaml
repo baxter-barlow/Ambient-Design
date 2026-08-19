@@ -17,18 +17,18 @@
 # Worse, the assertion checker added in the same issue compares `measured:` to
 # three significant figures -- so the gate had been made to ENFORCE the
 # numerical error, and refining the timestep would have failed `make sim`.
-# The deck now runs at 2 ns (5 s wall, inside the 60 s budget) and every
+# The deck now runs at 2 ns (4.881 s wall, inside the 60 s budget) and every
 # `measured:` below is from that run.
 # Windows are the task defaults; none were widened. Measured values are from
 # the canonical `ngspice -b netlist.cir` run recorded in validation.log
-# (ngspice-46, 4.9 s wall at the shipped 2 ns timestep).
+# (ngspice-46, 4.881 s wall at the shipped 2 ns timestep).
 
 benchmark: bench-buck
 fidelity_class: behavioral
 sim_rung: 0
 deck: netlist.cir
 runtime_budget_s: 60
-measured_runtime_s: 5.0
+measured_runtime_s: 4.881
 
 assertions:
   - name: vout_mean

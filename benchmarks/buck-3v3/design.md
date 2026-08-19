@@ -398,7 +398,7 @@ drift is |25 - (-100)| = 125 ppm/K, which the divider gain
 R1/R2 / (1 + R1/R2) = 0.757 turns into 0.31 mV/K on Vout. The binding side is
 the low corner's 13.1 mV of headroom (3.2141 V against the 3.201 V floor), so
 the +/-3% window holds for part temperatures within about 42 K of the
-tolerance reference -- roughly -15..67 C, which covers the bench this
+tolerance reference -- roughly -17..67 C, which covers the bench this
 benchmark models but is not an over-temperature guarantee. Holding the window
 over -40..85 C means matching R2 to the same thin-film line (TNPW/RT0402 in
 the same footprint): a matched +/-25 ppm/K pair bounds the ratio drift at
