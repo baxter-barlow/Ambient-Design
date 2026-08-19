@@ -228,6 +228,22 @@ def _canonical_number(value) -> str:
     return "-" + text if sign else text
 
 
+def _canonical_str(value: str) -> str:
+    """Clause 4: literal non-ASCII, and Unicode SCALAR VALUES only.
+
+    A lone surrogate previously failed only at .encode("utf-8") -- a
+    UnicodeEncodeError that happens to subclass ValueError -- while a
+    conforming JS implementation would either backslash-u escape it (violating
+    clause 4) or silently substitute U+FFFD and hash a different document.
+    The rule is stated, and it covers keys and values alike."""
+    if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):
+        raise ValueError(
+            "lone surrogates are not representable in "
+            "rhoform-canonical-json/1 (clause 4: strings are Unicode "
+            "scalar values; a surrogate has no UTF-8 bytes)")
+    return json.dumps(value, ensure_ascii=False)
+
+
 def _encode(node) -> str:
     """rhoform-canonical-json/1, written out rather than configured.
 
@@ -243,24 +259,15 @@ def _encode(node) -> str:
     if isinstance(node, (int, float)):
         return _canonical_number(node)
     if isinstance(node, str):
-        # LONE SURROGATES ARE AN ERROR, not an accident. The profile is
-        # silent-until-round-17 on them; a Python lone surrogate only failed
-        # later at .encode("utf-8") (a UnicodeEncodeError that happens to be
-        # a ValueError), while a conforming JS implementation would either
-        # \u-escape it (violating clause 4: the bytes are the text) or
-        # silently substitute U+FFFD and hash a different document. Clause 4
-        # now states it: a string must be Unicode scalar values only.
-        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in node):
-            raise ValueError(
-                "lone surrogates are not representable in "
-                "rhoform-canonical-json/1 (clause 4: strings are Unicode "
-                "scalar values; a surrogate has no UTF-8 bytes)")
-        return json.dumps(node, ensure_ascii=False)
+        return _canonical_str(node)
     if isinstance(node, list):
         return "[" + ",".join(_encode(item) for item in node) + "]"
     if isinstance(node, dict):
+        # Keys route through the same guarded encoder as values: the
+        # round-17 surrogate rule covered only the value branch, so a
+        # surrogate OBJECT KEY still went through bare json.dumps (round 18).
         return "{" + ",".join(
-            json.dumps(key, ensure_ascii=False) + ":" + _encode(value)
+            _canonical_str(key) + ":" + _encode(value)
             for key, value in sorted(node.items())) + "}"
     raise TypeError(f"{type(node).__name__} is not representable in JSON")
 
@@ -674,18 +681,38 @@ def self_test() -> int:
     try:
         canonical_bytes({"v": "bad \udcff string"})
     except ValueError as exc:
-        surrogate_rejected = "surrogate" in str(exc)
+        # The rule's own message, not UnicodeEncodeError's: the accidental
+        # rejection also says "surrogates", so a fragment match could not
+        # tell the rule from the accident it replaced (round 18).
+        surrogate_rejected = ("rhoform-canonical-json" in str(exc)
+                              and not isinstance(exc, UnicodeEncodeError))
     checks.append(("a lone surrogate is rejected by rule, not by accident",
                    surrogate_rejected))
+    key_rejected = False
+    try:
+        canonical_bytes({"bad \udcff key": 1})
+    except ValueError as exc:
+        key_rejected = ("rhoform-canonical-json" in str(exc)
+                        and not isinstance(exc, UnicodeEncodeError))
+    checks.append(("a lone surrogate in an OBJECT KEY is rejected by rule",
+                   key_rejected))
 
     # THE README'S PUBLISHED DIGEST, held to the committed header through
     # readme_digest_problems() with injectable inputs.
     _good = "sha256:" + "a" * 64
     _bad = "sha256:" + "b" * 64
     _ok, _stale, _gone = [], [], []
-    readme_digest_problems(_ok, readme_text=f"# -> {_good}\n", committed=_good)
-    readme_digest_problems(_stale, readme_text=f"# -> {_bad}\n", committed=_good)
-    readme_digest_problems(_gone, readme_text="no digest here", committed=_good)
+    readme_digest_problems(_ok, readme_text=f"scalar values\n# -> {_good}\n",
+                           committed=_good)
+    readme_digest_problems(_stale, readme_text=f"scalar values\n# -> {_bad}\n",
+                           committed=_good)
+    readme_digest_problems(_gone, readme_text="scalar values, no digest here",
+                           committed=_good)
+    _clauseless = []
+    readme_digest_problems(_clauseless, readme_text=f"# -> {_good}\n",
+                           committed=_good)
+    checks.append(("a README that drops the scalar-values clause is caught",
+                   any("scalar-values" in x for x in _clauseless)))
     checks.append(("a README digest matching the header reconciles clean",
                    not _ok))
     checks.append(("a stale README digest is caught",
@@ -917,6 +944,11 @@ def readme_digest_problems(problems, readme_text=_READ_FROM_DISK, committed=None
         document = json.loads(
             (IR_EXAMPLES / "blinker.ir.json").read_text(encoding="utf-8"))
         committed = document["header"]["design_hash"]
+    if "scalar values" not in readme_text:
+        problems.append(
+            "ir/README.md no longer states clause 4's Unicode-scalar-values "
+            "rule; the serializer enforces what the profile no longer "
+            "documents, which is how implementations diverge.")
     published = re.findall(r"# -> (sha256:[0-9a-f]{64})", readme_text)
     if not published:
         problems.append(

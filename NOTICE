@@ -44,14 +44,11 @@ corpus/bugs.yaml
 
     The corpus records a source URL for every entry. It does not record a
     checksum or a per-source licence determination, which AGENTS.md asks for
-    when redistributing vendor artifacts. That gap is real and is tracked
-    rather than papered over. An earlier revision said "see the Linear issue
-    referenced in corpus/README.md"; that file references no such issue, so
-    the claim that the gap was tracked rested on a pointer that does not
-    resolve. It is NOT currently tracked in a dedicated issue -- two earlier revisions
-    claimed it was, against pointers that did not resolve. The corpus records a
-    source URL per entry and no checksum or per-source licence determination,
-    and that remains true.
+    when redistributing vendor artifacts. That gap is real, stated here
+    rather than papered over, and NOT currently tracked in a dedicated
+    issue: two earlier revisions claimed it was tracked, each against a
+    pointer that did not resolve, and a third revision managed to claim
+    both at once (round 18).
 
 parts/examples/*.part.json
 
