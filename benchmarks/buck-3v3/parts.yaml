@@ -1,7 +1,10 @@
 # Rhoform benchmark b: 3.3V/2A synchronous buck -- power stage + control BOM
 # MPNs are examples establishing that the design is buildable with real,
 # in-production parts at the stated margins; the benchmark itself is
-# exercised through the behavioral deck (netlist.cir).
+# exercised through the behavioral deck (netlist.cir). MPN existence is a
+# distributor fact no offline gate can hold true: each MPN was verified
+# against live distributor stock in the AMB-123 audit (last full pass round
+# 18, 2026-08-19, after a fabricated R1 part number shipped for two rounds).
 
 parts:
   - ref: U1
@@ -71,15 +74,21 @@ parts:
 
   - ref: R1
     role: feedback_divider_top
-    value: 31.2 kOhm, 1%
+    value: 31.2 kOhm, 0.1% thin film (stack computed at the +/-1% requirement)
     package: "0402"
-    mpn: Yageo RC0402FR-0731K2L
+    mpn: Vishay TNPW040231K2BEED
     notes: >-
       Vout = 0.8*(1 + 31.2k/10k) = 3.296 V (-0.12% of nominal). Was 31.6k,
       centring at +0.85%, which put the worst-case error stack (+/-1% reference,
       +/-1% on both resistors) at +3.42% and outside the design's own +/-3%
       window. Centring the divider is the fix; widening the window would have
-      been asserting a spec the design does not meet.
+      been asserting a spec the design does not meet. 31.2k is an E192-only
+      value: the thick-film RC0402FR line is E24/E96 and the part an earlier
+      revision named here (RC0402FR-0731K2L) DOES NOT EXIST -- it shipped for
+      two audit rounds before a distributor search caught it (round 18). The
+      TNPW e3 thin film part is verified active and stocked (DigiKey 4972288,
+      15k+ units, 2026-08-19): +/-0.1%, +/-25 ppm/K, 0.13 W. The error stack
+      keeps the +/-1% requirement as its bound; the shipped part exceeds it.
 
   - ref: R2
     role: feedback_divider_bottom

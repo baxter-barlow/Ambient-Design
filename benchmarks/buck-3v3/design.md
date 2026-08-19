@@ -390,16 +390,21 @@ move as fitting an expected value to a bug.
 
 Both worst-case corners are 25 C figures, and the stack has a fourth term the
 table does not show: divider tempco. The LM25145's +/-1% reference is specified
-over its full junction range, but the RC0402FR thick-film parts carry
-+/-100 ppm/K on top of their 25 C +/-1%, and with the two drifting apart the
-ratio moves 200 ppm/K, which the divider gain R1/R2 / (1 + R1/R2) = 0.757
-turns into 0.50 mV/K on Vout. The binding side is the low corner's 13.1 mV of
-headroom (3.2141 V against the 3.201 V floor), so the +/-3% window holds for
-part temperatures within about 26 K of the tolerance reference -- roughly
-0..50 C, which covers the bench this benchmark models but is not an
-over-temperature guarantee. Holding the window over -40..85 C means +/-25 ppm/K
-thin film for the divider (RT0402 in the same footprint), which stretches the
-same headroom past 100 K.
+over its full junction range; the divider is now a MIXED pair -- R1 is a
++/-25 ppm/K thin film part (TNPW040231K2BEED; 31.2k is an E192-only value,
+and the thick-film part an earlier revision named here does not exist, see
+parts.yaml) and R2 remains +/-100 ppm/K thick film -- so the worst ratio
+drift is |25 - (-100)| = 125 ppm/K, which the divider gain
+R1/R2 / (1 + R1/R2) = 0.757 turns into 0.31 mV/K on Vout. The binding side is
+the low corner's 13.1 mV of headroom (3.2141 V against the 3.201 V floor), so
+the +/-3% window holds for part temperatures within about 42 K of the
+tolerance reference -- roughly -15..67 C, which covers the bench this
+benchmark models but is not an over-temperature guarantee. Holding the window
+over -40..85 C means matching R2 to the same thin-film line (TNPW/RT0402 in
+the same footprint): a matched +/-25 ppm/K pair bounds the ratio drift at
+50 ppm/K (0.125 mV/K), stretching the same headroom past 100 K. (An earlier
+revision of this paragraph computed 0.50 mV/K / 26 K for a both-thick-film
+divider; the round-18 part correction improved the shipped stack.)
 
 The simulation never showed this: it runs at nominal, where both dividers are
 comfortably inside. This is a tolerance defect, and the deck has no tolerance.
