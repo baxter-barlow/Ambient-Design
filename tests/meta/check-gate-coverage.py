@@ -110,7 +110,7 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 # the survivor number; do not raise it.
 CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
-    "lang/tests/check_readme_numbers.py": (34, 16),
+    "lang/tests/check_readme_numbers.py": (36, 16),
     "parts/lint-part-data.py": (30, 5),
     "tests/benchmarks/check-assertions.py": (18, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
@@ -119,13 +119,13 @@ CEILINGS = {
     "tests/benchmarks/run-sim.sh": (11, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
-    "tests/corpus/check-corpus.py": (25, 3),
+    "tests/corpus/check-corpus.py": (27, 3),
     "tests/eval/check-run-records.py": (62, 9),
-    "tests/ir/check-hashes.py": (16, 2),
+    "tests/ir/check-hashes.py": (19, 2),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
-    "tests/meta/check-gate-coverage.py": (11, 6),
+    "tests/meta/check-gate-coverage.py": (12, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
     "tests/golden/run.sh": (6, 0),
     "tests/structure/check-layout.sh": (29, 0),
@@ -178,7 +178,8 @@ OWNERS = {
         {"problems"}, {"checks", "notes", "seen_spans", "_p"}),
     "tests/meta/check-gate-coverage.py": (
         {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
-                       "gates", "notes", "unaccounted", "missed"}),
+                       "gates", "notes", "unaccounted", "missed",
+                       "_TREE_DIGEST_MEMO"}),
     "tests/schemas/validate-schemas.py": (
         {"failures"}, {"cases"}),
     "tests/structure/check-retired-names.py": (
@@ -242,7 +243,7 @@ class GateUnavailable(Exception):
     """The measurement could not be performed. Never reported as a pass."""
 
 
-def makefile_gates() -> list[str]:
+def makefile_gates(text=None) -> list[str]:
     """Every script path the Makefile invokes, read out of the Makefile.
 
     The population used to be `ROOT.rglob("*.py")` filtered to files containing
@@ -255,12 +256,20 @@ def makefile_gates() -> list[str]:
     with a `--self-test`. That exclusion is by construction -- no path appears
     -- rather than by a list somebody has to maintain.
     """
-    text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    if text is None:
+        text = (ROOT / "Makefile").read_text(encoding="utf-8")
     found = []
-    for match in re.finditer(r"(?:python3|bash|sh)\s+(\S+\.(?:py|sh))", text):
-        rel = match.group(1)
-        if (ROOT / rel).is_file() and rel not in found:
-            found.append(rel)
+    for line in text.splitlines():
+        # Comments are not invocations. The regex used to run over the whole
+        # file, so `#`-ing a recipe line out DISABLED the gate while the
+        # census still listed it as covered -- the exact silent unhooking the
+        # census exists to catch, hidden by its own parser.
+        if line.lstrip().startswith("#"):
+            continue
+        for match in re.finditer(r"(?:python3|bash|sh)\s+(\S+\.(?:py|sh))", line):
+            rel = match.group(1)
+            if (ROOT / rel).is_file() and rel not in found:
+                found.append(rel)
     return sorted(found)
 
 
@@ -423,14 +432,71 @@ def _last_line(result) -> str:
 
 def _machinery_salt() -> str:
     """Hash of the mutation machinery itself, so editing how sites are
-    counted, blanked or judged invalidates every cached measurement."""
+    counted, blanked or JUDGED invalidates every cached measurement. Round 15
+    showed the first version's docstring claimed "judged" while the salt
+    covered only counting and blanking -- surviving_sites (the runner, the
+    exit-code judgement, the bash -n rule) is hashed now, and so is the tree
+    digest function whose output joins the key."""
     import hashlib
     import inspect
     digest = hashlib.sha256()
     digest.update(SHELL_SITE.pattern.encode("utf-8"))
-    for fn in (report_sites, shell_report_sites, blank_site, blank_shell_site):
+    for fn in (report_sites, shell_report_sites, blank_site, blank_shell_site,
+               surviving_sites, _tree_digest, _cache_key):
         digest.update(inspect.getsource(fn).encode("utf-8"))
     return digest.hexdigest()
+
+
+def _tree_digest():
+    """Content hash of every git-tracked file, or None when git is absent.
+
+    A mutation outcome depends on everything a gate's self-test reads --
+    part fixtures, the frozen IR example, the Makefile -- not only on the
+    gate's own bytes, and round 15 reproduced stale cache hits through
+    exactly those inputs. Keying on the whole tracked tree is coarse: any
+    edit anywhere re-measures every gate. That is the correct direction;
+    a cheaper key that misses an input serves a wrong number. When the
+    digest cannot be computed the cache is DISABLED, not trusted.
+    """
+    import hashlib
+    try:
+        listing = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"],
+                                 capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if listing.returncode != 0:
+        return None
+    digest = hashlib.sha256()
+    for rel in listing.stdout.decode("utf-8", "replace").split("\0"):
+        if not rel:
+            continue
+        try:
+            data = (ROOT / rel).read_bytes()
+        except OSError:
+            data = b"<unreadable>"
+        digest.update(rel.encode("utf-8"))
+        digest.update(len(data).to_bytes(8, "big"))
+        digest.update(data)
+    return digest.hexdigest()
+
+
+# Computed once per process, BEFORE any mutation is written: the loop below
+# swaps mutants into tracked files, and a digest taken mid-measurement would
+# key on a tree state that never exists at rest.
+_TREE_DIGEST_MEMO = []
+
+
+def _tree_digest_cached():
+    if not _TREE_DIGEST_MEMO:
+        _TREE_DIGEST_MEMO.append(_tree_digest())
+    return _TREE_DIGEST_MEMO[0]
+
+
+def _cache_key(source: str, report_owners: set[str], tree) -> str:
+    import hashlib
+    return hashlib.sha256(
+        (source + repr(sorted(report_owners)) + str(tree) + _machinery_salt())
+        .encode("utf-8")).hexdigest()
 
 
 def _mutation_cache_path() -> Path:
@@ -500,9 +566,10 @@ def surviving_sites(gate: Path, report_owners: set[str],
             f"{baseline.returncode} before any mutation, so every site would "
             "score as caught. Install the pinned dependencies and re-run: "
             f"{_last_line(baseline)}")
-    cache_key = hashlib.sha256(
-        (source + repr(sorted(report_owners)) + _machinery_salt())
-        .encode("utf-8")).hexdigest()
+    tree = _tree_digest_cached()
+    if tree is None:
+        cache = None  # no digest, no cache: an unverifiable key is not a key
+    cache_key = _cache_key(source, report_owners, tree)
     if cache is not None and cache_key in cache:
         cached_sites, cached_survivors = cache[cache_key]
         return cached_sites, len(cached_survivors), list(cached_survivors)
@@ -565,7 +632,8 @@ def has_self_test(path: Path) -> bool:
     return "--self-test" in text and ("def self_test" in text or "self_test()" in text)
 
 
-def census(problems: list[str], gates=None) -> list[str]:
+def census(problems: list[str], gates=None, ceilings=None,
+           no_self_test=None) -> list[str]:
     """Every Makefile gate lands in exactly one bucket, or this fails.
 
     The buckets are CEILINGS (measured) and NO_SELF_TEST (verified to have
@@ -576,9 +644,12 @@ def census(problems: list[str], gates=None) -> list[str]:
     nothing saying so.
     """
     unaccounted = []
-    for rel in (gates if gates is not None else makefile_gates()):
+    ceilings = CEILINGS if ceilings is None else ceilings
+    no_self_test = NO_SELF_TEST if no_self_test is None else no_self_test
+    population = gates if gates is not None else makefile_gates()
+    for rel in population:
         buckets = [name for name, holder in
-                   (("CEILINGS", CEILINGS), ("NO_SELF_TEST", NO_SELF_TEST))
+                   (("CEILINGS", ceilings), ("NO_SELF_TEST", no_self_test))
                    if rel in holder]
         if len(buckets) > 1:
             problems.append(f"{rel}: listed in {' and '.join(buckets)}; a gate "
@@ -590,12 +661,30 @@ def census(problems: list[str], gates=None) -> list[str]:
                 "for it. Add it to CEILINGS with a measured (sites, ceiling), "
                 "or to NO_SELF_TEST if it has none. A gate that is in no bucket "
                 "is a gate whose coverage nobody has looked at.")
+    # THE REVERSE DIRECTION, which round 15 demonstrated was open end to end:
+    # deleting a gate's invocations from the Makefile and CI left the gate
+    # running NOWHERE while this census (population = the Makefile's), the
+    # measurement loop (population = CEILINGS, measured off disk whether or
+    # not anything invokes them) and check-pins' Makefile-subset-of-CI parity
+    # all stayed green. A bucket entry the Makefile no longer runs is a gate
+    # that has been unhooked, not retired -- retiring one means removing it
+    # from the bucket in the same commit, which is a visible decision.
+    for name, holder in (("CEILINGS", ceilings), ("NO_SELF_TEST", no_self_test)):
+        for rel in sorted(holder):
+            if rel not in population:
+                problems.append(
+                    f"{rel}: listed in {name} and the Makefile no longer runs "
+                    "it, so its checks execute nowhere while its coverage is "
+                    "still reported as measured. Rewire the Makefile, or "
+                    "remove the entry in the same commit as a deliberate "
+                    "retirement.")
     return unaccounted
 
 
 def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[int, int]:
     """(gates measured, report sites counted but unpinned in NO_SELF_TEST)."""
-    census(problems, gates=gates)
+    census(problems, gates=gates, ceilings=ceilings,
+           no_self_test=NO_SELF_TEST if gates is None else ())
     if gates is None:
         for missed in uncollected_tests():
             problems.append(
@@ -837,6 +926,14 @@ def self_test() -> int:
         cases.append(("an edited gate misses the cache",
                       surviving_sites(edited_probe, set(), cache=poisoned)
                       == (2, 1, [11])))
+        # The key covers the WHOLE tracked tree, not just the gate: a
+        # self-test's fixtures live outside the gate file, and round 15
+        # served a stale measurement through exactly that gap.
+        cases.append(("a changed tree digest misses the cache",
+                      _cache_key("x", set(), "tree-a")
+                      != _cache_key("x", set(), "tree-b")))
+        cases.append(("the tree digest is computable in this checkout",
+                      isinstance(_tree_digest_cached(), str)))
 
         # THE BASELINE GUARD. Round 13 added it as the fix for a blocker and
         # pinned it with nothing: `if baseline.returncode != 0:` -> `if False:`
@@ -886,12 +983,12 @@ def self_test() -> int:
         probe_owners = {rel: ({"problems"}, set())}
         try:
             over = []
-            check(over, ceilings={rel: (6, 0)}, owners=probe_owners, gates=[])
+            check(over, ceilings={rel: (6, 0)}, owners=probe_owners, gates=[rel])
             cases.append(("a gate above its ceiling is reported", any(
                 "survive being blanked" in p and "above the ceiling of 0" in p
                 for p in over)))
             under = []
-            check(under, ceilings={rel: (6, 9)}, owners=probe_owners, gates=[])
+            check(under, ceilings={rel: (6, 9)}, owners=probe_owners, gates=[rel])
             cases.append(("a gate under its ceiling is not reported", not under))
 
             # THE DENOMINATOR. `REPORT_NAMES = ("append",)` removed 82 of 292
@@ -943,9 +1040,28 @@ def self_test() -> int:
             cases.append(("a Makefile gate in no bucket is reported", any(
                 "does not account for it" in p for p in unaccounted)))
             cases.append(("a gate that IS in a bucket is not reported", not any(
-                "check-layout.sh" in p for p in unaccounted)))
+                "check-layout.sh" in p and "does not account" in p
+                for p in unaccounted)))
+            # THE REVERSE DIRECTION. The probe population above omits every
+            # real bucket entry except check-layout, so each omission must be
+            # reported as an unhooked gate -- and check-layout must not be.
+            cases.append(("a bucket entry the Makefile no longer runs is "
+                          "reported", any(
+                "check-dco.sh" in p and "no longer runs it" in p
+                for p in unaccounted)))
+            cases.append(("a bucket entry the Makefile still runs is not "
+                          "reported as unhooked", not any(
+                "check-layout.sh" in p and "no longer runs it" in p
+                for p in unaccounted)))
         finally:
             inside.unlink()
+
+    # A commented-out recipe line is not an invocation; the census parser
+    # matched them, so #-ing a gate out kept it "covered" while disabling it.
+    cases.append(("a commented-out recipe line is not counted as a gate",
+                  makefile_gates("\tbash tests/structure/check-layout.sh\n"
+                                 "#\tbash tests/golden/run.sh\n")
+                  == ["tests/structure/check-layout.sh"]))
 
     # NO_SELF_TEST must be true of every entry.
     cases.append(("no NO_SELF_TEST entry has a self-test", not [
