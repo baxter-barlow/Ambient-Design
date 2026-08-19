@@ -152,11 +152,27 @@ def _deck_passives():
     return found
 
 
+_DECK_READ_ERROR = None
 try:
     _PASSIVES = _deck_passives()
     RA, RB, C = _PASSIVES["RA"], _PASSIVES["RB"], _PASSIVES["CT"]
-except (OSError, ValueError):  # reported by main(); constants keep import safe
+except (OSError, ValueError) as exc:
+    # Import must stay safe (check-assertions imports this module), but a
+    # derivation over these constants gates a circuit that no longer exists:
+    # round 17 hid a 700k RB behind a brace parameter and this fallback
+    # silently reverted to 680k while the old comment claimed main()
+    # reported it -- nothing did. The error is held and main() refuses.
+    _DECK_READ_ERROR = str(exc)
     RA, RB, C = 100e3, 680e3, 1e-6
+
+
+def deck_read_problems():
+    """Non-empty when the timing values below are fallback constants."""
+    if _DECK_READ_ERROR is None:
+        return []
+    return [f"the deck's timing passives could not be read ({_DECK_READ_ERROR}) "
+            "and the derivation below would run on fallback constants, "
+            "gating a circuit that no longer exists"]
 
 
 def _record():
@@ -228,6 +244,9 @@ def _fmt(model):
 
 
 def main(argv):
+    for problem in deck_read_problems():
+        print(f"derive-555: UNAVAILABLE: {problem}", file=sys.stderr)
+        return 2
     m = models()
     rec = m["record"]
     print(f"NE555 record: THRES bias max {rec['ib_max'] * 1e9:.0f} nA, "
@@ -379,7 +398,28 @@ def self_test() -> int:
                 spec_with(osc_period=["about a second", "a bit more"]), m))),
         # And the shipped spec itself, so the wiring is not only fixtures.
         ("the committed assertions.yaml passes", not _shipped_problems(m)),
+        ("a readable deck reports no read problem",
+         deck_read_problems() == []),
     ]
+
+    # THE FALLBACK REFUSAL. Round 17 hid RB behind a brace: the module fell
+    # back to hard-coded constants while its comment claimed main() reported
+    # it. Nothing did; now main() refuses to derive from fallback values.
+    global _DECK_READ_ERROR
+    _held = _DECK_READ_ERROR
+    import contextlib as _ctx
+    import io as _io
+    try:
+        _DECK_READ_ERROR = "probe: RB is a brace parameter"
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _refused = main([])
+        cases.append(("an unreadable deck makes the derivation refuse, "
+                      "not fall back",
+                      _refused == 2 and any("fallback constants" in x
+                                            for x in deck_read_problems())))
+    finally:
+        _DECK_READ_ERROR = _held
 
     failures = 0
     for name, ok in cases:
