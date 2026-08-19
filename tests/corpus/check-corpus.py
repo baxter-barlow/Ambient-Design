@@ -234,6 +234,103 @@ def notice_problems(document, notice_text):
     return problems
 
 
+def census_table_problems(document, readme_text):
+    """corpus/README.md's three census tables and Counts header, recomputed.
+
+    ~71 published numbers were read by nothing (round 16 falsified them
+    arbitrarily with every gate green). Each table must hold exactly the
+    counts the corpus produces -- a missing row, an extra row and a drifted
+    count are all failures -- and the Counts header's arithmetic must close:
+    raw - duplicates - removed = total, with removed equal to the ledger."""
+    problems = []
+    if readme_text is None:
+        problems.append("corpus/README.md is missing, so its census tables "
+                        "are compared to nothing")
+        return problems
+    bugs = [b for b in document.get("bugs") or [] if isinstance(b, dict)]
+
+    header = re.search(
+        r"\*\*Total entries: (\d+)\*\* \((\d+) raw candidates; (\d+) removed "
+        r"as same-bug duplicates[^)]*then (\d+) removed at review",
+        re.sub(r"\s+", " ", readme_text))
+    if header is None:
+        problems.append(
+            "corpus/README.md no longer states the Counts header in the form "
+            "this gate reads (total, raw, duplicates, removed-at-review).")
+    else:
+        total, raw, dupes, removed = (int(g) for g in header.groups())
+        if total != len(bugs):
+            problems.append(
+                f"corpus/README.md's Counts header says {total} entries; the "
+                f"corpus holds {len(bugs)}.")
+        if raw - dupes - removed != total:
+            problems.append(
+                f"corpus/README.md's Counts arithmetic does not close: "
+                f"{raw} - {dupes} - {removed} != {total}.")
+        if removed != len(RETIRED):
+            problems.append(
+                f"corpus/README.md says {removed} entries were removed at "
+                f"review; the retirement ledger holds {len(RETIRED)}.")
+
+    censuses = (
+        ("By source kind", lambda b: (b.get("source") or {}).get("kind")),
+        ("By class (coarse)", lambda b: b.get("class")),
+        ("By category (fine)", lambda b: b.get("category")),
+    )
+    for heading, keyfn in censuses:
+        want = {}
+        for bug in bugs:
+            key = keyfn(bug)
+            if key is not None:
+                want[str(key)] = want.get(str(key), 0) + 1
+        section = re.search(
+            rf"### {re.escape(heading)}\n(.*?)(?=\n### |\n## |\Z)",
+            readme_text, re.S)
+        if section is None:
+            problems.append(
+                f"corpus/README.md no longer carries the '{heading}' census "
+                "table, so its counts are checked by nothing.")
+            continue
+        published = {}
+        for row in re.finditer(r"^\| ([a-z][\w-]*) \| (\d+) \|$",
+                               section.group(1), re.M):
+            published[row.group(1)] = int(row.group(2))
+        for name in sorted(set(want) | set(published)):
+            if want.get(name) != published.get(name):
+                problems.append(
+                    f"corpus/README.md's '{heading}' table says "
+                    f"{name} = {published.get(name, 'absent')}; the corpus "
+                    f"gives {want.get(name, 'no such value')}. A census a "
+                    "reader can falsify by hand must not be publishable "
+                    "wrong.")
+    return problems
+
+
+def licenses_problems(document, licenses_text):
+    """LICENSES.md's excerpt count is the ungated twin of NOTICE's gated one;
+    hold it to the same census (round 16)."""
+    problems = []
+    if licenses_text is None:
+        problems.append("LICENSES.md is missing, so its excerpt count is "
+                        "compared to nothing")
+        return problems
+    counts, _, _ = excerpt_census(document)
+    total = sum(counts.values())
+    found = re.search(r"carries (\d+) verbatim excerpts", licenses_text)
+    if found is None:
+        problems.append(
+            "LICENSES.md no longer states its corpus excerpt count in the "
+            f"form this gate reads. Publish: carries {total} verbatim "
+            "excerpts.")
+    elif int(found.group(1)) != total:
+        problems.append(
+            f"LICENSES.md says the corpus carries {found.group(1)} verbatim "
+            f"excerpts; the census gives {total}. NOTICE's copy of this "
+            "number is gated and this one was not, so they could diverge "
+            "silently.")
+    return problems
+
+
 def retirement_problems(readme_text):
     """Every ledgered retirement must be recorded in corpus/README.md.
 
@@ -470,6 +567,20 @@ def self_test():
         '    briefest being a single word (`"off"` in BUG-1001).\n'
         "    The corpus records a source URL for every entry.\n")
     gutted = notice_problems(exdoc, "unrelated text")
+    CENSUS_README = (
+        "## Counts\n\n"
+        "**Total entries: 3** (7 raw candidates; 2 removed as same-bug "
+        "duplicates with\ntheir URLs merged, then 2 removed at review, "
+        "above).\n\n"
+        "### By source kind\n\n"
+        "| kind | count |\n|---|---|\n"
+        "| github_issue | 2 |\n| qa_site | 1 |\n\n"
+        "### By class (coarse)\n\n"
+        "| class | count |\n|---|---|\n"
+        "| power-supply | 2 |\n| usb | 1 |\n\n"
+        "### By category (fine)\n\n"
+        "| category | count |\n|---|---|\n"
+        "| c | 3 |\n")
     cases += [
         ("a NOTICE that matches the corpus reconciles clean",
          not notice_problems(exdoc, good_notice)),
@@ -517,6 +628,60 @@ def self_test():
         ("a ledgered retirement the README no longer mentions is caught",
          any("BUG-0063" in p and "no longer mentions" in p
              for p in retirement_problems("only **BUG-0009** is here"))),
+        # THE CENSUS TABLES AND THE LICENSES TWIN, each direction.
+        ("a census README matching the corpus reconciles clean",
+         not census_table_problems(corpus([
+             entry(1), entry(2, source={"url": "https://example.invalid/1002",
+                                        "kind": "qa_site"}),
+             entry(3, **{"class": "usb"}),
+         ]), CENSUS_README)),
+        ("a missing census README is caught",
+         any("compared to nothing" in p
+             for p in census_table_problems(corpus([entry(1)]), None))),
+        ("a reshaped Counts header is caught",
+         any("Counts header in the form" in p for p in census_table_problems(
+             corpus([entry(1)]), "no header here"))),
+        ("a stale entry total is caught",
+         any("the corpus holds" in p for p in census_table_problems(corpus([
+             entry(1), entry(2, source={"url": "https://example.invalid/1002",
+                                        "kind": "qa_site"}),
+             entry(3, **{"class": "usb"}), entry(4),
+         ]), CENSUS_README))),
+        ("Counts arithmetic that does not close is caught",
+         any("does not close" in p for p in census_table_problems(corpus([
+             entry(1), entry(2, source={"url": "https://example.invalid/1002",
+                                        "kind": "qa_site"}),
+             entry(3, **{"class": "usb"}),
+         ]), CENSUS_README.replace("(7 raw candidates", "(9 raw candidates")))),
+        ("a removed count disagreeing with the ledger is caught",
+         any("retirement ledger holds" in p for p in census_table_problems(
+             corpus([entry(1), entry(2, source={
+                 "url": "https://example.invalid/1002", "kind": "qa_site"}),
+                 entry(3, **{"class": "usb"})]),
+             CENSUS_README.replace("then 2 removed at review",
+                                   "then 3 removed at review")
+                          .replace("(7 raw candidates", "(8 raw candidates")))),
+        ("a vanished census table is caught",
+         any("checked by nothing" in p for p in census_table_problems(
+             corpus([entry(1)]),
+             CENSUS_README.replace("### By class (coarse)", "### By class!")))),
+        ("a drifted census count is caught",
+         any("must not be publishable" in p for p in census_table_problems(
+             corpus([entry(1), entry(2, source={
+                 "url": "https://example.invalid/1002", "kind": "qa_site"}),
+                 entry(3, **{"class": "usb"})]),
+             CENSUS_README.replace("| github_issue | 2 |",
+                                   "| github_issue | 5 |")))),
+        ("a LICENSES.md matching the census reconciles clean",
+         not licenses_problems(exdoc, "corpus carries 5 verbatim excerpts")),
+        ("a missing LICENSES.md is caught",
+         any("compared to nothing" in p for p in licenses_problems(exdoc, None))),
+        ("a LICENSES.md that drops the count is caught",
+         any("no longer states" in p for p in licenses_problems(
+             exdoc, "no count here"))),
+        ("a stale LICENSES.md excerpt count is caught",
+         any("could diverge" in p for p in licenses_problems(
+             exdoc, "corpus carries 99 verbatim excerpts"))),
         ("a multi-word briefest is caught",
          any("word(s))" in p for p in notice_problems(corpus([
              entry(1, evidence='log said "rail collapsed under load" at boot',
@@ -554,6 +719,15 @@ def self_test():
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
             _planted_retire = main([])
         globals()["retirement_problems"] = _real_retire
+        _real_census, _real_lic = census_table_problems, licenses_problems
+        globals()["census_table_problems"] = lambda *_a, **_k: ["planted"]
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted_census = main([])
+        globals()["census_table_problems"] = _real_census
+        globals()["licenses_problems"] = lambda *_a, **_k: ["planted"]
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted_lic = main([])
+        globals()["licenses_problems"] = _real_lic
     finally:
         globals()["check"], globals()["notice_problems"] = _real, _real_notice
     cases.append(("main() exits non-zero when a problem is found", _planted == 1))
@@ -562,6 +736,10 @@ def self_test():
                   _planted_notice == 1))
     cases.append(("main() exits non-zero when the retirement reconciliation fails",
                   _planted_retire == 1))
+    cases.append(("main() exits non-zero when the census reconciliation fails",
+                  _planted_census == 1))
+    cases.append(("main() exits non-zero when the LICENSES reconciliation fails",
+                  _planted_lic == 1))
 
     failures = 0
     for name, ok in cases:
@@ -583,8 +761,13 @@ def main(argv):
         notice_text = notice.read_text(encoding="utf-8") if notice.is_file() else None
         readme = ROOT / "corpus" / "README.md"
         readme_text = readme.read_text(encoding="utf-8") if readme.is_file() else None
+        licenses = ROOT / "LICENSES.md"
+        licenses_text = (licenses.read_text(encoding="utf-8")
+                         if licenses.is_file() else None)
         problems = (check(document) + notice_problems(document, notice_text)
-                    + retirement_problems(readme_text))
+                    + retirement_problems(readme_text)
+                    + census_table_problems(document, readme_text)
+                    + licenses_problems(document, licenses_text))
     except GateUnavailable as exc:
         print(f"corpus: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -600,7 +783,8 @@ def main(argv):
         f"corpus: PASS: {len(bugs)} entries, {external} externally sourced "
         f"({external * 100 // len(bugs)}%), ids contiguous with "
         f"{len(RETIRED)} ledgered retirement(s), every source URL distinct; "
-        f"NOTICE's {sum(counts.values())} excerpt span(s) reconciled."
+        f"NOTICE's and LICENSES.md's {sum(counts.values())} excerpt span(s) "
+        "and corpus/README's census tables reconciled."
     )
     return 0
 
