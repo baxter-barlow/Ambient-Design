@@ -48,9 +48,12 @@ REQUIRED = {"buck-3v3": 2}
 # corner table that must reconcile. Counting CELLS let a duplicated column pay
 # for a deleted one -- the settling column, carrying the 45.39 us worst case,
 # could leave the reader's table entirely. Its sibling gate had already learned
-# this; this one repeated it the same day. 6 = two
-# surveyed corners x three measurement columns; the 12 V row is the nominal
-# deck and is held by check-assertions.py's transcript leg instead.
+# this; this one repeated it the same day. 9 = three rows (9, 12 and 14 V) x
+# three measurement columns. The comment used to derive it as 6 = two
+# surveyed corners x three columns, on the grounds that the 12 V row is the
+# nominal deck and held by check-assertions.py's transcript leg instead --
+# but NOMINAL_VOLTS is checked here too, so the derivation described a gate
+# this is not and a maintainer correcting 9 to 6 would have unpinned a row.
 MINIMUM_DOC_CELLS = {"buck-3v3": 9}
 # The deck's own supply voltage, whose design.md row has no corner block and
 # is therefore held to validation.log instead.

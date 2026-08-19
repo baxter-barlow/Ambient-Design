@@ -81,8 +81,11 @@ not paywalls. Each now carries `corrected:` and a `correction_note:`. See
 
 ## Removed at review
 
-Two entries were removed in the 2026-08-15 review round. Their ids are retired,
-not reused, so the id sequence has gaps at these positions:
+Two entries were removed in the 2026-08-15 review round. Their ids are retired
+and never reused, so the sequence is neither dense nor contiguous. Only one of
+the two leaves an interior gap: the surviving ids run 1..62 with a single hole
+at 9, and BUG-0063 was the last id ever issued, so removing it truncated the
+sequence rather than punching a hole in it.
 
 - **BUG-0009** (LM2596-ADJ feedback-divider output decay) — removed because the
   entry misrepresented its TI e2e source: the TI engineer stated bias current does

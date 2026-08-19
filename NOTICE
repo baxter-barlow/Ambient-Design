@@ -24,8 +24,10 @@ corpus/bugs.yaml
     forum posts, issue trackers, mailing lists, blog postmortems and vendor
     errata. They sit principally in the
     `evidence:` field, and in a handful of cases in `symptom:` or
-    `root_cause:` where the source's own wording is the finding. Each excerpt is a sentence
-    or two, is attributed to a specific public URL in the same entry's
+    `root_cause:` where the source's own wording is the finding. Most excerpts
+    are a sentence or two; six of the 93 are shorter fragments, the briefest
+    being a single word (`"off"` in BUG-0008). Each is attributed to a
+    specific public URL in the same entry's
     `source:` block, and is included so that a reader can check that the entry
     describes the bug its source describes.
 
