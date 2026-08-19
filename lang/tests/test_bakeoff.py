@@ -219,6 +219,26 @@ class CorpusIntegrity(unittest.TestCase):
         self.assertIn("3 DNP", anchors[0]["compared"])
         self.assertIn("5 series edge", anchors[1]["compared"])
 
+    def test_the_readme_anchor_sentence_matches_the_live_anchor(self):
+        """lang/README.md publishes the anchor's numbers in prose. The first
+        two were pinned above; '172 refdes/package/MPN fields' was compared
+        to nothing, so a BOM edit with the tests updated left it stale
+        (round 15). All three now come from the same computed string."""
+        import re as _re
+        text = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+            encoding="utf-8")
+        found = _re.search(
+            r"(\d+) placements, (\d+) DNP, and\s+(\d+) refdes/package/MPN",
+            _re.sub(r"\s+", " ", text))
+        self.assertIsNotNone(found, "the README anchor sentence is gone or "
+                             "reshaped, so its three numbers have no reader")
+        compared = check_anchor(CORPUS["esp32s3-devboard"])[0]["compared"]
+        for number, noun in zip(found.groups(),
+                                ("placements", "DNP", "refdes/package/MPN")):
+            self.assertIn(f"{number} {noun.split('/')[0]}", compared,
+                          f"README says {number} {noun}; the live anchor "
+                          f"computes {compared!r}")
+
     def test_esp32_anchor_catches_a_broken_power_chain(self):
         """The BOM anchors no connectivity; power-tree.yaml does."""
         from bakeoff.elaborate import check_power_tree
@@ -1039,20 +1059,47 @@ class LanguageCards(unittest.TestCase):
             with self.subTest(arm=arm.key):
                 arm.language_card().encode("ascii")
 
+    # Counts the cards in a CHILD process that forbids itself the network.
+    # `load_tokenizer` in-process fetched the 3.6 MB vocabulary on a cold
+    # tiktoken cache -- a network access inside `make all`, the exact defect
+    # check-pins closed for the fingerprint leg in round 14, reintroduced one
+    # suite over (round 15). A cold cache now SKIPS loudly instead of
+    # fetching silently; warm the cache deliberately (any --write/--verify
+    # run on a machine allowed to fetch) to arm this test.
+    _CARD_BUDGET_CHILD = (
+        "import sys\n"
+        "def deny(event, args):\n"
+        "    if event in ('socket.connect', 'socket.getaddrinfo',\n"
+        "                 'socket.gethostbyname', 'http.client.connect',\n"
+        "                 'urllib.Request'):\n"
+        "        raise RuntimeError('network access blocked: ' + event)\n"
+        "sys.addaudithook(deny)\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        "from bakeoff.arms import ARMS\n"
+        "from bakeoff.measure import load_tokenizer\n"
+        "tokenizer = load_tokenizer(allow_stub=False)\n"
+        "for key, arm in sorted(ARMS.items()):\n"
+        "    print(key, tokenizer.count(arm.language_card()))\n"
+    )
+
     def test_cards_are_inside_the_flip_criterion_budget(self):
         """§4's flip criterion is stated in tokens of this artifact."""
-        try:
-            from bakeoff.measure import load_tokenizer
-
-            tokenizer = load_tokenizer(allow_stub=False)
-        except Exception as exc:  # noqa: BLE001 - reported, never swallowed
+        lang_dir = str(Path(__file__).resolve().parents[1])
+        child = subprocess.run(
+            [sys.executable, "-c", self._CARD_BUDGET_CHILD, lang_dir],
+            capture_output=True, text=True, timeout=120)
+        if child.returncode != 0:
             self.skipTest(
-                f"the pinned tokenizer is unavailable, so the ~3K card budget "
-                f"cannot be checked here: {exc}"
-            )
-        for arm in ARMS.values():
-            with self.subTest(arm=arm.key):
-                self.assertLessEqual(tokenizer.count(arm.language_card()), 3000)
+                "the pinned tokenizer is unavailable OFFLINE (missing "
+                "tiktoken, or a cold vocabulary cache), so the ~3K card "
+                "budget cannot be checked here without fetching. Warm the "
+                "cache deliberately and re-run: "
+                + (child.stderr or child.stdout).strip()[-200:])
+        counts = dict(line.split() for line in child.stdout.splitlines())
+        self.assertEqual(sorted(counts), sorted(ARMS))
+        for key, count in counts.items():
+            with self.subTest(arm=key):
+                self.assertLessEqual(int(count), 3000)
 
 
 class Columnar(unittest.TestCase):

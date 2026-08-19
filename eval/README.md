@@ -14,7 +14,7 @@ plugs in later as a `CommandGate` with no change to the protocol, the result
 format, or the statistics.
 
 ```
-python3 -m unittest discover -s eval/tests -t eval   # 67 tests, stdlib only
+python3 -m unittest discover -s eval/tests -t eval   # 68 tests, stdlib only
 cd eval && python3 -m rhoform_eval selftest          # statistics vs closed form
 cd eval && python3 -m rhoform_eval replay --transcript fixtures/demo-replay.json --allow-stub
 cd eval && python3 -m rhoform_eval plan --rate-a 0.6 --rate-b 0.9

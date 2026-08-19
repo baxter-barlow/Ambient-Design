@@ -69,7 +69,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 157 tests (29 need lark)
+python3 -m unittest discover -s tests -t .  # 163 tests (29 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the
