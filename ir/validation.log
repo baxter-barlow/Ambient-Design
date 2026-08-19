@@ -27,7 +27,7 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 59 checks.
+ir-hashes: self-test PASS: 60 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
