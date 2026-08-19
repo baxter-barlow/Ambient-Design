@@ -137,6 +137,34 @@ FAKE
   rebuild 99; rm "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
   expect "a required benchmark losing its spec fails" 2 "cannot leave the gate by losing its spec"
 
+  rebuild 99
+  printf 'runtime_budget_s: 3\nmeasured_runtime_s: 9\n' \
+    >> "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
+  expect "a recorded runtime above its own declared budget fails" 2 \
+    "busts the declared budget"
+
+  rebuild 99
+  printf 'runtime_budget_s: 60\nmeasured_runtime_s: 9\n' \
+    >> "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
+  printf 'Total elapsed time (seconds) = 0.294\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/validation.log"
+  expect "a recorded runtime the transcript contradicts fails" 2 \
+    "must agree"
+
+  rebuild 99
+  printf 'runtime_budget_s: 60\nmeasured_runtime_s: 0.294\n' \
+    >> "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
+  printf 'Total elapsed time (seconds) = 0.294\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/validation.log"
+  expect "a recorded runtime matching its transcript passes" 0 \
+    "deck(s) completed within budget"
+
+  rebuild 99
+  printf 'measured_runtime_s: 0.294\n' \
+    >> "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
+  expect "a recorded runtime with no transcript to answer to fails" 2 \
+    "answers to nothing"
+
   rebuild 99; mkdir "$sandbox/tree/benchmarks/rogue-bench"
   printf '* deck\n.end\n' > "$sandbox/tree/benchmarks/rogue-bench/netlist.cir"
   expect "a benchmark joining without a spec fails" 2 "cannot join the tree ungated"
@@ -327,13 +355,51 @@ while IFS= read -r deck; do
     continue
   fi
 
+  # A benchmark may declare its own runtime budget; the declared figure and
+  # the recorded measured_runtime_s were read by nothing (round 19). The
+  # declared budget BECOMES the enforcement bound for that deck, and the
+  # recorded measurement must fit inside it -- machine-independent
+  # consistency, since wall time itself varies by host.
+  # Each key is read on its own terms: nesting the measurement check inside
+  # "a budget was declared" would have made deleting one line disable the
+  # other, which is the scoped-wrong shape this audit keeps finding.
+  DECK_BUDGET=$BUDGET_SECONDS
+  declared_budget=$( (grep -E '^runtime_budget_s:' "$deck_dir/assertions.yaml" || true) | awk '{print $2}')
+  recorded_runtime=$( (grep -E '^measured_runtime_s:' "$deck_dir/assertions.yaml" || true) | awk '{print $2}')
+  if [ -n "$declared_budget" ]; then
+    DECK_BUDGET=$declared_budget
+    if [ -n "$recorded_runtime" ]; then
+      over=$(awk -v r="$recorded_runtime" -v b="$declared_budget" 'BEGIN{print (r > b) ? 1 : 0}')
+      if [ "$over" -eq 1 ]; then
+        fail_env "$case_name records measured_runtime_s=$recorded_runtime above its own runtime_budget_s=$declared_budget; a recorded run that busts the declared budget is a contradiction, not a record."
+      fi
+    fi
+  fi
+  if [ -n "$recorded_runtime" ]; then
+    # The recorded measurement must be the runtime the canonical transcript
+    # actually reports. `5.0` sat next to a transcript reading 4.881 and a
+    # header reading 4.9 s for two rounds because nothing compared the two
+    # recorded artifacts; wall time varies by host, but these two files
+    # describe THE SAME run.
+    transcript_runtime=$( (grep -E '^Total elapsed time \(seconds\) =' \
+      "$deck_dir/validation.log" 2>/dev/null || true) | awk '{print $6}')
+    if [ -z "$transcript_runtime" ]; then
+      fail_env "$case_name records measured_runtime_s=$recorded_runtime but its validation.log reports no total elapsed time, so the recorded figure answers to nothing."
+    fi
+    differs=$(awk -v r="$recorded_runtime" -v t="$transcript_runtime" \
+      'BEGIN{d = r - t; if (d < 0) d = -d; print (d > 1e-9) ? 1 : 0}')
+    if [ "$differs" -eq 1 ]; then
+      fail_env "$case_name records measured_runtime_s=$recorded_runtime but validation.log's canonical run reports $transcript_runtime s; two recorded artifacts describing the same run must agree."
+    fi
+  fi
+
   start=$SECONDS
   status=0
-  run_ngspice "$deck_dir" "$log" || status=$?
+  BUDGET_SECONDS=$DECK_BUDGET run_ngspice "$deck_dir" "$log" || status=$?
   elapsed=$((SECONDS - start))
 
   if [ "$status" -eq 124 ]; then
-    printf 'sim: FAIL: %s exceeded the %ss budget (killed).\n' "$case_name" "$BUDGET_SECONDS" >&2
+    printf 'sim: FAIL: %s exceeded the %ss budget (killed).\n' "$case_name" "$DECK_BUDGET" >&2
     failed=1
     continue
   fi
@@ -342,8 +408,8 @@ while IFS= read -r deck; do
     failed=1
     continue
   fi
-  if [ "$elapsed" -gt "$BUDGET_SECONDS" ]; then
-    printf 'sim: FAIL: %s took %ss, over the %ss budget.\n' "$case_name" "$elapsed" "$BUDGET_SECONDS" >&2
+  if [ "$elapsed" -gt "$DECK_BUDGET" ]; then
+    printf 'sim: FAIL: %s took %ss, over the %ss budget.\n' "$case_name" "$elapsed" "$DECK_BUDGET" >&2
     failed=1
     continue
   fi

@@ -50,8 +50,10 @@ parts:
     package: 1210 (3.2 x 2.5 x 2.0 mm)
     mpn: Murata GRM32DR71E106KA12L
     qty: 2
-    notes: 0.98 A rms worst-case input ripple current (9 V corner, D' ~= 0.40;
-      0.89 A at 12 V nominal) shared across two parts (~0.49 A each); per-part
+    notes: 0.98 A rms worst-case input ripple current (9 V corner at practical
+      D' ~= 0.40; the 12 V figure of 0.89 A uses ideal D = 0.275 -- the two
+      bases are labelled because a previous note mixed them silently) shared
+      across two parts (~0.49 A each); per-part
       rms handling to be confirmed against Murata temperature-rise data at
       500 kHz. Murata lists this part NRND -- in-production alternative
       GRM31CR71E106KA12L (1206).
