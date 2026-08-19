@@ -108,7 +108,7 @@ MINIMUM_ROWS_BY_KIND = {
     "decision": 3,
     "card": 3,
     "t9": 6,
-    "lines": 3,
+    "lines": 7,  # 3 blinker AC1a + 4 esp32
     "defect-table": 3,       # one row per arm
     "cheaper": 2,            # the headline percentage, one per design
     "anchor": 1,             # the IR anchor sentence
@@ -131,7 +131,7 @@ MINIMUM_T9_CELLS = 24
 # plus diagnostics/defect) + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts
 # + 2 cheaper-than-A percentages + 4 IR anchor counts. A total, not a floor:
 # any leg detaching drops it.
-MINIMUM_TOTAL_COUNTS = 104  # 16 token + 11+9 decision + 12 defect + 3 card + 24 T9 + 20 L6 + 3 AC1a + 2 cheaper + 4 anchor
+MINIMUM_TOTAL_COUNTS = 108  # 16 token + 11+9 decision + 12 defect + 3 card + 24 T9 + 20 L6 + 3 AC1a + 4 esp32 lines + 2 cheaper + 4 anchor
 # 4 rows x 5 thresholds.
 MINIMUM_SWEEP_CELLS = 20
 
@@ -651,6 +651,35 @@ def token_problems(text, counts, problems, minimum=None, ir=None):
             "lang/README.md: the AC1a line-count sentence is gone or reshaped, "
             "so its three numbers are checked by nothing.")
 
+    # THE ESP32 LINE-COUNT SENTENCE, the AC1a sentence's sibling one
+    # paragraph up. Its four numbers matched the artifact and were read by
+    # nothing (round 15) -- the same sentence shape, outside the locator.
+    esp32_lines = re.search(
+        r"Measured: (\d+) \(A, inferred\), (\d+) \(B,\s+inferred\), "
+        r"(\d+)/(\d+) with columnar", text)
+    if esp32_lines:
+        for key, published in zip(
+                ("lines|esp32s3-devboard|candidate_a|inferred",
+                 "lines|esp32s3-devboard|candidate_b|inferred",
+                 "lines|esp32s3-devboard|candidate_a|inferred+columnar",
+                 "lines|esp32s3-devboard|candidate_b|inferred+columnar"),
+                esp32_lines.groups()):
+            want = counts.get(key)
+            if want is None:
+                continue
+            if int(published) != want:
+                problems.append(
+                    f"lang/README.md: the esp32 line-count sentence publishes "
+                    f"{published} for {key}, but the artifact records {want}.")
+                continue
+            rows_seen.add(("lines", "esp32", key.rsplit("|", 2)[-2],
+                           key.rsplit("|", 1)[-1]))
+            checked += 1
+    elif minimum is None:
+        problems.append(
+            "lang/README.md: the esp32 line-count sentence is gone or "
+            "reshaped, so its four numbers are checked by nothing.")
+
     # THE STANDALONE DEFECT TABLE, located by its own header and held to the
     # same defects| keys as the decision table's last two columns. Its nine
     # cells repeat the decision table's story with the diagnostics/defect
@@ -849,6 +878,7 @@ def self_test():
              # The FAKE counts put candidate_b ABOVE candidate_a, so the
              # fixture's true percentages are negative; the regex accepts the
              # sign so this fixture can exercise the arithmetic at all.
+             "\nMeasured: 91 (A, inferred), 92 (B, inferred), 93/94 with columnar.\n"
              "\nB is -150.0% cheaper than A on (a) and -142.9% on (c).\n"
              "\nreproduces 5 instances, 6 nets, 7 connections, 8 assertions.\n")
     FAKE = {
@@ -872,6 +902,10 @@ def self_test():
         "t9|blinker-555|candidate_a|T9-1": 15,
         "t9|blinker-555|candidate_a|T9-2": 25,
         "t9|blinker-555|candidate_a|T9-3": 35,
+        "lines|esp32s3-devboard|candidate_a|inferred": 91,
+        "lines|esp32s3-devboard|candidate_b|inferred": 92,
+        "lines|esp32s3-devboard|candidate_a|inferred+columnar": 93,
+        "lines|esp32s3-devboard|candidate_b|inferred+columnar": 94,
         "defects|candidate_a|detected": 15,
         "defects|candidate_a|applicable": 15,
         "defects|candidate_a|localised_pct": 100,
@@ -925,6 +959,14 @@ def self_test():
                 TABLE + "\n| Arm | detected | localised | diagnostics/defect |\n"
                         "|---|---|---|---|\n"
                         "| candidate_a | 12/15 | 80% | 3.0 |\n"))),
+        ("a stale esp32 line count is caught", any(
+            "esp32 line-count sentence publishes" in p for p in probe(
+                TABLE.replace("Measured: 91 (A", "Measured: 990 (A")))),
+        ("a missing esp32 line-count sentence is caught", any(
+            "esp32 line-count sentence is gone" in p for p in _floor_probe(
+                TABLE.replace(
+                    "Measured: 91 (A, inferred), 92 (B, inferred), 93/94 with columnar.",
+                    ""), FAKE))),
         ("a stale cheaper-than-A percentage is caught", any(
             "cheaper than A on" in p for p in probe(
                 TABLE.replace("-150.0", "91.0")))),
