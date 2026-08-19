@@ -29,7 +29,8 @@ jobs:
           if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
             git show --check --format= "$HEAD_SHA"
           else
-            git diff --check "$BASE_SHA" "$HEAD_SHA"
+            git -c core.whitespace=blank-at-eol,space-before-tab,blank-at-eof \
+              diff --check "$BASE_SHA" "$HEAD_SHA"
           fi
       - name: Validate cross-agent layout
         run: sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh

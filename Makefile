@@ -5,6 +5,12 @@
 
 .PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests gate-coverage sim golden
 
+# gate-coverage MUTATES gate files in place (blank one report site, run the
+# self-test, restore). Under -j another target can execute a gate while its
+# mutant is on disk, judging the tree by a check that momentarily is not
+# there. Serial execution is the isolation boundary.
+.NOTPARALLEL:
+
 # Everything CI runs, with ONE stated exception: checks.yml's "Resolve the
 # pinned KiCad digests" step needs network (`docker manifest inspect`) and so
 # cannot be a local target. It is named here rather than left to be rediscovered
@@ -153,10 +159,15 @@ policy:
 	# only covered the last commit, so a defect two commits back was invisible
 	# locally and red in CI -- the same index-vs-HEAD miss one commit further
 	# back. Falls back to the root commit on a branch with no merge-base.
-	git diff --check $$(git merge-base HEAD origin/main 2>/dev/null \
+	# -c pins the whitespace rules to git's documented defaults: without it
+	# `git diff --check` reads the USER'S core.whitespace, so a local config
+	# with `-blank-at-eol` gave local-green/CI-red on the same bytes.
+	git -c core.whitespace=blank-at-eol,space-before-tab,blank-at-eof \
+	  diff --check $$(git merge-base HEAD origin/main 2>/dev/null \
 	  || git merge-base HEAD main 2>/dev/null \
 	  || git rev-list --max-parents=0 HEAD) HEAD
-	git diff --check HEAD
+	git -c core.whitespace=blank-at-eol,space-before-tab,blank-at-eof \
+	  diff --check HEAD
 	sh .github/scripts/check-dco.sh --self-test
 	sh .github/scripts/check-dco.sh $$(git rev-list --max-parents=0 HEAD) HEAD
 
