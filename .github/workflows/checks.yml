@@ -127,7 +127,9 @@ jobs:
         # collects test_grammar.py, which this job installs no lark for: 16 of
         # its 39 cases ran here and reported OK, in a job whose own comment says
         # running them here "would report a green suite that never loaded the
-        # grammar". The grammar job runs the full 48 with lark present.
+        # grammar". The grammar job runs the full suite with lark present
+        # (test_grammar.py; the suite counts itself -- a number here went stale
+        # at 48-vs-53 within two rounds).
         run: python3 -m unittest discover -s lang/tests -t lang -p 'test_bakeoff.py'
 
   grammar:
@@ -156,7 +158,7 @@ jobs:
         # conformance cases skip themselves without lark, so running them
         # there would report a green suite that never loaded the grammar and
         # never exercised a single negative control.
-        run: python3 -m unittest discover -s lang/tests -t lang -p 'test_grammar.py' -v
+        run: python3 -m unittest discover -s lang/tests -t lang -p 'test_grammar.py'
 
   eval-harness:
     name: Measurement harness
