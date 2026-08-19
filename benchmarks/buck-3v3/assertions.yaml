@@ -2,11 +2,17 @@
 #
 # TIMESTEP: the deck ran at `.tran ... 40n` until AMB-123, which is 50 points per
 # switching cycle and NOT converged for a 500 kHz PWM comparator with no event
-# detection. vout_pp read 7.09 mV against a converged 3.64 mV, il_pp 0.520 A
-# against 0.487 A, and overshoot_pct 0.112 % against 0.048 %. design.md
-# explained the 9 V corner's 24.4 mVpp as "a slow envelope oscillation" with a
-# damping mechanism; at 2 ns that corner reads 3.14 mV and the envelope does not
-# exist. It was beat between the duty cycle and the time grid.
+# detection. The figures in this paragraph are measurements of the RETIRED
+# 31.6k-divider deck of that era (design.md sec. 9 retires them; the shipped
+# 31.2k deck reads 6.435 mV / 0.5159 A / 0.0964 % at 40 ns) -- an earlier
+# revision quoted them in the present tense with the divider unstated, so two
+# shipped documents disagreed on the same nominal quantities (round 18). On
+# that retired deck: vout_pp read 7.09 mV against a converged 3.64 mV, il_pp
+# 0.520 A against 0.487 A, and overshoot_pct 0.112 % against 0.048 %.
+# design.md explained the 9 V corner's 24.4 mVpp as "a slow envelope
+# oscillation" with a damping mechanism; at 2 ns that corner read 3.14 mV and
+# the envelope does not exist. It was beat between the duty cycle and the
+# time grid.
 #
 # Worse, the assertion checker added in the same issue compares `measured:` to
 # three significant figures -- so the gate had been made to ENFORCE the
