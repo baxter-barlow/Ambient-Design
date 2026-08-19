@@ -343,8 +343,10 @@ alternative is a gate that cannot detect a deck change at all. Anyone refining
 the timestep for a real reason should re-record the five values and say so.
 
 None of the engineering conclusions move across the sweep: `Ipk` 2.256 A,
-saturation margin 1.6x, ripple margin 13.9x, efficiency 0.92864 (timestep
-invariant to five figures), settling 16.86 us against a 500 us budget.
+saturation margin 1.6x, ripple margin 13.9x, efficiency 0.92864 (invariant to
+four figures over 4 ns..500 ps, three over the whole sweep: the run at 40 ns
+gives 0.928704, and the five values are 0.928704 / 0.928628 / 0.928644 /
+0.928634 / 0.928635), settling 16.86 us against a 500 us budget.
 
 ## Output-voltage error stack
 
