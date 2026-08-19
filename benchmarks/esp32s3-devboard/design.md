@@ -111,7 +111,7 @@ assumption of 0.50 V/A** (not a datasheet figure). Rationale:
 - Dropout at worst-worst corner (VBUS 4.40 V, max series drops, guardbanded
   load), both dropout bases: at the datasheet 340 mV-typ figure (0.34 V/A),
   required V_in = 3.499 V -> **+319 mV margin**; at the in-house 0.50 V/A
-  guardband, required V_in = 3.562 V -> **+257 mV margin**. V_LDO_in = 3.818 V
+  guardband, required V_in = 3.562 V -> **+256 mV margin**. V_LDO_in = 3.818 V
   in both rows. Full arithmetic in `assertions.yaml` A4.
 - Thermal at continuous TX, Ta = 50 C, VBUS 5.25 V: P = 0.654 W. At the
   datasheet SOT-223 theta_JA of **110 C/W** (DS37274 Rev. 5-2 thermal table,

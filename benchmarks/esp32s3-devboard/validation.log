@@ -169,7 +169,7 @@ re-derives A1-A8 from assertions.yaml, power-tree.yaml and the part records,
 reconciles three design.md figures against them, runs under `make all`, and
 prints:
 
-  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 3 design.md figure(s) reconcile against them; 2 power-tree total(s) agree.
+  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 3 design.md figure(s) reconcile against them; 5 power-tree figure(s) agree; 15 shown-work claim(s) recompute.
 
 It also names the two it cannot mechanise and why -- A9_strapping_dc_state
 (a boot-mode truth table, not a numeric relation) and A10_single_pin_nets_l9b
@@ -195,3 +195,24 @@ The 2026-08-15 sections above are left as written (their arithmetic was
 correct over the inputs they had). VBUS max 5.25 V sits above the 5.0 V
 standoff, where leakage is unspecified entirely -- noted in power-tree.yaml,
 not modelled.
+
+=== Correction, 2026-08-19 (AMB-123 round 19) ===
+The round-18 section above says the voltage-propagation figures were
+unchanged at their quoted precision. That is true of the four propagated
+voltages (3.818 / 4.335 / 4.585 / 4.903 V) and false of the margins DERIVED
+from them, which the same edit should have moved: A4's in-house guardband
+margin is +0.256 V, not the +0.257 V it kept publishing (3.81816 - 3.5618 =
+0.25636; the +0.257 belonged to the retracted 2 uA-leakage current), and the
+usbc_min secondary row is +0.773 V, not +0.774 V. Both are corrected in
+assertions.yaml, and design.md's "+257 mV margin" with them. A4's inline
+derivation also still showed the 2 uA-era drops (0.1382 / 0.0434, "exact
+3.81834") where power-tree.yaml already showed 0.1384 / 0.0435; it now shows
+the same intermediates as the tree.
+
+Why it survived a round: nothing read shown work. calc_rows, secondary_rows
+and calc_* were prose to every gate, so an arithmetic row could contradict
+its own operands indefinitely. check-hand-assertions.py now recomputes each
+named shown-work row at the precision the row itself publishes, and holds
+A4's and A5's voltage inputs to the power-tree rows they transcribe by name
+-- the current totals alone were reconciled before, which is why a Vf edit
+could flip A4's physical verdict with every gate green.

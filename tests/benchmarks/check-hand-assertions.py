@@ -561,6 +561,200 @@ def _must_mechanise_probe():
     return problems
 
 
+# Which assertion input is a transcription of which voltage_at_ldo_input row.
+# Named, not counted: a binding that can be deleted without a failure is not
+# a binding. Extend this when a new assertion copies a propagated voltage.
+REQUIRED_TREE_VOLTAGES = {
+    "esp32s3-devboard": (
+        ("A4_ldo_dropout_at_min_vbus", "v_ldo_in_min_v", "worst_min"),
+        ("A5_ldo_thermal_at_wifi_tx", "worst.vin_v", "max"),
+        ("A5_ldo_thermal_at_wifi_tx", "typ.vin_v", "nominal"),
+    ),
+}
+
+# Every shown-work row that must be arithmetically true. A4's guardband row
+# published `3.818 - 3.562 = +0.257 V` for two rounds after the current it
+# derives from moved (the answer is 0.256), because shown work had no reader
+# at all -- the "published number nothing checks" shape this audit keeps
+# finding. Named rows, so deleting one is a failure, not a smaller check.
+#
+# The number beside each row is how many `A = B` claims it publishes. A row
+# is allowed to go unread only in prose form, so a claim added in a form
+# this cannot evaluate would otherwise arrive unchecked and invisible; the
+# count makes that arrival a failure, the way the report-site counts do in
+# the meta-gate. Re-derive it in the same commit that edits a row.
+REQUIRED_SHOWN_WORK_ROWS = {
+    "esp32s3-devboard": {
+        "A2_vbus_budget_t10/calc": 1,
+        "A4_ldo_dropout_at_min_vbus/calc_rows.datasheet_typ": 3,
+        "A4_ldo_dropout_at_min_vbus/calc_rows.inhouse_guardband": 3,
+        "A4_ldo_dropout_at_min_vbus/secondary_rows.usbc_min_4p75_guardband": 1,
+        "A4_ldo_dropout_at_min_vbus/secondary_rows.nominal_5p00_typ_vdo": 2,
+        "A5_ldo_thermal_at_wifi_tx/calc_worst": 2,
+        "A5_ldo_thermal_at_wifi_tx/calc_typ": 2,
+        "A5_ldo_thermal_at_wifi_tx/calc_worst_datasheet_theta": 1,
+    },
+}
+
+_ARITHMETIC = re.compile(r"[\s()+\-*/.0-9eE]+")
+_INNER_CLAIM = re.compile(r"\(([^()]*=[^()]*)\)")
+_ANNOTATION = re.compile(r"\([^()]*\)")
+
+
+def _tree_voltage_rows(power_text):
+    """Each voltage_at_ldo_input row by name, from its shown work's `= X V`."""
+    block = re.search(r"^voltage_at_ldo_input:\n((?:[ \t]+\S[^\n]*\n)+)",
+                      power_text, re.M)
+    rows = {}
+    if block is None:
+        return rows
+    for name, shown in re.findall(r"^[ \t]+(\w+):\s*\"([^\"]*)\"",
+                                  block.group(1), re.M):
+        tail = re.search(r"=\s*([0-9.]+)\s*V\s*$", shown.strip())
+        if tail:
+            rows[name] = float(tail.group(1))
+    return rows
+
+
+def _eval_arith(text):
+    """A shown-work fragment as a number, or None if it is not pure arithmetic.
+
+    `x` is the multiplication sign these documents use; a trailing unit is
+    dropped. Nothing else is accepted -- no names, no calls, no attributes --
+    so a fragment carrying prose simply goes unchecked rather than guessed at.
+    """
+    import ast
+    candidate = re.sub(r"\s*[A-Za-z%][A-Za-z%/^0-9]*\s*$", "", text.strip())
+    candidate = candidate.replace(" x ", " * ").strip()
+    if not candidate or not _ARITHMETIC.fullmatch(candidate):
+        return None
+    try:
+        tree = ast.parse(candidate, mode="eval")
+    except SyntaxError:
+        return None
+    allowed = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Add, ast.Sub,
+               ast.Mult, ast.Div, ast.USub, ast.UAdd, ast.Constant)
+    for node in ast.walk(tree):
+        if not isinstance(node, allowed):
+            return None
+        if isinstance(node, ast.Constant) and not isinstance(
+                node.value, (int, float)):
+            return None
+    try:
+        return float(eval(compile(tree, "<shown-work>", "eval"),
+                          {"__builtins__": {}}, {}))
+    except ArithmeticError:
+        return None
+
+
+def _split_top_level(text, sep="="):
+    """Split on `sep` outside parentheses, so nested claims stay whole."""
+    parts, depth, current = [], 0, []
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        if char == sep and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    parts.append("".join(current))
+    return parts
+
+
+def _half_ulp(text):
+    """The precision the fragment publishes: `+0.257` claims three decimals,
+    so 0.256 is a different number; `90.5` claims one, so 90.548 is not."""
+    decimals = max((len(d) for d in re.findall(r"[0-9]+\.([0-9]+)", text)),
+                   default=0)
+    return 0.5 * 10 ** -decimals
+
+
+def _chain_problems(where, chain, problems):
+    """One `A = B = C` chain. Every fragment that IS arithmetic must agree
+    with the last one, to the precision the last one publishes."""
+    fragments = _split_top_level(chain)
+    values = [(text, _eval_arith(text)) for text in fragments]
+    values = [(text, value) for text, value in values if value is not None]
+    if len(values) < 2:
+        return 0
+    stated_text, stated = values[-1]
+    tolerance = _half_ulp(stated_text)
+    for text, value in values[:-1]:
+        if abs(value - stated) > tolerance:
+            problems.append(
+                f"{where}: shown work states `{text.strip()} = "
+                f"{stated_text.strip()}`, but {text.strip()} is "
+                f"{value:.6g}, which does not round to {stated:g} at the "
+                "precision the row publishes. A shown-work row that no "
+                "longer follows from its own operands is a stale number.")
+            return 0
+    return 1
+
+
+def _row_problems(where, text, problems):
+    """A shown-work row: `;`, `->` and newlines separate independent chains;
+    a parenthesised sub-claim is checked and then substituted by its value;
+    a parenthesised annotation that is not arithmetic is dropped."""
+    verified = 0
+    for piece in re.split(r";|->|\n", text):
+        working = piece
+        resolved = True
+        while True:
+            match = _INNER_CLAIM.search(working)
+            if match is None:
+                break
+            verified += _chain_problems(f"{where} (sub-claim)",
+                                        match.group(1), problems)
+            stated = _eval_arith(_split_top_level(match.group(1))[-1])
+            if stated is None:
+                resolved = False
+                break
+            working = (f"{working[:match.start()]} {stated!r} "
+                       f"{working[match.end():]}")
+        if not resolved:
+            continue
+        working = _ANNOTATION.sub(
+            lambda m: m.group(0) if _eval_arith(m.group(0)) is not None else " ",
+            working)
+        verified += _chain_problems(where, working, problems)
+    return verified
+
+
+def shown_work_problems(spec, label, problems):
+    """Every named shown-work row must be present and arithmetically true."""
+    rows = {}
+    for assertion in spec.get("assertions") or []:
+        ident = assertion.get("id")
+        for key, value in sorted(assertion.items()):
+            if key.startswith("calc") and isinstance(value, str):
+                rows[f"{ident}/{key}"] = value
+            elif key in ("calc_rows", "secondary_rows") and isinstance(
+                    value, dict):
+                for name, text in value.items():
+                    if isinstance(text, str):
+                        rows[f"{ident}/{key}.{name}"] = text
+    checked = 0
+    for name, expected in REQUIRED_SHOWN_WORK_ROWS.get(label, {}).items():
+        if name not in rows:
+            problems.append(
+                f"{label}: shown-work row {name} is named as checked "
+                "arithmetic and is not in the spec. Rows leave this "
+                "population by review, not by being deleted.")
+            continue
+        verified = _row_problems(f"{label}/{name}", rows[name], problems)
+        if verified != expected:
+            problems.append(
+                f"{label}: shown-work row {name} publishes {verified} "
+                f"readable claim(s), not the recorded {expected}. A claim "
+                "this gate cannot evaluate is a claim nothing checks; "
+                "re-derive the count in the commit that edits the row.")
+        checked += verified
+    return checked
+
+
 def power_tree_problems(spec, power_text, label, problems):
     """The power tree's own summary arithmetic must agree with A2/A6.
 
@@ -600,6 +794,45 @@ def power_tree_problems(spec, power_text, label, problems):
             f"{label}: no assertion records sum_worst_a/worst_a for the "
             "power tree's total to reconcile against; the cross-file check "
             "is comparing nothing.")
+    # THE VOLTAGE SIDE TOO, AND BY NAME. Round 18 reconciled the current
+    # totals; round 19 changed SS34's Vf max in the tree and watched A4's
+    # physically-failing verdict stay green, with A5's worst-case Vin the
+    # same kind of unreconciled copy one row over. Every assertion input
+    # that is a transcription of a voltage_at_ldo_input row is NAMED below,
+    # so dropping a binding fails the gate instead of quietly shrinking it
+    # -- a set, not a count, the shape that has held elsewhere here.
+    rows = _tree_voltage_rows(power_text)
+    for assertion_id, dotted, row_name in REQUIRED_TREE_VOLTAGES.get(label, ()):
+        assertion = next((a for a in spec.get("assertions") or []
+                          if a.get("id") == assertion_id), None)
+        if assertion is None:
+            problems.append(
+                f"{label}: {assertion_id} is named as carrying a copy of "
+                f"power-tree.yaml's {row_name} row and is not in the spec; "
+                "a cross-file binding cannot be dropped by deleting one side.")
+            continue
+        if row_name not in rows:
+            problems.append(
+                f"{label}: power-tree.yaml no longer derives a "
+                f"voltage_at_ldo_input {row_name} row in the form this gate "
+                f"reads, so {assertion_id}'s {dotted} can drift from the "
+                "tree silently.")
+            continue
+        try:
+            recorded = _resolve(assertion.get("inputs") or {}, dotted)
+        except KeyError:
+            problems.append(
+                f"{label}/{assertion_id}: has no input {dotted}, which is "
+                f"named as its copy of power-tree.yaml's {row_name} row.")
+            continue
+        if abs(recorded - rows[row_name]) > 5e-4:
+            problems.append(
+                f"{label}/{assertion_id}: records {dotted} = {recorded:g} "
+                f"but power-tree.yaml's {row_name} propagation derives "
+                f"{rows[row_name]:g} V. A re-derived Vf, PTC or bead value "
+                "must move both files.")
+        else:
+            checked += 1
     return checked
 
 
@@ -786,6 +1019,143 @@ def self_test():
                         TREE, "probe", orphan)
     cases.append(("a spec with nothing to reconcile is caught",
                   any("comparing nothing" in x for x in orphan)))
+    # THE VOLTAGE LEG, by NAMED binding: the tree's rows and the assertion
+    # inputs that transcribe them, each direction and each way to lose one.
+    VTREE = TREE + ('voltage_at_ldo_input:\n'
+                    '  worst_min: "4.4 - 0.1 - 0.1 = 4.4 - 0.2 = 4.200 V"\n'
+                    '  max:       "5.25 - 0.05 = 5.200 V"\n')
+    VSPEC = {"assertions": [
+        {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+        {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
+        {"id": "A5", "inputs": {"worst": {"vin_v": 5.200}}}]}
+    _real_volt = REQUIRED_TREE_VOLTAGES
+    globals()["REQUIRED_TREE_VOLTAGES"] = {"probe": (
+        ("A4", "v_ldo_in_min_v", "worst_min"),
+        ("A5", "worst.vin_v", "max"))}
+    try:
+        v_ok = []
+        v_agreed = power_tree_problems(VSPEC, VTREE, "probe", v_ok)
+        cases.append(("both named voltage bindings agree with the tree",
+                      v_agreed == 3 and not v_ok))
+        v_drift = []
+        power_tree_problems(
+            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.100}},
+                            {"id": "A5", "inputs": {"worst":
+                                                    {"vin_v": 5.200}}}]},
+            VTREE, "probe", v_drift)
+        cases.append(("a voltage input the tree no longer derives is caught",
+                      any("must move both files" in x for x in v_drift)))
+        v_nested = []
+        power_tree_problems(
+            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
+                            {"id": "A5", "inputs": {"worst":
+                                                    {"vin_v": 5.100}}}]},
+            VTREE, "probe", v_nested)
+        cases.append(("a drifted NESTED voltage input is caught too",
+                      any("worst.vin_v" in x for x in v_nested)))
+        v_gone = []
+        power_tree_problems(VSPEC, TREE, "probe", v_gone)
+        cases.append(("a tree that stops deriving a named row is caught",
+                      sum("in the form this gate reads" in x
+                          for x in v_gone) == 2))
+        v_unbound = []
+        power_tree_problems(
+            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                            {"id": "A4", "inputs": {}},
+                            {"id": "A5", "inputs": {"worst":
+                                                    {"vin_v": 5.200}}}]},
+            VTREE, "probe", v_unbound)
+        cases.append(("deleting the input a binding names is caught",
+                      any("has no input v_ldo_in_min_v" in x
+                          for x in v_unbound)))
+        v_deleted = []
+        power_tree_problems(
+            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}}]},
+            VTREE, "probe", v_deleted)
+        cases.append(("deleting the assertion a binding names is caught",
+                      any("cannot be dropped by deleting one side" in x
+                          for x in v_deleted)))
+    finally:
+        globals()["REQUIRED_TREE_VOLTAGES"] = _real_volt
+
+    # SHOWN WORK. A4's guardband row published an answer its own operands
+    # stopped producing; nothing read shown work at all until round 19.
+    _real_rows = REQUIRED_SHOWN_WORK_ROWS
+    globals()["REQUIRED_SHOWN_WORK_ROWS"] = {"probe": {"A4/calc_rows.g": 1}}
+    try:
+        good = []
+        n_good = shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "margin = 3.818 - 3.562 = +0.256 V"}}]}, "probe", good)
+        cases.append(("a shown-work row that recomputes is counted",
+                      n_good == 1 and not good))
+        stale = []
+        shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "margin = 3.818 - 3.562 = +0.257 V"}}]}, "probe", stale)
+        cases.append(("the exact stale margin round 19 found is caught",
+                      any("does not round to 0.257" in x for x in stale)))
+        coarse = []
+        n_coarse = shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "Tj = 50 + 0.654 x 62 = 90.5 C"}}]}, "probe", coarse)
+        cases.append(("a row rounds at the precision IT publishes, not more",
+                      n_coarse == 1 and not coarse))
+        annotated = []
+        n_annot = shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "0.39166 (LDO in) + 0.00325 (PWR LED @5.25V) + 400e-6 "
+                     "(TVS IR max) = 0.39531 A"}}]}, "probe", annotated)
+        cases.append(("parenthesised prose is dropped, not guessed at",
+                      n_annot == 1 and not annotated))
+        inner = []
+        shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "4.585 - (3.300 + 0.34 x 0.356 = 3.521) = +1.064 V"}}]},
+            "probe", inner)
+        cases.append(("a false sub-claim inside parentheses is caught",
+                      any("(sub-claim)" in x for x in inner)))
+        prose = []
+        shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "the margin is comfortable"}}]}, "probe", prose)
+        cases.append(("a named row with no readable claim is caught",
+                      any("publishes 0 readable claim(s)" in x
+                          for x in prose)))
+        gained = []
+        shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "margin = 3.818 - 3.562 = +0.256 V; and a second "
+                     "claim = 1 + 1 = 2"}}]}, "probe", gained)
+        cases.append(("a row that GAINS a claim past its recorded count "
+                      "is caught",
+                      any("not the recorded 1" in x for x in gained)))
+        absent = []
+        shown_work_problems({"assertions": [{"id": "A4"}]}, "probe", absent)
+        cases.append(("deleting a named shown-work row is caught",
+                      any("named as checked arithmetic" in x
+                          for x in absent)))
+    finally:
+        globals()["REQUIRED_SHOWN_WORK_ROWS"] = _real_rows
+
+    # WIRING: a planted problem from each cross-file leg must reach main().
+    for leg in ("shown_work_problems", "power_tree_problems"):
+        _real_leg = globals()[leg]
+
+        def _planted(*args, _leg=leg, **kwargs):
+            args[-1].append(f"planted-{_leg}")
+            return 0
+        globals()[leg] = _planted
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                wired = main([str(ROOT / "benchmarks" / "esp32s3-devboard")])
+        finally:
+            globals()[leg] = _real_leg
+        cases.append((f"{leg} is WIRED into main()", wired == 1))
 
     failures = 0
     for name, ok in cases:
@@ -949,6 +1319,7 @@ def main(argv):
         # the increment-counting shape this audit has found repeatedly.
         asserts_checked = check_spec(spec, case_dir.name, problems)
         figures_checked = doc_problems(case_dir, spec, problems)
+        claims_checked = shown_work_problems(spec, case_dir.name, problems)
         tree_path = case_dir / "power-tree.yaml"
         tree_checked = 0
         if tree_path.is_file():
@@ -965,7 +1336,8 @@ def main(argv):
         return 1
     print(f"hand-assert: PASS: {case_dir.name}: {asserts_checked} assertion(s) "
           f"follow from their inputs; {figures_checked} design.md figure(s) "
-          f"reconcile against them; {tree_checked} power-tree total(s) agree.")
+          f"reconcile against them; {tree_checked} power-tree figure(s) agree; "
+          f"{claims_checked} shown-work claim(s) recompute.")
     return 0
 
 
