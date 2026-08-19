@@ -34,6 +34,7 @@ Exit codes: 0 pass, 1 a pin and its consumer disagree, 2 environment failure.
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -125,7 +126,12 @@ MINIMUM_AGREEMENTS = 14
 # PER FILE, not one total. A single number let an entire deleted job be paid
 # for by a duplicated checkout step elsewhere; the totals matched and the gate
 # passed. These are the real per-workflow counts.
-MINIMUM_ACTION_REFS = {"checks.yml": 14, "dco.yml": 1, "repository-policy.yml": 1}
+# checks.yml went 14 -> 13 when round 18 moved the structure job into the
+# ngspice container (its setup-python step went with the bare runner).
+MINIMUM_ACTION_REFS = {"checks.yml": 13, "dco.yml": 1, "repository-policy.yml": 1}
+# Both legs of repository-policy (diff path and the branch-creation fallback)
+# carry the pin; the floor was 1 while the file held 2, so the fallback leg
+# could lose its pin silently (round 18).
 
 # The JOBS each workflow must define. Counting action references stopped
 # cross-file compensation and not within-file: an auditor deleted the whole
@@ -923,6 +929,32 @@ def self_test():
                   scan_workflow_jobs(
                       {"jobs": {"g": {"steps": [{"run": "python3 x.py"}]}}},
                       "probe.yml")[1:] == (1, [])))
+    cases.append(("a truthy continue-on-error on a gate job is caught", any(
+        "not a gate" in x for x in scan_workflow_jobs(
+            {"jobs": {"g": {"continue-on-error": True,
+                            "steps": [{"run": "python3 x.py"}]}}},
+            "probe.yml")[2])))
+    cases.append(("a continue-on-error expression on a step is caught", any(
+        "swallowed" in x for x in scan_workflow_jobs(
+            {"jobs": {"g": {"steps": [{"continue-on-error": "${{ 1 }}",
+                                       "run": "python3 x.py"}]}}},
+            "probe.yml")[2])))
+    cases.append(("an explicit continue-on-error false is not flagged",
+                  scan_workflow_jobs(
+                      {"jobs": {"g": {"steps": [{"continue-on-error": False,
+                                                 "run": "python3 x.py"}]}}},
+                      "probe.yml")[2] == []))
+    _dead = scan_workflow_jobs(
+        {"jobs": {"g": {"steps": [{"run": "exit 0\npython3 x.py"}]}}},
+        "probe.yml")
+    cases.append(("lines after an unconditional exit are dead and reported",
+                  any("never run" in x for x in _dead[2])
+                  and "python3 x.py" not in _dead[0]))
+    cases.append(("set +e in a gate run block is reported", any(
+        "swallowed" in x for x in scan_workflow_jobs(
+            {"jobs": {"g": {"steps": [{"run": "set +e\npython3 x.py"}]}}},
+            "probe.yml")[2])))
+
     # THE WIRINGS, deletable green in round 17: `+=`/`.extend` are not census
     # sites, so each is pinned by a planted stub surfacing through the REAL
     # main() path.
@@ -947,15 +979,69 @@ def self_test():
         globals()["ci_command_problems"] = _real_cc
     cases.append(("the CI command parity check is WIRED into main",
                   _cc_wired == 1))
+    _real_scan = scan_workflow_jobs
+    globals()["scan_workflow_jobs"] = lambda *_a, **_k: ("", 1, ["planted-scan"])
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _scan_wired = main([])
+    finally:
+        globals()["scan_workflow_jobs"] = _real_scan
+    cases.append(("the workflow scan's findings are WIRED into main",
+                  _scan_wired == 1))
+    # THE FLOORS, also deletable green in round 18: each is pinned by
+    # driving the real main() with the floor raised past reality.
+    global MINIMUM_AGREEMENTS
+    _held_floor = MINIMUM_AGREEMENTS
+    MINIMUM_AGREEMENTS = 999
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _floor_fires = main([])
+    finally:
+        MINIMUM_AGREEMENTS = _held_floor
+    cases.append(("the agreement floor is WIRED into main", _floor_fires == 1))
+    _held_refs = MINIMUM_ACTION_REFS["checks.yml"]
+    MINIMUM_ACTION_REFS["checks.yml"] = 999
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _refs_fires = main([])
+    finally:
+        MINIMUM_ACTION_REFS["checks.yml"] = _held_refs
+    cases.append(("the action-reference floor is WIRED into main",
+                  _refs_fires == 1))
+    # THE TRIGGERS: a workflow that never runs on a PR gates nothing.
+    cases.append(("a dispatch-only workflow is caught", any(
+        "gates nothing" in x for x in workflow_trigger_problems(
+            {True: {"workflow_dispatch": None}}, "probe.yml"))))
+    cases.append(("a pull_request-triggered workflow is clean",
+                  workflow_trigger_problems(
+                      {True: {"push": None, "pull_request": None}},
+                      "probe.yml") == []))
+    _real_trig = workflow_trigger_problems
+    globals()["workflow_trigger_problems"] = lambda *_a: ["planted-trigger"]
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _trig_wired = main([])
+    finally:
+        globals()["workflow_trigger_problems"] = _real_trig
+    cases.append(("the trigger requirement is WIRED into main",
+                  _trig_wired == 1))
 
     # THE WHITESPACE PIN PARITY, each direction.
     cases.append(("matching whitespace pins reconcile clean",
                   not whitespace_pin_problems(
                       f"a {WHITESPACE_PIN} b {WHITESPACE_PIN}",
-                      f"c {WHITESPACE_PIN}")))
+                      f"c {WHITESPACE_PIN} d {WHITESPACE_PIN}")))
     cases.append(("a CI side missing the whitespace pin is caught", any(
         "local-green/CI-red" in x for x in whitespace_pin_problems(
             f"a {WHITESPACE_PIN} b {WHITESPACE_PIN}", "bare git diff"))))
+    cases.append(("a CI side that loses its fallback-leg pin is caught", any(
+        "local-green/CI-red" in x for x in whitespace_pin_problems(
+            f"a {WHITESPACE_PIN} b {WHITESPACE_PIN}",
+            f"only one {WHITESPACE_PIN}"))))
     cases.append(("a Makefile losing one whitespace pin is caught", any(
         "local-green/CI-red" in x for x in whitespace_pin_problems(
             f"only one {WHITESPACE_PIN}", f"c {WHITESPACE_PIN}"))))
@@ -1013,7 +1099,7 @@ def whitespace_pin_problems(makefile_text=None, policy_text=None):
         policy_text = POLICY.read_text(encoding="utf-8") if POLICY.is_file() else ""
     for name, text, want in (
             ("Makefile", makefile_text, 2),
-            (".github/workflows/repository-policy.yml", policy_text, 1)):
+            (".github/workflows/repository-policy.yml", policy_text, 2)):
         have = text.count(WHITESPACE_PIN)
         if have < want:
             problems.append(
@@ -1022,6 +1108,24 @@ def whitespace_pin_problems(makefile_text=None, policy_text=None):
                 "pinned identically in the Makefile and CI, or the same "
                 "bytes go local-green/CI-red on a stray git config.")
     return problems
+
+
+def workflow_trigger_problems(document, workflow_name):
+    """A required workflow must trigger on pull_request.
+
+    Job keys, command text and conditions were all pinned while the `on:`
+    block was read by nothing: `on: workflow_dispatch:` stopped every gate
+    job from ever running on a pull request with all gates green (round 18).
+    PyYAML parses a bare `on:` key as boolean True."""
+    triggers = document.get(True) or document.get("on") or {}
+    names = (set(triggers) if isinstance(triggers, dict)
+             else set(triggers) if isinstance(triggers, list)
+             else {str(triggers)} if triggers else set())
+    if "pull_request" not in names:
+        return [f"{workflow_name}: does not trigger on pull_request "
+                f"(triggers: {sorted(map(str, names))}); a gate workflow "
+                "that never runs on a PR gates nothing."]
+    return []
 
 
 def scan_workflow_jobs(document, workflow_name):
@@ -1046,6 +1150,14 @@ def scan_workflow_jobs(document, workflow_name):
                 "policy: any condition is a spelling of 'sometimes this "
                 "does not run'.")
             continue
+        if job.get("continue-on-error", False) is not False:
+            # The fourth spelling of the same attack (round 18): the job
+            # runs, fails, and the workflow stays green.
+            problems.append(
+                f"{workflow_name}: job {job_name!r} sets continue-on-error; "
+                "a gate whose failure does not fail the workflow is not a "
+                "gate.")
+            continue
         live += 1
         for step in (job.get("steps") or []):
             if not isinstance(step, dict) or not step.get("run"):
@@ -1056,10 +1168,30 @@ def scan_workflow_jobs(document, workflow_name):
                     f"carries an `if:` ({str(step.get('if'))!r}); a "
                     "conditional gate step is a gate that may not run.")
                 continue
+            if step.get("continue-on-error", False) is not False:
+                problems.append(
+                    f"{workflow_name}: a run step in job {job_name!r} sets "
+                    "continue-on-error; its gate's failure is swallowed.")
+                continue
             for line in str(step["run"]).splitlines():
                 stripped = line.split("#", 1)[0].strip()
                 if not stripped:
                     continue
+                # Lines below an unconditional `exit` are dead: a preceding
+                # `exit 0` disarmed every parity match after it (round 18).
+                # Dead lines are dropped AND reported -- a run block that
+                # exits early around gate commands is hiding something.
+                if re.fullmatch(r"exit(\s+\d+)?", stripped):
+                    problems.append(
+                        f"{workflow_name}: job {job_name!r} has a run block "
+                        "with an unconditional `exit`; lines after it never "
+                        "run and are not counted.")
+                    break
+                if stripped.startswith("set ") and "+e" in stripped:
+                    problems.append(
+                        f"{workflow_name}: job {job_name!r} disables "
+                        "errexit (`set +e`) in a gate run block; later "
+                        "failures in the block are swallowed.")
                 text += "\n" + " ".join(stripped.split())
     return text, live, problems
 
@@ -1109,9 +1241,25 @@ def main(argv):
                 missing_jobs.append(f"{workflow_name}: job {job!r} is gone")
     # Every gate command must appear in some workflow, and in a job that is
     # not disabled.
+    # THE TRIGGERS. Job keys, command text and conditions were all pinned
+    # while the `on:` block was read by nothing -- `on: workflow_dispatch:`
+    # stopped every gate job from ever running on a pull request with all
+    # gates green (round 18). Every required workflow must trigger on
+    # pull_request.
+    for workflow_name in REQUIRED_JOBS:
+        path = ROOT / ".github" / "workflows" / workflow_name
+        if not path.is_file():
+            continue  # already reported above
+        try:
+            import yaml as _yaml
+            document = _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            document = {}
+        missing_jobs.extend(workflow_trigger_problems(document, workflow_name))
     workflow_text = ""
     live_jobs = 0
-    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+    for path in sorted(list((ROOT / ".github" / "workflows").glob("*.yml"))
+                       + list((ROOT / ".github" / "workflows").glob("*.yaml"))):
         try:
             import yaml as _yaml
             document = _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
