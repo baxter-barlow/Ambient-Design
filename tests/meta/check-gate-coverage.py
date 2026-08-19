@@ -70,8 +70,10 @@ WHAT THIS DOES NOT MEASURE, demonstrated rather than supposed:
      ACCUMULATOR loud; it cannot make an unusual reporting STYLE loud.
   4. NO_SELF_TEST gates are counted, not measured. Their report sites are
      published as an unpinned total because there is no self-test to run them
-     against; that number is a floor on what is unpinned in the shell half of
-     the suite, and closing it means writing those self-tests.
+     against. Round 14 closed four of the five shell gates this way -- each
+     now measured under CEILINGS like everything else -- leaving only the
+     validate-layout skill script, whose self-test is blocked on skill-change
+     policy (see the NO_SELF_TEST comment) rather than on nobody writing it.
 
 Surviving-site count is a floor on what is unpinned. It is not a coverage
 percentage and must not be quoted as one.
@@ -107,12 +109,14 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 # from under the ceiling, which is how 28% of it disappeared unnoticed. Lower
 # the survivor number; do not raise it.
 CEILINGS = {
+    ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (34, 16),
     "parts/lint-part-data.py": (30, 5),
     "tests/benchmarks/check-assertions.py": (18, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
+    "tests/benchmarks/run-sim.sh": (11, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (25, 3),
@@ -123,6 +127,8 @@ CEILINGS = {
     # which the version that excused itself as "too few sites" did not.
     "tests/meta/check-gate-coverage.py": (11, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
+    "tests/golden/run.sh": (6, 0),
+    "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
     "tests/toolchain/check-pins.py": (18, 12),
 }
@@ -136,6 +142,13 @@ CEILINGS = {
 # check-corners.py; one global whitelist scored the second as a check and the
 # first not at all.
 OWNERS = {
+    # Shell gates report through `fail`/printf lines counted by SHELL_SITE,
+    # not through accumulators; the empty classification keeps them in the
+    # same census as everything else.
+    ".github/scripts/check-dco.sh": (set(), set()),
+    "tests/benchmarks/run-sim.sh": (set(), set()),
+    "tests/golden/run.sh": (set(), set()),
+    "tests/structure/check-layout.sh": (set(), set()),
     "lang/tests/check_readme_numbers.py": (
         {"problems"},
         {"token_lines", "t9_order", "sources", "published", "cases"}),
@@ -198,11 +211,12 @@ SMALL_POPULATION = 5
 # bucket. Their report sites are counted and published as an unpinned total,
 # because a gap that is measured is a gap somebody can close.
 NO_SELF_TEST = (
+    # The one remaining member. It is a PROJECT SKILL script, and AGENTS.md
+    # allows skill changes only through a dedicated Linear issue with
+    # independent review -- so its self-test is recorded work, not a silent
+    # gap: its 19 report sites stay in the published unpinned total until
+    # that issue lands.
     ".agents/skills/verify-rhoform-change/scripts/validate-layout.sh",
-    ".github/scripts/check-dco.sh",
-    "tests/benchmarks/run-sim.sh",
-    "tests/golden/run.sh",
-    "tests/structure/check-layout.sh",
 )
 
 # Shell gates are counted by pattern; there is no AST for them. Every one of
@@ -339,8 +353,26 @@ def shell_report_sites(source: str) -> list[int]:
     """Failure-reporting lines in a shell gate, counted rather than measured."""
     # search, not match: the pattern is no longer anchored to the start of the
     # line, because `[ -f X ] || fail "..."` reports from the middle of one.
-    return [i for i, line in enumerate(source.splitlines())
-            if SHELL_SITE.search(line)]
+    #
+    # A self_test() body is excluded, exactly as report_sites() excludes the
+    # Python one: its FAIL lines report on the self-test, not on the tree, and
+    # counting them handed every migrated shell gate one permanent survivor.
+    # The extent is the function opener to the first column-0 `}` -- these
+    # scripts are written to that shape, and a self_test whose closer is
+    # indented would put its lines back IN the population, which fails safe.
+    sites, in_self_test = [], False
+    for i, line in enumerate(source.splitlines()):
+        if re.match(r"self_test\s*\(\)", line):
+            # A one-line `self_test() { ...; }` closes itself; entering
+            # exclusion mode for it would swallow every later site in the
+            # file, which is how the syntax-fragility probe briefly scored
+            # zero sites.
+            in_self_test = not line.rstrip().endswith("}")
+        elif in_self_test and line.rstrip() == "}":
+            in_self_test = False
+        elif not in_self_test and SHELL_SITE.search(line):
+            sites.append(i)
+    return sites
 
 
 def blank_site(source: str, line_no: int) -> str:
@@ -367,6 +399,21 @@ def blank_site(source: str, line_no: int) -> str:
     return "".join(lines)
 
 
+def blank_shell_site(source: str, line_no: int) -> str:
+    """Replace one shell report line with a no-op colon command.
+
+    Line-scoped where the Python side is statement-scoped, because that is
+    what SHELL_SITE counts. A line that cannot be blanked without breaking
+    the script's syntax (a continuation, a one-line case arm carrying its own
+    `;;`) is handled by the caller: the mutant fails `bash -n` and the site
+    scores as SURVIVING, because a self-test that only fails on a syntax
+    error has not pinned the check."""
+    lines = source.splitlines(keepends=True)
+    indent = len(lines[line_no]) - len(lines[line_no].lstrip())
+    lines[line_no] = " " * indent + ":\n"
+    return "".join(lines)
+
+
 def _last_line(result) -> str:
     """The most informative line of a failed run, or a stand-in if it printed
     nothing. Indexing [-1] of an empty split is how this crashed once."""
@@ -374,10 +421,64 @@ def _last_line(result) -> str:
     return text.splitlines()[-1][:120] if text else "(no output)"
 
 
-def surviving_sites(gate: Path, report_owners: set[str]) -> tuple[int, int, list[int]]:
-    """(sites, survivors, survivor line numbers) for one gate."""
+def _machinery_salt() -> str:
+    """Hash of the mutation machinery itself, so editing how sites are
+    counted, blanked or judged invalidates every cached measurement."""
+    import hashlib
+    import inspect
+    digest = hashlib.sha256()
+    digest.update(SHELL_SITE.pattern.encode("utf-8"))
+    for fn in (report_sites, shell_report_sites, blank_site, blank_shell_site):
+        digest.update(inspect.getsource(fn).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _mutation_cache_path() -> Path:
+    """A per-machine, per-checkout cache file in the system temp directory.
+
+    Not committed: the measurement is a pure function of the gate's bytes and
+    this file's machinery, so a cold cache costs one full measurement and a
+    warm one costs nothing -- but a committed file would assert results for
+    machines that never ran them."""
+    import hashlib
+    import tempfile
+    tag = hashlib.sha256(str(ROOT).encode("utf-8")).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / f"rhoform-gate-coverage-{tag}.json"
+
+
+def _load_mutation_cache() -> dict:
+    import json
+    try:
+        return json.loads(_mutation_cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _store_mutation_cache(cache: dict) -> None:
+    import json
+    try:
+        _mutation_cache_path().write_text(json.dumps(cache), encoding="utf-8")
+    except OSError:
+        pass  # a cache that cannot be written is only a slower measurement
+
+
+def surviving_sites(gate: Path, report_owners: set[str],
+                    cache: dict | None = None) -> tuple[int, int, list[int]]:
+    """(sites, survivors, survivor line numbers) for one gate.
+
+    THE BASELINE SELF-TEST ALWAYS RUNS -- the environment can rot under an
+    unchanged gate (PyYAML uninstalled, ngspice gone), and the baseline is
+    what catches that. Only the mutation LOOP is cached, keyed on the gate's
+    bytes, the owner classification and the machinery hash: with a working
+    environment its outcome is a pure function of those, and re-running
+    27 mutants of a six-second self-test on every make invocation priced the
+    measurement out of the default gate run.
+    """
+    import hashlib
     source = gate.read_text(encoding="utf-8")
-    sites = report_sites(source, report_owners)
+    shell = gate.suffix == ".sh"
+    sites = (shell_report_sites(source) if shell
+             else report_sites(source, report_owners))
     # THE BASELINE MUST PASS FIRST. Nothing checked that the UNMUTATED gate's
     # self-test exits 0, so a self-test that cannot run at all -- PyYAML absent,
     # which is true of four of these gates in CI's schemas job -- made every
@@ -385,7 +486,9 @@ def surviving_sites(gate: Path, report_owners: set[str]) -> tuple[int, int, list
     # then told the maintainer to pin those fabricated zeros. An unavailable
     # measurement is not a measurement.
     inner_env = {**os.environ, "RHOFORM_GATE_COVERAGE_INNER": "1"}
-    baseline = subprocess.run([sys.executable, str(gate), "--self-test"],
+    runner = (["bash", str(gate), "--self-test"] if shell
+              else [sys.executable, str(gate), "--self-test"])
+    baseline = subprocess.run(runner,
                               capture_output=True, text=True, cwd=ROOT,
                               env=inner_env, timeout=300)
     if baseline.returncode != 0:
@@ -397,25 +500,63 @@ def surviving_sites(gate: Path, report_owners: set[str]) -> tuple[int, int, list
             f"{baseline.returncode} before any mutation, so every site would "
             "score as caught. Install the pinned dependencies and re-run: "
             f"{_last_line(baseline)}")
+    cache_key = hashlib.sha256(
+        (source + repr(sorted(report_owners)) + _machinery_salt())
+        .encode("utf-8")).hexdigest()
+    if cache is not None and cache_key in cache:
+        cached_sites, cached_survivors = cache[cache_key]
+        return cached_sites, len(cached_survivors), list(cached_survivors)
     survivors = []
     backup = gate.with_suffix(gate.suffix + ".coverage-backup")
     shutil.copy(gate, backup)
+
+    def swap_in(text: str) -> None:
+        # Write-to-temp then atomic rename. `gate.write_text` opened the REAL
+        # gate with truncation, so an ENOSPC between the truncate and the
+        # write left a ZERO-BYTE gate on disk -- and the finally's restore
+        # copy failed on the same full disk, so the tree stayed corrupted.
+        # A rename needs no new blocks; a failed temp write leaves the gate
+        # untouched.
+        scratch = gate.with_suffix(gate.suffix + ".coverage-mutant")
+        scratch.write_text(text, encoding="utf-8")
+        os.replace(scratch, gate)
+
     try:
         for line_no in sites:
-            gate.write_text(blank_site(source, line_no), encoding="utf-8")
+            swap_in((blank_shell_site if shell else blank_site)
+                    (source, line_no))
+            if shell:
+                syntax = subprocess.run(["bash", "-n", str(gate)],
+                                        capture_output=True, timeout=60)
+                if syntax.returncode != 0:
+                    # A blank that breaks the script is not a deleted check;
+                    # a self-test that goes red on the syntax error proves
+                    # nothing about the CHECK, so score it as unpinned.
+                    survivors.append(line_no + 1)
+                    swap_in(source)
+                    continue
             result = subprocess.run(
-                [sys.executable, str(gate), "--self-test"],
+                runner,
                 capture_output=True, text=True, cwd=ROOT,
                 env=inner_env, timeout=300)
             if result.returncode == 0:
                 survivors.append(line_no + 1)
-            gate.write_text(source, encoding="utf-8")
+            swap_in(source)
+    except OSError as exc:
+        raise GateUnavailable(
+            f"mutating {gate.name} failed mid-loop ({exc}); the gate itself "
+            "is intact and its .coverage-backup still exists") from exc
     finally:
         # Restore from the backup, not from `source`: if this process dies
         # mid-loop the gate is left mutated, which is the shared-writable-state
         # hazard AGENTS.md forbids and which a sibling probe already caused.
-        shutil.copy(backup, gate)
-        backup.unlink()
+        try:
+            os.replace(backup, gate)
+        except OSError:
+            shutil.copy(backup, gate)
+            backup.unlink()
+    if cache is not None:
+        cache[cache_key] = [len(sites), survivors]
     return len(sites), len(survivors), survivors
 
 
@@ -463,6 +604,7 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                 "leaves `make all` green.")
     owners = owners if owners is not None else OWNERS
     measured = 0
+    mutation_cache = _load_mutation_cache()
     for name, pinned in sorted((ceilings or CEILINGS).items()):
         recorded_sites, ceiling = pinned
         gate = ROOT / name
@@ -474,7 +616,10 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
             problems.append(f"{name}: no accumulator classification in OWNERS")
             continue
         report_owners, bookkeeping = owners[name]
-        unclassified = appended_owners(source) - report_owners - bookkeeping
+        # A shell gate has no accumulators to classify -- its sites are
+        # SHELL_SITE lines -- and ast.parse on bash is a crash, not a census.
+        unclassified = (set() if name.endswith(".sh")
+                        else appended_owners(source) - report_owners - bookkeeping)
         if unclassified:
             problems.append(
                 f"{name}: appends to {sorted(unclassified)}, which OWNERS "
@@ -485,7 +630,8 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                 "sites.")
             continue
         try:
-            sites, survivors, where = surviving_sites(gate, report_owners)
+            sites, survivors, where = surviving_sites(gate, report_owners,
+                                                      cache=mutation_cache)
         except subprocess.TimeoutExpired:
             raise GateUnavailable(f"{name}: --self-test did not terminate")
         # A gate with NO report sites scores a perfect zero for free. That is
@@ -521,6 +667,7 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                   f"its ceiling of {ceiling}. Lower the ceiling to {survivors} "
                   "in the same commit so it cannot drift back.")
         measured += 1
+    _store_mutation_cache(mutation_cache)
 
     unpinned = 0
     for rel in NO_SELF_TEST:
@@ -610,6 +757,12 @@ def self_test() -> int:
     cases.append(("both shell reporting styles are recognised",
                   len(shell_report_sites('  [ -f X ] || fail "gone"\n')) == 1
                   and len(shell_report_sites("  printf 'x: FAIL\\n' >&2\n")) == 1))
+    cases.append(("a report line inside a shell self_test is not counted",
+                  shell_report_sites(
+                      'self_test() {\n  fail "mine"\n}\nfail "real"\n') == [3]))
+    cases.append(("a one-line self_test does not swallow later sites",
+                  shell_report_sites(
+                      'self_test() { :; }\nfail "real"\n') == [1]))
 
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
@@ -621,6 +774,69 @@ def self_test() -> int:
                       sites == 2 and survivors == 1 and where == [4]))
         cases.append(("the gate is restored after measurement",
                       probe.read_text(encoding="utf-8") == SAMPLE))
+
+        # THE SHELL SIDE of the same machinery. A shell gate is mutated per
+        # LINE (that is what SHELL_SITE counts), run with bash, and a blank
+        # that breaks the script's syntax scores as SURVIVING: a self-test
+        # that only goes red on a syntax error has not pinned the check.
+        SHELL_SAMPLE = (
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "fail() { printf 'FAIL: %s\\n' \"$1\" >&2; exit 1; }\n"
+            "self_test() {\n"
+            "  if out=$(bash \"$0\" broken 2>&1); then return 1; fi\n"
+            "  case \"$out\" in *pinned*) : ;; *) return 1 ;; esac\n"
+            "  return 0\n"
+            "}\n"
+            "[ \"${1:-}\" != \"--self-test\" ] || { self_test; exit $?; }\n"
+            "[ \"${1:-}\" != broken ] || fail \"pinned check\"\n"
+            "[ \"${1:-}\" != quiet ] || fail \"unpinned check\"\n"
+            "echo PASS\n"
+        )
+        shell_probe = Path(tmp) / "probe.sh"
+        shell_probe.write_text(SHELL_SAMPLE, encoding="utf-8")
+        sh_sites, sh_survivors, sh_where = surviving_sites(shell_probe, set())
+        cases.append(("a pinned shell site is caught and an unpinned one "
+                      "survives",
+                      sh_sites == 2 and sh_survivors == 1 and sh_where == [11]))
+        cases.append(("the shell gate is restored after measurement",
+                      shell_probe.read_text(encoding="utf-8") == SHELL_SAMPLE))
+        FRAGILE = (
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "fail() { printf 'FAIL: %s\\n' \"$1\" >&2; exit 1; }\n"
+            "self_test() { bash -n \"$0\"; }\n"
+            "[ \"${1:-}\" != \"--self-test\" ] || { self_test; exit $?; }\n"
+            "case \"${1:-}\" in\n"
+            "  broken) fail \"inside a case arm\" ;;\n"
+            "esac\n"
+            "echo PASS\n"
+        )
+        fragile = Path(tmp) / "fragile.sh"
+        fragile.write_text(FRAGILE, encoding="utf-8")
+        fr_sites, fr_survivors, _ = surviving_sites(fragile, set())
+        cases.append(("a syntax-breaking shell blank scores as surviving, "
+                      "not caught",
+                      fr_sites == 1 and fr_survivors == 1))
+
+        # THE MUTATION CACHE. The loop's outcome is a pure function of the
+        # gate's bytes, the owner set and the machinery, so check() caches
+        # it -- the BASELINE still runs uncached every time, which is what
+        # keeps a rotted environment loud. A poisoned entry proves the read
+        # path is real; an edited gate must miss it.
+        probe_cache = {}
+        cases.append(("a mutation result lands in the cache",
+                      surviving_sites(shell_probe, set(), cache=probe_cache)
+                      == (2, 1, [11]) and len(probe_cache) == 1))
+        poisoned = {key: [99, [1, 2, 3]] for key in probe_cache}
+        cases.append(("a cached measurement is returned without re-running",
+                      surviving_sites(shell_probe, set(), cache=poisoned)
+                      == (99, 3, [1, 2, 3])))
+        edited_probe = Path(tmp) / "edited.sh"
+        edited_probe.write_text(SHELL_SAMPLE + "# edited\n", encoding="utf-8")
+        cases.append(("an edited gate misses the cache",
+                      surviving_sites(edited_probe, set(), cache=poisoned)
+                      == (2, 1, [11])))
 
         # THE BASELINE GUARD. Round 13 added it as the fix for a blocker and
         # pinned it with nothing: `if baseline.returncode != 0:` -> `if False:`

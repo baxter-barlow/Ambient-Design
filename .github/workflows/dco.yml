@@ -45,4 +45,5 @@ jobs:
             BASE_SHA=$(git rev-parse "$HEAD_SHA^" 2>/dev/null || git rev-list --max-parents=0 "$HEAD_SHA")
           fi
           echo "checking $BASE_SHA..$HEAD_SHA"
+          sh .github/scripts/check-dco.sh --self-test
           sh .github/scripts/check-dco.sh "$BASE_SHA" "$HEAD_SHA"

@@ -6,6 +6,79 @@ usage() {
   exit 2
 }
 
+# Every failure path below, proven to fire against throwaway repositories.
+# This gate ran for fourteen rounds with no self-test at all, which the
+# coverage gate published honestly and nothing acted on; each case asserts
+# the exit code AND a message fragment, so blanking a report line cannot
+# pass as long as the exit path still fires.
+self_test() {
+  script=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)/$(basename -- "$0")
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  failures=0
+
+  expect() {
+    # expect <name> <expected-exit> <stderr+stdout fragment> <repo> [args...]
+    name=$1; want=$2; fragment=$3; repo=$4; shift 4
+    got=0
+    out=$( (cd "$repo" && "$script" "$@") 2>&1 ) || got=$?
+    if [ "$got" -eq "$want" ] && printf '%s' "$out" | grep -Fq -- "$fragment"; then
+      printf 'self-test ok:   %s\n' "$name"
+    else
+      printf 'self-test FAIL: %s (exit %s, wanted %s; output: %s)\n' \
+        "$name" "$got" "$want" "$out"
+      failures=$((failures + 1))
+    fi
+  }
+
+  commit() {
+    # commit <repo> <subject> [signoff-line]
+    msg=$2
+    [ -z "${3:-}" ] || msg=$(printf '%s\n\n%s' "$2" "$3")
+    git -C "$1" -c user.name='T Author' -c user.email='t@example.invalid' \
+      commit -q --allow-empty -m "$msg"
+  }
+
+  signed="$tmp/signed"
+  git init -q "$signed"
+  commit "$signed" root 'Signed-off-by: T Author <t@example.invalid>'
+  commit "$signed" second 'Signed-off-by: T Author <t@example.invalid>'
+  root_commit=$(git -C "$signed" rev-list --max-parents=0 HEAD)
+
+  unsigned="$tmp/unsigned"
+  git init -q "$unsigned"
+  commit "$unsigned" root 'Signed-off-by: T Author <t@example.invalid>'
+  commit "$unsigned" 'no trailer here'
+  unsigned_root=$(git -C "$unsigned" rev-list --max-parents=0 HEAD)
+
+  bare_root="$tmp/bare-root"
+  git init -q "$bare_root"
+  commit "$bare_root" 'root without signoff'
+  commit "$bare_root" second 'Signed-off-by: T Author <t@example.invalid>'
+  bare_root_commit=$(git -C "$bare_root" rev-list --max-parents=0 HEAD)
+
+  expect "no arguments is usage, not a pass" 2 "usage:" "$signed"
+  expect "an unavailable base commit is an environment failure" \
+    2 "base commit" "$signed" 0000000000000000000000000000000000000000
+  expect "an unavailable head commit is an environment failure" \
+    2 "head commit" "$signed" "$root_commit" 0000000000000000000000000000000000000000
+  expect "a fully signed range passes" \
+    0 "DCO check passed" "$signed" "$root_commit" HEAD
+  expect "a commit without the trailer fails" \
+    1 "DCO failed" "$unsigned" "$unsigned_root" HEAD
+  expect "the root commit is checked when it is the base" \
+    1 "DCO failed" "$bare_root" "$bare_root_commit" HEAD
+
+  if [ "$failures" -ne 0 ]; then
+    printf 'dco: SELF-TEST FAILED: %s case(s)\n' "$failures" >&2
+    return 1
+  fi
+  printf 'dco: self-test PASS: 6 cases.\n'
+  return 0
+}
+
+[ "${1:-}" != "--self-test" ] || { self_test; exit $?; }
+
 [ "$#" -ge 1 ] && [ "$#" -le 2 ] || usage
 
 base=$1
