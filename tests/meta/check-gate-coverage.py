@@ -73,7 +73,7 @@ WHAT THIS DOES NOT MEASURE, demonstrated rather than supposed:
      against. Round 14 closed four of the five shell gates this way -- each
      now measured under CEILINGS like everything else -- leaving only the
      validate-layout skill script, whose self-test is blocked on skill-change
-     policy (see the NO_SELF_TEST comment) rather than on nobody writing it.
+     policy (AMB-125 is the recorded work) rather than on nobody writing it.
 
 Surviving-site count is a floor on what is unpinned. It is not a coverage
 percentage and must not be quoted as one.
@@ -112,25 +112,25 @@ CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
     "parts/lint-part-data.py": (30, 5),
-    "tests/benchmarks/check-assertions.py": (29, 3),
+    "tests/benchmarks/check-assertions.py": (30, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
-    "tests/benchmarks/check-hand-assertions.py": (28, 15),
+    "tests/benchmarks/check-hand-assertions.py": (31, 15),
     "tests/benchmarks/run-sim.sh": (18, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
     "tests/eval/check-run-records.py": (62, 9),
-    "tests/ir/check-hashes.py": (19, 2),
+    "tests/ir/check-hashes.py": (20, 2),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
-    "tests/meta/check-gate-coverage.py": (13, 6),
+    "tests/meta/check-gate-coverage.py": (15, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (19, 12),
+    "tests/toolchain/check-pins.py": (23, 10),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -214,9 +214,9 @@ SMALL_POPULATION = 5
 NO_SELF_TEST = (
     # The one remaining member. It is a PROJECT SKILL script, and AGENTS.md
     # allows skill changes only through a dedicated Linear issue with
-    # independent review -- so its self-test is recorded work, not a silent
-    # gap: its 19 report sites stay in the published unpinned total until
-    # that issue lands.
+    # independent review -- so its self-test is recorded work (AMB-125, the
+    # issue that owns it), not a silent gap: its 19 report sites stay in the
+    # published unpinned total until that issue lands.
     ".agents/skills/verify-rhoform-change/scripts/validate-layout.sh",
 )
 
@@ -266,9 +266,14 @@ def makefile_gates(text=None) -> list[str]:
         text = (ROOT / "Makefile").read_text(encoding="utf-8")
     found = []
     for line in _live_makefile_lines(_reachable_from_all(text)):
-        for match in re.finditer(r"(?:python3|bash|sh)\s+(\S+\.(?:py|sh))", line):
-            rel = match.group(1)
-            if (ROOT / rel).is_file() and rel not in found:
+        # `python` without the 3, and direct `./path` execution, both run a
+        # gate; the three-verb list missed them (round 18).
+        for match in re.finditer(
+                r"(?:python3?|bash|sh)\s+(\S+\.(?:py|sh))\b"
+                r"|(?:^|\s)\.?/?((?:tests|parts|lang|eval|\.github|\.agents)"
+                r"/\S+\.(?:py|sh))\b", line):
+            rel = match.group(1) or match.group(2)
+            if rel and (ROOT / rel).is_file() and rel not in found:
                 found.append(rel)
     return sorted(found)
 
@@ -287,12 +292,26 @@ def indirection_problems(text=None):
     for line in _live_makefile_lines(_reachable_from_all(text)):
         if not line.startswith("\t"):
             continue
-        if re.search(r"(?<!\$)\$[({]", line):
+        if re.search(r"(?<!\$)\$(?!\$)", line):
+            # ANY single-`$` -- `$(VAR)`, `${VAR}`, `$G`, `$@` -- expands to
+            # something this parser did not see. Round 18 ran a planted gate
+            # through make's single-character expansion (`$G`) with the
+            # census green; the round-17 guard matched only `$(`/`${`.
             problems.append(
-                f"Makefile recipe line {line.strip()!r} uses a make-variable "
+                f"Makefile recipe line {line.strip()!r} uses a make "
                 "expansion the gate census cannot see through. Spell gate "
                 "invocations literally; indirection is how a gate runs "
                 "while sitting in no coverage bucket.")
+            continue
+        if (re.search(r"\bcd\s+\S+\s*(?:&&|;)", line)
+                and re.search(r"\S+\.(?:py|sh)\b", line)):
+            # `cd X && python3 -m module` is the documented module-invocation
+            # exclusion (packages with their own suites); a FILE invoked
+            # after cd is a gate the census cannot resolve.
+            problems.append(
+                f"Makefile recipe line {line.strip()!r} changes directory "
+                "before invoking; a relative invocation after `cd` is "
+                "invisible to the census. Invoke gates from the repo root.")
     return problems
 
 
@@ -636,31 +655,83 @@ def _cache_key(source: str, report_owners: set[str], tree) -> str:
         .encode("utf-8")).hexdigest()
 
 
-def _mutation_cache_path() -> Path:
-    """A per-machine, per-checkout cache file in the system temp directory.
+def _mutation_cache_path():
+    """Checkout-local cache under .git, or None when there is no .git.
 
-    Not committed: the measurement is a pure function of the gate's bytes and
-    this file's machinery, so a cold cache costs one full measurement and a
-    warm one costs nothing -- but a committed file would assert results for
-    machines that never ran them."""
-    import hashlib
-    import tempfile
-    tag = hashlib.sha256(str(ROOT).encode("utf-8")).hexdigest()[:16]
-    return Path(tempfile.gettempdir()) / f"rhoform-gate-coverage-{tag}.json"
+    It lived in the shared system temp directory at a name any local user
+    could predict, and its entries were trusted verbatim: round 18 forged it
+    and every gate reported a fabricated "0 of N survive", with the poisoned
+    probe turning enforcement into exit 2. `.git` is writable only by
+    whoever can already rewrite the repository, which is the right trust
+    boundary; no .git, no cache. Not committed: a committed file would
+    assert results for machines that never ran them."""
+    git_dir = ROOT / ".git"
+    if not git_dir.is_dir():
+        return None
+    return git_dir / "rhoform-gate-coverage-cache.json"
+
+
+def _valid_cache_entry(value) -> bool:
+    """(sites, survivors, [lines]) and nothing else."""
+    return (isinstance(value, (list, tuple)) and len(value) == 3
+            and isinstance(value[0], int) and isinstance(value[1], int)
+            and isinstance(value[2], list)
+            and all(isinstance(line, int) for line in value[2])
+            and 0 <= value[1] <= value[0])
+
+
+def _acquire_measurement_lock(lock_path=None):
+    """Exclusive lock for the mutation loop, or GateUnavailable.
+
+    The loop swaps mutants into tracked gate files: `.NOTPARALLEL` serialises
+    one make process, but two CONCURRENT invocations against one checkout
+    interleaved mutants and left a report site silently blanked in-tree while
+    the winner printed PASS (round 18). The lock lives beside the cache in
+    .git; without .git the measurement runs unlocked, which matches the
+    cacheless fallback (a bare tree has no concurrent-make story to protect).
+    Returns the open file handle to hold, or None when no .git exists."""
+    git_dir = ROOT / ".git"
+    if lock_path is None:
+        if not git_dir.is_dir():
+            return None
+        lock_path = git_dir / "rhoform-gate-coverage.lock"
+    import fcntl
+    handle = open(lock_path, "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        raise GateUnavailable(
+            "another gate-coverage measurement holds the mutation lock for "
+            "this checkout; two loops would interleave mutants in the same "
+            "tracked files. Wait for it, or investigate a stale process.")
+    return handle
 
 
 def _load_mutation_cache() -> dict:
     import json
+    path = _mutation_cache_path()
+    if path is None:
+        return {}
     try:
-        return json.loads(_mutation_cache_path().read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    if not isinstance(raw, dict):
+        return {}
+    # Malformed entries are dropped, not trusted: a cache is an accelerator,
+    # never an authority on shape.
+    return {key: value for key, value in raw.items()
+            if isinstance(key, str) and _valid_cache_entry(value)}
 
 
 def _store_mutation_cache(cache: dict) -> None:
     import json
+    path = _mutation_cache_path()
+    if path is None:
+        return
     try:
-        _mutation_cache_path().write_text(json.dumps(cache), encoding="utf-8")
+        path.write_text(json.dumps(cache), encoding="utf-8")
     except OSError:
         pass  # a cache that cannot be written is only a slower measurement
 
@@ -769,6 +840,31 @@ def has_self_test(path: Path) -> bool:
     return "--self-test" in text and ("def self_test" in text or "self_test()" in text)
 
 
+def self_test_only_gates(makefile_text, bucket_gates, population):
+    """Bucket gates whose every reachable invocation is `--self-test`.
+
+    Round 18 reduced a gate's Makefile line to its self-test alone: the
+    census saw the path invoked, the measurement measured, and a corrupted
+    part record sailed through. The real-run scan covers the Makefile's
+    reachable live lines AND the shell harnesses it runs, whose lines are
+    reachable execution too (run-sim dispatches check-assertions; the layout
+    engine runs the retired-name scan)."""
+    run_lines = list(_live_makefile_lines(_reachable_from_all(makefile_text)))
+    for rel in population:
+        if rel.endswith(".sh") and (ROOT / rel).is_file():
+            run_lines.extend((ROOT / rel).read_text(
+                encoding="utf-8", errors="replace").splitlines())
+    real_runs = set()
+    for line in run_lines:
+        if "--self-test" in line:
+            continue
+        for rel in bucket_gates:
+            if rel in line:
+                real_runs.add(rel)
+    return sorted(rel for rel in bucket_gates
+                  if rel in population and rel not in real_runs)
+
+
 def serial_problems(makefile_text):
     """The Makefile must forbid parallel execution while mutants exist."""
     if ".NOTPARALLEL" in makefile_text:
@@ -816,6 +912,20 @@ def census(problems: list[str], gates=None, ceilings=None,
         problems.extend(serial_problems(makefile_text))
         problems.extend(indirection_problems(makefile_text))
 
+    # A SELF-TEST IS NOT THE GATE. Round 18 reduced lint-part-data's Makefile
+    # invocation to `--self-test` alone: the census saw the path invoked, the
+    # measurement measured, and a corrupted part record sailed through
+    # `make lint`. Every bucket entry must have at least one live invocation
+    # WITHOUT --self-test -- the run that actually checks the tree.
+    if gates is None:
+        for rel in self_test_only_gates(
+                (ROOT / "Makefile").read_text(encoding="utf-8"),
+                set(ceilings) | set(no_self_test), population):
+            problems.append(
+                f"{rel}: every reachable invocation carries --self-test, so "
+                "the gate proves it CAN fail and never actually checks the "
+                "tree. Add the real run.")
+
     # THE REVERSE DIRECTION, which round 15 demonstrated was open end to end:
     # deleting a gate's invocations from the Makefile and CI left the gate
     # running NOWHERE while this census (population = the Makefile's), the
@@ -848,6 +958,10 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                 "leaves `make all` green.")
     owners = owners if owners is not None else OWNERS
     measured = 0
+    # The lock guards mutants swapped into REAL tracked gates; probe runs
+    # (gates=[...]) mutate tmp fixtures only, and taking the real lock there
+    # deadlocked the measurement against its own baseline self-test.
+    measurement_lock = _acquire_measurement_lock() if gates is None else None
     mutation_cache = _load_mutation_cache()
     for name, pinned in sorted((ceilings or CEILINGS).items()):
         recorded_sites, ceiling = pinned
@@ -912,6 +1026,8 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                   "in the same commit so it cannot drift back.")
         measured += 1
     _store_mutation_cache(mutation_cache)
+    if measurement_lock is not None:
+        measurement_lock.close()
 
     unpinned = 0
     for rel in NO_SELF_TEST:
@@ -1039,6 +1155,16 @@ def self_test() -> int:
                       "planted-serial" in _wired))
     finally:
         globals()["serial_problems"] = _real_serial
+    _real_sto = globals()["self_test_only_gates"]
+    globals()["self_test_only_gates"] = lambda *_a, **_k: ["planted/gate.py"]
+    try:
+        _wired3 = []
+        census(_wired3)
+        cases.append(("the self-test-only check is WIRED into the census",
+                      any("planted/gate.py" in x and "--self-test" in x
+                          for x in _wired3)))
+    finally:
+        globals()["self_test_only_gates"] = _real_sto
     _real_ind = globals()["indirection_problems"]
     globals()["indirection_problems"] = lambda *_a, **_k: ["planted-indirection"]
     try:
@@ -1048,6 +1174,37 @@ def self_test() -> int:
                       "planted-indirection" in _wired2))
     finally:
         globals()["indirection_problems"] = _real_ind
+    cases.append(("a gate reduced to its own self-test is reported",
+                  self_test_only_gates(
+                      "all: a\n\na:\n\tpython3 tests/schemas/"
+                      "validate-schemas.py --self-test\n",
+                      {"tests/schemas/validate-schemas.py"},
+                      ["tests/schemas/validate-schemas.py"])
+                  == ["tests/schemas/validate-schemas.py"]))
+    cases.append(("a gate with a real run alongside its self-test is clean",
+                  self_test_only_gates(
+                      "all: a\n\na:\n"
+                      "\tpython3 tests/schemas/validate-schemas.py --self-test\n"
+                      "\tpython3 tests/schemas/validate-schemas.py\n",
+                      {"tests/schemas/validate-schemas.py"},
+                      ["tests/schemas/validate-schemas.py"]) == []))
+    cases.append(("python-without-3 and direct execution count as invocations",
+                  makefile_gates("all: a\n\na:\n"
+                                 "\tpython tests/structure/check-retired-names.py\n"
+                                 "\t./tests/golden/run.sh\n")
+                  == sorted(["tests/structure/check-retired-names.py",
+                             "tests/golden/run.sh"])))
+    cases.append(("a single-character make expansion is reported",
+                  any("cannot see through" in x for x in indirection_problems(
+                      "all: a\n\na:\n\t$G\n"))))
+    cases.append(("a cd-then-relative-file invocation is reported",
+                  any("Invoke gates from the repo root" in x
+                      for x in indirection_problems(
+                          "all: a\n\na:\n\tcd tests && python3 s/x.py\n"))))
+    cases.append(("a cd module invocation is the documented exclusion",
+                  indirection_problems(
+                      "all: a\n\na:\n\tcd lang && python3 -m bakeoff check\n")
+                  == []))
     cases.append(("a gate in a target unreachable from `all` is not counted",
                   makefile_gates("all: alpha\n\nalpha:\n"
                                  "\tbash tests/structure/check-layout.sh\n\n"
@@ -1133,6 +1290,30 @@ def self_test() -> int:
         # The key covers the WHOLE tracked tree, not just the gate: a
         # self-test's fixtures live outside the gate file, and round 15
         # served a stale measurement through exactly that gap.
+        cases.append(("a forged or malformed cache entry is dropped on load",
+                      not _valid_cache_entry([5, "x", []])
+                      and not _valid_cache_entry([1, 5, []])
+                      and not _valid_cache_entry({"sites": 5})
+                      and _valid_cache_entry([5, 1, [3, 7]])))
+        cases.append(("the cache lives in .git, not the shared temp dir",
+                      _mutation_cache_path() is not None
+                      and ".git" in str(_mutation_cache_path())))
+        # A probe lock file, NOT the real one: the real lock is held by the
+        # parent measurement while this self-test runs as its baseline, and
+        # contending with it deadlocked the measurement against itself.
+        _probe_lock = Path(tmp) / "probe.lock"
+        _lock = _acquire_measurement_lock(_probe_lock)
+        try:
+            _second_refused = False
+            try:
+                _acquire_measurement_lock(_probe_lock)
+            except GateUnavailable:
+                _second_refused = True
+            cases.append(("a concurrent measurement is refused, not "
+                          "interleaved", _second_refused))
+        finally:
+            if _lock is not None:
+                _lock.close()
         cases.append(("the cache key covers the tool identity",
                       "ngspice" in _tool_identity() or "<no ngspice>" in
                       _tool_identity()))
