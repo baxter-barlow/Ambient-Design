@@ -856,7 +856,6 @@ def main(argv):
                 for operand, formula in (assertion.get("check_inputs_derived")
                                          or {}).items():
                     print(f"  {assertion.get('id')}: {operand} = {formula}")
-        import re as _re
         if "check_inputs_structure_hash:" in text:
             text = _re.sub(r"check_inputs_structure_hash: \S+",
                            f"check_inputs_structure_hash: {digest}", text, count=1)

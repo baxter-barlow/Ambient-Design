@@ -282,38 +282,37 @@ def check_benchmark(case, spec, log_text, problems, minimum=None):
         # docstring says the guard exists to catch. The run's own output is the
         # only centre not under the author's control.
         centre = value
-        if True:
-            if centre is not None and centre != 0:
-                if low > float("-inf") and high < float("inf"):
-                    span = (high - low) / abs(centre)
-                    if span > MAX_RELATIVE_WINDOW:
-                        problems.append(
-                            f"{label}: window [{low:.6g}, {high:.6g}] spans "
-                            f"{span:.1f}x its expected value {centre:.6g}. A "
-                            "window that wide asserts nothing; state a real "
-                            f"tolerance or raise MAX_RELATIVE_WINDOW "
-                            f"(currently {MAX_RELATIVE_WINDOW}) deliberately."
-                        )
-                        continue
+        if centre is not None and centre != 0:
+            if low > float("-inf") and high < float("inf"):
+                span = (high - low) / abs(centre)
+                if span > MAX_RELATIVE_WINDOW:
+                    problems.append(
+                        f"{label}: window [{low:.6g}, {high:.6g}] spans "
+                        f"{span:.1f}x its expected value {centre:.6g}. A "
+                        "window that wide asserts nothing; state a real "
+                        f"tolerance or raise MAX_RELATIVE_WINDOW "
+                        f"(currently {MAX_RELATIVE_WINDOW}) deliberately."
+                    )
+                    continue
+            else:
+                # A `max:` is meaningless when far ABOVE the value; a
+                # `min:` when far BELOW it. Testing `bound/centre > ratio`
+                # only caught the first, so `efficiency min=1e-30` passed —
+                # and `bound == 0` was skipped outright, so `min=0.0` did
+                # too. The slack is measured in the direction the bound
+                # actually constrains.
+                if high < float("inf"):
+                    bound, slack = high, (abs(high / centre) if centre else 0.0)
                 else:
-                    # A `max:` is meaningless when far ABOVE the value; a
-                    # `min:` when far BELOW it. Testing `bound/centre > ratio`
-                    # only caught the first, so `efficiency min=1e-30` passed —
-                    # and `bound == 0` was skipped outright, so `min=0.0` did
-                    # too. The slack is measured in the direction the bound
-                    # actually constrains.
-                    if high < float("inf"):
-                        bound, slack = high, (abs(high / centre) if centre else 0.0)
-                    else:
-                        bound = low
-                        slack = (abs(centre / low) if low else float("inf"))
-                    if slack > MAX_ONE_SIDED_RATIO:
-                        problems.append(
-                            f"{label}: one-sided bound {bound:.6g} leaves "
-                            f"{slack:.1f}x slack against its expected value "
-                            f"{centre:.6g}, so it cannot fail."
-                        )
-                        continue
+                    bound = low
+                    slack = (abs(centre / low) if low else float("inf"))
+                if slack > MAX_ONE_SIDED_RATIO:
+                    problems.append(
+                        f"{label}: one-sided bound {bound:.6g} leaves "
+                        f"{slack:.1f}x slack against its expected value "
+                        f"{centre:.6g}, so it cannot fail."
+                    )
+                    continue
         if not (low <= value <= high):
             problems.append(
                 f"{label}: measured {value:.6g} is outside the declared window "
@@ -443,16 +442,141 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
 # were read by no code at all.
 # benchmark -> how many deck passives MUST carry their parts.yaml value.
 #
-# buck-3v3 is 0 ON PURPOSE, and the zero is declared here rather than arrived
-# at silently. Its deck is an averaged behavioural model: the inductor and
-# output cap are `{LVAL}`/`{CEFF}` parameters, and the feedback divider is
-# `Rfb1`/`Rfb2` where the BOM says `R1`/`R2`. Nothing in the deck claims to be
-# a component-level realisation of that BOM, so demanding a refdes match would
-# be inventing a correspondence the design never asserted. What must not happen
-# is a benchmark reconciling zero because a refdes quietly stopped matching --
-# hence the floor, and hence the failure below for a benchmark absent from this
-# table entirely.
+# buck-3v3 is 0 here ON PURPOSE, and the zero is declared rather than arrived
+# at silently: its deck is an averaged behavioural model whose passives are
+# `.param`s and whose divider refdes differ from the BOM's, so a REFDES match
+# is a correspondence the deck never asserts. The `.param`-level
+# correspondence its comments DO assert is enforced by DECK_PARAM_RULES
+# below -- an earlier revision of this comment said "nothing in the deck
+# claims to be a realisation of that BOM", which the deck's own .param
+# comments contradicted line by line (round 16).
 MINIMUM_BOM_PASSIVES = {"blinker-555": 6, "buck-3v3": 0}
+
+# benchmark -> deck parameter/instance -> how the BOM pins it. The buck deck's
+# .param block claims a per-part correspondence in its own comments (RON cites
+# the BSC059N04LS6 max, DCR the XGL6060 max, CEFF the derated output pair,
+# LVAL the inductor), and round 16 replayed the blinker's coordinated
+# re-record attack at exactly that level: retime LVAL, mechanically re-record
+# every measured value, and no gate read the buck's parts.yaml at all.
+# Rule kinds:
+#   "value"    spice_value of the part's `value:` field, exact
+#   "regex"    a number extracted from value+notes by pattern, times scale,
+#              exact
+#   "roundup"  like "regex", but the deck may round UP by at most 5% (the
+#              deck's own stated convention for Rds(on))
+DECK_PARAM_RULES = {
+    "buck-3v3": (
+        ("LVAL",   "L1", "value",   None,                        1),
+        ("DCR",    "L1", "regex",   r"([\d.]+)\s*mOhm max",      1e-3),
+        ("RON_HS", "Q1", "roundup", r"([\d.]+)\s*mOhm max",      1e-3),
+        ("RON_LS", "Q2", "roundup", r"([\d.]+)\s*mOhm max",      1e-3),
+        ("CEFF",   "C2", "regex",   r"~([\d.]+)\s*uF effective", 1e-6),
+        ("RESR",   "C2", "regex",   r"net ESR ~([\d.]+)\s*mOhm", 1e-3),
+        ("RFB1",   "R1", "value",   None,                        1),
+        ("RFB2",   "R2", "value",   None,                        1),
+    ),
+    # The blinker instantiates its passives at component level under the
+    # BOM's own refdes -- deck_bom_problems reconciles those directly -- and
+    # its deck declares no .param at all.
+    "blinker-555": (),
+}
+
+
+def deck_param_problems(case_dir, problems, rules=None,
+                        deck_text=None, bom_text=None):
+    """Every deck parameter the rule table names must trace to the BOM."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_derive555p", Path(__file__).with_name("derive-555-windows.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if rules is None:
+        # Mirror deck_bom_problems: a case with no deck at all is run-sim's
+        # missing-deck failure, not a rule-table complaint.
+        if deck_text is None and not (case_dir / "netlist.cir").is_file():
+            return 0
+        if case_dir.name not in DECK_PARAM_RULES:
+            problems.append(
+                f"{case_dir.name}: no deck-parameter rule table is declared "
+                "for this benchmark. A parameterised deck with no declared "
+                "correspondence is the state the buck was in when its LVAL "
+                "could be retimed and re-recorded with everything green.")
+            return 0
+        rules = DECK_PARAM_RULES[case_dir.name]
+    if deck_text is None:
+        deck = case_dir / "netlist.cir"
+        deck_text = deck.read_text(encoding="utf-8", errors="replace") \
+            if deck.is_file() else ""
+    if bom_text is None:
+        bom = case_dir / "parts.yaml"
+        bom_text = bom.read_text(encoding="utf-8", errors="replace") \
+            if bom.is_file() else ""
+
+    values = {ref.upper(): got
+              for ref, got in module.passives_from_deck(deck_text).items()}
+    for line in deck_text.splitlines():
+        found = re.match(r"\s*\.param\s+(\w+)=(\S+)", line)
+        if not found:
+            continue
+        try:
+            values[found.group(1).upper()] = module.spice_value(found.group(2))
+        except (ValueError, IndexError):
+            continue  # computed parameters like {1/FSW} pin nothing here
+
+    import yaml as _yaml
+    declared = {str(p.get("ref") or "").upper(): p
+                for p in (_yaml.safe_load(bom_text) or {}).get("parts") or []}
+
+    reconciled = 0
+    for name, ref, kind, pattern, scale in rules:
+        part = declared.get(ref.upper())
+        if part is None:
+            problems.append(
+                f"{case_dir.name}: the rule table pins deck parameter {name} "
+                f"to BOM ref {ref}, which parts.yaml no longer declares.")
+            continue
+        if name.upper() not in values:
+            problems.append(
+                f"{case_dir.name}: netlist.cir no longer carries {name}, "
+                f"which the rule table pins to {ref}. A parameter cannot "
+                "leave the correspondence by being renamed.")
+            continue
+        got = values[name.upper()]
+        source = f"{part.get('value') or ''} {part.get('notes') or ''}"
+        if kind == "value":
+            try:
+                want = module.spice_value(str(part.get("value") or ""))
+            except ValueError:
+                problems.append(
+                    f"{case_dir.name}/parts.yaml: {ref} declares no number "
+                    f"for deck parameter {name} to be compared against.")
+                continue
+        else:
+            found = re.search(pattern, source)
+            if not found:
+                problems.append(
+                    f"{case_dir.name}/parts.yaml: {ref} no longer states the "
+                    f"figure matching {pattern!r}, so deck parameter {name} "
+                    "is compared to nothing.")
+                continue
+            want = float(found.group(1)) * scale
+        if kind == "roundup":
+            if got < want * (1 - 1e-9) or got > want * 1.05:
+                problems.append(
+                    f"{case_dir.name}: deck parameter {name}={got:g} must "
+                    f"round UP from {ref}'s {want:g} by at most 5%; it does "
+                    "not. The deck's own comment states the convention.")
+                continue
+        elif abs(got - want) > 1e-9 * max(abs(want), 1.0):
+            problems.append(
+                f"{case_dir.name}: deck parameter {name}={got:g} but "
+                f"parts.yaml's {ref} gives {want:g}. The averaged model's "
+                "parameters are the BOM's values by the deck's own claim; a "
+                "retimed parameter with re-recorded measurements gates a "
+                "circuit nobody specified.")
+            continue
+        reconciled += 1
+    return reconciled
 
 
 def deck_bom_problems(case_dir, problems, minimum=None):
@@ -549,6 +673,7 @@ def main(argv):
             case_dir, fresh_text, problems,
             minimum_measurements=len(declared) or None)
         passives = deck_bom_problems(case_dir, problems)
+        params = deck_param_problems(case_dir, problems)
     except GateUnavailable as exc:
         print(f"sim-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -560,7 +685,8 @@ def main(argv):
         return 1
     print(f"sim-assert: PASS: {case_dir.name}: {checked} assertion(s) inside "
           f"their windows; {transcript} transcript measurement(s) match a fresh "
-          f"run; {passives} deck passive(s) carry their parts.yaml value.")
+          f"run; {passives} deck passive(s) carry their parts.yaml value; "
+          f"{params} deck parameter(s) trace to the BOM.")
     return 0
 
 
@@ -765,6 +891,65 @@ def self_test():
         deck_bom_problems(case, undeclared)
     cases.append(("a benchmark with no declared floor is caught", any(
         "no deck/BOM reconciliation floor" in p for p in undeclared)))
+
+    # DECK PARAMETER RULES, every direction. The buck's averaged model claims
+    # a per-.param correspondence to the BOM in its own comments; round 16
+    # retimed LVAL and re-recorded every measurement with everything green.
+    PDECK = (".param LVAL=10u\n.param DCR=20.4m\n.param RON_HS=6m\n"
+             ".param TSW={1/FSW}\nRfb1 out fb 31.2k\n")
+    PBOM = ("parts:\n"
+            "  - ref: L1\n    value: 10 uH +/-20%\n"
+            "    notes: DCR 18.5 mOhm typ / 20.4 mOhm max\n"
+            "  - ref: Q1\n    value: NMOS 40 V, 5.9 mOhm max @ Vgs=10V\n"
+            "  - ref: R1\n    value: 31.2 kOhm, 1%\n")
+    PRULES = (("LVAL", "L1", "value", None, 1),
+              ("DCR", "L1", "regex", r"([\d.]+)\s*mOhm max", 1e-3),
+              ("RON_HS", "Q1", "roundup", r"([\d.]+)\s*mOhm max", 1e-3),
+              ("RFB1", "R1", "value", None, 1))
+
+    def param_probe(deck=PDECK, bom=PBOM, rules=PRULES):
+        out = []
+        count = deck_param_problems(Path("/nonexistent"), out, rules=rules,
+                                    deck_text=deck, bom_text=bom)
+        return count, out
+
+    pcount, pclean = param_probe()
+    cases.append(("a deck whose parameters trace to the BOM reconciles",
+                  pcount == 4 and not pclean))
+    cases.append(("a retimed parameter is caught", any(
+        "gates a circuit nobody specified" in p for p in param_probe(
+            deck=PDECK.replace("LVAL=10u", "LVAL=12u"))[1])))
+    cases.append(("a drifted extracted figure is caught", any(
+        "gates a circuit nobody specified" in p for p in param_probe(
+            deck=PDECK.replace("DCR=20.4m", "DCR=18.5m"))[1])))
+    cases.append(("a round-up parameter below its source is caught", any(
+        "must round UP" in p for p in param_probe(
+            deck=PDECK.replace("RON_HS=6m", "RON_HS=5.8m"))[1])))
+    cases.append(("a round-up parameter more than 5% above is caught", any(
+        "must round UP" in p for p in param_probe(
+            deck=PDECK.replace("RON_HS=6m", "RON_HS=6.3m"))[1])))
+    cases.append(("a renamed parameter cannot leave the correspondence", any(
+        "cannot leave the correspondence" in p for p in param_probe(
+            deck=PDECK.replace("LVAL=", "LSOMETHINGELSE="))[1])))
+    cases.append(("a BOM ref the table pins must keep existing", any(
+        "no longer declares" in p for p in param_probe(
+            bom=PBOM.replace("ref: Q1", "ref: Q9"))[1])))
+    cases.append(("a value-kind source with no parsable number is caught", any(
+        "declares no number" in p for p in param_probe(
+            bom=PBOM.replace("value: 31.2 kOhm, 1%", "value: an E192 resistor"))[1])))
+    cases.append(("a vanished source figure is caught", any(
+        "compared to nothing" in p for p in param_probe(
+            bom=PBOM.replace("    notes: DCR 18.5 mOhm typ / 20.4 mOhm max\n",
+                             ""))[1])))
+    with _tempfile.TemporaryDirectory() as tmp:
+        case = Path(tmp) / "mystery-benchmark"
+        case.mkdir()
+        (case / "netlist.cir").write_text(".param X=1\n", encoding="utf-8")
+        (case / "parts.yaml").write_text("parts: []\n", encoding="utf-8")
+        untabled = []
+        deck_param_problems(case, untabled)
+    cases.append(("a benchmark with no parameter rule table is caught", any(
+        "no deck-parameter rule table" in p for p in untabled)))
 
     failures = 0
     for name, ok in cases:
