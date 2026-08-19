@@ -169,7 +169,7 @@ re-derives A1-A8 from assertions.yaml, power-tree.yaml and the part records,
 reconciles three design.md figures against them, runs under `make all`, and
 prints:
 
-  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 3 design.md figure(s) reconcile against them.
+  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 3 design.md figure(s) reconcile against them; 2 power-tree total(s) agree.
 
 It also names the two it cannot mechanise and why -- A9_strapping_dc_state
 (a boot-mode truth table, not a numeric relation) and A10_single_pin_nets_l9b
@@ -183,3 +183,15 @@ deleted assertion. Split in the same commit as this correction.
 
 Read the tallies above as a record of what was done on 2026-08-15, not as
 evidence you can re-run. The evidence you can re-run is the gate.
+
+=== Correction, 2026-08-19 (AMB-123 round 18) ===
+The TVS leakage load carried 2 uA with no source; Littelfuse publishes only
+IR max = 400 uA at VRWM 5.0 V for the SMF5.0A, with no typical, so the max
+now stands in every mode row (the one load where the "datasheet typ" policy
+has no typ to use). Re-derived: A2 VBUS worst sum 0.39491 -> 0.39531 A,
+margin +105.1 -> +104.7 mA; sleep/idle/rx mode sums move by the same
++398 uA; voltage-propagation figures unchanged at their quoted precision.
+The 2026-08-15 sections above are left as written (their arithmetic was
+correct over the inputs they had). VBUS max 5.25 V sits above the 5.0 V
+standoff, where leakage is unspecified entirely -- noted in power-tree.yaml,
+not modelled.

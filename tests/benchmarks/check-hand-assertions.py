@@ -561,6 +561,48 @@ def _must_mechanise_probe():
     return problems
 
 
+def power_tree_problems(spec, power_text, label, problems):
+    """The power tree's own summary arithmetic must agree with A2/A6.
+
+    check_spec holds each assertion to its recorded inputs; the inputs come
+    from power-tree.yaml, and nothing held the two files together -- round 18
+    changed the tree's TVS leakage and this gate stayed green while A2 still
+    carried the old sum. The tree's wifi_tx_peak worst VBUS total (the `=`
+    tail of its own shown-work string) must equal the sum A2 and A6 gate on.
+    Returns the number of cross-file agreements verified."""
+    found = re.search(
+        r"wifi_tx_peak:.*?vbus_total_a:[^\n]*worst:[^=\n]*=\s*([0-9.eE+-]+)",
+        power_text, re.S)
+    if found is None:
+        problems.append(
+            f"{label}: power-tree.yaml no longer shows the wifi_tx_peak "
+            "worst VBUS total in the form this gate reads, so the tree and "
+            "the assertions can drift apart silently.")
+        return 0
+    tree_total = float(found.group(1))
+    checked = 0
+    for assertion in spec.get("assertions") or []:
+        inputs = assertion.get("inputs") or {}
+        for key in ("sum_worst_a", "worst_a"):
+            if key in inputs:
+                recorded = float(inputs[key])
+                if abs(recorded - tree_total) > 1e-9:
+                    problems.append(
+                        f"{label}/{assertion.get('id')}: records "
+                        f"{key} = {recorded:g} but power-tree.yaml's own "
+                        f"summary computes {tree_total:g}. Two files "
+                        "publishing the same quantity must agree; this is "
+                        "the drift the round-18 TVS correction exposed.")
+                else:
+                    checked += 1
+    if checked == 0:
+        problems.append(
+            f"{label}: no assertion records sum_worst_a/worst_a for the "
+            "power tree's total to reconcile against; the cross-file check "
+            "is comparing nothing.")
+    return checked
+
+
 def self_test():
     cases = []
 
@@ -719,6 +761,31 @@ def self_test():
     planted, clean = drive(0.001, 99.0), drive(99.0, 0.001)
     cases.append(("main() exits 1 when a verdict does not follow", planted == 1))
     cases.append(("main() exits 0 when every verdict follows", clean == 0))
+
+    # THE CROSS-FILE LEG, each direction. Round 18 changed the power tree's
+    # TVS leakage and this gate stayed green while A2 carried the old sum.
+    TREE = ('summary_per_mode:\n  wifi_tx_peak:\n'
+            '    vbus_total_a:  "typ: 1 = 2 ; worst: 3 + 4 = 0.395"\n')
+    TSPEC = {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}}]}
+    agree = []
+    agreed = power_tree_problems(TSPEC, TREE, "probe", agree)
+    cases.append(("a tree total agreeing with the assertions reconciles",
+                  agreed == 1 and not agree))
+    drift = []
+    power_tree_problems({"assertions": [{"id": "A2", "inputs":
+                                         {"sum_worst_a": 0.394}}]},
+                        TREE, "probe", drift)
+    cases.append(("a tree total the assertions no longer match is caught",
+                  any("must agree" in x for x in drift)))
+    gone = []
+    power_tree_problems(TSPEC, "no summary here", "probe", gone)
+    cases.append(("a tree that stops showing its total is caught",
+                  any("form this gate reads" in x for x in gone)))
+    orphan = []
+    power_tree_problems({"assertions": [{"id": "A1", "inputs": {}}]},
+                        TREE, "probe", orphan)
+    cases.append(("a spec with nothing to reconcile is caught",
+                  any("comparing nothing" in x for x in orphan)))
 
     failures = 0
     for name, ok in cases:
@@ -882,6 +949,12 @@ def main(argv):
         # the increment-counting shape this audit has found repeatedly.
         asserts_checked = check_spec(spec, case_dir.name, problems)
         figures_checked = doc_problems(case_dir, spec, problems)
+        tree_path = case_dir / "power-tree.yaml"
+        tree_checked = 0
+        if tree_path.is_file():
+            tree_checked = power_tree_problems(
+                spec, tree_path.read_text(encoding="utf-8"),
+                case_dir.name, problems)
     except GateUnavailable as exc:
         print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -892,7 +965,7 @@ def main(argv):
         return 1
     print(f"hand-assert: PASS: {case_dir.name}: {asserts_checked} assertion(s) "
           f"follow from their inputs; {figures_checked} design.md figure(s) "
-          "reconcile against them.")
+          f"reconcile against them; {tree_checked} power-tree total(s) agree.")
     return 0
 
 
