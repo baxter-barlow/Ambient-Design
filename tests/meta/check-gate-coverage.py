@@ -107,7 +107,7 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 # from under the ceiling, which is how 28% of it disappeared unnoticed. Lower
 # the survivor number; do not raise it.
 CEILINGS = {
-    "lang/tests/check_readme_numbers.py": (24, 16),
+    "lang/tests/check_readme_numbers.py": (34, 16),
     "parts/lint-part-data.py": (30, 5),
     "tests/benchmarks/check-assertions.py": (18, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
@@ -115,7 +115,7 @@ CEILINGS = {
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
-    "tests/corpus/check-corpus.py": (15, 3),
+    "tests/corpus/check-corpus.py": (25, 3),
     "tests/eval/check-run-records.py": (62, 9),
     "tests/ir/check-hashes.py": (16, 2),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
@@ -154,7 +154,7 @@ OWNERS = {
     "tests/corpus/check-classification.py": (
         {"problems"}, {"lines", "checks", "results", "alone_fails"}),
     "tests/corpus/check-corpus.py": (
-        {"problems"}, {"cases", "numbers"}),
+        {"problems"}, {"cases", "numbers", "spans"}),
     "tests/eval/check-run-records.py": (
         {"problems", "problems_out", "out"}, {"cases"}),
     "tests/ir/check-hashes.py": (
