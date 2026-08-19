@@ -22,12 +22,163 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd -P)
 BENCH_DIR="$ROOT/benchmarks"
 MANIFEST="$ROOT/toolchain/versions.yaml"
-BUDGET_SECONDS=60
+# Overridable ONLY so the self-test can exercise the elapsed-over-budget leg
+# without a 61-second sleep. Production callers never set this.
+BUDGET_SECONDS=${RHOFORM_SIM_BUDGET_SECONDS:-60}
 
 fail_env() {
   printf 'sim: FAIL: %s\n' "$1" >&2
   exit 2
 }
+
+# Every failure path, proven against a sandbox tree with a scripted ngspice.
+# ROOT is derived from this script's location, so the RUNNING script
+# (mutations included) is copied into the sandbox beside stub checkers; the
+# fake ngspice replays whatever the deck's *SIMLOG lines say and exits with
+# *SIMEXIT, so each leg of the contract can be forced deterministically.
+self_test() {
+  local script sandbox bin failures=0
+  script=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/$(basename -- "${BASH_SOURCE[0]}")
+  sandbox=$(mktemp -d)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$sandbox'" EXIT
+
+  bin="$sandbox/bin"
+  mkdir -p "$bin"
+  for tool in bash sh sed grep tr sort awk dirname basename mktemp find \
+              cat wc env sleep python3 rm mkdir; do
+    path=$(command -v "$tool") && ln -s "$path" "$bin/$tool"
+  done
+  write_fake_ngspice() {
+    # Scripted ngspice: replays the deck's *SIMLOG lines, exits per *SIMEXIT,
+    # sleeps per *SIMSLEEP, and reports version 99.
+    cat > "$bin/ngspice" <<'FAKE'
+#!/bin/bash
+if [ "${1:-}" = "--version" ]; then echo "ngspice-99"; exit 0; fi
+deck="" ; out=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out=$2; shift 2 ;;
+    -b) shift ;;
+    *) deck=$1; shift ;;
+  esac
+done
+grep '^\*SIMSLEEP' "$deck" >/dev/null && sleep "$(grep -m1 '^\*SIMSLEEP' "$deck" | awk '{print $2}')"
+grep '^\*SIMLOG ' "$deck" | sed 's/^\*SIMLOG //' > "$out"
+code=$(grep -m1 '^\*SIMEXIT' "$deck" | awk '{print $2}')
+exit "${code:-0}"
+FAKE
+    chmod +x "$bin/ngspice"
+  }
+  write_fake_ngspice
+  # A timeout that never kills: lets the elapsed-time leg fire instead of the
+  # kill leg when a deck deliberately overruns a 1-second budget.
+  printf '#!/bin/bash\nshift\nexec "$@"\n' > "$bin/timeout"
+  chmod +x "$bin/timeout"
+
+  rebuild() {
+    # rebuild <pin> -- a sandbox tree whose manifest pins ngspice-<pin>
+    rm -rf "$sandbox/tree"
+    mkdir -p "$sandbox/tree/tests/benchmarks" "$sandbox/tree/toolchain" \
+             "$sandbox/tree/benchmarks/blinker-555" \
+             "$sandbox/tree/benchmarks/buck-3v3" \
+             "$sandbox/tree/benchmarks/esp32s3-devboard"
+    cp "$script" "$sandbox/tree/tests/benchmarks/run-sim.sh"
+    printf 'import sys, pathlib\nsys.exit(1 if (pathlib.Path(sys.argv[1]) / "ASSERT_FAIL").exists() else 0)\n' \
+      > "$sandbox/tree/tests/benchmarks/check-assertions.py"
+    printf 'import sys, pathlib\nsys.exit(1 if (pathlib.Path(sys.argv[1]) / "HAND_FAIL").exists() else 0)\n' \
+      > "$sandbox/tree/tests/benchmarks/check-hand-assertions.py"
+    printf 'ngspice:\n  version: "%s"\n' "$1" > "$sandbox/tree/toolchain/versions.yaml"
+    printf 'deck: netlist.cir\n' > "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
+    printf 'deck: null\n' > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+    printf 'deck: null\n' > "$sandbox/tree/benchmarks/esp32s3-devboard/assertions.yaml"
+    printf '* deck\n.meas tran f_hz trig\n*SIMLOG f_hz = 1.0\n.end\n' \
+      > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  }
+
+  expect() {
+    # expect <name> <expected-exit> <fragment>; env via EXPECT_ENV
+    local name=$1 want=$2 fragment=$3 got=0 out
+    out=$(env PATH="$bin" $EXPECT_ENV bash "$sandbox/tree/tests/benchmarks/run-sim.sh" 2>&1) || got=$?
+    if [ "$got" -eq "$want" ] && printf '%s' "$out" | grep -Fq -- "$fragment"; then
+      printf 'self-test ok:   %s\n' "$name"
+    else
+      printf 'self-test FAIL: %s (exit %s, wanted %s; output: %s)\n' \
+        "$name" "$got" "$want" "$out"
+      failures=$((failures + 1))
+    fi
+  }
+  EXPECT_ENV=""
+
+  rebuild 99
+  expect "a sandbox tree with a scripted ngspice passes" 0 "deck(s) completed"
+
+  rebuild 99; rm "$bin/ngspice"
+  expect "a missing ngspice is an environment failure" 2 "ngspice is not installed"
+  write_fake_ngspice
+
+  rebuild 99; rm "$sandbox/tree/toolchain/versions.yaml"
+  expect "a missing manifest is an environment failure" 2 "versions.yaml is missing"
+
+  rebuild 99; printf 'nonsense: {}\n' > "$sandbox/tree/toolchain/versions.yaml"
+  expect "an unreadable version pin is an environment failure" 2 "could not read ngspice.version"
+
+  rebuild 98
+  expect "a version mismatch is an environment failure" 2 "version mismatch"
+
+  rebuild 99; rm "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+  expect "a required benchmark losing its spec fails" 2 "cannot leave the gate by losing its spec"
+
+  rebuild 99; printf 'title: no deck key\n' > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+  expect "a spec that does not say whether it has a deck fails" 2 "declares no \`deck:\`"
+
+  rebuild 99; touch "$sandbox/tree/benchmarks/buck-3v3/HAND_FAIL"
+  expect "failing hand-computed assertions fail the gate" 1 "hand-computed assertions do not follow"
+
+  rebuild 99; rm "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "a declared deck that does not exist fails" 1 "declare a deck that does not exist"
+
+  rebuild 99; printf '* deck with no meas\n*SIMLOG x = 1\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "a deck with no .meas assertions fails" 1 "declares no .meas assertions"
+
+  rebuild 99; printf '*SIMEXIT 124\n.meas tran f_hz trig\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "a killed deck reports the budget" 1 "exceeded the"
+
+  rebuild 99; printf '*SIMEXIT 3\n.meas tran f_hz trig\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "a nonzero ngspice exit fails the quit-code protocol" 1 "ngspice exited 3"
+
+  rebuild 99; printf '*SIMSLEEP 2\n.meas tran f_hz trig\n*SIMLOG f_hz = 1.0\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  EXPECT_ENV="RHOFORM_SIM_BUDGET_SECONDS=1"
+  expect "a deck over the elapsed budget fails" 1 "over the"
+  EXPECT_ENV=""
+
+  rebuild 99; printf '.meas tran f_hz trig\n*SIMLOG meas f_hz failed badly\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "measurement failures in the log fail" 1 "reported measurement failures"
+  rebuild 99; printf '.meas tran f_hz trig\n*SIMLOG meas f_hz failed badly\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "the failing measurement line itself is shown" 1 "failed badly"
+
+  rebuild 99; printf '.meas tran f_hz trig\n*SIMLOG other = 2\n.end\n' \
+    > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
+  expect "a .meas that produced no value fails" 1 "produced no value"
+
+  rebuild 99; touch "$sandbox/tree/benchmarks/blinker-555/ASSERT_FAIL"
+  expect "failing value assertions fail the gate" 1 "one or more benchmark decks failed"
+
+  if [ "$failures" -ne 0 ]; then
+    printf 'sim: SELF-TEST FAILED: %s case(s)\n' "$failures" >&2
+    return 1
+  fi
+  printf 'sim: self-test PASS: 16 cases.\n'
+  return 0
+}
+
+[ "${1:-}" != "--self-test" ] || { self_test; exit $?; }
 
 command -v ngspice >/dev/null 2>&1 \
   || fail_env "ngspice is not installed; an unavailable gate is not a pass."
@@ -35,8 +186,12 @@ command -v ngspice >/dev/null 2>&1 \
 
 # Expected major version, read from the manifest's ngspice block so this
 # script has no second copy of the pin.
+# The `|| true` is load-bearing: under pipefail, a manifest with NO ngspice
+# block made grep fail the whole pipeline and set -e killed the gate at exit 1
+# with no message at all -- the "could not read" report below was unreachable
+# for exactly the input it describes. The self-test found this.
 expected_version=$(sed -n '/^ngspice:/,/^[a-z]/p' "$MANIFEST" \
-  | grep -m1 -E '^[[:space:]]+version:' \
+  | { grep -m1 -E '^[[:space:]]+version:' || true; } \
   | sed -E 's/^[[:space:]]*version:[[:space:]]*"([0-9]+)".*/\1/')
 case "$expected_version" in
   '' | *[!0-9]*)
@@ -69,7 +224,10 @@ missing_decks=""
 for spec in "$BENCH_DIR"/*/assertions.yaml; do
   [ -f "$spec" ] || continue
   case_dir=$(dirname "$spec")
-  declared=$(grep -m1 -E '^deck:' "$spec" | sed -E 's/^deck:[[:space:]]*//' | tr -d '"')
+  # Same pipefail hazard as the version pin above: without `|| true`, a spec
+  # with no `deck:` key at all killed the gate silently instead of reaching
+  # the report that names that exact defect.
+  declared=$({ grep -m1 -E '^deck:' "$spec" || true; } | sed -E 's/^deck:[[:space:]]*//' | tr -d '"')
   case "$declared" in
     '' )
       fail_env "$(basename "$case_dir")/assertions.yaml declares no \`deck:\`; a benchmark must say whether it has one, so a deleted deck cannot look like a deliberate absence." ;;

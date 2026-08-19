@@ -25,6 +25,7 @@ check: structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests g
 # policy, required files, JSON well-formedness under ir/).
 structure:
 	python3 tests/structure/check-retired-names.py --self-test
+	bash tests/structure/check-layout.sh --self-test
 	bash tests/structure/check-layout.sh
 
 # Toolchain pins: every version in toolchain/versions.yaml must appear in the
@@ -127,6 +128,7 @@ sim:
 	python3 tests/benchmarks/check-corners.py
 	python3 lang/tests/check_readme_numbers.py --self-test
 	python3 lang/tests/check_readme_numbers.py
+	bash tests/benchmarks/run-sim.sh --self-test
 	bash tests/benchmarks/run-sim.sh
 
 # How much of each gate is pinned by its own --self-test. Slow (it re-runs
@@ -155,8 +157,10 @@ policy:
 	  || git merge-base HEAD main 2>/dev/null \
 	  || git rev-list --max-parents=0 HEAD) HEAD
 	git diff --check HEAD
+	sh .github/scripts/check-dco.sh --self-test
 	sh .github/scripts/check-dco.sh $$(git rev-list --max-parents=0 HEAD) HEAD
 
 # Golden-file harness; exits 0 with "no cases" while tests/golden is empty.
 golden:
+	bash tests/golden/run.sh --self-test
 	bash tests/golden/run.sh

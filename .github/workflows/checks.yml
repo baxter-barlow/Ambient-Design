@@ -42,6 +42,7 @@ jobs:
       - name: Validate monorepo layout invariants
         run: |
           python3 tests/structure/check-retired-names.py --self-test
+          bash tests/structure/check-layout.sh --self-test
           bash tests/structure/check-layout.sh
       - name: AC2 corpus contents
         # The population AC2 is measured over. Until AMB-123 nothing gated it:
@@ -294,7 +295,9 @@ jobs:
           python3 lang/tests/check_readme_numbers.py --self-test
           python3 lang/tests/check_readme_numbers.py
       - name: Run benchmark decks and check their assertion windows
-        run: bash tests/benchmarks/run-sim.sh
+        run: |
+          bash tests/benchmarks/run-sim.sh --self-test
+          bash tests/benchmarks/run-sim.sh
 
   golden:
     name: Golden files
@@ -307,4 +310,6 @@ jobs:
         # The harness exits 0 with "no cases" while tests/golden is empty;
         # once cases exist, any byte-level divergence fails this job.
         continue-on-error: false
-        run: bash tests/golden/run.sh
+        run: |
+          bash tests/golden/run.sh --self-test
+          bash tests/golden/run.sh
