@@ -593,6 +593,34 @@ def self_test():
         return 1
     print("ok   provenance coverage counts only real Measures (130, 5, 4)")
 
+    # THE GAP PREDICATE reads the locator field, not the provenance key. The
+    # previous predicate counted default-fallthrough, which agrees with "names
+    # no table" on today's records only because every specific entry happens to
+    # carry a locator and no default does. Both drift directions were silent:
+    # a locator-less specific entry hid every value under it from the count,
+    # and a default gaining a locator kept counting values that now have one.
+    _ne = _json.loads((DEFAULT_TARGET / "ti-ne555p.part.json").read_text(
+        encoding="utf-8"))
+    _t0, _g0, _r0 = document_locator_gaps(_hc)
+    _hc_mut = _json.loads(_json.dumps(_hc))
+    del _hc_mut["provenance"]["/ratings/abs_max"]["locator"]
+    _t1, _g1, _r1 = document_locator_gaps(_hc_mut)
+    if not (_g1 > _g0 and _t1 == _t0):
+        print(f"FAIL a specific provenance entry that names no table must add "
+              f"its values to the gap count: {(_t0, _g0)} -> {(_t1, _g1)}",
+              file=sys.stderr)
+        return 1
+    print("ok   a locator-less specific entry counts as a table gap")
+    _ne_mut = _json.loads(_json.dumps(_ne))
+    _ne_mut["provenance"][""]["locator"] = "planted table, page 1"
+    _tn, _gn, _rn = document_locator_gaps(_ne)
+    _tm, _gm, _rm = document_locator_gaps(_ne_mut)
+    if not (_gn > 0 and _gm == 0 and _tm == _tn):
+        print(f"FAIL a record default that names a table must close its gaps: "
+              f"{(_tn, _gn)} -> {(_tm, _gm)}", file=sys.stderr)
+        return 1
+    print("ok   a default that names a table stops counting as a gap")
+
     print(f"\nself-test PASS: reference record lints clean; {len(cases)} defect cases all detected.")
     return 0
 
@@ -617,54 +645,74 @@ REQUIRED_RECORDS = (
 )
 
 
+def document_locator_gaps(document):
+    """(measured values, values whose effective provenance names no table, of
+    which ratings) for one parsed record.
+
+    THE PREDICATE IS "names no locator", NOT "falls to the record default".
+    Those coincide across today's five records -- every specific entry carries a
+    locator and no default does -- but the coincidence is load-bearing in both
+    directions. Counting default-fallthrough meant a locator-less SPECIFIC
+    entry would have hidden every value under it from the count, and a default
+    that gained a locator would have kept counting values that now have a
+    table. NOTICE's claim is about tables, so the gate reads the locator field.
+    """
+    entries = document.get("provenance", {})
+    pointers = list(entries)
+
+    def effective(pointer):
+        best = None
+        for candidate in pointers:
+            if (candidate == "" or pointer == candidate
+                    or pointer.startswith(candidate + "/")):
+                if best is None or len(candidate) > len(best):
+                    best = candidate
+        return best
+
+    total = gaps = ratings = 0
+    # USE THE FILE'S OWN MEASURE PREDICATE. I wrote a second one here --
+    # `"unit" in node` -- ten lines from `walk_measures`, which correctly
+    # also requires one of min/typ/max/peak. The SN74HC00D's twelve PIN
+    # objects carry `unit` as the L5 gate id ("1".."4"), so each was counted
+    # as a measured value AND the walk returned before reaching the 24 real
+    # measures inside them: 130 - 24 + 12 = 118, exactly the number NOTICE
+    # published. The paragraph's whole defence is that the numbers are
+    # computed rather than hand-maintained, and nobody hand-checks a
+    # computed number.
+    for pointer, _measure in walk_measures(document):
+        if "/conditions/" in pointer:
+            continue
+        total += 1
+        key = effective(pointer)
+        entry = entries.get(key, {}) if key is not None else {}
+        if not entry.get("locator"):
+            gaps += 1
+            if pointer.startswith("/ratings"):
+                ratings += 1
+    return total, gaps, ratings
+
+
 def provenance_coverage():
-    """(measured values, values covered only by the record default, of which ratings).
+    """(measured values, values whose provenance names no table, of which ratings).
 
     NOTICE publishes these three numbers. They have now been wrong in three
     successive revisions -- a table-per-field claim, a generalisation of one
     record's shape to all five, and a count that was internally unsatisfiable.
     The paragraph even carries a recount procedure, and following it did not
     reproduce the number it guards. So the gate computes them and holds NOTICE
-    to the result.
+    to the result. The per-record predicate lives in document_locator_gaps().
 
     `conditions` sub-objects are EXCLUDED: they state the operating point at
     which a value was measured, not a transcribed rating, and counting them
     made "measured values" mean something no reader would guess.
     """
     import json
-    total = default_only = ratings = 0
+    total = gaps = ratings = 0
     for path in sorted(DEFAULT_TARGET.glob("*.part.json")):
         document = json.loads(path.read_text(encoding="utf-8"))
-        pointers = list(document.get("provenance", {}))
-
-        def covered(pointer):
-            best = ""
-            for candidate in pointers:
-                if candidate and (pointer == candidate
-                                  or pointer.startswith(candidate + "/")):
-                    if len(candidate) > len(best):
-                        best = candidate
-            return best
-
-        # USE THE FILE'S OWN MEASURE PREDICATE. I wrote a second one here --
-        # `"unit" in node` -- ten lines from `walk_measures`, which correctly
-        # also requires one of min/typ/max/peak. The SN74HC00D's twelve PIN
-        # objects carry `unit` as the L5 gate id ("1".."4"), so each was counted
-        # as a measured value AND the walk returned before reaching the 24 real
-        # measures inside them: 130 - 24 + 12 = 118, exactly the number NOTICE
-        # published. The paragraph's whole defence is that the numbers are
-        # computed rather than hand-maintained, and nobody hand-checks a
-        # computed number.
-        for pointer, _measure in walk_measures(document):
-            if "/conditions/" in pointer:
-                continue
-            total += 1
-            if covered(pointer) == "":
-                default_only += 1
-                if pointer.startswith("/ratings"):
-                    ratings += 1
-
-    return total, default_only, ratings
+        t, g, r = document_locator_gaps(document)
+        total, gaps, ratings = total + t, gaps + g, ratings + r
+    return total, gaps, ratings
 
 
 def notice_problems(problems):
@@ -674,7 +722,7 @@ def notice_problems(problems):
     if not notice.is_file():
         problems.append("NOTICE is missing")
         return 0
-    total, default_only, ratings = provenance_coverage()
+    total, gaps, ratings = provenance_coverage()
     text = notice.read_text(encoding="utf-8")
     # Whitespace-tolerant: the sentence wraps, and the first version of this
     # regex missed its own text because of a line break.
@@ -687,15 +735,15 @@ def notice_problems(problems):
             "NOTICE no longer states its provenance-coverage numbers in the form "
             "this gate reads. That paragraph has been wrong three times; it is "
             "gated on purpose. Publish: "
-            f"{default_only} of the {total} measured values across the five "
+            f"{gaps} of the {total} measured values across the five "
             f"records, of which {ratings} are ratings.")
         return 0
     published = tuple(int(g) for g in found.groups())
-    if published != (default_only, total, ratings):
+    if published != (gaps, total, ratings):
         problems.append(
             f"NOTICE publishes {published[0]} of {published[1]} measured values "
-            f"covered only by the record default, {published[2]} of them "
-            f"ratings. The records give {default_only} of {total}, {ratings} "
+            f"whose provenance names no table, {published[2]} of them "
+            f"ratings. The records give {gaps} of {total}, {ratings} "
             "ratings.")
         return 0
     return 3
