@@ -39,6 +39,11 @@ self_test() {
       commit -q --allow-empty -m "$msg"
   }
 
+  # Sandbox commits must not inherit the contributor's git config: with
+  # commit.gpgsign=true every `git commit` here died at exit 128 (round 18).
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+  export GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM
+
   signed="$tmp/signed"
   git init -q "$signed"
   commit "$signed" root 'Signed-off-by: T Author <t@example.invalid>'

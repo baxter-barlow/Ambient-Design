@@ -490,7 +490,10 @@ while IFS= read -r pair; do
   fresh_self=""
   [ -n "$pattern" ] || fresh_self=$(python3 "$command" --self-test 2>/dev/null | grep -m1 ": self-test PASS" || true)
   if [ -z "$fresh" ]; then
-    printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' "${pair##*:}" "${pair%%:*}" >&2
+    # $command_path, not ${pair##*:}: for a pattern-carrying pair the
+    # latter is the tail of the grep pattern, so the report named no
+    # command at all (round 18).
+    printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' "$command_path" "${pair%%:*}" >&2
     exit 1
   fi
   if [ -n "$pattern" ]; then prefix="$pattern"; else prefix="${fresh%%:*}"; fi
