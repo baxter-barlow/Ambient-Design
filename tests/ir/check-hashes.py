@@ -189,7 +189,23 @@ def _canonical_number(value) -> str:
     if isinstance(value, bool):
         raise TypeError("booleans are not numbers")
     if isinstance(value, int):
-        return str(value)
+        # ECMA has ONE number type. `str(int)` gave integers a second spelling
+        # per value -- 10**21 printed all its digits while the same value as a
+        # float printed "1e+21" -- so two conforming producers still disagreed
+        # on design_hash (round 15). An integer is serialized as the double it
+        # denotes, and an integer the double grid cannot hold exactly is
+        # REJECTED rather than silently rounded: a hash over a silently
+        # rounded value is an unledgered identity change.
+        try:
+            as_float = float(value)
+        except OverflowError:
+            as_float = float("inf")
+        if as_float in (float("inf"), float("-inf")) or int(as_float) != value:
+            raise ValueError(
+                f"{value} is not exactly representable as an IEEE double; "
+                "rhoform-canonical-json/1 numbers are doubles, and integers "
+                "beyond 2^53 must be rejected, not rounded (clause 7)")
+        value = as_float
     if value != value or value in (float("inf"), float("-inf")):
         raise ValueError("NaN and Infinity are not representable")
     if value == 0:
@@ -622,6 +638,46 @@ def self_test() -> int:
         document["header"].get("canonical_form") == CANONICAL_PROFILE,
     ))
 
+    # INTEGERS ARE DOUBLES. `str(int)` gave 10**21 a different spelling from
+    # the identical value 1e21, so two conforming producers disagreed on
+    # design_hash for the same document (round 15); and an integer the double
+    # grid cannot hold must be rejected, not silently rounded to a neighbour
+    # that hashes as something else.
+    checks.append((
+        "an int and the equal float spell identically (10**21 vs 1e21)",
+        canonical_bytes({"v": 10**21}) == canonical_bytes({"v": 1e21}),
+    ))
+    checks.append((
+        "2**53 is exactly representable and accepted",
+        canonical_bytes({"v": 2**53}) == b'{"v":9007199254740992}\n',
+    ))
+    rejected = False
+    try:
+        canonical_bytes({"v": 2**53 + 1})
+    except ValueError:
+        rejected = True
+    checks.append(("an integer beyond the double grid is rejected, "
+                   "not rounded", rejected))
+
+    # THE README'S PUBLISHED DIGEST, held to the committed header through
+    # readme_digest_problems() with injectable inputs.
+    _good = "sha256:" + "a" * 64
+    _bad = "sha256:" + "b" * 64
+    _ok, _stale, _gone = [], [], []
+    readme_digest_problems(_ok, readme_text=f"# -> {_good}\n", committed=_good)
+    readme_digest_problems(_stale, readme_text=f"# -> {_bad}\n", committed=_good)
+    readme_digest_problems(_gone, readme_text="no digest here", committed=_good)
+    checks.append(("a README digest matching the header reconciles clean",
+                   not _ok))
+    checks.append(("a stale README digest is caught",
+                   any("disagrees with the artifact" in x for x in _stale)))
+    checks.append(("a README that stops publishing the digest is caught",
+                   any("checked by nothing" in x for x in _gone)))
+    _missing = []
+    readme_digest_problems(_missing, readme_text=None, committed=_good)
+    checks.append(("a missing ir/README.md is reported, not skipped",
+                   any("is missing" in x for x in _missing)))
+
     # And the blanking rule itself: two documents differing ONLY in the
     # design_hash value must hash identically, or the rule is not idempotent
     # and every recomputation would chase its own tail.
@@ -821,6 +877,43 @@ def self_test() -> int:
     return 0
 
 
+_READ_FROM_DISK = object()
+
+
+def readme_digest_problems(problems, readme_text=_READ_FROM_DISK, committed=None):
+    """ir/README.md publishes the frozen design_hash in prose; hold it to the
+    committed header. The README's copy was read by nothing, so a legitimate
+    --write refreeze would have left it publishing the superseded digest --
+    the exact drift ir/validation.log documents for the b2a4c088 -> 8d056aa1
+    move (round 15)."""
+    if readme_text is _READ_FROM_DISK:
+        readme = ROOT / "ir" / "README.md"
+        readme_text = (readme.read_text(encoding="utf-8")
+                       if readme.is_file() else None)
+    if readme_text is None:
+        problems.append("ir/README.md is missing, so its published "
+                        "design_hash is compared to nothing")
+        return
+    if committed is None:
+        document = json.loads(
+            (IR_EXAMPLES / "blinker.ir.json").read_text(encoding="utf-8"))
+        committed = document["header"]["design_hash"]
+    published = re.findall(r"# -> (sha256:[0-9a-f]{64})", readme_text)
+    if not published:
+        problems.append(
+            "ir/README.md no longer publishes the recompute result in the "
+            "form this gate reads ('# -> sha256:...'), so its digest prose "
+            "is checked by nothing")
+        return
+    for digest in published:
+        if digest != committed:
+            problems.append(
+                f"ir/README.md publishes {digest} as the recompute result; "
+                f"the committed example's header holds {committed}. A README "
+                "that disagrees with the artifact it documents is the drift "
+                "its own history section warns about.")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -848,6 +941,7 @@ def main(argv: list[str] | None = None) -> int:
     notes: list[str] = []
     for path in documents:
         check_document(path, problems, notes)
+    readme_digest_problems(problems)
 
     for note in notes:
         print(f"ir-hashes: unverified: {note}")

@@ -48,6 +48,15 @@ values for the same design, which is the one thing "IR v0" had to nail down.
 
    `-0.0` normalizes to `0`: a design has no signed zero.
 
+   Numbers are IEEE-754 doubles, ECMA's one number type: a JSON integer is
+   serialized as the double it denotes, so `1000000000000000000000` and
+   `1e21` are one value with one spelling (`1e+21`). An integer the double
+   grid cannot hold exactly (beyond 2^53) is **rejected**, not rounded — a
+   JavaScript implementation would have silently rounded it at parse time,
+   and a hash over a silently rounded value is an unledgered identity
+   change. (Until round 15 integers were spelled with `str()`, giving the
+   same value two conforming spellings and two design_hashes.)
+
    The first version of this clause said "the shortest form that round-trips"
    and left it there. That is not a specification, it is whichever spelling the
    host language happens to use — and Python and JavaScript differ across
