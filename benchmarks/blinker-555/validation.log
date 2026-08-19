@@ -65,12 +65,12 @@ No. of Data Rows : 50360
 
   Measurements for Transient Analysis
 
-t_period            =  1.01191e+00 targ=  3.35355e+00 trig=  2.34164e+00
-t_on                =  5.40895e-01 targ=  2.88254e+00 trig=  2.34164e+00
-f_osc               =  9.88234e-01
-duty_pct            =  5.34530e+01
-i_led_on            =  9.25678e-03 at=  2.34169e+00
-v_out_high          =  7.19860e+00 at=  2.34169e+00
+t_period            =  1.01166e+00 targ=  3.35295e+00 trig=  2.34129e+00
+t_on                =  5.40876e-01 targ=  2.88217e+00 trig=  2.34129e+00
+f_osc               =  9.88474e-01
+duty_pct            =  5.34641e+01
+i_led_on            =  9.25223e-03 at=  4.36465e+00
+v_out_high          =  7.19602e+00 at=  4.36465e+00
 
 
 Total analysis time (seconds) = 0.232177
@@ -84,13 +84,13 @@ Current ngspice program size =   11.266 MB.
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===
-t_period            =  1.01191e+00 targ=  3.35355e+00 trig=  2.34164e+00
-t_on                =  5.40895e-01 targ=  2.88254e+00 trig=  2.34164e+00
-f_osc               =  9.88234e-01
-duty_pct            =  5.34530e+01
-i_led_on            =  9.25678e-03 at=  2.34169e+00
-v_out_high          =  7.19860e+00 at=  2.34169e+00
+t_period            =  1.01166e+00 targ=  3.35295e+00 trig=  2.34129e+00
+t_on                =  5.40876e-01 targ=  2.88217e+00 trig=  2.34129e+00
+f_osc               =  9.88474e-01
+duty_pct            =  5.34641e+01
+i_led_on            =  9.25223e-03 at=  4.36465e+00
+v_out_high          =  7.19602e+00 at=  4.36465e+00
 
 === assertion windows ===
-sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows; 12 transcript measurement(s) match a fresh run; 6 deck passive(s) carry their parts.yaml value.
+sim-assert: PASS: blinker-555: 5 assertion(s) inside their windows; 12 transcript measurement(s) match a fresh run; 6 deck passive(s) carry their parts.yaml value; 0 deck parameter(s) trace to the BOM.
 exit=0
