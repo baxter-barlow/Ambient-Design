@@ -586,12 +586,12 @@ def self_test():
               f"{sorted(_pin_paths & _measured)}", file=sys.stderr)
         return 1
     _total, _default, _ratings = provenance_coverage()
-    if (_total, _default, _ratings) != (130, 5, 4):
+    if (_total, _default, _ratings) != (132, 5, 4):
         print(f"FAIL provenance_coverage() gives {(_total, _default, _ratings)}, "
-              "expected (130, 5, 4). NOTICE publishes these; if the records "
+              "expected (132, 5, 4). NOTICE publishes these; if the records "
               "legitimately changed, update both in one commit.", file=sys.stderr)
         return 1
-    print("ok   provenance coverage counts only real Measures (130, 5, 4)")
+    print("ok   provenance coverage counts only real Measures (132, 5, 4)")
 
     # THE GAP PREDICATE reads the locator field, not the provenance key. The
     # previous predicate counted default-fallthrough, which agrees with "names
