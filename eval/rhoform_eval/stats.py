@@ -285,10 +285,15 @@ def mcnemar_exact(b: int, c: int) -> float:
     NUMBERS ARE NOT ONE." Under genuine independence pairing LOSES power in
     this module's own numbers (0.182 against 0.291 at n=10), so recommending it
     recommended the more expensive design. Use it only where a real blocking
-    factor exists. The text below describes when that would be true when both arms run the same benchmark with the
-    same seed set. Pairing removes between-seed variance, so it detects a
-    real difference at a substantially smaller n — which at roughly 150K
-    tokens per trial is a direct cost saving, not a statistical nicety.
+    factor exists — protocol.py names the legitimate case: several distinct
+    benchmark DESIGNS, where the design is the block. Where such a factor
+    exists, pairing removes between-block variance and detects a real
+    difference at a substantially smaller n — at roughly 150K tokens per
+    trial, a direct cost saving. (A previous revision of this paragraph
+    ended with a half-edited sentence that reasserted matching seed sets as
+    the blocking factor, the exact reading rejected above; the seed labels a
+    trial and does not seed the model, so there is no between-seed variance
+    to remove.)
     """
     if b < 0 or c < 0:
         raise ValueError("discordant counts must be non-negative")

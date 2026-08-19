@@ -33,6 +33,7 @@ Exit codes: 0 pass, 1 a pin and its consumer disagree, 2 environment failure.
     python3 tests/toolchain/check-pins.py
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -243,7 +244,10 @@ class _SkipFingerprint(Exception):
 # Too strict: when the vocabulary genuinely IS in tiktoken's default cache,
 # TIKTOKEN_CACHE_DIR is unset, so the guard declared it uncached and the pin
 # went unverified in exactly the case where it could have been checked for
-# free. It is verified here now, and counts toward the agreement total.
+# free. It is verified here now -- reported, and deliberately NOT counted
+# toward the agreement total, so the summary cannot depend on an optional
+# package. (This comment claimed it counted; the code below never did, and
+# the code is right.)
 _FINGERPRINT_CHILD = r'''
 import sys
 def _no_network(event, args):
@@ -883,11 +887,43 @@ def self_test():
     cases.append(("an unrecognised probe answer is not trusted",
                   tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
                       "everything is fine"))[0] == "unverifiable"))
+    # THE WHITESPACE PIN PARITY, each direction.
+    cases.append(("matching whitespace pins reconcile clean",
+                  not whitespace_pin_problems(
+                      f"a {WHITESPACE_PIN} b {WHITESPACE_PIN}",
+                      f"c {WHITESPACE_PIN}")))
+    cases.append(("a CI side missing the whitespace pin is caught", any(
+        "local-green/CI-red" in x for x in whitespace_pin_problems(
+            f"a {WHITESPACE_PIN} b {WHITESPACE_PIN}", "bare git diff"))))
+    cases.append(("a Makefile losing one whitespace pin is caught", any(
+        "local-green/CI-red" in x for x in whitespace_pin_problems(
+            f"only one {WHITESPACE_PIN}", f"c {WHITESPACE_PIN}"))))
+
     # And the child really does refuse the network: run it against an encoding
     # whose vocabulary cannot be local under any circumstances.
     unknown = tokenizer_fingerprint_outcome("no_such_encoding_ever", "sha256:0")
     cases.append(("an unknown encoding does not reach the network",
                   unknown[0] == "unverifiable"))
+    # THE HOOK ITSELF, pinned behaviourally. The case above passes without
+    # sys.addaudithook because tiktoken rejects an unknown encoding before any
+    # fetch -- so round 16 deleted the hook with all cases green and the child
+    # then reached openaipublic.blob.core.windows.net on a cold cache. This
+    # case gives the real child a KNOWN encoding and an empty cache: with the
+    # hook, the load is blocked and the cache directory stays empty; without
+    # it, on any networked machine, the child fetches the vocabulary and both
+    # assertions go red. (On a machine with no network at all the two are
+    # indistinguishable -- and equally fetchless.)
+    import tempfile as _tempfile
+    with _tempfile.TemporaryDirectory() as _cold:
+        _env = {**os.environ, "TIKTOKEN_CACHE_DIR": _cold}
+        _cold_run = lambda argv: subprocess.run(
+            argv, capture_output=True, text=True, timeout=300, env=_env)
+        cold = tokenizer_fingerprint_outcome("cl100k_base", "sha256:0",
+                                             run=_cold_run)
+        cases.append(("a cold cache is blocked by the child's own hook, "
+                      "not fetched", cold[0] == "unverifiable"))
+        cases.append(("the cold cache directory stays empty",
+                      not any(Path(_cold).iterdir())))
 
     failures = 0
     for name, ok in cases:
@@ -900,12 +936,40 @@ def self_test():
     return 0
 
 
+# The policy target's git legs are excluded from Makefile-to-CI command
+# parity by design (computed commands are not required verbatim in CI), so
+# the whitespace pin they carry needs its own reconciliation: a Makefile
+# pinning core.whitespace while CI runs bare `git diff --check` reintroduces
+# exactly the local-green/CI-red split the pin closed (round 16).
+WHITESPACE_PIN = "core.whitespace=blank-at-eol,space-before-tab,blank-at-eof"
+
+
+def whitespace_pin_problems(makefile_text=None, policy_text=None):
+    problems = []
+    if makefile_text is None:
+        makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    if policy_text is None:
+        policy_text = POLICY.read_text(encoding="utf-8") if POLICY.is_file() else ""
+    for name, text, want in (
+            ("Makefile", makefile_text, 2),
+            (".github/workflows/repository-policy.yml", policy_text, 1)):
+        have = text.count(WHITESPACE_PIN)
+        if have < want:
+            problems.append(
+                f"{name} carries {have} of the {want} required "
+                f"`{WHITESPACE_PIN}` pin(s). The whitespace rules must be "
+                "pinned identically in the Makefile and CI, or the same "
+                "bytes go local-green/CI-red on a stray git config.")
+    return problems
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
     try:
         manifest = load_manifest()
         problems, checked, action_refs = check(manifest)
+        problems += whitespace_pin_problems()
     except GateUnavailable as exc:
         print(f"toolchain-pins: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2

@@ -1082,6 +1082,26 @@ class LanguageCards(unittest.TestCase):
         "    print(key, tokenizer.count(arm.language_card()))\n"
     )
 
+    def test_the_card_child_refuses_the_network_on_a_cold_cache(self):
+        """Pins the child's audit hook BEHAVIOURALLY. Round 16 deleted the
+        sys.addaudithook line with the whole suite green -- the budget test
+        then fetched the vocabulary again on a cold cache, the round-15
+        defect resurrected. With an empty TIKTOKEN_CACHE_DIR the hooked
+        child must fail without populating the cache; a hookless child on
+        any networked machine fetches, and both assertions go red."""
+        import os
+        import tempfile
+        lang_dir = str(Path(__file__).resolve().parents[1])
+        with tempfile.TemporaryDirectory() as cold:
+            child = subprocess.run(
+                [sys.executable, "-c", self._CARD_BUDGET_CHILD, lang_dir],
+                capture_output=True, text=True, timeout=120,
+                env={**os.environ, "TIKTOKEN_CACHE_DIR": cold})
+            self.assertNotEqual(child.returncode, 0,
+                                "a cold cache must not produce card counts")
+            self.assertEqual(os.listdir(cold), [],
+                             "the child fetched into the cold cache")
+
     def test_cards_are_inside_the_flip_criterion_budget(self):
         """§4's flip criterion is stated in tokens of this artifact."""
         lang_dir = str(Path(__file__).resolve().parents[1])
