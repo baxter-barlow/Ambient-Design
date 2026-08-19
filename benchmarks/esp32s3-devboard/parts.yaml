@@ -1,4 +1,10 @@
 # Rhoform benchmark (c) ESP32-S3 devboard — full BOM
+# MPN VERIFICATION STATUS, stated because the sibling BOMs date theirs and
+# silence reads as parity (round 19): these 60 MPNs were transcribed from
+# vendor documentation during authoring and have NOT been individually
+# verified against live distributor stock in the AMB-123 audit. AMB-126's
+# vendor-figure pass is the natural home for that sweep; no offline gate
+# can hold MPN existence true.
 # Count: 60 total placements = 57 fitted + 3 DNP (J4, R6, R10).
 # dnp is only stated where true; absence means fitted.
 meta:

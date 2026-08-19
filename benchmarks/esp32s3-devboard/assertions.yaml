@@ -70,16 +70,16 @@ assertions:
     kind: dropout margin at minimum input, wifi_tx_peak worst
     expr: "v_ldo_in_min >= vout_max + vdo(i_load)"
     inputs:
-      v_ldo_in_min_v: 3.818       # 4.40 - 0.1382 (PTC 0.35R) - 0.0434 (bead 0.11R) - 0.400 (Vf max), power-tree.yaml; exact 3.81834
+      v_ldo_in_min_v: 3.818       # 4.40 - 0.1384 (PTC 0.35R) - 0.0435 (bead 0.11R) - 0.400 (Vf max), power-tree.yaml; exact 3.81816 at the round-18 TVS-corrected 0.39531 A (a pre-correction 3.81834 lingered here for a round)
       vout_max_v: 3.366
       i_load_a: 0.3916            # LDO OUTPUT current at wifi_tx_peak worst (P3V3 load; excludes the 60 uA Iq, which flows Vin->GND)
       vdo_typ_v_per_a: 0.34       # datasheet DS37274 Rev. 5-2 EC table, IOUT=1A, 2.6V<=VOUT<=3.3V row; NO datasheet max exists
       vdo_guardband_v_per_a: 0.50 # in-house conservative guardband ASSUMPTION (not a datasheet figure)
     calc_rows:
       datasheet_typ: "vdo = 0.34 x 0.3916 = 0.133 V; required = 3.366 + 0.133 = 3.499 V; margin = 3.818 - 3.499 = +0.319 V"
-      inhouse_guardband: "vdo = 0.50 x 0.3916 = 0.196 V; required = 3.366 + 0.196 = 3.562 V; margin = 3.818 - 3.562 = +0.257 V"
+      inhouse_guardband: "vdo = 0.50 x 0.3916 = 0.196 V; required = 3.366 + 0.196 = 3.562 V; margin = 3.818 - 3.562 = +0.256 V"
     secondary_rows:
-      usbc_min_4p75_guardband: "4.335 - 3.5618 = +0.774 V"   # mixes usbc-min input (typ current) with worst-current required V_in; conservative
+      usbc_min_4p75_guardband: "4.335 - 3.5618 = +0.773 V"   # mixes usbc-min input (typ current) with worst-current required V_in; conservative. (+0.774 shipped for two rounds: it was 4.33555 - 3.562 rounded, both operands since superseded)
       nominal_5p00_typ_vdo: "4.585 - (3.300 + 0.34 x 0.356 = 3.421) = +1.164 V"
     status: PASS   # passes under both the datasheet-typ and the guardband basis
     caveat: "Datasheet specifies dropout at 1 A as typ-only (340 mV, 2.6-3.3 V row; features page quotes 360 mV) with no max; the 0.50 V/A row is our guardband, not vendor data. SS34 Vf=0.40 V at 0.4 A and PTC R range remain stated assumptions; re-derive from vendor datasheets before freeze"
