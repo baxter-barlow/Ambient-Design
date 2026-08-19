@@ -321,13 +321,28 @@ def self_test() -> int:
                  any("(binary, not scanned)" in h for h in binary_found)))
 
             locked = ROOT / "locked.md"
-            locked.write_text("clean\n", encoding="utf-8")
-            locked.chmod(0o000)
+            # chmod 0o000 does not stop root: DAC checks are bypassed at
+            # uid 0, which is exactly how GitHub Actions container jobs run,
+            # so this case failed the whole self-test in the committed CI
+            # (round 18). Under root the unreadable file is a Unix socket
+            # node instead -- open() fails with ENXIO for every uid.
+            import os as _os
+            if _os.geteuid() == 0:
+                import socket as _socket
+                _sock = _socket.socket(_socket.AF_UNIX)
+                _sock.bind(str(locked))
+            else:
+                _sock = None
+                locked.write_text("clean\n", encoding="utf-8")
+                locked.chmod(0o000)
             globals()["tracked_files"] = lambda: ["locked.md"]
             try:
                 unreadable_found = scan_repository()
             finally:
-                locked.chmod(0o644)
+                if _sock is not None:
+                    _sock.close()
+                else:
+                    locked.chmod(0o644)
             wiring_cases.append(
                 ("an unreadable file is reported, not skipped",
                  any("not scanned" in h for h in unreadable_found)))

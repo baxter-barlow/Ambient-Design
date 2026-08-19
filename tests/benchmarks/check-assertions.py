@@ -463,11 +463,16 @@ REQUIRED_BOM_REFS = {
     "buck-3v3": (),  # refdes-level correspondence not asserted; see the rules
 }
 
-# How many deck parameters must trace to the BOM. DECK_PARAM_RULES is data,
-# and data is editable: round 17 replaced the buck's 8-row table with () and
-# every case stayed green ("0 deck parameter(s)" printed as a statistic).
-# The floor makes an emptied or row-deleted table a failure, not a number.
-MINIMUM_DECK_PARAMS = {"blinker-555": 0, "buck-3v3": 8}
+# WHICH deck parameters must trace to the BOM, by name. The round-17 floor
+# was a count, and a count is refillable: round 18 deleted two rule rows and
+# refilled with duplicates while the MOSFET pair drifted 4.2x. A named
+# population cannot be refilled -- each name must appear as a rule AND
+# reconcile.
+REQUIRED_DECK_PARAMS = {
+    "blinker-555": (),
+    "buck-3v3": ("LVAL", "DCR", "RON_HS", "RON_LS",
+                 "CEFF", "RESR", "RFB1", "RFB2"),
+}
 
 # benchmark -> deck parameter/instance -> how the BOM pins it. The buck deck's
 # .param block claims a per-part correspondence in its own comments (RON cites
@@ -546,6 +551,7 @@ def deck_param_problems(case_dir, problems, rules=None,
                 for p in (_yaml.safe_load(bom_text) or {}).get("parts") or []}
 
     reconciled = 0
+    reconciled_names = set()
     for name, ref, kind, pattern, scale in rules:
         part = declared.get(ref.upper())
         if part is None:
@@ -594,19 +600,27 @@ def deck_param_problems(case_dir, problems, rules=None,
                 "circuit nobody specified.")
             continue
         reconciled += 1
+        reconciled_names.add(name.upper())
     if from_table:
-        floor = MINIMUM_DECK_PARAMS.get(case_dir.name)
-        if floor is None:
+        required_names = REQUIRED_DECK_PARAMS.get(case_dir.name)
+        if required_names is None:
             problems.append(
-                f"{case_dir.name}: no deck-parameter floor is declared. The "
-                "rule table is editable data; without a floor, emptying it "
-                "reconciles zero and prints zero as a statistic (round 17).")
-        elif reconciled < floor:
-            problems.append(
-                f"{case_dir.name}: {reconciled} deck parameter(s) traced to "
-                f"the BOM, below the floor of {floor}. An emptied or "
-                "row-deleted rule table is a decision to unpin the deck, "
-                "and a decision must move this floor in the same commit.")
+                f"{case_dir.name}: no required deck-parameter names are "
+                "declared. The rule table is editable data; without a named "
+                "population, emptying it reconciles zero as a statistic "
+                "(round 17) and duplicates refill a count (round 18).")
+        else:
+            ruled = {name.upper() for name, *_ in rules}
+            for name in required_names:
+                if name.upper() not in ruled:
+                    problems.append(
+                        f"{case_dir.name}: required deck parameter {name} "
+                        "has no rule row; the named population may not "
+                        "shrink silently.")
+                elif name.upper() not in reconciled_names:
+                    problems.append(
+                        f"{case_dir.name}: required deck parameter {name} "
+                        "did not reconcile against the BOM.")
     return reconciled
 
 
@@ -1009,8 +1023,8 @@ def self_test():
         deck_param_problems(ROOT / "benchmarks" / "buck-3v3", _empty_rules)
     finally:
         DECK_PARAM_RULES["buck-3v3"] = _saved
-    cases.append(("an emptied rule table trips the parameter floor", any(
-        "below the floor" in p for p in _empty_rules)))
+    cases.append(("an emptied rule table fails its named population", any(
+        "has no rule row" in p for p in _empty_rules)))
     with _tempfile.TemporaryDirectory() as tmp:
         case = Path(tmp) / "floorless-benchmark"
         case.mkdir()
@@ -1025,8 +1039,32 @@ def self_test():
             deck_param_problems(case, _floorless)
         finally:
             del DECK_PARAM_RULES["floorless-benchmark"]
-    cases.append(("a benchmark with no parameter floor is caught", any(
-        "no deck-parameter floor" in p for p in _floorless)))
+    cases.append(("a benchmark with no required parameter names is caught", any(
+        "no required deck-parameter names" in p for p in _floorless)))
+    _dupes = []
+    _saved2 = DECK_PARAM_RULES["buck-3v3"]
+    try:
+        # Two rows deleted, refilled with duplicates: the round-18 attack a
+        # count-based floor waved through.
+        DECK_PARAM_RULES["buck-3v3"] = _saved2[:6] + _saved2[:2]
+        deck_param_problems(ROOT / "benchmarks" / "buck-3v3", _dupes)
+    finally:
+        DECK_PARAM_RULES["buck-3v3"] = _saved2
+    cases.append(("duplicate rule rows cannot refill the named population",
+                  any("has no rule row" in p for p in _dupes)))
+    _unrecon = []
+    _saved3 = DECK_PARAM_RULES["buck-3v3"]
+    try:
+        # LVAL's rule pinned to a ref that cannot supply it: the row exists,
+        # the reconciliation fails, and the NAMED population must say so.
+        DECK_PARAM_RULES["buck-3v3"] = (
+            (("LVAL", "C3", "regex", r"never-matches-(\d+)", 1),)
+            + _saved3[1:])
+        deck_param_problems(ROOT / "benchmarks" / "buck-3v3", _unrecon)
+    finally:
+        DECK_PARAM_RULES["buck-3v3"] = _saved3
+    cases.append(("a required parameter whose rule fails to reconcile is "
+                  "named", any("did not reconcile" in p for p in _unrecon)))
     braced, _bc = bom_probe(
         DECK.replace("RA vcc disch 100k", "RA vcc disch {RAVAL}"), BOM,
         required=("RA",))
