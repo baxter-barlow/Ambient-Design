@@ -21,7 +21,7 @@ parts:
     notes: specs from Infineon datasheet rev 2.1 (2020-07-22) -- Rds(on) max
       5.9 mOhm @ 10 V, Qg typ 9.4 nC, Qoss typ 10.2 nC @ 20 V, Id 59 A @ Tc.
       Vds margin 40 V vs 14 V max input + ringing (2.8x);
-      Id rating >> 2.28 A peak.
+      Id rating >> 2.256 A peak.
 
   - ref: Q2
     role: low_side_fet
@@ -36,9 +36,9 @@ parts:
       (20 C rise), DCR 18.5 mOhm typ / 20.4 mOhm max
     package: XGL6060 (6.71x6.51x6.1 mm shielded molded)
     mpn: Coilcraft XGL6060-103MEC
-    notes: specs from Coilcraft Document 1621-2 rev 02/19/26. Ipk = 2.28 A
+    notes: specs from Coilcraft Document 1621-2 rev 02/19/26. Ipk = 2.256 A
       worst case vs 3.6 A Isat (strictest, 10% drop) -> 1.6x margin, 2.4x
-      vs the 20%-drop rating; soft-saturating composite core. Deck models
+      vs the 20%-drop rating (2.32 A / 1.55x at the L-20% corner); soft-saturating composite core. Deck models
       DCR at the 20.4 mOhm max.
 
   - ref: C1
@@ -47,10 +47,11 @@ parts:
     package: 1210 (3.2 x 2.5 x 2.0 mm)
     mpn: Murata GRM32DR71E106KA12L
     qty: 2
-    notes: 0.89 A rms worst-case input ripple current shared across two parts
-      (~0.45 A each); per-part rms handling to be confirmed against Murata
-      temperature-rise data at 500 kHz. Murata lists this part NRND --
-      in-production alternative GRM31CR71E106KA12L (1206).
+    notes: 0.98 A rms worst-case input ripple current (9 V corner, D' ~= 0.40;
+      0.89 A at 12 V nominal) shared across two parts (~0.49 A each); per-part
+      rms handling to be confirmed against Murata temperature-rise data at
+      500 kHz. Murata lists this part NRND -- in-production alternative
+      GRM31CR71E106KA12L (1206).
 
   - ref: C2
     role: output_capacitor

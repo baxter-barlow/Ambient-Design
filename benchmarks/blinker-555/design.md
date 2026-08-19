@@ -163,9 +163,12 @@ Those are **candidate_a**'s counts, and candidate_a is the arm that LOST --
 `lang/tests/test_grammar.py::test_the_grammar_rejects_the_losing_candidates_surface`
 asserts the frozen grammar rejects exactly that rendering. So AC1a's headline
 evidence was measured on a syntax the frozen grammar refuses, and labelled as
-the frozen syntax. `check-design-docs.py` reads only tables whose last column
-is a verdict, so this one is outside it by construction; the counts are
-reproducible from the command below instead.
+the frozen syntax. The table below is held to the candidate_b renderer by
+`check-design-docs.py`'s line-count leg (an earlier revision of this sentence
+said the table was "outside it by construction", which was true when written
+and stale once that leg landed -- the same shape as the mislabelled counts
+this section documents); the counts are also reproducible from the command
+below.
 
 Reproduce with:
 
