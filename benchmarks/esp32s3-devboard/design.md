@@ -71,7 +71,18 @@ Table 6-2 "Recommended Operating Conditions", same datasheet.
 - D1: SS34 Schottky, VBUS -> P5V0. Prevents backdriving the host when the
   board is powered from the J2 5V header pin. Vf at ~0.4 A: 0.35 V typ,
   0.40 V worst (assumption, flagged in assertions).
-- D3: SMF5.0A TVS on VBUS (5 V standoff) for surge.
+- D3: SMF5.0A TVS on VBUS (5 V standoff) for surge. SURGE COORDINATION,
+  stated rather than implied (round 18): during the clamped event D3 holds
+  VBUS between its 6.4 V minimum breakdown and 9.2 V maximum clamp, and only
+  FB1 (0.05-0.11 Ohm) plus D1's 0.30-0.40 V forward drop separate that node
+  from U2's input, whose absolute maximum is 6.5 V -- so a clamped surge can
+  transiently present ~6.1-8.9 V at the LDO input, at or above abs-max. The
+  exposure is microseconds (8/20 us) against a DC rating, behind the PTC and
+  bead series impedance, and is judged survivable at rung 0 -- but it is a
+  real coordination gap this spec-only benchmark documents instead of
+  hiding. Closing it properly means a higher-abs-max regulator input or a
+  second clamp after D1, decided when the board is actually built (AMB-126's
+  vendor-figure pass is the natural home).
 - D2: USBLC6-2SC6 ESD array on D+/D-/VBUS, placed at the connector.
 - R11/R12: 0 Ohm series links in D+/D- (isolation/rework aid; FS USB needs no
   series termination — the S3 PHY is internal).
