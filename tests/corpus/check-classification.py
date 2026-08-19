@@ -223,10 +223,14 @@ RESIDUAL_KIND_EMPTIES_PROMOTION = (
 )
 
 # `at_risk` entries group into the decisions that would lose them together.
-# Reporting 17 conditional verdicts as 17 independent risks both
-# overstates the exposure and buries the useful fact: two of these decisions
-# fail AC2 on their own, which is something to go and settle rather than a
-# number to worry about.
+# Reporting the conditional verdicts (16 today; the generated margin table in
+# corpus/README.md is the maintained count) as independent risks both
+# overstates the exposure and buries the useful fact the same table states:
+# three of these decisions -- domain-attributes, part-record, gpio-roles --
+# fail AC2 each on their own, which is something to go and settle rather
+# than a number to worry about. (This comment said "17" and "two" against a
+# generated 16 and three; a fact-stating comment beside the machinery built
+# to end fact drift is still just a comment, so it now defers to the table.)
 AT_RISK_GROUPS = {
     "l9b-leg": "the L9b undeclared-single-pin-net leg is implemented, not only the T2 no-driver leg",
     "decoupling-rule": "the generic decoupling rule survives the zero-spurious-errors precision pass",
