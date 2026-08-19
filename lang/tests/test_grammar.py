@@ -922,6 +922,39 @@ class Attribution(unittest.TestCase):
         self.assertIn("## Attribution", licenses)
 
 
+class SuiteCountDocumentation(unittest.TestCase):
+    """lang/README.md publishes the suite's size beside its run command. It
+    said 157 for several rounds while the suite ran 161 -- the number had no
+    reader (round 15). Note the self-reference: this test is part of the
+    count it verifies, so adding a test here moves the README number too."""
+
+    SENTENCE = re.compile(r"#\s*(\d+) tests \((\d+) need lark\)")
+
+    def test_the_readme_suite_counts_match_discovery(self):
+        text = (LANG / "README.md").read_text(encoding="utf-8")
+        found = self.SENTENCE.search(text)
+        self.assertIsNotNone(
+            found,
+            "lang/README.md no longer publishes the suite count in the form "
+            "this test reads ('# N tests (M need lark)')")
+        suite = unittest.defaultTestLoader.discover(
+            str(LANG / "tests"), top_level_dir=str(LANG))
+
+        def walk(node):
+            for item in node:
+                if isinstance(item, unittest.TestSuite):
+                    yield from walk(item)
+                else:
+                    yield item
+
+        tests = list(walk(suite))
+        lark_only = [t for t in tests if type(t).__name__ == "Conformance"]
+        self.assertEqual(int(found.group(1)), len(tests),
+                         "the README's suite total is stale")
+        self.assertEqual(int(found.group(2)), len(lark_only),
+                         "the README's lark-only count is stale")
+
+
 class ReservedSetDocumentation(unittest.TestCase):
     """lang/README.md documents what FREE_NAME rejects. It described only the
     24 keywords while the grammar enforces 32 -- the 8 RESERVED_FUTURE words

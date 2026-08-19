@@ -683,5 +683,26 @@ class TestAuthoritativeComputation(unittest.TestCase):
         self.assertIn("caveat", record["ac5_gate"])
 
 
+class SuiteCountDocumentation(unittest.TestCase):
+    """eval/README.md publishes the suite's size beside its run command; the
+    number had no reader (round 15 found lang's twin already stale at 157
+    against 161). Self-referential: this test is part of the count."""
+
+    def test_the_readme_suite_count_matches_discovery(self):
+        import re as _re
+        from pathlib import Path as _Path
+        readme = _Path(__file__).resolve().parents[1] / "README.md"
+        found = _re.search(r"#\s*(\d+) tests, stdlib only",
+                           readme.read_text(encoding="utf-8"))
+        self.assertIsNotNone(
+            found, "eval/README.md no longer publishes the suite count in "
+            "the form this test reads ('# N tests, stdlib only')")
+        top = str(_Path(__file__).resolve().parents[1])
+        suite = unittest.defaultTestLoader.discover(
+            str(_Path(__file__).resolve().parent), top_level_dir=top)
+        self.assertEqual(int(found.group(1)), suite.countTestCases(),
+                         "the README's suite total is stale")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
