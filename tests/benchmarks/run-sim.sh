@@ -96,9 +96,11 @@ FAKE
       > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
   }
 
+  st_cases=0
   expect() {
     # expect <name> <expected-exit> <fragment>; env via EXPECT_ENV
     local name=$1 want=$2 fragment=$3 got=0 out
+    st_cases=$((st_cases + 1))
     out=$(env PATH="$bin" $EXPECT_ENV bash "$sandbox/tree/tests/benchmarks/run-sim.sh" 2>&1) || got=$?
     if [ "$got" -eq "$want" ] && printf '%s' "$out" | grep -Fq -- "$fragment"; then
       printf 'self-test ok:   %s\n' "$name"
@@ -128,6 +130,10 @@ FAKE
 
   rebuild 99; rm "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
   expect "a required benchmark losing its spec fails" 2 "cannot leave the gate by losing its spec"
+
+  rebuild 99; mkdir "$sandbox/tree/benchmarks/rogue-bench"
+  printf '* deck\n.end\n' > "$sandbox/tree/benchmarks/rogue-bench/netlist.cir"
+  expect "a benchmark joining without a spec fails" 2 "cannot join the tree ungated"
 
   rebuild 99; printf 'title: no deck key\n' > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
   expect "a spec that does not say whether it has a deck fails" 2 "declares no \`deck:\`"
@@ -174,7 +180,7 @@ FAKE
     printf 'sim: SELF-TEST FAILED: %s case(s)\n' "$failures" >&2
     return 1
   fi
-  printf 'sim: self-test PASS: 16 cases.\n'
+  printf 'sim: self-test PASS: %s cases.\n' "$st_cases"
   return 0
 }
 
@@ -217,6 +223,16 @@ REQUIRED_BENCHMARKS="blinker-555 buck-3v3 esp32s3-devboard"
 for required in $REQUIRED_BENCHMARKS; do
   [ -f "$BENCH_DIR/$required/assertions.yaml" ] \
     || fail_env "benchmarks/$required/assertions.yaml is missing; a benchmark cannot leave the gate by losing its spec."
+done
+
+# The JOINING direction, which the list above cannot see: a benchmark
+# directory added with a deck and no spec was skipped by the glob below and
+# gated by nothing -- the same additive hole uncollected_tests() closed for
+# lang/tests, one directory over.
+for joined in "$BENCH_DIR"/*/; do
+  [ -d "$joined" ] || continue
+  [ -f "$joined/assertions.yaml" ] \
+    || fail_env "benchmarks/$(basename "$joined") has no assertions.yaml; a benchmark cannot join the tree ungated."
 done
 
 expected_decks=""
@@ -350,7 +366,9 @@ while IFS= read -r deck; do
     continue
   fi
 
-  printf 'sim: PASS: %s (%s measurement(s), %ss).\n' "$case_name" "$meas_count" "$elapsed"
+  # No wall-clock in the transcript: the elapsed check above still
+  # enforces the budget, but two identical runs must print identical bytes.
+  printf 'sim: PASS: %s (%s measurement(s), within budget).\n' "$case_name" "$meas_count"
 done <<<"$deck_list"
 
 if [ "$failed" -ne 0 ]; then
