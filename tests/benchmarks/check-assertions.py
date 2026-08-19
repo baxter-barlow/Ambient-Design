@@ -452,6 +452,23 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
 # comments contradicted line by line (round 16).
 MINIMUM_BOM_PASSIVES = {"blinker-555": 6, "buck-3v3": 0}
 
+# WHICH refs must reconcile, by name. The count floor above is gameable: hide
+# RB behind a brace parameter (unparseable, silently skipped) and refill the
+# count by adding the deck's convergence leak RLK to parts.yaml -- round 17
+# restored the 700k-RB attack end to end that way, its third spelling. A
+# NAMED population cannot be refilled: each listed ref must be present in the
+# deck, parseable, and matching, or the gate fails on that ref by name.
+REQUIRED_BOM_REFS = {
+    "blinker-555": ("RA", "RB", "CT", "CB", "CBYP", "RL"),
+    "buck-3v3": (),  # refdes-level correspondence not asserted; see the rules
+}
+
+# How many deck parameters must trace to the BOM. DECK_PARAM_RULES is data,
+# and data is editable: round 17 replaced the buck's 8-row table with () and
+# every case stayed green ("0 deck parameter(s)" printed as a statistic).
+# The floor makes an emptied or row-deleted table a failure, not a number.
+MINIMUM_DECK_PARAMS = {"blinker-555": 0, "buck-3v3": 8}
+
 # benchmark -> deck parameter/instance -> how the BOM pins it. The buck deck's
 # .param block claims a per-part correspondence in its own comments (RON cites
 # the BSC059N04LS6 max, DCR the XGL6060 max, CEFF the derated output pair,
@@ -485,6 +502,7 @@ DECK_PARAM_RULES = {
 def deck_param_problems(case_dir, problems, rules=None,
                         deck_text=None, bom_text=None):
     """Every deck parameter the rule table names must trace to the BOM."""
+    from_table = rules is None
     import importlib.util
     spec = importlib.util.spec_from_file_location(
         "_derive555p", Path(__file__).with_name("derive-555-windows.py"))
@@ -576,10 +594,23 @@ def deck_param_problems(case_dir, problems, rules=None,
                 "circuit nobody specified.")
             continue
         reconciled += 1
+    if from_table:
+        floor = MINIMUM_DECK_PARAMS.get(case_dir.name)
+        if floor is None:
+            problems.append(
+                f"{case_dir.name}: no deck-parameter floor is declared. The "
+                "rule table is editable data; without a floor, emptying it "
+                "reconciles zero and prints zero as a statistic (round 17).")
+        elif reconciled < floor:
+            problems.append(
+                f"{case_dir.name}: {reconciled} deck parameter(s) traced to "
+                f"the BOM, below the floor of {floor}. An emptied or "
+                "row-deleted rule table is a decision to unpin the deck, "
+                "and a decision must move this floor in the same commit.")
     return reconciled
 
 
-def deck_bom_problems(case_dir, problems, minimum=None):
+def deck_bom_problems(case_dir, problems, minimum=None, required=None):
     """Every passive the deck instantiates must carry the BOM's value."""
     deck = case_dir / "netlist.cir"
     bom = case_dir / "parts.yaml"
@@ -593,12 +624,26 @@ def deck_bom_problems(case_dir, problems, minimum=None):
     declared = load_yaml(bom).get("parts") or []
     deck_values = module.passives_from_deck(
         deck.read_text(encoding="utf-8", errors="replace"))
+    if required is None:
+        required = set(REQUIRED_BOM_REFS.get(case_dir.name, ())
+                       if minimum is None else ())
+    else:
+        required = set(required)
     reconciled = 0
     for part in declared:
         ref = str(part.get("ref") or "").upper()
         raw = str(part.get("value") or "")
         if ref not in deck_values or not raw:
+            if ref in required:
+                problems.append(
+                    f"{case_dir.name}: required BOM ref {ref} is missing "
+                    "from the deck's parseable passives -- a braced or "
+                    "renamed timing component leaves the comparison "
+                    "silently, which is how a 700k RB shipped behind a "
+                    "green gate three times.")
+                required.discard(ref)
             continue
+        required.discard(ref)
         try:
             want = module.spice_value(raw)
         except ValueError:
@@ -616,6 +661,11 @@ def deck_bom_problems(case_dir, problems, minimum=None):
                 "measurements gate a circuit nobody specified.")
             continue
         reconciled += 1
+    for ref in sorted(required):
+        problems.append(
+            f"{case_dir.name}: required BOM ref {ref} is no longer declared "
+            "in parts.yaml; the named reconciliation population may not "
+            "shrink silently.")
     if minimum is None and case_dir.name not in MINIMUM_BOM_PASSIVES:
         problems.append(
             f"{case_dir.name}: no deck/BOM reconciliation floor is declared "
@@ -840,14 +890,15 @@ def self_test():
     # value no document in the repository names.
     import tempfile as _tempfile
 
-    def bom_probe(deck_text, bom_text, minimum=0):
+    def bom_probe(deck_text, bom_text, minimum=0, required=()):
         with _tempfile.TemporaryDirectory() as tmp:
             case = Path(tmp) / "case"
             case.mkdir()
             (case / "netlist.cir").write_text(deck_text, encoding="utf-8")
             (case / "parts.yaml").write_text(bom_text, encoding="utf-8")
             problems = []
-            count = deck_bom_problems(case, problems, minimum=minimum)
+            count = deck_bom_problems(case, problems, minimum=minimum,
+                                      required=required)
             return problems, count
 
     DECK = "RA vcc disch 100k\nRB disch nct 680k\nCT nct 0 1u\n"
@@ -950,6 +1001,41 @@ def self_test():
         deck_param_problems(case, untabled)
     cases.append(("a benchmark with no parameter rule table is caught", any(
         "no deck-parameter rule table" in p for p in untabled)))
+    # THE FLOOR AND THE NAMED REFS, round 17's two population fixes.
+    _empty_rules = []
+    _saved = DECK_PARAM_RULES["buck-3v3"]
+    try:
+        DECK_PARAM_RULES["buck-3v3"] = ()
+        deck_param_problems(ROOT / "benchmarks" / "buck-3v3", _empty_rules)
+    finally:
+        DECK_PARAM_RULES["buck-3v3"] = _saved
+    cases.append(("an emptied rule table trips the parameter floor", any(
+        "below the floor" in p for p in _empty_rules)))
+    with _tempfile.TemporaryDirectory() as tmp:
+        case = Path(tmp) / "floorless-benchmark"
+        case.mkdir()
+        (case / "netlist.cir").write_text(".param X=1" + chr(10),
+                                          encoding="utf-8")
+        (case / "parts.yaml").write_text("parts: []" + chr(10),
+                                        encoding="utf-8")
+        _floorless = []
+        _saved_rules = DECK_PARAM_RULES.get("floorless-benchmark")
+        DECK_PARAM_RULES["floorless-benchmark"] = ()
+        try:
+            deck_param_problems(case, _floorless)
+        finally:
+            del DECK_PARAM_RULES["floorless-benchmark"]
+    cases.append(("a benchmark with no parameter floor is caught", any(
+        "no deck-parameter floor" in p for p in _floorless)))
+    braced, _bc = bom_probe(
+        DECK.replace("RA vcc disch 100k", "RA vcc disch {RAVAL}"), BOM,
+        required=("RA",))
+    cases.append(("a required ref hidden behind a brace is caught by name", any(
+        "required BOM ref RA is missing" in p for p in braced)))
+    undeclared_ref, _uc = bom_probe(DECK, BOM, required=("RZ",))
+    cases.append(("a required ref dropped from parts.yaml is caught", any(
+        "required BOM ref RZ is no longer declared" in p
+        for p in undeclared_ref)))
 
     failures = 0
     for name, ok in cases:
