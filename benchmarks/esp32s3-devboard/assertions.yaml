@@ -151,7 +151,7 @@ assertions:
 
   - id: A9_strapping_dc_state
     not_mechanisable: >-
-      a boot-mode truth table over pull-up/pull-down states, not a numeric relation. Mechanising it needs the strap defaults encoded in the part record, which they are not (AMB-124 territory).
+      a boot-mode truth table over pull-up/pull-down states, not a numeric relation. Mechanising it needs the strap defaults encoded in the part record, which they are not (AMB-127; an earlier revision routed this to AMB-124, the corpus-augmentation issue).
     kind: strapping-node DC solution at EN rising edge (details in pin-plan.md)
     expr: "straps sample to {GPIO0:1, GPIO45:0, GPIO46:0, GPIO3:float} unless BOOT held"
     inputs:

@@ -30,7 +30,12 @@ values for the same design, which is the one thing "IR v0" had to nail down.
    that rule was unimplementable for precisely the objects most likely to
    differ between implementations.
 3. No insignificant whitespace — `,` and `:` separators and nothing else.
-4. Non-ASCII characters emitted literally, never `\u`-escaped.
+4. Non-ASCII characters emitted literally, never `\u`-escaped. Strings are
+   Unicode **scalar values** only: a lone surrogate has no UTF-8 bytes, so
+   it is an error — never a `\u` escape (which would violate this clause)
+   and never a silent U+FFFD substitution (which would hash a different
+   document). Stated since round 17; the reference implementation had
+   rejected it only by accident of `UnicodeEncodeError`.
 5. `NaN` and `Infinity` are not representable and are an error.
 6. Arrays keep their order. Order is meaning here; each array's sort rule is
    stated on its own field and is not the encoder's business.

@@ -459,7 +459,8 @@ and no net-tie, star-ground, isolation-barrier or chassis/earth bug at all.
 The consequence is worth stating before AMB-61 rather than after: **AMB-37's rules GA-1…GA-17 and
 diagnostics RHO4001…RHO4010 will not be exercised by the AC2 gate.** Passing AC2 will say nothing
 about whether the ground-architecture checker works. Closing that needs corpus augmentation, which
-is AMB-35's territory, not a reclassification.
+is AMB-124's scope (an earlier revision routed it to AMB-35 — an issue that had already closed,
+which is precisely why AMB-124 was opened to own it), not a reclassification.
 
 ### Risks carried into AMB-61
 

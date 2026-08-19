@@ -77,9 +77,10 @@ assertions:
                                #   excluded partly on a "no bias current" argument
                                #   that applies here too. Tightening this to the
                                #   deck's reachable range would make it a real
-                               #   regression check; that is AMB-124 territory,
-                               #   because it needs the comparator model the part
-                               #   record cannot yet express.
+                               #   regression check; that is AMB-127 (an earlier
+                               #   revision said AMB-124, which is corpus
+                               #   augmentation), because it needs the comparator
+                               #   model the part record cannot yet express.
                                #   0.25 uA is the
                                #   GUARANTEED THRES max; an earlier revision used
                                #   0.5 uA, obtained by inverting the datasheet's

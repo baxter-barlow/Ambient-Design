@@ -243,6 +243,18 @@ def _encode(node) -> str:
     if isinstance(node, (int, float)):
         return _canonical_number(node)
     if isinstance(node, str):
+        # LONE SURROGATES ARE AN ERROR, not an accident. The profile is
+        # silent-until-round-17 on them; a Python lone surrogate only failed
+        # later at .encode("utf-8") (a UnicodeEncodeError that happens to be
+        # a ValueError), while a conforming JS implementation would either
+        # \u-escape it (violating clause 4: the bytes are the text) or
+        # silently substitute U+FFFD and hash a different document. Clause 4
+        # now states it: a string must be Unicode scalar values only.
+        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in node):
+            raise ValueError(
+                "lone surrogates are not representable in "
+                "rhoform-canonical-json/1 (clause 4: strings are Unicode "
+                "scalar values; a surrogate has no UTF-8 bytes)")
         return json.dumps(node, ensure_ascii=False)
     if isinstance(node, list):
         return "[" + ",".join(_encode(item) for item in node) + "]"
@@ -658,6 +670,13 @@ def self_test() -> int:
         rejected = True
     checks.append(("an integer beyond the double grid is rejected, "
                    "not rounded", rejected))
+    surrogate_rejected = False
+    try:
+        canonical_bytes({"v": "bad \udcff string"})
+    except ValueError as exc:
+        surrogate_rejected = "surrogate" in str(exc)
+    checks.append(("a lone surrogate is rejected by rule, not by accident",
+                   surrogate_rejected))
 
     # THE README'S PUBLISHED DIGEST, held to the committed header through
     # readme_digest_problems() with injectable inputs.

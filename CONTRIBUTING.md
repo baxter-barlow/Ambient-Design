@@ -35,7 +35,9 @@ The DCO workflow checks every pull-request commit.
 
 ## Verification
 
-`make all` runs every gate the repository has -- layout and policy, toolchain
+`make all` runs every local gate the repository has (the one stated
+exception: checks.yml's pinned-KiCad digest resolution needs network and is
+CI-only, as the Makefile's own header records) -- layout and policy, toolchain
 pins, schema validation, part-data lint, IR hashing, corpus and classification,
 the bake-off and grammar suites, the eval-harness tests, benchmark simulation,
 the golden-file harness, and the gate-coverage measurement. Run it before every
