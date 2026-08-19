@@ -4,7 +4,7 @@
   "part_id": "vishay/crcw040210k0fked",
   "manufacturer": "Vishay",
   "mpn": "CRCW040210K0FKED",
-  "description": "10.0 kohm +/-1% thick film chip resistor, 0402, 0.10 W, +/-100 ppm/K",
+  "description": "10.0 kohm +/-1% thick film chip resistor, 0402, 0.063 W standard / 0.10 W extended, +/-100 ppm/K",
   "lifecycle": "active",
   "package": {
     "name": "0402",
@@ -12,35 +12,100 @@
     "footprint_ref": "rho:R_0402_1005Metric"
   },
   "pins": [
-    { "name": "1", "numbers": ["1"], "role": "passive", "description": "Terminal 1. A chip resistor is symmetric; terminal order carries no meaning." },
-    { "name": "2", "numbers": ["2"], "role": "passive", "description": "Terminal 2." }
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive",
+      "description": "Terminal 1. A chip resistor is symmetric; terminal order carries no meaning."
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive",
+      "description": "Terminal 2."
+    }
   ],
   "parameters": {
-    "resistance": { "unit": "kohm", "min": 9.9, "typ": 10.0, "max": 10.1 },
-    "resistance_tolerance": { "unit": "1", "min": -0.01, "max": 0.01 },
-    "temperature_coefficient": { "unit": "ppm/K", "min": -100, "max": 100 }
+    "resistance": {
+      "unit": "kohm",
+      "min": 9.9,
+      "typ": 10.0,
+      "max": 10.1
+    },
+    "resistance_tolerance": {
+      "unit": "1",
+      "min": -0.01,
+      "max": 0.01
+    },
+    "temperature_coefficient": {
+      "unit": "ppm/K",
+      "min": -100,
+      "max": 100
+    }
   },
   "ratings": {
     "recommended": {
       "power_dissipation": {
         "unit": "W",
+        "max": 0.063,
+        "conditions": {
+          "ta": {
+            "unit": "degC",
+            "typ": 70
+          },
+          "note": "STANDARD operation class: max dR/R <=1% at 1000 h, <=2% at 8000 h. The headline P70 figure on page 1 is the EXTENDED class, recorded separately below."
+        }
+      },
+      "power_dissipation_extended": {
+        "unit": "W",
         "max": 0.1,
-        "conditions": { "ta": { "unit": "degC", "typ": 70 } }
+        "conditions": {
+          "ta": {
+            "unit": "degC",
+            "typ": 70
+          },
+          "note": "EXTENDED operation class: the higher rating is bought with a relaxed drift specification -- max dR/R <=2% at 1000 h and NO 8000 h class -- a material distinction for a +/-1% part."
+        }
       },
       "operating_voltage": {
         "unit": "V",
-        "max": 75,
-        "conditions": { "note": "AC RMS or DC, whichever applies" }
+        "max": 50,
+        "conditions": {
+          "note": "AC RMS or DC, whichever applies. STANDARD operation class; see power_dissipation."
+        }
       },
-      "ambient_temperature": { "unit": "degC", "min": -55, "max": 155 },
+      "operating_voltage_extended": {
+        "unit": "V",
+        "max": 75,
+        "conditions": {
+          "note": "AC RMS or DC, whichever applies. EXTENDED operation class; see power_dissipation_extended."
+        }
+      },
+      "ambient_temperature": {
+        "unit": "degC",
+        "min": -55,
+        "max": 155
+      },
       "insulation_voltage": {
         "unit": "V",
         "max": 100,
-        "conditions": { "duration": { "unit": "min", "typ": 1 } }
+        "conditions": {
+          "duration": {
+            "unit": "min",
+            "typ": 1
+          }
+        }
       }
     },
     "abs_max": {
-      "film_temperature": { "unit": "degC", "max": 155 }
+      "film_temperature": {
+        "unit": "degC",
+        "max": 155
+      }
     }
   },
   "sources": [
@@ -89,12 +154,12 @@
     },
     "/ratings": {
       "source_id": "vishay-dcrcw-e3-20035",
-      "locator": "TECHNICAL SPECIFICATIONS table, D10/CRCW0402 e3 column",
+      "locator": "TECHNICAL SPECIFICATIONS table, D10/CRCW0402 e3 column, page 1; Maximum Resistance Change at Rated Dissipation and Operating Voltage table, page 2 (standard vs extended operation)",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "Rated dissipation is P70 - 0.10 W at 70 C ambient, not at 25 C - so the ambient condition is recorded with it. Derating above 70 C follows the datasheet's derating curve, which this record does not transcribe."
+      "note": "Page 1's headline row (0.10 W P70, 75 V Umax) carries footnote (2) to the page-2 standard/extended table: STANDARD operation for this size is 0.063 W / 50 V at max dR/R <=1%/1000 h, and 0.10 W / 75 V is the EXTENDED class at <=2%/1000 h with no 8000 h spec. Both classes are transcribed, labelled, and the safe class is the default-named one. Rated dissipation is P70 - at 70 C ambient, not 25 C - so the ambient condition is recorded with it; derating above 70 C follows the datasheet's curve, which this record does not transcribe. An earlier revision of this record shipped the extended figures as the unconditional recommended ratings: a budget checker would have over-rated the part 1.6x with no drift caveat."
     }
   },
   "license_class": "vendor-public",
-  "notes": "This record exists to exercise the schema's MINIMAL FLOOR: the roughly 80 jellybean passives of the D5 seed library look like this. It carries no modes (a passive draws no supply current), no per-pin capability, no units, and no per-pin characteristics - and it is still a complete, checkable record. A schema that forced integrated-circuit structure onto a chip resistor would make the bulk of the seed library unauthorable, so the absence of those fields here is the point.\n\nThe 0.10 W / 75 V figures are specific to the e3 series in 0402 and were read from the live datasheet; they differ from the 1/16 W and 50 V that older CRCW generations are often quoted at, which is exactly the kind of remembered-but-wrong value this record avoids by citing the current document.\n\nBenchmark (c) specifies Yageo RC-series 0402 resistors rather than this Vishay part. Populating the exact benchmark MPNs is AMB-58's scope; this record demonstrates the shape with a part whose datasheet was retrievable and hashable at authoring time."
+  "notes": "This record exists to exercise the schema's MINIMAL FLOOR: the roughly 80 jellybean passives of the D5 seed library look like this. It carries no modes (a passive draws no supply current), no per-pin capability, no units, and no per-pin characteristics - and it is still a complete, checkable record. A schema that forced integrated-circuit structure onto a chip resistor would make the bulk of the seed library unauthorable, so the absence of those fields here is the point.\n\nPower and voltage are recorded in BOTH of the datasheet's operation classes: standard (0.063 W / 50 V, the tighter <=1%/1000 h drift class) under the default names, extended (0.10 W / 75 V, <=2%/1000 h, no 8000 h class) under *_extended. An earlier revision shipped only the extended figures, unconditionally, and its notes attributed the 0.063 W / 50 V figures to \"older CRCW generations\" -- the live document publishes them as this series' STANDARD class, so that sentence was the remembered-but-wrong value this record claims to avoid. Round 15 caught it against the fetched datasheet.\n\nBenchmark (c) specifies Yageo RC-series 0402 resistors rather than this Vishay part. Populating the exact benchmark MPNs is AMB-58's scope; this record demonstrates the shape with a part whose datasheet was retrievable and hashable at authoring time."
 }
