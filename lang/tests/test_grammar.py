@@ -864,5 +864,102 @@ class Conformance(unittest.TestCase):
                 self.assertTrue(self._accepts(mutated[0]))
 
 
+def _every_literal(node) -> set[str]:
+    """Every literal in a production tree, word-shaped or not. `_literals`
+    above filters to keyword-shaped text and so cannot see `~`."""
+    found: set[str] = set()
+    if isinstance(node, Lit):
+        found.add(node.text)
+    for child in getattr(node, "items", ()) or getattr(node, "options", ()) or ():
+        found |= _every_literal(child)
+    inner = getattr(node, "item", None)
+    if inner is not None:
+        found |= _every_literal(inner)
+    return found
+
+
+class Attribution(unittest.TestCase):
+    """LICENSES.md attributes named surface constructs to atopile, and
+    requirement L2 makes that attribution an obligation rather than prose.
+    Until AMB-123 round 14 the sentence was read by no gate, so it could name
+    constructs the grammar no longer had -- or the grammar could keep them
+    while someone reworded the sentence away -- with everything green."""
+
+    SENTENCE = re.compile(
+        r"principally the `([a-z_]+)` and `([a-z_]+)` keywords and the "
+        r"`(.)` connection operator")
+
+    def test_licenses_md_names_constructs_the_grammar_actually_has(self):
+        text = (LANG.parent / "LICENSES.md").read_text(encoding="utf-8")
+        found = self.SENTENCE.search(text)
+        self.assertIsNotNone(
+            found,
+            "LICENSES.md no longer states the atopile attribution in the form "
+            "this test reads. Requirement L2 says 'Adopt atopile's MIT-licensed "
+            "surface with public attribution'; name the adopted constructs.")
+        keyword_a, keyword_b, operator = found.groups()
+        literals: set[str] = set()
+        for _, _, node in RULES:
+            literals |= _every_literal(node)
+        for keyword in (keyword_a, keyword_b):
+            with self.subTest(keyword=keyword):
+                self.assertIn(
+                    keyword, KEYWORDS,
+                    f"LICENSES.md attributes the `{keyword}` keyword to "
+                    "atopile but the frozen grammar does not reserve it")
+        self.assertIn(
+            operator, literals,
+            f"LICENSES.md attributes the `{operator}` connection operator to "
+            "atopile but no production in the frozen grammar uses it")
+
+    def test_notice_points_at_the_attribution(self):
+        """NOTICE's atopile entry defers to LICENSES.md; the pointer must
+        keep resolving to a section that exists."""
+        notice = (LANG.parent / "NOTICE").read_text(encoding="utf-8")
+        self.assertIn("atopile", notice)
+        self.assertIn('"Attribution" section of LICENSES.md', notice)
+        licenses = (LANG.parent / "LICENSES.md").read_text(encoding="utf-8")
+        self.assertIn("## Attribution", licenses)
+
+
+class ReservedSetDocumentation(unittest.TestCase):
+    """lang/README.md documents what FREE_NAME rejects. It described only the
+    24 keywords while the grammar enforces 32 -- the 8 RESERVED_FUTURE words
+    went unmentioned, so a reader auditing the freeze against the README
+    found an 8-word discrepancy and no explanation."""
+
+    SENTENCE = re.compile(
+        r"cannot be any of (\d+) words: the (\d+) keywords the grammar "
+        r"actually uses plus (\d+) words reserved for v1 \(([^)]*)\)")
+
+    def test_the_readme_states_the_full_free_name_exclusion(self):
+        collapsed = re.sub(r"\s+", " ",
+                           (LANG / "README.md").read_text(encoding="utf-8"))
+        found = self.SENTENCE.search(collapsed)
+        self.assertIsNotNone(
+            found,
+            "lang/README.md no longer documents the FREE_NAME exclusion in "
+            "the form this test reads; the counts and the v1 word list must "
+            "stay published.")
+        total, keywords, future = (int(found.group(n)) for n in (1, 2, 3))
+        self.assertEqual(keywords, len(KEYWORDS))
+        self.assertEqual(future, len(RESERVED_FUTURE))
+        self.assertEqual(total, len(KEYWORDS) + len(RESERVED_FUTURE))
+        listed = sorted(word.strip().strip("`")
+                        for word in found.group(4).split(","))
+        self.assertEqual(listed, sorted(RESERVED_FUTURE))
+
+    def test_free_name_actually_excludes_both_tuples(self):
+        """The artifact's FREE_NAME lookahead is the enforcement; the README
+        numbers describe it, so the two must name the same set."""
+        artifact = (LANG / "grammar" / "rhoform.lark").read_text(
+            encoding="utf-8")
+        found = re.search(r"FREE_NAME: /\(\?!\(\?:([a-z_|]+)\)", artifact)
+        self.assertIsNotNone(found, "FREE_NAME's exclusion list is gone from "
+                             "the Lark artifact")
+        self.assertEqual(sorted(found.group(1).split("|")),
+                         sorted(set(KEYWORDS) | set(RESERVED_FUTURE)))
+
+
 if __name__ == "__main__":
     unittest.main()

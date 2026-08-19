@@ -52,6 +52,15 @@ of both candidates' keywords because the bake-off needed one, and carrying the
 loser's vocabulary into the frozen language would reserve a useful identifier
 for a syntax that no longer exists.
 
+A name, then, cannot be any of 32 words: the 24 keywords the grammar actually
+uses plus 8 words reserved for v1 (`component`, `else`, `for`, `from`, `if`,
+`import`, `in`, `interface`). Reserving a word later is a breaking syntax
+change and E1 forbids those, so they are blocked from `FREE_NAME` now despite
+appearing in no rule. Earlier revisions of this section described only the
+keywords, so a reader counting what `FREE_NAME` rejects got 24 where the
+grammar enforces 32; a test now reconciles all three counts and the listed
+words against the grammar source.
+
 ## The bake-off that decided it
 
 ```
