@@ -104,23 +104,6 @@ jobs:
         # membership, sort order, licence containment. Stdlib only.
         run: python3 parts/lint-part-data.py
 
-      - name: Install every gate's dependencies for the coverage measurement
-        # The coverage gate RUNS each gate's --self-test, so it needs what
-        # those gates need. Without this the job installed jsonschema only,
-        # four gates raised GateUnavailable, and every blanked site scored as
-        # caught -- the gate reported perfect coverage in CI and told the
-        # maintainer to pin the fabricated zeros.
-        run: python3 -m pip install PyYAML==6.0.2 lark==1.3.0
-
-      - name: Gates are pinned by their own self-tests
-        # Blanks each report site in each gate and re-runs that gate's
-        # --self-test. A site that survives is a check deletable with
-        # everything green -- the most common finding across thirteen audit
-        # rounds. Ceilings are measured values and may only go down.
-        run: |
-          python3 tests/meta/check-gate-coverage.py --self-test
-          python3 tests/meta/check-gate-coverage.py
-
   bakeoff:
     name: Syntax bake-off
     runs-on: ubuntu-24.04
@@ -298,6 +281,28 @@ jobs:
         run: |
           bash tests/benchmarks/run-sim.sh --self-test
           bash tests/benchmarks/run-sim.sh
+      - name: Install every gate's dependencies for the coverage measurement
+        # The coverage gate RUNS each gate's --self-test, so it must live in
+        # the one job that has the pinned ngspice: check-corners' baseline
+        # hard-requires the simulator, and an unavailable measurement is not
+        # a measurement. It sat in the schemas job -- which installs no
+        # ngspice -- so the committed CI could only ever exit 2 there
+        # (round 16 found the job structurally unable to pass). git is for
+        # check-layout's sandbox repositories and the mutation cache's
+        # tree digest; jsonschema and lark are what validate-schemas and the
+        # grammar-reading gates need. Without all of them a baseline raises
+        # GateUnavailable and every blanked site would score as caught.
+        run: |
+          apt-get install -y --no-install-recommends git python3-pip
+          python3 -m pip install --break-system-packages jsonschema==4.26.0 lark==1.3.0
+      - name: Gates are pinned by their own self-tests
+        # Blanks each report site in each gate and re-runs that gate's
+        # --self-test. A site that survives is a check deletable with
+        # everything green -- the most common finding across thirteen audit
+        # rounds. Ceilings are measured values and may only go down.
+        run: |
+          python3 tests/meta/check-gate-coverage.py --self-test
+          python3 tests/meta/check-gate-coverage.py
 
   golden:
     name: Golden files
