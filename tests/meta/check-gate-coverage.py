@@ -112,7 +112,7 @@ CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
     "parts/lint-part-data.py": (30, 5),
-    "tests/benchmarks/check-assertions.py": (25, 3),
+    "tests/benchmarks/check-assertions.py": (29, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (28, 15),
@@ -125,7 +125,7 @@ CEILINGS = {
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
-    "tests/meta/check-gate-coverage.py": (12, 6),
+    "tests/meta/check-gate-coverage.py": (13, 6),
     "tests/schemas/validate-schemas.py": (11, 2),
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
@@ -163,7 +163,7 @@ OWNERS = {
     "tests/benchmarks/check-hand-assertions.py": (
         {"problems"}, {"cases", "parts", "shape"}),
     "tests/benchmarks/derive-555-windows.py": (
-        {"problems"}, set()),
+        {"problems"}, {"cases"}),
     "tests/corpus/check-classification.py": (
         {"problems"}, {"lines", "checks", "results", "alone_fails"}),
     "tests/corpus/check-corpus.py": (
@@ -273,6 +273,29 @@ def makefile_gates(text=None) -> list[str]:
     return sorted(found)
 
 
+def indirection_problems(text=None):
+    """Recipe lines this census cannot parse are failures, not blind spots.
+
+    A single-`$` make expansion (`python3 $(GATE)`) hides an invocation from
+    every parser above; round 17 combined one with the no-op-prefix hole to
+    run a planted gate under make all while it sat in no coverage bucket.
+    `$$` -- make's escape for a literal shell `$` -- is fine and skipped.
+    """
+    if text is None:
+        text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    problems = []
+    for line in _live_makefile_lines(_reachable_from_all(text)):
+        if not line.startswith("\t"):
+            continue
+        if re.search(r"(?<!\$)\$[({]", line):
+            problems.append(
+                f"Makefile recipe line {line.strip()!r} uses a make-variable "
+                "expansion the gate census cannot see through. Spell gate "
+                "invocations literally; indirection is how a gate runs "
+                "while sitting in no coverage bucket.")
+    return problems
+
+
 def _reachable_from_all(text):
     """The Makefile text scoped to targets reachable from `all`.
 
@@ -298,8 +321,10 @@ def _reachable_from_all(text):
         if header is None:
             continue
         current = []
-        prereqs = [word for word in header.group(2).split()
-                   if not word.startswith("#")]
+        # Everything after a `#` on a rule header is comment: the old filter
+        # dropped only the literal `#` token, so `all: check # sim golden`
+        # kept sim and golden "reachable" while make ran neither (round 17).
+        prereqs = header.group(2).split("#", 1)[0].split()
         for name in header.group(1).split():
             entry = targets.setdefault(name, ([], []))
             entry[0].extend(prereqs)
@@ -337,7 +362,12 @@ def _live_makefile_lines(text):
             stripped = stripped[1:].lstrip()
         if stripped.startswith("#"):
             continue
-        yield line
+        # The shell stops reading at an unquoted `#`, so an invocation that
+        # only appears after one -- `: # bash tests/...` -- executes nothing.
+        # Yield only the pre-comment portion; a `#` at token start ends the
+        # command (round 17: a colon-comment recipe kept a gate "invoked"
+        # while make ran a no-op).
+        yield re.split(r"(?:^|\s)#", line)[0]
 
 
 def uncollected_tests(text=None) -> list[str]:
@@ -530,7 +560,7 @@ def _machinery_salt() -> str:
     digest = hashlib.sha256()
     digest.update(SHELL_SITE.pattern.encode("utf-8"))
     for fn in (report_sites, shell_report_sites, blank_site, blank_shell_site,
-               surviving_sites, _tree_digest, _cache_key):
+               surviving_sites, _tree_digest, _cache_key, _tool_identity):
         digest.update(inspect.getsource(fn).encode("utf-8"))
     return digest.hexdigest()
 
@@ -580,10 +610,29 @@ def _tree_digest_cached():
     return _TREE_DIGEST_MEMO[0]
 
 
+def _tool_identity() -> str:
+    """The interpreter and simulator the measurement ran under.
+
+    A mutation outcome can depend on the tools as much as on the tree: a
+    local interpreter swap (or an ngspice upgrade, for the gates whose
+    self-tests simulate) changes what survives, and the key ignored both
+    (round 17). Unresolvable tool versions serialize as their absence,
+    which still keys distinctly from any resolved version.
+    """
+    try:
+        ngspice = subprocess.run(["ngspice", "--version"],
+                                 capture_output=True, text=True,
+                                 timeout=30).stdout.splitlines()[:2]
+    except (OSError, subprocess.TimeoutExpired, IndexError):
+        ngspice = ["<no ngspice>"]
+    return sys.version + "|" + " ".join(ngspice)
+
+
 def _cache_key(source: str, report_owners: set[str], tree) -> str:
     import hashlib
     return hashlib.sha256(
-        (source + repr(sorted(report_owners)) + str(tree) + _machinery_salt())
+        (source + repr(sorted(report_owners)) + str(tree)
+         + _tool_identity() + _machinery_salt())
         .encode("utf-8")).hexdigest()
 
 
@@ -763,8 +812,9 @@ def census(problems: list[str], gates=None, ceilings=None,
     # mutant is on disk. .NOTPARALLEL is the isolation boundary, and round 16
     # found it pinned by nothing.
     if gates is None:
-        problems.extend(serial_problems(
-            (ROOT / "Makefile").read_text(encoding="utf-8")))
+        makefile_text = (ROOT / "Makefile").read_text(encoding="utf-8")
+        problems.extend(serial_problems(makefile_text))
+        problems.extend(indirection_problems(makefile_text))
 
     # THE REVERSE DIRECTION, which round 15 demonstrated was open end to end:
     # deleting a gate's invocations from the Makefile and CI left the gate
@@ -962,6 +1012,42 @@ def self_test() -> int:
                       for x in serial_problems("all: check\n"))))
     cases.append(("a Makefile declaring .NOTPARALLEL is not reported",
                   not serial_problems(".NOTPARALLEL:\nall: check\n")))
+    cases.append(("a commented-out prerequisite is not reachable",
+                  makefile_gates("all: alpha # beta\n\nalpha:\n"
+                                 "\tbash tests/structure/check-layout.sh\n\n"
+                                 "beta:\n\tbash tests/golden/run.sh\n")
+                  == ["tests/structure/check-layout.sh"]))
+    cases.append(("a shell-comment recipe line is not an invocation",
+                  makefile_gates("all: a\n\na:\n"
+                                 "\t: # bash tests/golden/run.sh\n") == []))
+    cases.append(("a make-variable invocation is reported, not invisible",
+                  any("cannot see through" in x for x in indirection_problems(
+                      "all: a\n\na:\n\tpython3 $(GATE)\n"))))
+    cases.append(("an escaped shell dollar is not flagged as indirection",
+                  indirection_problems(
+                      "all: a\n\na:\n\tgit diff $$(git merge-base X Y)\n")
+                  == []))
+    # THE WIRING: round 17 deleted the serial_problems extend with all cases
+    # green -- `.extend` is not a census site. A planted stub must surface
+    # through the real census path.
+    _real_serial = globals()["serial_problems"]
+    globals()["serial_problems"] = lambda *_a, **_k: ["planted-serial"]
+    try:
+        _wired = []
+        census(_wired)
+        cases.append(("the serial guard is WIRED into the census",
+                      "planted-serial" in _wired))
+    finally:
+        globals()["serial_problems"] = _real_serial
+    _real_ind = globals()["indirection_problems"]
+    globals()["indirection_problems"] = lambda *_a, **_k: ["planted-indirection"]
+    try:
+        _wired2 = []
+        census(_wired2)
+        cases.append(("the indirection check is WIRED into the census",
+                      "planted-indirection" in _wired2))
+    finally:
+        globals()["indirection_problems"] = _real_ind
     cases.append(("a gate in a target unreachable from `all` is not counted",
                   makefile_gates("all: alpha\n\nalpha:\n"
                                  "\tbash tests/structure/check-layout.sh\n\n"
@@ -1047,6 +1133,9 @@ def self_test() -> int:
         # The key covers the WHOLE tracked tree, not just the gate: a
         # self-test's fixtures live outside the gate file, and round 15
         # served a stale measurement through exactly that gap.
+        cases.append(("the cache key covers the tool identity",
+                      "ngspice" in _tool_identity() or "<no ngspice>" in
+                      _tool_identity()))
         cases.append(("a changed tree digest misses the cache",
                       _cache_key("x", set(), "tree-a")
                       != _cache_key("x", set(), "tree-b")))

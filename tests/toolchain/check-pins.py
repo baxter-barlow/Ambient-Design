@@ -209,11 +209,21 @@ def ci_command_problems(required, workflow_text) -> list[str]:
             f"only {len(required)} command(s) were read out of the Makefile, "
             f"below the floor of {MINIMUM_CI_COMMANDS}. An empty comparison "
             "reports no missing command, so this passes by finding nothing.")
+    lines = {line.strip() for line in workflow_text.splitlines()}
     for command in required:
-        if command not in workflow_text:
+        # EXACT LINE EQUALITY, not substring. The old skip-list enumerated
+        # `echo ` and `if false`, so `: cmd`, `true cmd` and `cmd || true`
+        # all counted as the command running (round 17) -- every one a line
+        # that contains the command and does not execute it, or swallows its
+        # failure. A required command is live only as a whole line of its
+        # own; prefixes, suffixes and chaining are all spellings of "not
+        # actually gating".
+        if command not in lines:
             problems.append(
-                f"no live CI job runs {command!r}. A gate that runs only in "
-                "`make all` is not enforced on a pull request.")
+                f"no live CI step runs {command!r} as its own command line. "
+                "A gate that runs only in `make all` is not enforced on a "
+                "pull request, and a prefixed/suffixed spelling is not "
+                "running it.")
     return problems
 
 
@@ -887,6 +897,57 @@ def self_test():
     cases.append(("an unrecognised probe answer is not trusted",
                   tokenizer_fingerprint_outcome("e", "p", run=lambda a: _Fake(
                       "everything is fine"))[0] == "unverifiable"))
+    # THE PARITY PROPERTIES, round 17's holes, each direction.
+    cases.append(("a no-op-prefixed CI line does not satisfy command parity",
+                  any("as its own command line" in x for x in
+                      ci_command_problems(
+                          ["python3 tests/x.py"] * MINIMUM_CI_COMMANDS,
+                          ": python3 tests/x.py\ntrue python3 tests/x.py\n"
+                          "python3 tests/x.py || true"))))
+    cases.append(("an exact CI command line satisfies parity",
+                  not any("as its own command line" in x for x in
+                          ci_command_problems(
+                              ["python3 tests/x.py"] * MINIMUM_CI_COMMANDS,
+                              "python3 tests/x.py"))))
+    _cond = scan_workflow_jobs(
+        {"jobs": {"gates": {"steps": [
+            {"if": "${{ 0 }}", "run": "python3 tests/x.py"}]}}}, "probe.yml")
+    cases.append(("a conditional gate step is reported whatever the spelling",
+                  any("may not run" in x for x in _cond[2])))
+    _condjob = scan_workflow_jobs(
+        {"jobs": {"gates": {"if": "${{ 0 }}", "steps": []}}}, "probe.yml")
+    cases.append(("a conditional gate job is reported whatever the spelling",
+                  any("unconditional by policy" in x for x in _condjob[2])
+                  and _condjob[1] == 0))
+    cases.append(("an unconditional job scans clean and counts live",
+                  scan_workflow_jobs(
+                      {"jobs": {"g": {"steps": [{"run": "python3 x.py"}]}}},
+                      "probe.yml")[1:] == (1, [])))
+    # THE WIRINGS, deletable green in round 17: `+=`/`.extend` are not census
+    # sites, so each is pinned by a planted stub surfacing through the REAL
+    # main() path.
+    import contextlib as _ctx
+    import io as _io
+    _real_ws, _real_cc = whitespace_pin_problems, ci_command_problems
+    globals()["whitespace_pin_problems"] = lambda *_a, **_k: ["planted-ws"]
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _ws_wired = main([])
+    finally:
+        globals()["whitespace_pin_problems"] = _real_ws
+    cases.append(("the whitespace parity check is WIRED into main",
+                  _ws_wired == 1))
+    globals()["ci_command_problems"] = lambda *_a, **_k: ["planted-cc"]
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _cc_wired = main([])
+    finally:
+        globals()["ci_command_problems"] = _real_cc
+    cases.append(("the CI command parity check is WIRED into main",
+                  _cc_wired == 1))
+
     # THE WHITESPACE PIN PARITY, each direction.
     cases.append(("matching whitespace pins reconcile clean",
                   not whitespace_pin_problems(
@@ -963,6 +1024,46 @@ def whitespace_pin_problems(makefile_text=None, policy_text=None):
     return problems
 
 
+def scan_workflow_jobs(document, workflow_name):
+    """(collected run lines, live job count, problems) for one workflow.
+
+    A gate job or gate step is unconditional by policy: `if:` of ANY spelling
+    is reported -- the old check enumerated two literal false-spellings and
+    `if: ${{ 0 }}` skipped a step with everything green (round 17). Run lines
+    are collected comment-stripped and whitespace-normalised for the
+    exact-line parity match in ci_command_problems.
+    """
+    text = ""
+    live = 0
+    problems = []
+    for job_name, job in (document.get("jobs") or {}).items():
+        if not isinstance(job, dict):
+            continue
+        if "if" in job:
+            problems.append(
+                f"{workflow_name}: job {job_name!r} carries an `if:` "
+                f"({str(job.get('if'))!r}). Gate jobs are unconditional by "
+                "policy: any condition is a spelling of 'sometimes this "
+                "does not run'.")
+            continue
+        live += 1
+        for step in (job.get("steps") or []):
+            if not isinstance(step, dict) or not step.get("run"):
+                continue
+            if "if" in step:
+                problems.append(
+                    f"{workflow_name}: a run step in job {job_name!r} "
+                    f"carries an `if:` ({str(step.get('if'))!r}); a "
+                    "conditional gate step is a gate that may not run.")
+                continue
+            for line in str(step["run"]).splitlines():
+                stripped = line.split("#", 1)[0].strip()
+                if not stripped:
+                    continue
+                text += "\n" + " ".join(stripped.split())
+    return text, live, problems
+
+
 def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
@@ -1016,42 +1117,10 @@ def main(argv):
             document = _yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except Exception:
             continue
-        for job_name, job in (document.get("jobs") or {}).items():
-            if not isinstance(job, dict):
-                continue
-            if str(job.get("if", "")).strip().lower() in ("false", "${{ false }}"):
-                missing_jobs.append(
-                    f"{path.name}: job {job_name!r} is disabled with `if: false`, "
-                    "so it defines steps and runs none of them")
-                continue
-            live_jobs += 1
-            for step in (job.get("steps") or []):
-                if not isinstance(step, dict) or not step.get("run"):
-                    continue
-                # STEP-LEVEL `if:` TOO. The fix covered the job level only, so
-                # `if: false` one nesting level down turned any gate off in CI
-                # with make all green -- the property is "the command runs",
-                # and I tested it at the wrong depth.
-                if str(step.get("if", "")).strip().lower() in (
-                        "false", "${{ false }}"):
-                    missing_jobs.append(
-                        f"{path.name}: a step in job {job_name!r} is disabled "
-                        "with `if: false`; its gate runs nowhere")
-                    continue
-                if True:
-                    # STRIP COMMENTS. A substring match over the raw run text
-                    # was satisfied by `true  # was: python3 .../gate.py` --
-                    # the command commented out and the gate still passing. I
-                    # found that by attacking my own check an hour after
-                    # writing it; it is the same substring-instead-of-property
-                    # mistake this file has now made three times.
-                    for line in str(step["run"]).splitlines():
-                        stripped = line.split("#", 1)[0].strip()
-                        # A command inside `echo`, or an `if false;` branch, is
-                        # not a command that runs.
-                        if not stripped or stripped.startswith(("echo ", "if false")):
-                            continue
-                        workflow_text += "\n" + " ".join(stripped.split())
+        text, live, found = scan_workflow_jobs(document, path.name)
+        workflow_text += text
+        live_jobs += live
+        missing_jobs.extend(found)
     required, computed = makefile_commands()
     missing_jobs.extend(ci_command_problems(required, workflow_text))
     for command in computed:
@@ -1059,11 +1128,12 @@ def main(argv):
               "different commit range, so it is matched by job name rather "
               "than by text.")
     if missing_jobs:
-        print("toolchain-pins: FAIL: CI job(s) removed:", file=sys.stderr)
+        # Entries are self-contained sentences; a shared suffix stapled a
+        # jobs-population explanation onto command-parity findings, printing
+        # '..' and a wrong reason (round 17).
+        print("toolchain-pins: FAIL: CI coverage problem(s):", file=sys.stderr)
         for entry in missing_jobs:
-            print(f"  {entry}. A job is what runs a gate; counting `uses:` "
-                  "steps let a whole deleted job be paid for by duplicated "
-                  "steps in the same file.", file=sys.stderr)
+            print(f"  {entry}", file=sys.stderr)
         return 1
 
     short = {name: (action_refs.get(name, 0), floor)
