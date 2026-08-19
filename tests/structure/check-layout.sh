@@ -484,7 +484,11 @@ while IFS= read -r pair; do
   else
     fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
   fi
-  fresh_self=$(python3 "$command" --self-test 2>/dev/null | grep -m1 ": self-test PASS" || true)
+  # Only the pattern-less pairs compare a self-test line; running the
+  # command's --self-test for pattern pairs burned a full self-test run
+  # whose output the branch below then discarded (round 16).
+  fresh_self=""
+  [ -n "$pattern" ] || fresh_self=$(python3 "$command" --self-test 2>/dev/null | grep -m1 ": self-test PASS" || true)
   if [ -z "$fresh" ]; then
     printf 'FAIL: %s prints no PASS summary, so %s is compared to nothing.\n' "${pair##*:}" "${pair%%:*}" >&2
     exit 1
