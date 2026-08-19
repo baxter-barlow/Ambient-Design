@@ -69,11 +69,16 @@ self_test() {
   expect "the root commit is checked when it is the base" \
     1 "DCO failed" "$bare_root" "$bare_root_commit" HEAD
 
+  DCO_EXEMPT_EXTRA="$bare_root_commit" export DCO_EXEMPT_EXTRA
+  expect "a ledgered exemption passes with notice, not silently" \
+    0 "DCO exempt:" "$bare_root" "$bare_root_commit" HEAD
+  unset DCO_EXEMPT_EXTRA
+
   if [ "$failures" -ne 0 ]; then
     printf 'dco: SELF-TEST FAILED: %s case(s)\n' "$failures" >&2
     return 1
   fi
-  printf 'dco: self-test PASS: 6 cases.\n'
+  printf 'dco: self-test PASS: 7 cases.\n'
   return 0
 }
 
@@ -110,6 +115,15 @@ fi
 # through its UI, with no trailer and no way to add one without rewriting the
 # history every later commit is chained to.
 DCO_EXEMPT="199bdcffee2b65b34975b01b7ce47091a141746c"
+# Self-test hook: a commit hash cannot be forged into a throwaway repo, so the
+# exemption BRANCH is exercisable only by injecting a hash. The override is
+# additive-only input to a pass-with-notice path, it announces itself on
+# stdout, and the CI workflows that run this script are SHA-pinned and
+# parity-checked, so it cannot be smuggled into CI silently.
+if [ -n "${DCO_EXEMPT_EXTRA:-}" ]; then
+  printf 'DCO exemption list extended via DCO_EXEMPT_EXTRA (self-test hook)\n'
+  DCO_EXEMPT="$DCO_EXEMPT $DCO_EXEMPT_EXTRA"
+fi
 
 if [ -z "$commits" ]; then
   printf 'DCO check passed: no non-merge commits in range.\n'
