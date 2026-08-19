@@ -116,6 +116,121 @@ class GateUnavailable(Exception):
     """The check could not be performed. Never reported as a pass."""
 
 
+# NOTICE's corpus paragraph publishes five numbers, a named briefest excerpt,
+# and its own recount procedure: "a count of quoted spans of three or more
+# characters over those three fields". The paragraph was wrong once already
+# (83 published for 93, an 11% understatement of the third-party content), and
+# a published procedure nobody runs is the parts-paragraph mistake with a
+# different noun -- so this gate runs it. The parts paragraph two sections
+# down in NOTICE is held by parts/lint-part-data.py the same way.
+EXCERPT_FIELDS = ("evidence", "symptom", "root_cause")
+EXCERPT_SPAN = re.compile(r'"([^"]{3,})"')
+# What NOTICE means by a "shorter fragment": at most this many words. Stated
+# as a constant because it is the predicate that makes NOTICE's "six" true;
+# change either only with the other.
+FRAGMENT_MAX_WORDS = 3
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                "eleven": 11, "twelve": 12}
+
+
+def excerpt_census(document):
+    """(per-field span counts, ids holding at least one span, spans sorted so
+    [0] is the briefest). A span is NOTICE's own predicate: a double-quoted
+    run of three or more characters in one of the three excerpt fields."""
+    counts = {field: 0 for field in EXCERPT_FIELDS}
+    spanned, spans = set(), []
+    for bug in document.get("bugs") or []:
+        if not isinstance(bug, dict):
+            continue
+        for field in EXCERPT_FIELDS:
+            text = bug.get(field)
+            for found in EXCERPT_SPAN.finditer(text if isinstance(text, str) else ""):
+                counts[field] += 1
+                spanned.add(bug.get("id"))
+                spans.append((len(found.group(1)), str(bug.get("id")), found.group(1)))
+    return counts, spanned, sorted(spans)
+
+
+def notice_problems(document, notice_text):
+    """Hold NOTICE's corpus-excerpt paragraph to the corpus itself."""
+    problems = []
+    if notice_text is None:
+        problems.append("NOTICE is missing")
+        return problems
+    collapsed = re.sub(r"\s+", " ", notice_text)
+    counts, spanned, spans = excerpt_census(document)
+    total = sum(counts.values())
+    entries = len(document.get("bugs") or [])
+
+    found = re.search(
+        r"Contains (\d+) short verbatim excerpts, spanning all (\d+) entries",
+        collapsed)
+    if found is None:
+        problems.append(
+            "NOTICE no longer states its excerpt total in the form this gate "
+            f"reads. Publish: {total} excerpts spanning all {entries} entries.")
+    elif (int(found.group(1)), int(found.group(2))) != (total, entries) \
+            or len(spanned) != entries:
+        problems.append(
+            f"NOTICE says {found.group(1)} excerpts spanning all "
+            f"{found.group(2)} entries; the corpus gives {total} span(s) over "
+            f"{len(spanned)} of {entries} entries.")
+
+    found = re.search(
+        r"The count is (\d+) in `evidence:`, (\d+) in `symptom:` and "
+        r"(\d+) in `root_cause:`", collapsed)
+    if found is None:
+        problems.append(
+            "NOTICE no longer publishes the per-field excerpt split. Publish: "
+            + ", ".join(f"{counts[f]} in `{f}:`" for f in EXCERPT_FIELDS) + ".")
+    elif tuple(int(g) for g in found.groups()) != tuple(counts[f] for f in EXCERPT_FIELDS):
+        problems.append(
+            "NOTICE's per-field split says "
+            f"{'/'.join(found.groups())}; the corpus gives "
+            f"{'/'.join(str(counts[f]) for f in EXCERPT_FIELDS)} over "
+            f"{'/'.join(EXCERPT_FIELDS)}.")
+
+    fragments = [s for s in spans if len(s[2].split()) <= FRAGMENT_MAX_WORDS]
+    found = re.search(r"(\w+) of the (\d+) are shorter fragments", collapsed)
+    if found is None:
+        problems.append(
+            "NOTICE no longer states the fragment count. Publish: "
+            f"{len(fragments)} of the {total} are shorter fragments (spans of "
+            f"at most {FRAGMENT_MAX_WORDS} words).")
+    else:
+        published = NUMBER_WORDS.get(found.group(1).lower())
+        if published is None and found.group(1).isdigit():
+            published = int(found.group(1))
+        if (published, int(found.group(2))) != (len(fragments), total):
+            problems.append(
+                f"NOTICE says {found.group(1)} of the {found.group(2)} are "
+                f"shorter fragments; spans of at most {FRAGMENT_MAX_WORDS} "
+                f"words number {len(fragments)} of {total}.")
+
+    found = re.search(
+        r'the briefest being a single word \(`"([^"`]*)"` in (BUG-\d{4})\)',
+        collapsed)
+    if found is None:
+        problems.append(
+            "NOTICE no longer names the briefest excerpt; it is the sentence "
+            "that tells a reader how small a quoted span can get.")
+    elif not spans or (found.group(1), found.group(2)) != (spans[0][2], spans[0][1]) \
+            or len(spans[0][2].split()) != 1:
+        briefest = spans[0] if spans else (0, "<none>", "<none>")
+        problems.append(
+            f'NOTICE names `"{found.group(1)}"` in {found.group(2)} as the '
+            f'briefest single-word excerpt; the corpus gives "{briefest[2]}" '
+            f"in {briefest[1]} ({len(briefest[2].split())} word(s)).")
+
+    if "The corpus records a source URL for every entry" not in collapsed:
+        problems.append(
+            "NOTICE no longer states that every entry records a source URL. "
+            "The property is enforced by this gate's url check; the SENTENCE "
+            "is what a reader of NOTICE relies on, so losing it is drift.")
+    return problems
+
+
 def load(path):
     try:
         import yaml
@@ -309,13 +424,83 @@ def self_test():
                 + [dict(entry(99), id="BUG-0009")])))),
     ]
 
+    # THE NOTICE RECONCILIATION, one case per way the paragraph can go stale.
+    # Every number NOTICE publishes about the corpus must be recomputed from
+    # the corpus, in both directions: a regex that finds nothing must fail,
+    # and a regex that finds a stale number must fail.
+    exdoc = corpus([
+        entry(1, evidence='log said "rail collapsed under load" at boot',
+              symptom='it was "off"'),
+        entry(2, evidence='poster wrote "no enumeration"',
+              root_cause='vendor confirmed "silicon bug in mux"'),
+        entry(3, evidence='thread ends "replaced the regulator, fixed"'),
+    ])
+    good_notice = (
+        "corpus/bugs.yaml\n\n"
+        "    Contains 5 short verbatim excerpts, spanning all 3 entries, from\n"
+        "    public sources. The count is 3 in `evidence:`, 1 in `symptom:`\n"
+        "    and 1 in `root_cause:`. two of the 5 are shorter fragments, the\n"
+        '    briefest being a single word (`"off"` in BUG-1001).\n'
+        "    The corpus records a source URL for every entry.\n")
+    gutted = notice_problems(exdoc, "unrelated text")
+    cases += [
+        ("a NOTICE that matches the corpus reconciles clean",
+         not notice_problems(exdoc, good_notice)),
+        ("a missing NOTICE is caught",
+         any("NOTICE is missing" in p for p in notice_problems(exdoc, None))),
+        ("a NOTICE without the excerpt total is caught",
+         any("excerpt total" in p for p in gutted)),
+        ("a NOTICE without the per-field split is caught",
+         any("per-field excerpt split" in p for p in gutted)),
+        ("a NOTICE without the fragment count is caught",
+         any("fragment count" in p for p in gutted)),
+        ("a NOTICE without the briefest excerpt is caught",
+         any("briefest" in p for p in gutted)),
+        ("a NOTICE without the source-URL sentence is caught",
+         any("source URL" in p for p in gutted)),
+        ("a stale excerpt total is caught",
+         any("the corpus gives 5 span(s)" in p for p in notice_problems(
+             exdoc, good_notice.replace("Contains 5", "Contains 6")))),
+        ("a stale per-field split is caught",
+         any("per-field split says" in p for p in notice_problems(
+             exdoc, good_notice.replace("3 in `evidence:`", "2 in `evidence:`")))),
+        ("a stale fragment count is caught",
+         any("shorter fragments; spans of at most" in p for p in notice_problems(
+             exdoc, good_notice.replace("two of the 5", "three of the 5")))),
+        ("a wrong briefest excerpt is caught",
+         any("briefest single-word excerpt" in p for p in notice_problems(
+             exdoc, good_notice.replace("BUG-1001", "BUG-1002")))),
+        # The "spanning all N entries" leg with the total still right: move
+        # B3's span into B1 so 5 spans cover 2 of 3 entries.
+        ("an entry with no excerpt is caught while the total still matches",
+         any("of 3 entries" in p for p in notice_problems(corpus([
+             entry(1, evidence='log said "rail collapsed under load" at boot '
+                   'and later "replaced the regulator, fixed"',
+                   symptom='it was "off"'),
+             entry(2, evidence='poster wrote "no enumeration"',
+                   root_cause='vendor confirmed "silicon bug in mux"'),
+             entry(3),
+         ]), good_notice))),
+        # The single-word claim itself: a corpus whose briefest span is two
+        # words makes "a single word" false even if the id matches.
+        ("a multi-word briefest is caught",
+         any("word(s))" in p for p in notice_problems(corpus([
+             entry(1, evidence='log said "rail collapsed under load" at boot',
+                   symptom='it was "not off"'),
+             entry(2, evidence='poster wrote "no enumeration mid"',
+                   root_cause='vendor confirmed "silicon bug in mux"'),
+             entry(3, evidence='thread ends "replaced the regulator, fixed"'),
+         ]), good_notice.replace('(`"off"` in BUG-1001)',
+                                 '(`"not off"` in BUG-1001)')))),
+    ]
+
 
     # WIRING. Everything above drives the check function directly; nothing
     # proved `main()` turns a finding into a non-zero EXIT. Replacing
     # `if problems:` with `if False:` left this self-test green AND the live
     # gate green over data with real defects planted in it.
     import contextlib as _ctx, io as _io
-    _real = check
+    _real, _real_notice = check, notice_problems
     try:
         globals()["check"] = lambda *_a, **_k: ["planted"]
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
@@ -323,10 +508,18 @@ def self_test():
         globals()["check"] = lambda *_a, **_k: []
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
             _clean = main([])
+        # notice_problems is a separate call in main(); the check() stub above
+        # proves nothing about it, and an unwired reconciliation is the exact
+        # defect it exists to catch.
+        globals()["notice_problems"] = lambda *_a, **_k: ["planted"]
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted_notice = main([])
     finally:
-        globals()["check"] = _real
+        globals()["check"], globals()["notice_problems"] = _real, _real_notice
     cases.append(("main() exits non-zero when a problem is found", _planted == 1))
     cases.append(("main() exits zero when none is", _clean == 0))
+    cases.append(("main() exits non-zero when the NOTICE reconciliation fails",
+                  _planted_notice == 1))
 
     failures = 0
     for name, ok in cases:
@@ -343,7 +536,10 @@ def main(argv):
     if argv and argv[0] == "--self-test":
         return self_test()
     try:
-        problems = check(load(CORPUS))
+        document = load(CORPUS)
+        notice = ROOT / "NOTICE"
+        notice_text = notice.read_text(encoding="utf-8") if notice.is_file() else None
+        problems = check(document) + notice_problems(document, notice_text)
     except GateUnavailable as exc:
         print(f"corpus: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -352,13 +548,14 @@ def main(argv):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    document = load(CORPUS)
     bugs = document["bugs"]
     external = sum(1 for b in bugs if SOURCE_KINDS.get(b["source"]["kind"]))
+    counts, _, spans = excerpt_census(document)
     print(
         f"corpus: PASS: {len(bugs)} entries, {external} externally sourced "
         f"({external * 100 // len(bugs)}%), ids contiguous with "
-        f"{len(RETIRED)} ledgered retirement(s), every source URL distinct."
+        f"{len(RETIRED)} ledgered retirement(s), every source URL distinct; "
+        f"NOTICE's {sum(counts.values())} excerpt span(s) reconciled."
     )
     return 0
 

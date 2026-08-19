@@ -77,14 +77,21 @@ ROW = re.compile(
 # outside the gate by construction and four of them were stale.
 DECISION_ROW = re.compile(
     r"^\|\s*[`*]*(?P<arm>candidate_a|candidate_b|starlark)[`*]*\s*\|(?P<rest>.+)\|\s*$")
-# The decision table's token columns, in order.
+# The decision table's columns, in order. The two @-prefixed entries are the
+# defect columns, whose cells are `16/16` and `94%` rather than bare counts;
+# they were zipped against token keys, matched nothing, and so were the only
+# two columns of this table outside the gate.
 DECISION_KEYS = (
     "blinker-555|{arm}|inferred",
     "esp32s3-devboard|{arm}|inferred",
     "esp32s3-devboard|{arm}|inferred+columnar",
     "card|{arm}",
+    "@detected",
+    "@localised",
 )
 CELL_NUMBER = re.compile(r"-?\d+")
+DETECTED_CELL = re.compile(r"(\d+)/(\d+)")
+PERCENT_CELL = re.compile(r"(\d+)%")
 
 # How many rows each table must contribute. A row that stops being parsed also
 # stops being checked, so the count is pinned rather than counted.
@@ -102,6 +109,9 @@ MINIMUM_ROWS_BY_KIND = {
     "card": 3,
     "t9": 6,
     "lines": 3,
+    "defect-table": 3,       # one row per arm
+    "cheaper": 2,            # the headline percentage, one per design
+    "anchor": 1,             # the IR anchor sentence
 }
 
 # 6 rows x (3 rules + the `all` column), counted as DISTINCT (design, arm,
@@ -116,9 +126,12 @@ MINIMUM_ROWS_BY_KIND = {
 # quotes its headline range from, with make all green.
 MINIMUM_T9_CELLS = 24
 # The exact population the shipped README publishes: 16 token + 11 decision
-# + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts. A total, not a floor:
+# token/card cells + 9 decision defect cells (three arms x detected numerator,
+# denominator, localised %) + 12 defect-table cells (three arms x those three
+# plus diagnostics/defect) + 3 card + 24 T9 + 20 L6 sweep + 3 AC1a line counts
+# + 2 cheaper-than-A percentages + 4 IR anchor counts. A total, not a floor:
 # any leg detaching drops it.
-MINIMUM_TOTAL_COUNTS = 77  # 16 token + 11 decision + 3 card + 24 T9 + 20 L6 + 3 AC1a
+MINIMUM_TOTAL_COUNTS = 104  # 16 token + 11+9 decision + 12 defect + 3 card + 24 T9 + 20 L6 + 3 AC1a + 2 cheaper + 4 anchor
 # 4 rows x 5 thresholds.
 MINIMUM_SWEEP_CELLS = 20
 
@@ -203,6 +216,31 @@ def measure_now():
         for arm, reading in arms_seen.items():
             tokens[f"t9all|{design}|{arm}"] = round(
                 1000 * reading["tax_tokens"] / reading["explicit_tokens"])
+    # THE DEFECT OUTCOMES over the two reference designs. The decision table's
+    # last two columns and the whole standalone defect table published these
+    # nine cells and nothing read any of them: an auditor rewrote 16/16 into
+    # arbitrary figures with make all green. Scored over DESIGNS only -- the
+    # README's table excludes the coverage probe by its own stated rule, and
+    # the probe's row is prose that the same paragraph covers. Stored as
+    # integers like every other key: localisation as a whole percent,
+    # diagnostics-per-defect in tenths.
+    from bakeoff.arms import ARMS as scored_arms
+    from bakeoff.defects import score
+    for name in arms:
+        rows = [row for design in DESIGNS
+                for row in score(scored_arms[name], "inferred",
+                                 load_model(ROOT / "lang" / "examples" /
+                                            f"{design}.design.json"), design)]
+        applicable = [row for row in rows if row["status"] != "not_applicable"]
+        detected = [row for row in applicable if row["status"] == "detected"]
+        localised = sum(1 for row in detected if row.get("localised"))
+        diagnostics = sum(row.get("diagnostics", 0) for row in applicable)
+        tokens[f"defects|{name}|detected"] = len(detected)
+        tokens[f"defects|{name}|applicable"] = len(applicable)
+        tokens[f"defects|{name}|localised_pct"] = round(
+            100 * localised / len(detected)) if detected else 0
+        tokens[f"defects|{name}|diag_tenths"] = round(
+            10 * diagnostics / len(detected)) if detected else 0
     return tokens
 
 
@@ -279,7 +317,21 @@ def load_counts():
         raise GateUnavailable(f"{ARTIFACT.name} is not readable: {exc}") from exc
 
 
-def token_problems(text, counts, problems, minimum=None):
+def _ir_counts():
+    """(instances, nets, connections, assertions) of the committed blinker IR,
+    or None if it cannot be read. Plain JSON: offline, no optional packages."""
+    import json
+    try:
+        document = json.loads(
+            (ROOT / "ir" / "examples" / "blinker.ir.json").read_text(
+                encoding="utf-8"))
+        return tuple(len(document[key]) for key in
+                     ("instances", "nets", "connections", "assertions"))
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def token_problems(text, counts, problems, minimum=None, ir=None):
     """Every `| design | arm | ... |` row, against the committed counts."""
     checked = 0
     rows_seen = set()
@@ -372,7 +424,39 @@ def token_problems(text, counts, problems, minimum=None):
         arm = found.group("arm")
         cells = [c.strip() for c in found.group("rest").split("|")]
         for template, cell in zip(DECISION_KEYS, cells):
-            number = CELL_NUMBER.search(cell.replace(",", "").replace("*", ""))
+            cell = cell.replace(",", "").replace("*", "")
+            if template == "@detected":
+                fraction = DETECTED_CELL.search(cell)
+                want = (counts.get(f"defects|{arm}|detected"),
+                        counts.get(f"defects|{arm}|applicable"))
+                if None in want:
+                    continue
+                if fraction is None or tuple(
+                        int(g) for g in fraction.groups()) != want:
+                    problems.append(
+                        f"lang/README.md: the decision table publishes "
+                        f"{cell!r} defects for {arm}, but the artifact records "
+                        f"{want[0]}/{want[1]}. This column was outside the "
+                        "gate by construction and rewrote cleanly.")
+                    continue
+                rows_seen.add(("decision", arm))
+                checked += 2
+                continue
+            if template == "@localised":
+                percent = PERCENT_CELL.search(cell)
+                want = counts.get(f"defects|{arm}|localised_pct")
+                if want is None:
+                    continue
+                if percent is None or int(percent.group(1)) != want:
+                    problems.append(
+                        f"lang/README.md: the decision table publishes "
+                        f"{cell!r} localised for {arm}, but the artifact "
+                        f"records {want}%.")
+                    continue
+                rows_seen.add(("decision", arm))
+                checked += 1
+                continue
+            number = CELL_NUMBER.search(cell)
             if number is None:
                 continue
             key = template.format(arm=arm)
@@ -567,6 +651,111 @@ def token_problems(text, counts, problems, minimum=None):
             "lang/README.md: the AC1a line-count sentence is gone or reshaped, "
             "so its three numbers are checked by nothing.")
 
+    # THE STANDALONE DEFECT TABLE, located by its own header and held to the
+    # same defects| keys as the decision table's last two columns. Its nine
+    # cells repeat the decision table's story with the diagnostics/defect
+    # column added, and none of them were read by anything.
+    defect_headers = [i for i, line in enumerate(all_lines)
+                      if _norm(line).startswith("|arm|detected|")]
+    if len(defect_headers) > 1:
+        problems.append(
+            f"lang/README.md: publishes the defect table {len(defect_headers)} "
+            "times; only the first is read.")
+    if not defect_headers and minimum is None:
+        problems.append(
+            "lang/README.md: the defect table's header row is gone, so its "
+            "nine cells are checked by nothing.")
+    for line in all_lines[defect_headers[0]:] if defect_headers else ():
+        if not line.strip().startswith("|"):
+            break
+        found = DECISION_ROW.match(line.strip())
+        if not found:
+            continue
+        arm = found.group("arm")
+        cells = [c.strip().replace("*", "")
+                 for c in found.group("rest").split("|")]
+        want = tuple(counts.get(f"defects|{arm}|{field}") for field in
+                     ("detected", "applicable", "localised_pct", "diag_tenths"))
+        if None in want or len(cells) < 3:
+            continue
+        fraction = DETECTED_CELL.search(cells[0])
+        percent = PERCENT_CELL.search(cells[1])
+        diag = re.search(r"(\d+)\.(\d)", cells[2])
+        published = (
+            (int(fraction.group(1)), int(fraction.group(2))) if fraction else (None, None),
+            int(percent.group(1)) if percent else None,
+            int(diag.group(1)) * 10 + int(diag.group(2)) if diag else None,
+        )
+        if published != ((want[0], want[1]), want[2], want[3]):
+            problems.append(
+                f"lang/README.md: the defect table's {arm} row publishes "
+                f"{cells[0]} detected, {cells[1]} localised, {cells[2]} "
+                f"diagnostics/defect, but the artifact records "
+                f"{want[0]}/{want[1]}, {want[2]}%, {want[3] / 10:.1f}.")
+            continue
+        rows_seen.add(("defect-table", arm))
+        checked += 4
+
+    # THE HEADLINE PERCENTAGES. "B is 18.0% cheaper than A on (a) and 20.8%
+    # on (c)" is derived from four cells this gate already reconciles, and an
+    # auditor rewrote it to 91.0%/99.8% with make all green. Recomputed from
+    # the artifact at the one decimal the README prints.
+    cheaper = re.search(
+        r"B is (-?\d+\.\d)% cheaper than A on \(a\) and (-?\d+\.\d)% on \(c\)",
+        text)
+    if cheaper:
+        for design, published in zip(DESIGNS, cheaper.groups()):
+            a = counts.get(f"{design}|candidate_a|inferred")
+            b = counts.get(f"{design}|candidate_b|inferred")
+            if not a or b is None:
+                continue
+            want_tenths = round(1000 * (a - b) / a)
+            if round(float(published) * 10) != want_tenths:
+                problems.append(
+                    f"lang/README.md: says B is {published}% cheaper than A "
+                    f"on {design}, but the reconciled counts give "
+                    f"{want_tenths / 10:.1f}%.")
+                continue
+            rows_seen.add(("cheaper", design))
+            checked += 1
+    elif minimum is None:
+        problems.append(
+            "lang/README.md: the cheaper-than-A sentence is gone or reshaped, "
+            "so its two percentages are checked by nothing.")
+
+    # THE IR ANCHOR SENTENCE. "13 instances, 7 nets, 27 connections, 2
+    # assertions" describes ir/examples/blinker.ir.json, which is offline
+    # JSON, so it is compared LIVE rather than through the artifact. An
+    # auditor rewrote all four numbers to 99/1/3/0 with make all green.
+    anchor = re.search(
+        r"(\d+) instances, (\d+)\s+nets, (\d+) connections, (\d+) assertions",
+        text)
+    if anchor is None:
+        if minimum is None:
+            problems.append(
+                "lang/README.md: the IR anchor sentence (instances/nets/"
+                "connections/assertions) is gone or reshaped, so its four "
+                "numbers are checked by nothing.")
+    else:
+        if ir is None:
+            ir = _ir_counts()
+        if ir is None:
+            problems.append(
+                "ir/examples/blinker.ir.json is missing or unreadable, so the "
+                "README's IR anchor sentence is compared to nothing.")
+        else:
+            published = tuple(int(g) for g in anchor.groups())
+            if published != ir:
+                problems.append(
+                    "lang/README.md: the IR anchor sentence publishes "
+                    f"{published[0]} instances, {published[1]} nets, "
+                    f"{published[2]} connections, {published[3]} assertions; "
+                    f"ir/examples/blinker.ir.json holds "
+                    f"{'/'.join(str(n) for n in ir)}.")
+            else:
+                rows_seen.add(("anchor", "blinker-555"))
+                checked += 4
+
     if minimum is None:
         by_kind = {}
         for row in rows_seen:
@@ -647,13 +836,21 @@ def self_test():
              "| esp32s3-devboard | candidate_a | 11 | 21 | 31 |\n"
              "| esp32s3-devboard | candidate_b | 41 | 51 | 61 |\n"
              "\n"
-             "| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n"
-             "|---|---:|---:|---:|---:|---:|\n"
-             "| candidate_a | 20 | 21 | 31 | 90 | 15/15 |\n"
+             "| | (a) blinker | (c) esp32 | (c) +columnar | card | defects | localised |\n"
+             "|---|---:|---:|---:|---:|---:|---:|\n"
+             "| candidate_a | 20 | 21 | 31 | 90 | 15/15 | 100% |\n"
              "\nLanguage cards: candidate_a 90, candidate_b 91, starlark 92 tokens\n"
              "\n| Design | Arm | T9-1 library pins | T9-2 inference | T9-3 L9 flags | all |\n"
              "|---|---|---:|---:|---:|---:|\n"
-             "| blinker-555 | candidate_a | 1.5% | 2.5% | 3.5% | 7.5% |\n")
+             "| blinker-555 | candidate_a | 1.5% | 2.5% | 3.5% | 7.5% |\n"
+             "\n| Arm | detected | localised | diagnostics/defect |\n"
+             "|---|---|---|---|\n"
+             "| candidate_a | 15/15 | 100% | 1.0 |\n"
+             # The FAKE counts put candidate_b ABOVE candidate_a, so the
+             # fixture's true percentages are negative; the regex accepts the
+             # sign so this fixture can exercise the arithmetic at all.
+             "\nB is -150.0% cheaper than A on (a) and -142.9% on (c).\n"
+             "\nreproduces 5 instances, 6 nets, 7 connections, 8 assertions.\n")
     FAKE = {
         "blinker-555|candidate_a|explicit": 10,
         "blinker-555|candidate_a|inferred": 20,
@@ -675,11 +872,15 @@ def self_test():
         "t9|blinker-555|candidate_a|T9-1": 15,
         "t9|blinker-555|candidate_a|T9-2": 25,
         "t9|blinker-555|candidate_a|T9-3": 35,
+        "defects|candidate_a|detected": 15,
+        "defects|candidate_a|applicable": 15,
+        "defects|candidate_a|localised_pct": 100,
+        "defects|candidate_a|diag_tenths": 10,
     }
 
-    def probe(table, counts=FAKE):
+    def probe(table, counts=FAKE, ir=(5, 6, 7, 8)):
         problems = []
-        token_problems(table, counts, problems, minimum=0)
+        token_problems(table, counts, problems, minimum=0, ir=ir)
         return problems
 
     cases = [
@@ -701,7 +902,45 @@ def self_test():
                 TABLE.replace("| 31 | 90 | 15/15 |", "| 31 | 863 | 15/15 |")))),
         ("a missing decision-table header is caught", any(
             "header row is gone" in p for p in probe(
-                TABLE.replace("| | (a) blinker | (c) esp32 | (c) +columnar | card | defects |\n", "")))),
+                TABLE.replace("| | (a) blinker | (c) esp32 | (c) +columnar | card | defects | localised |\n", "")))),
+        # THE DEFECT COLUMNS, decision table and standalone table both. All
+        # eleven of these README cells were outside the gate; an auditor
+        # rewrote 16/16 and 94% arbitrarily with make all green.
+        ("a stale decision-table defect fraction is caught", any(
+            "defects for candidate_a" in p for p in probe(
+                TABLE.replace("| 90 | 15/15 | 100% |", "| 90 | 14/15 | 100% |")))),
+        ("a stale decision-table localised percent is caught", any(
+            "localised for candidate_a" in p for p in probe(
+                TABLE.replace("| 15/15 | 100% |", "| 15/15 | 90% |")))),
+        ("a stale defect-table row is caught", any(
+            "defect table's candidate_a row" in p for p in probe(
+                TABLE.replace("| candidate_a | 15/15 | 100% | 1.0 |",
+                              "| candidate_a | 15/15 | 100% | 9.9 |")))),
+        ("a missing defect-table header is caught", any(
+            "defect table's header row is gone" in p for p in _floor_probe(
+                TABLE.replace("| Arm | detected | localised | diagnostics/defect |\n", ""),
+                FAKE))),
+        ("a second defect table is reported, not silently unread", any(
+            "publishes the defect table 2 times" in p for p in probe(
+                TABLE + "\n| Arm | detected | localised | diagnostics/defect |\n"
+                        "|---|---|---|---|\n"
+                        "| candidate_a | 12/15 | 80% | 3.0 |\n"))),
+        ("a stale cheaper-than-A percentage is caught", any(
+            "cheaper than A on" in p for p in probe(
+                TABLE.replace("-150.0", "91.0")))),
+        ("a missing cheaper-than-A sentence is caught", any(
+            "cheaper-than-A sentence is gone" in p for p in _floor_probe(
+                TABLE.replace(
+                    "B is -150.0% cheaper than A on (a) and -142.9% on (c).", ""),
+                FAKE))),
+        ("a stale IR anchor number is caught", any(
+            "blinker.ir.json holds" in p for p in probe(
+                TABLE.replace("5 instances", "99 instances")))),
+        ("a missing IR anchor sentence is caught", any(
+            "IR anchor sentence" in p and "gone" in p for p in _floor_probe(
+                TABLE.replace(
+                    "reproduces 5 instances, 6 nets, 7 connections, 8 assertions.",
+                    ""), FAKE))),
         ("a missing token-table header is caught", any(
             "header row is gone" in p for p in probe(TABLE.replace(HEADER, "")))),
         ("a stale language-card number is caught", any(
@@ -740,6 +979,17 @@ def self_test():
             "below the row floor" in p for p in _floor_probe(
                 HEADER + "| blinker-555 | candidate_a | 10 | 20 | 30 |\n" * 6, FAKE))),
     ]
+
+    # The unreadable-IR leg: _ir_counts() returning None must be reported,
+    # not skipped -- a missing anchor file silently unpinning four numbers is
+    # the exact shape this file exists to end.
+    _real_ir_counts = _ir_counts
+    try:
+        globals()["_ir_counts"] = lambda: None
+        cases.append(("an unreadable blinker IR is reported, not skipped", any(
+            "compared to nothing" in p for p in probe(TABLE, ir=None))))
+    finally:
+        globals()["_ir_counts"] = _real_ir_counts
 
     # WIRING over the real README and the committed artifact.
     try:
