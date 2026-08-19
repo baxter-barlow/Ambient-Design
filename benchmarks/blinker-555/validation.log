@@ -20,6 +20,15 @@ Assertions: tests/benchmarks/check-assertions.py compares every .meas result
            not exist until AMB-123 either — assertions.yaml was read by no code
            in the repository, so these numbers were recorded and never checked.
 
+CORRECTED 2026-08-19 (round 17). The 2f020ec re-record (NE555 RESET-priority
+latch fix) updated only the 12 .meas lines inside the verbatim block below,
+leaving the pre-fix run's node list, initial transient solution and data-row
+count -- a splice no run of the committed deck could produce, caught by two
+independent auditors against the block's own 'captured output from a run
+made now' claim. The block below is now a COMPLETE fresh capture of the
+committed netlist.cir under ngspice-46, replacing every byte between the
+markers, not just the measured lines.
+
 ----- begin verbatim ngspice stdout+stderr -----
 
 Note: No compatibility mode selected!
@@ -43,25 +52,23 @@ xu1.s                                      0.5
 nct                                          0
 xu1.rth                                    0.5
 xu1.rrs                                      1
-xu1.r                                        1
-xu1.q                                 0.583118
-xu1.oint                             0.0633891
-out                                   0.063389
-xu1.qb                                0.416882
+xu1.q                              2.38505e-13
+xu1.oint                                  0.15
+out                                       0.15
+xu1.qb                                       1
 disch                                        0
-nled                                 0.0633855
+nled                                  0.149991
 nks                                          0
 b.xu1.bqb#branch                             0
-b.xu1.bout#branch                 -6.33861e-09
-b.xu1.bres#branch                            0
+b.xu1.bout#branch                 -1.49993e-08
 b.xu1.brst#branch                            0
 b.xu1.bthr#branch                            0
 b.xu1.bset#branch                            0
-vsled#branch                       6.33861e-09
+vsled#branch                       1.49993e-08
 vcc#branch                                   0
 
-
-No. of Data Rows : 50360
+ Reference value :  4.01463e+00
+No. of Data Rows : 50413
 
   Measurements for Transient Analysis
 
@@ -73,14 +80,15 @@ i_led_on            =  9.25223e-03 at=  4.36465e+00
 v_out_high          =  7.19602e+00 at=  4.36465e+00
 
 
-Total analysis time (seconds) = 0.232177
+Total analysis time (seconds) = 0.248468
 
-Total elapsed time (seconds) = 0.249 
+Total elapsed time (seconds) = 0.294 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available =  111.562 MB.
-Maximum ngspice program size =   11.266 MB.
-Current ngspice program size =   11.266 MB.
+DRAM currently available =  353.094 MB.
+Maximum ngspice program size =   11.234 MB.
+Current ngspice program size =   11.234 MB.
+
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===

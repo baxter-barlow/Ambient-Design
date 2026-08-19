@@ -107,8 +107,11 @@ RL ±1 %: 8.5 – 10.3 mA, rounded outward to an **8.0 – 10.5 mA** assertion.
 | i_led_on | 8.0 – 10.5 mA | 9.25223 mA | PASS |
 | v_out_high | 6.8 – 7.6 V | 7.19602 V | PASS |
 
-Full transcript, exact command, and iteration history: `validation.log`.
-Wallclock 0.25 s — stated as engineering context (the sim is cheap enough for
+Full transcript and exact command: `validation.log`. (Earlier revisions also
+pointed there for iteration history; the log's 2026-08-17 regeneration
+deliberately did not carry the pre-rename history forward, so the pointer
+outlived its target — round 17.) Wallclock ~0.25 s — stated as engineering
+context (the sim is cheap enough for
 interactive iteration); no runtime acceptance criterion applies to
 benchmark (a). (The AC3 <60 s budget governs benchmark (b).)
 
@@ -122,15 +125,20 @@ benchmark (a). (The AC3 <60 s budget governs benchmark (b).)
   TD=2 s deterministically lands inside a low phase (steady-state rises at
   ~2.34/3.35/4.36 s, falls at ~1.87/2.88/3.89 s), so the RISE=1/FALL=1 pairing
   after TD is well-defined.
-- **V1:** the deck was iterated until every .meas returned a real number; the
-  two convergence failures and their root causes are recorded in
-  `validation.log`. No assertion window was widened to make a failure pass.
+- **V1:** the deck was iterated until every .meas returned a real number. Two
+  convergence failures were hit and fixed during authoring; their record went
+  with the pre-rename logs that `validation.log`'s preamble documents
+  discarding, so the claim survives here as history with no citation -- an
+  earlier revision still pointed at the log (round 17). No assertion window
+  was widened to make a failure pass.
 
 ## Behavioral NE555 macromodel (original, D4 core-library seed)
 
 `NE555_RHOFORM` in `netlist.cir` is written from the device's block diagram, not
 from any vendor or textbook deck: 5k/5k/5k divider (CONT rides the 2/3 tap),
-two tanh-smoothed B-source comparators, a set-dominant SR latch realized as a
+two tanh-smoothed B-source comparators, an SR latch (set-dominant for TRIG
+over THRES, RESET at highest priority per the SLFS022 function table since
+round 16's fix) realized as a
 B current source on a 100 pF state cap with a weak tanh positive-feedback hold
 term, a softplus-clamped totem-pole output (Voh ≈ VCC − 1.7 V, Vol ≈ 0.15 V,
 12 Ω), and a switch-model open-collector discharge transistor (18 Ω on).
