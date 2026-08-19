@@ -1019,6 +1019,67 @@ def self_test():
                   workflow_trigger_problems(
                       {True: {"push": None, "pull_request": None}},
                       "probe.yml") == []))
+    cases.append(("a paths-filtered pull_request is caught", any(
+        "skips some pull requests" in x for x in workflow_trigger_problems(
+            {True: {"pull_request": {"paths": ["never/**"]}}}, "probe.yml"))))
+    cases.append(("a branches-filtered pull_request is caught", any(
+        "skips some pull requests" in x for x in workflow_trigger_problems(
+            {True: {"pull_request": {"branches": ["release/*"]}}},
+            "probe.yml"))))
+    cases.append(("a types filter that drops synchronize is caught", any(
+        "opened+synchronize" in x for x in workflow_trigger_problems(
+            {True: {"pull_request": {"types": ["closed"]}}}, "probe.yml"))))
+    cases.append(("dco.yml's additive types filter is legitimate",
+                  workflow_trigger_problems(
+                      {True: {"pull_request": {"types": [
+                          "opened", "synchronize", "reopened",
+                          "ready_for_review"]}}}, "probe.yml") == []))
+    _pins_manifest = {"python": {"packages": {"pyyaml": "6.0.2"}}}
+    cases.append(("a matching environment package reconciles clean",
+                  environment_pin_problems(
+                      _pins_manifest, _version=lambda d: "6.0.2") == []))
+    cases.append(("a drifted environment package is caught", any(
+        "drifted environment" in x for x in environment_pin_problems(
+            _pins_manifest, _version=lambda d: "9.9.9"))))
+
+    def _not_installed(dist_name):
+        raise ImportError(dist_name)
+    import contextlib as _ctx2
+    import io as _io2
+    with _ctx2.redirect_stdout(_io2.StringIO()):
+        _absent = environment_pin_problems(_pins_manifest,
+                                           _version=_not_installed)
+    cases.append(("an uninstalled package is a note, not a failure",
+                  _absent == []))
+    try:
+        _resolved = _installed_version("PyYAML")
+    except ImportError:
+        _resolved = None          # stdlib-only environments still self-test
+    cases.append(("the real resolver answers from metadata or says absent",
+                  _resolved is None
+                  or re.fullmatch(r"[0-9][0-9A-Za-z.+-]*", _resolved)
+                  is not None))
+    _real_env = environment_pin_problems
+    globals()["environment_pin_problems"] = lambda *_a, **_k: ["planted-env"]
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _env_wired = main([])
+    finally:
+        globals()["environment_pin_problems"] = _real_env
+    cases.append(("the environment pin check is WIRED into main",
+                  _env_wired == 1))
+    cases.append(("a shell override on a gate step is caught", any(
+        "errexit shell is the contract" in x for x in scan_workflow_jobs(
+            {"jobs": {"g": {"steps": [{"shell": "bash {0}",
+                                       "run": "python3 x.py"}]}}},
+            "probe.yml")[2])))
+    _exec_dead = scan_workflow_jobs(
+        {"jobs": {"g": {"steps": [{"run": "exec true\npython3 x.py"}]}}},
+        "probe.yml")
+    cases.append(("lines after exec are dead and reported",
+                  any("never run" in x for x in _exec_dead[2])
+                  and "python3 x.py" not in _exec_dead[0]))
     _real_trig = workflow_trigger_problems
     globals()["workflow_trigger_problems"] = lambda *_a: ["planted-trigger"]
     try:
@@ -1110,6 +1171,56 @@ def whitespace_pin_problems(makefile_text=None, policy_text=None):
     return problems
 
 
+def _installed_version(dist_name):
+    """The version the running interpreter would actually import.
+
+    Distribution metadata, not `module.__version__`: jsonschema deprecated
+    that attribute (it warns, and is due to disappear), and an attribute
+    that quietly becomes None reads as "unverifiable" rather than as drift.
+    Raises ImportError when the distribution is not installed here."""
+    import importlib.metadata
+    try:
+        return importlib.metadata.version(dist_name)
+    except importlib.metadata.PackageNotFoundError as exc:
+        raise ImportError(dist_name) from exc
+
+
+def environment_pin_problems(manifest, _version=_installed_version):
+    """The RUNNING interpreter's packages must match the manifest pins.
+
+    Every consumer check compares strings in files; nothing verified the
+    environment actually executing the gates (round 19) -- two machines with
+    different jsonschema/PyYAML/lark versions both report "pins verified"
+    while running different code. ngspice already gets this treatment in
+    run-sim. Uninstalled packages are reported as unverifiable, never
+    counted or failed: the stdlib-only gates must keep running without them.
+    """
+    problems = []
+    notes = []
+    pins = (manifest.get("python") or {}).get("packages") or {}
+    for dist_name, pin_key in (("PyYAML", "pyyaml"),
+                               ("jsonschema", "jsonschema"),
+                               ("lark", "lark")):
+        pinned = pins.get(pin_key)
+        if not pinned:
+            continue
+        try:
+            installed = _version(dist_name)
+        except ImportError:
+            notes.append(f"{pin_key}: not installed here; pin verified "
+                         "textually only")
+            continue
+        if installed != str(pinned):
+            problems.append(
+                f"{pin_key}: the manifest pins {pinned} but this "
+                f"interpreter runs {installed}. Recorded verifications made "
+                "under a drifted environment describe code that is not "
+                "running.")
+    for note in notes:
+        print(f"toolchain-pins: environment: {note}")
+    return problems
+
+
 def workflow_trigger_problems(document, workflow_name):
     """A required workflow must trigger on pull_request.
 
@@ -1125,6 +1236,23 @@ def workflow_trigger_problems(document, workflow_name):
         return [f"{workflow_name}: does not trigger on pull_request "
                 f"(triggers: {sorted(map(str, names))}); a gate workflow "
                 "that never runs on a PR gates nothing."]
+    # AN UNFILTERED pull_request, not just a present one: round 18 checked
+    # trigger NAMES, and a one-line `paths: ['does-not-exist/**']` (or a
+    # branches:/types: filter) silenced every gate job one spelling deeper
+    # (round 19). Gate workflows run on EVERY pull request: the only filter
+    # tolerated is a `types:` list that still covers opened+synchronize.
+    detail = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    if isinstance(detail, dict) and detail:
+        extra = set(detail) - {"types"}
+        if extra:
+            return [f"{workflow_name}: pull_request carries filter(s) "
+                    f"{sorted(extra)}; a paths/branches filter is a spelling "
+                    "of 'this gate skips some pull requests'."]
+        types = detail.get("types") or []
+        if not {"opened", "synchronize"} <= set(types):
+            return [f"{workflow_name}: pull_request types {types!r} do not "
+                    "cover opened+synchronize, so ordinary PR pushes skip "
+                    "every gate job."]
     return []
 
 
@@ -1168,6 +1296,17 @@ def scan_workflow_jobs(document, workflow_name):
                     f"carries an `if:` ({str(step.get('if'))!r}); a "
                     "conditional gate step is a gate that may not run.")
                 continue
+            if "shell" in step:
+                # `shell: bash {0}` (no -e template) swallows every non-final
+                # failure in the block, unseen by the parity scan (round 19).
+                # The default shell already is bash -e; a custom one on a
+                # gate step is only ever a way to weaken it.
+                problems.append(
+                    f"{workflow_name}: a run step in job {job_name!r} "
+                    f"overrides `shell:` ({str(step.get('shell'))!r}); the "
+                    "default errexit shell is the contract a gate step "
+                    "runs under.")
+                continue
             if step.get("continue-on-error", False) is not False:
                 problems.append(
                     f"{workflow_name}: a run step in job {job_name!r} sets "
@@ -1181,11 +1320,11 @@ def scan_workflow_jobs(document, workflow_name):
                 # `exit 0` disarmed every parity match after it (round 18).
                 # Dead lines are dropped AND reported -- a run block that
                 # exits early around gate commands is hiding something.
-                if re.fullmatch(r"exit(\s+\d+)?", stripped):
+                if re.fullmatch(r"(?:exit(\s+\d+)?|exec\s+.*)", stripped):
                     problems.append(
                         f"{workflow_name}: job {job_name!r} has a run block "
-                        "with an unconditional `exit`; lines after it never "
-                        "run and are not counted.")
+                        "with an unconditional `exit`/`exec`; lines after "
+                        "it never run and are not counted.")
                     break
                 if stripped.startswith("set ") and "+e" in stripped:
                     problems.append(
@@ -1203,6 +1342,7 @@ def main(argv):
         manifest = load_manifest()
         problems, checked, action_refs = check(manifest)
         problems += whitespace_pin_problems()
+        problems += environment_pin_problems(manifest)
     except GateUnavailable as exc:
         print(f"toolchain-pins: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
