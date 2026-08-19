@@ -80,8 +80,9 @@ IO38, IO37, IO36, IO35, IO45*, IO46*, IO47, IO48, IO19*, IO20*, GND.
 
 Notes: IO35/36/37 usable because N8R2 is a quad-PSRAM variant; IO48 shared
 with status LED D5; * = strapping or USB pins (see sections 1 and 3);
-5V pin backfeeds the LDO through D1's anode side only — D1 blocks current
-into the USB host.
+5V pin sits on P5V0, D1's cathode side, so a backfeed reaches the LDO
+only — D1 blocks it from the USB host. (An earlier revision said "anode
+side"; the protection was right, the mechanism was stated backwards.)
 
 ## 6. Other assignments
 

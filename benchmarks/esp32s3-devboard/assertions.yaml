@@ -34,14 +34,14 @@ assertions:
   - id: A2_vbus_budget_t10
     check: at-most
     check_inputs:
-      have: 0.39491
+      have: 0.39531
       limit: 0.5
     check_inputs_from: {have: sum_worst_a, limit: capability_a}
     kind: current-budget containment (T10), VBUS rail
     expr: "sum(vbus_loads.wifi_tx_peak.worst) <= usb.capability"
-    inputs: {sum_worst_a: 0.39491, capability_a: 0.500}
-    calc: "0.39166 (LDO in, guardbanded) + 0.00325 (PWR LED @5.25V) + 2e-6 = 0.39491 A"
-    margin: "+105.1 mA (21.0%); typ case +140.8 mA (28.2%)"
+    inputs: {sum_worst_a: 0.39531, capability_a: 0.500}
+    calc: "0.39166 (LDO in, guardbanded) + 0.00325 (PWR LED @5.25V) + 400e-6 (TVS IR max, no typ published) = 0.39531 A"
+    margin: "+104.7 mA (20.9%); typ case +140.4 mA (28.1%)"
     status: PASS
 
   - id: A3_3v3_source_capability
@@ -117,11 +117,11 @@ assertions:
     check: at-least
     check_inputs:
       have: 0.6
-      need: 0.39491
+      need: 0.39531
     check_inputs_from: {have: hold_derated_a, need: worst_a}
     kind: series-element rating vs continuous draw
     expr: "ptc.hold_derated(50C) >= vbus_worst_continuous"
-    inputs: {hold_derated_a: 0.60, worst_a: 0.39491}
+    inputs: {hold_derated_a: 0.60, worst_a: 0.39531}
     margin: "+205 mA; trip (1.5 A) does not intersect any legitimate mode"
     status: PASS
 
@@ -147,6 +147,13 @@ assertions:
     expr: "sum(vbus_visible_bulk) <= 10e-6"
     inputs: {c1_f: 4.7e-6, c3_f: 4.7e-6, c2_f: 0.1e-6, limit_f: 1.0e-5}
     note: "3.3 V bank (>=87 uF) charges behind LDO current limit, not at attach"
+    caveat: >-
+      PASS rests on NOMINAL capacitance, unlike every other mechanised
+      assertion here (worst-case policy): C1/C3 are +/-10% parts, and the
+      tolerance-stacked sum is 10.45 uF, over the 10 uF limit. The practical
+      pass is real -- 25 V-rated X5R at 5 V bias derates well below nominal
+      -- but no derating figure is stated or sourced in this benchmark, so
+      the worst-case-policy verdict is honestly OPEN, not PASS (round 18).
     status: PASS
 
   - id: A9_strapping_dc_state
