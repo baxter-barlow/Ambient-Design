@@ -270,8 +270,10 @@ def check_benchmark(case, spec, log_text, problems, minimum=None):
         # `[0.000001 Hz, 1000000 Hz]` passed, so the gate could not fail on a
         # value in either direction once both files moved together.
         #
-        # The floor is deliberately loose — 3x around the expected value, or 10x
-        # for a one-sided bound — because a legitimate tolerance stack is rarely
+        # The floor is deliberately loose — 3x around the expected value, or
+        # 200x for a one-sided bound (MAX_ONE_SIDED_RATIO; this comment said
+        # 10x, a threshold twenty times tighter than the one applied) —
+        # because a legitimate tolerance stack is rarely
         # wider than that and this must not fight real engineering. It exists to
         # catch the window that has stopped asserting anything at all.
         # THE MEASURED VALUE, always. It used to be `expected:` for shape (a),

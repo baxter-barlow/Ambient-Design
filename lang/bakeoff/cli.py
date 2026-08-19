@@ -142,7 +142,19 @@ def _measure(args) -> int:
     for design, arms in sorted(report["readings"]["t9_by_rule"].items()):
         for key, values in sorted(arms.items()):
             rules = values["by_rule_fraction"]
-            total = t9.get(design, {}).get(key, {}).get("tax_fraction", 0.0)
+            # FROM THE TOKEN COUNTS, not from the rounded fraction.
+            # `tax_fraction` is stored as round(x, 4), so printing it to one
+            # decimal rounded twice: 255/1069 = 23.854% became 0.2385 became
+            # "23.8%", against the 23.9% lang/README publishes and
+            # lang/token-counts.json gates (its `t9all` key computes
+            # round(1000 * tax/explicit) from full precision). Someone
+            # following the README's own instruction to reproduce the table
+            # with `python3 -m bakeoff measure` saw a cell disagreeing with it
+            # and no way to tell which was wrong.
+            reading = t9.get(design, {}).get(key, {})
+            explicit_tokens = reading.get("explicit_tokens") or 0
+            total = ((reading.get("tax_tokens", 0) / explicit_tokens)
+                     if explicit_tokens else 0.0)
             print(
                 f"  {design:20} {key:13} "
                 f"{rules['T9-1'] * 100:9.1f}% {rules['T9-2'] * 100:11.1f}% "
