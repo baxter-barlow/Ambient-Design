@@ -114,6 +114,12 @@ FAKE
 
   rebuild 99
   expect "a sandbox tree with a scripted ngspice passes" 0 "deck(s) completed"
+  # The FULL per-deck PASS line, byte for byte: round 15 removed wall-clock
+  # seconds so identical runs print identical transcripts, and round 16
+  # reintroduced them with everything green -- the property was enforced
+  # only by a comment. Any addition to the line breaks this literal.
+  expect "the per-deck PASS line is byte-stable" 0 \
+    "sim: PASS: blinker-555 (1 measurement(s), within budget)."
 
   rebuild 99; rm "$bin/ngspice"
   expect "a missing ngspice is an environment failure" 2 "ngspice is not installed"
@@ -246,7 +252,11 @@ for spec in "$BENCH_DIR"/*/assertions.yaml; do
   declared=$({ grep -m1 -E '^deck:' "$spec" || true; } | sed -E 's/^deck:[[:space:]]*//' | tr -d '"')
   case "$declared" in
     '' )
-      fail_env "$(basename "$case_dir")/assertions.yaml declares no \`deck:\`; a benchmark must say whether it has one, so a deleted deck cannot look like a deliberate absence." ;;
+      # On its own line so the coverage mutation can blank it without eating
+      # the arm's `;;` -- a site only blankable into a syntax error scores
+      # as unpinned.
+      fail_env "$(basename "$case_dir")/assertions.yaml declares no \`deck:\`; a benchmark must say whether it has one, so a deleted deck cannot look like a deliberate absence."
+      ;;
     null | ~ )
       # Deck-less, but its hand-computed assertions still have to follow from
       # their own inputs. Until AMB-123 nothing read them at all: rewriting A3
