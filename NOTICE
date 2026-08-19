@@ -58,10 +58,11 @@ parts/examples/*.part.json
     Electrical values transcribed from manufacturer datasheets, with the
     document and revision recorded per field in each record's `provenance`
     block, and a table or section for nearly all of them. Provenance is keyed
-    by JSON-pointer prefix with a record-level default that names no table, so
-    a field covered only by that default has a document and revision and no
-    table: 5 of the 130 measured values across the five records, of which 4 are
-    ratings.
+    by JSON-pointer prefix with a record-level default, and the count below is
+    of values whose governing entry names no table -- today that means falling
+    to a default, since every more specific entry carries one, but the gate
+    reads the locator field rather than trusting that to stay true: 5 of the
+    130 measured values across the five records, of which 4 are ratings.
 
     Those three numbers are COMPUTED AND GATED by parts/lint-part-data.py, not
     maintained by hand. Three successive revisions of this sentence were wrong
