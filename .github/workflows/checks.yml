@@ -21,15 +21,22 @@ jobs:
   structure:
     name: Repository structure
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    # The layout gate's transcript-pair engine re-runs the sim harness for
+    # the blinker/buck pairs, so this job needs the pinned ngspice -- it ran
+    # on the bare runner and could only ever exit 2 (round 18: a committed
+    # CI job structurally unable to pass, never observed because the
+    # repository has no remote yet). Same container as benchmarks-sim.
+    container:
+      image: debian:testing-20260803-slim@sha256:90e4367c69a75bb80e2f3b043a4bdaf2f0b97eed9bf9bbc05a29af42d3ffdfc2
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          # Keep in sync with toolchain/versions.yaml (python.version).
-          python-version: "3.12"
+      - name: Install pinned ngspice, git and Python
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ngspice=46+ds-1 git python3 python3-yaml
+          ngspice --version | head -n 2
       - name: Install pinned PyYAML
         # check-layout.sh FAILS (exit 2) when PyYAML is absent -- an
         # unavailable gate is not a pass -- so this install is what lets the
@@ -316,7 +323,6 @@ jobs:
       - name: Run golden-file harness
         # The harness exits 0 with "no cases" while tests/golden is empty;
         # once cases exist, any byte-level divergence fails this job.
-        continue-on-error: false
         run: |
           bash tests/golden/run.sh --self-test
           bash tests/golden/run.sh
