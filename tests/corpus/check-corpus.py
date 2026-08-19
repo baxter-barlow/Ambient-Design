@@ -82,32 +82,35 @@ REVIEW_FLAGS = {
 }
 
 # Ids that were issued and later withdrawn. A gap in the sequence must appear
-# here with the reason, or the gate fails.
+# here with the reason, or the gate fails — and each entry must also appear in
+# corpus/README.md's removed-entries section, which retirement_problems()
+# enforces below.
 #
-# This exists because the corpus holds 61 entries numbered BUG-0001..BUG-0062
-# with no BUG-0009, and until the audit neither retirement was recorded
-# anywhere a reader could find: BUG-0063 only obliquely, inside another entry's
-# correction note, and BUG-0009 nowhere at all. A reader counting entries and
-# reading the highest id got two different populations and no explanation.
+# HISTORY OF THIS LEDGER, kept because it is itself a recurrence of the shape
+# it documents: the first revision asserted the removal reasons "were not
+# recorded and cannot now be recovered", supported by real git archaeology
+# (entry_count already 61 at the first commit, validation.log never tracked)
+# — while corpus/README.md had published both reasons, in detail, since that
+# same first commit. Round 15 caught two shipped documents contradicting each
+# other. The reasons below are the README's, condensed; the README is the
+# durable record.
 RETIRED = {
     "BUG-0009": (
-        "Withdrawn during AMB-35 collection, BEFORE the corpus was first "
-        "committed. The reason was not recorded and cannot now be recovered: "
-        "git shows entry_count already 61 in the corpus's first commit "
-        "(912f7ce), and the only artifact describing the 63-entry population "
-        "was corpus/validation.log, which was never tracked. What that log did "
-        "record is that BUG-0009 was one of six entries flagged "
-        "`needs-source-recheck`; AMB-36 later re-fetched and corrected the "
-        "other five (BUG-0031, 0034, 0035, 0045, 0051). That is suggestive and "
-        "it is not evidence, so no reason is asserted here."
+        "LM2596-ADJ feedback-divider output decay. Removed in the 2026-08-15 "
+        "review round, before the corpus's first commit: the entry "
+        "misrepresented its TI e2e source — the TI engineer states bias "
+        "current does NOT explain the output collapse and the thread ends "
+        "undiagnosed — failing inclusion rule 2 (diagnosed root cause). "
+        "Recorded in corpus/README.md's removed-entries section since the "
+        "first commit."
     ),
     "BUG-0063": (
-        "Withdrawn during AMB-35 collection, before the first commit, for the "
-        "same undocumented reason as BUG-0009. The one surviving trace is "
-        "BUG-0035's `correction_note`, which cites it as the precedent for "
-        "failing corpus inclusion rule 3 (schematic-level defects only) — so "
-        "an assembly-process defect is the likely ground, stated here as an "
-        "inference and not as a record."
+        "ISS ExPRESS 28 V supply with polarized capacitors reversed. Removed "
+        "in the same round: the units were assembled to a superseded design, "
+        "a design-change-control/process failure excluded by inclusion rule 3 "
+        "(schematic-level defects only). BUG-0035's correction_note cites it "
+        "as the rule-3 precedent. Recorded in corpus/README.md alongside "
+        "BUG-0009."
     ),
 }
 
@@ -228,6 +231,30 @@ def notice_problems(document, notice_text):
             "NOTICE no longer states that every entry records a source URL. "
             "The property is enforced by this gate's url check; the SENTENCE "
             "is what a reader of NOTICE relies on, so losing it is drift.")
+    return problems
+
+
+def retirement_problems(readme_text):
+    """Every ledgered retirement must be recorded in corpus/README.md.
+
+    The ledger and the README are two records of the same two decisions, and
+    they shipped CONTRADICTING each other for a round: this ledger claimed
+    the reasons were unrecoverable while the README had published them since
+    the first commit. Requiring each RETIRED id to appear in the README keeps
+    the durable record and the machine ledger pointed at the same facts."""
+    problems = []
+    if readme_text is None:
+        problems.append("corpus/README.md is missing, so the retirement "
+                        "ledger's claims are recorded nowhere durable")
+        return problems
+    for retired_id in sorted(RETIRED):
+        if retired_id not in readme_text:
+            problems.append(
+                f"{retired_id} is ledgered as retired in this gate but "
+                "corpus/README.md no longer mentions it. The README is the "
+                "durable record of why an id was withdrawn; a ledger entry "
+                "it does not corroborate is the two-documents-disagree "
+                "defect round 15 caught, in the other direction.")
     return problems
 
 
@@ -483,6 +510,13 @@ def self_test():
          ]), good_notice))),
         # The single-word claim itself: a corpus whose briefest span is two
         # words makes "a single word" false even if the id matches.
+        ("a README that records every retirement reconciles clean",
+         not retirement_problems("... **BUG-0009** reason ... **BUG-0063** reason ...")),
+        ("a missing corpus README is caught",
+         any("recorded nowhere durable" in p for p in retirement_problems(None))),
+        ("a ledgered retirement the README no longer mentions is caught",
+         any("BUG-0063" in p and "no longer mentions" in p
+             for p in retirement_problems("only **BUG-0009** is here"))),
         ("a multi-word briefest is caught",
          any("word(s))" in p for p in notice_problems(corpus([
              entry(1, evidence='log said "rail collapsed under load" at boot',
@@ -510,16 +544,24 @@ def self_test():
             _clean = main([])
         # notice_problems is a separate call in main(); the check() stub above
         # proves nothing about it, and an unwired reconciliation is the exact
-        # defect it exists to catch.
+        # defect it exists to catch. Same for retirement_problems.
         globals()["notice_problems"] = lambda *_a, **_k: ["planted"]
         with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
             _planted_notice = main([])
+        globals()["notice_problems"] = lambda *_a, **_k: []
+        _real_retire = retirement_problems
+        globals()["retirement_problems"] = lambda *_a, **_k: ["planted"]
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _planted_retire = main([])
+        globals()["retirement_problems"] = _real_retire
     finally:
         globals()["check"], globals()["notice_problems"] = _real, _real_notice
     cases.append(("main() exits non-zero when a problem is found", _planted == 1))
     cases.append(("main() exits zero when none is", _clean == 0))
     cases.append(("main() exits non-zero when the NOTICE reconciliation fails",
                   _planted_notice == 1))
+    cases.append(("main() exits non-zero when the retirement reconciliation fails",
+                  _planted_retire == 1))
 
     failures = 0
     for name, ok in cases:
@@ -539,7 +581,10 @@ def main(argv):
         document = load(CORPUS)
         notice = ROOT / "NOTICE"
         notice_text = notice.read_text(encoding="utf-8") if notice.is_file() else None
-        problems = check(document) + notice_problems(document, notice_text)
+        readme = ROOT / "corpus" / "README.md"
+        readme_text = readme.read_text(encoding="utf-8") if readme.is_file() else None
+        problems = (check(document) + notice_problems(document, notice_text)
+                    + retirement_problems(readme_text))
     except GateUnavailable as exc:
         print(f"corpus: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
