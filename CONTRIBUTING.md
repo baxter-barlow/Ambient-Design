@@ -35,11 +35,18 @@ The DCO workflow checks every pull-request commit.
 
 ## Verification
 
-Run the narrow checks first, then every affected integration and domain gate. At minimum, repository-policy changes must pass:
+`make all` runs every gate the repository has -- layout and policy, toolchain
+pins, schema validation, part-data lint, IR hashing, corpus and classification,
+the bake-off and grammar suites, the eval-harness tests, benchmark simulation,
+the golden-file harness, and the gate-coverage measurement. Run it before every
+handoff; a change scoped to one area can also run its named target first
+(`make structure`, `make sim`, `make grammar`, ... -- see the Makefile).
+Repository-policy changes must additionally pass:
 
 ```sh
 sh .agents/skills/verify-rhoform-change/scripts/validate-layout.sh
-sh -n .github/scripts/check-dco.sh
+sh .github/scripts/check-dco.sh --self-test
 ```
 
-Implementation-specific commands will be added after the language and toolchain are frozen.
+(An earlier revision of this section predated the gate suite and named only
+the two policy scripts; the suite is frozen now and `make all` is the bar.)

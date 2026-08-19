@@ -73,7 +73,11 @@ rating point: 3.6/2.26 = **1.6x** at the 10%-drop Isat, 5.5/2.26 = 2.4x at
 the 20%-drop rating. A 100% overload transient (4.256 A) stays below the
 5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
 gracefully rather than collapsing. RMS heating: Irms ~= 2.0 A vs 7.3 A
-(20 C rise) rating.
+(20 C rise) rating. The BOM records L at +/-20%: at the -20% corner (8 uH)
+the ripple scales by 1/0.8 to 0.640 App, Ipk rises to 2.32 A, and the
+margins become 3.6/2.32 = 1.55x (10%-drop Isat) and 5.5/2.32 = 2.4x -- the
+conclusions above are computed at nominal L and survive the tolerance
+corner.
 
 ## 4. Output capacitor
 
@@ -99,18 +103,27 @@ with loop crossover fc, the droop is approximately
     DV_step ~= DI / (2 pi x fc x C) = 1.0 / (2 pi x 30e3 x 36e-6) = 147 mV
 
 which recovers within the band well inside 500 us (measured settling:
-16.86 us to +/-1%). A ripple-only design (~7 uF) would have failed the step
-spec; 2x22 uF satisfies both with margin.
+16.86 us to +/-1%). A ripple-only design -- DIL/(8 x fsw x DV_spec) =
+0.5119/(8 x 500e3 x 0.05) ~= 2.6 uF -- would have failed the step spec by an
+order of magnitude (DV_step ~= 1.0/(2 pi x 30e3 x 2.6e-6) ~= 2.0 V); 2x22 uF
+satisfies both with margin. (A previous revision said "~7 uF" here, a number
+derivable from nothing shipped.)
 
-Input capacitor: worst-case input RMS ripple current
+Input capacitor: worst-case input RMS ripple current. sqrt(D x (1-D)) grows
+toward D = 0.5, so over the 9..14 V input window the worst case is the 9 V
+corner, not nominal:
 
-    Irms,in = Iout x sqrt(D x (1-D)) = 2 x sqrt(0.275 x 0.725) = 0.89 A
+    Irms,in = Iout x sqrt(D x (1-D))
+            = 2 x sqrt(0.275 x 0.725) = 0.89 A   at 12 V nominal (D = 0.275)
+            = 2 x sqrt(0.40  x 0.60)  = 0.98 A   at 9 V, practical D' ~= 0.40
 
-2x **Murata GRM32DR71E106KA12L** (10 uF +/-10%, 25 V, X7R, 1210, 3.2 x 2.5 x
-2.0 mm; Murata product catalog) split this, ~0.45 A rms each; 25 V rating vs
-14 V max input gives 1.8x derating headroom. Per-part rms current handling
-should be confirmed against Murata's temperature-rise curves at 500 kHz for
-the final land pattern -- not claimed here.
+(A previous revision published the 12 V evaluation labelled "worst-case",
+understating the stress by ~10%.) 2x **Murata GRM32DR71E106KA12L** (10 uF
++/-10%, 25 V, X7R, 1210, 3.2 x 2.5 x 2.0 mm; Murata product catalog) split
+this, ~0.49 A rms each at the 9 V corner; 25 V rating vs 14 V max input gives
+1.8x derating headroom. Per-part rms current handling should be confirmed
+against Murata's temperature-rise curves at 500 kHz for the final land
+pattern -- not claimed here.
 
 ## 5. Power semiconductors
 
@@ -175,7 +188,7 @@ Divider from the LM25145's 0.8 V reference:
 31.2k is an E192 value (192 x log10(3.12) = 95); 10k is E96. 80 uA divider
 current. Worst-case DC error stack: +/-1% ref, +/-1% resistors x2 -> +/-2.52%
 about a regulation point that sits 0.12% low, giving +2.42%/-2.60% -- inside
-the +/-3% window on both sides, and the table in sec. 12 reproduces it
+the +/-3% window on both sides, and the table in the Output-voltage error stack section (end of this document) reproduces it
 (3.2141 .. 3.3799 V). Production would use 0.5% resistors if this were a
 shipping design; that is margin commentary, not a spec change.
 
@@ -228,7 +241,9 @@ Original construction, no vendor models:
   coming up under a rising rail); load is a 3.3 Ohm base (1 A) plus a 1 A
   PWL current step at t = 1.5 ms; `.tran 100n 2.5m 0 2n` gives 1250 cycles,
   1000 points per cycle.
-- **Settling detector**: a B-source flags |Vout - 3.296| > 33.0 mV; the
+- **Settling detector**: a B-source flags |Vout - 3.296| > 32.96 mV (the
+  deck's `SBAND`, 1% of the 3.296 V target; a previous revision rounded it
+  to 33.0 mV here, which is 1.001%); the
   `.meas ... FALL=LAST` on that flag implements "enters and stays within
   +/-1%" exactly, immune to multi-crossing ringing.
 
@@ -303,11 +318,17 @@ it should be re-derived against a real switching model at rung 1.
 
 `startup_overshoot` **measures steady-state ripple, not overshoot.** Probing the
 same expression over 1.20-1.40 ms — a window containing no startup transient,
-since soft-start ends at 600 us — gives 0.0466 % against the assertion's
-0.0466 %. The residual true overshoot is `vout_max_startup 3.29754` against
-`vmax_late 3.29753`, about 0.01 mV. The reported figure is half the
-peak-to-peak ripple over the mean. It would report the same number on a
-converter with no soft-start at all.
+since soft-start ends at 600 us — gives 0.0459 % against the assertion's
+0.0466 %. The residual true overshoot is `vout_max_startup 3.29754` (at
+1.117 ms) against `vmax_late 3.29751`, about 0.03 mV. The reported figure is
+half the peak-to-peak ripple over the mean; it would report nearly the same
+number on a converter with no soft-start at all. (A previous revision quoted
+0.0466 %/3.29753 for this probe — numbers no single window over the shipped
+deck produces; the exact-match figure only arises from a window that still
+contains the 1.117 ms peak, which would have voided the point being made.
+Re-derived from the deck: append
+`.meas tran vmax_late MAX v(out) from=1.2m to=1.4m` and
+`.meas tran ripple_late_pct PARAM=(vmax_late/vout_pre - 1)*100`.)
 
 Both are kept because they bound something real (a loss budget, a ripple
 envelope) and both are labelled `informational_at_rung_0` in assertions.yaml so
