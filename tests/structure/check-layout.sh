@@ -82,6 +82,8 @@ self_test() {
       > "$st_root/tests/ir/check-hashes.py"
     printf '#!/usr/bin/env bash\necho "sim-assert: PASS: blinker-555: fixture ok"\necho "sim-assert: PASS: buck-3v3: fixture ok"\n' \
       > "$st_root/tests/benchmarks/run-sim.sh"
+    printf 'import sys\nprint("hand-assert: PASS: esp32s3-devboard: fixture " + sys.argv[1].split("/")[-1])\n' \
+      > "$st_root/tests/benchmarks/check-hand-assertions.py"
   }
   st_write_logs() {
     printf 'stub-corpus: self-test PASS: 1 cases.\nstub-corpus: PASS: fixture summary.\n' \
@@ -92,13 +94,16 @@ self_test() {
       > "$st_root/benchmarks/blinker-555/validation.log"
     printf 'sim-assert: PASS: buck-3v3: fixture ok\n' \
       > "$st_root/benchmarks/buck-3v3/validation.log"
+    printf 'hand-assert: PASS: esp32s3-devboard: fixture esp32s3-devboard\n' \
+      > "$st_root/benchmarks/esp32s3-devboard/validation.log"
   }
 
   rm -rf "$st_root"
   mkdir -p "$st_root/tests/structure" "$st_root/tests/corpus" \
            "$st_root/tests/ir" "$st_root/tests/benchmarks" \
            "$st_root/toolchain" "$st_root/corpus" "$st_root/ir" \
-           "$st_root/benchmarks/blinker-555" "$st_root/benchmarks/buck-3v3"
+           "$st_root/benchmarks/blinker-555" "$st_root/benchmarks/buck-3v3" \
+           "$st_root/benchmarks/esp32s3-devboard"
   local f i
   for f in AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSE LICENSES.md NOTICE README.md; do
     printf 'fixture\n' > "$st_root/$f"
@@ -230,14 +235,20 @@ self_test() {
 
   mv "$st_root/ir/validation.log" "$st_tmp/ir-log.away"
   st_expect "a skipped pair trips the transcript floor" 1 \
-    "reconciled 4 evidence summary line(s)" "quietly checks nothing"
+    "reconciled 5 evidence summary line(s)" "quietly checks nothing"
+
+  printf 'hand-assert: PASS: esp32s3-devboard: stale tally\n' \
+    > "$st_root/benchmarks/esp32s3-devboard/validation.log"
+  st_expect "a stale summary in an ARGUMENT-carrying pair fails" 1 \
+    "quotes a summary the gate no longer prints" "stale tally"
+  st_write_logs
   mv "$st_tmp/ir-log.away" "$st_root/ir/validation.log"
 
   if [ "$st_failures" -ne 0 ]; then
     printf 'layout: SELF-TEST FAILED: %s case(s)\n' "$st_failures" >&2
     return 1
   fi
-  printf 'layout: self-test PASS: 24 cases.\n'
+  printf 'layout: self-test PASS: 25 cases.\n'
   return 0
 }
 
@@ -414,18 +425,18 @@ transcripts_checked=0
 TRANSCRIPT_PAIRS="corpus/validation.log:tests/corpus/check-classification.py
 ir/validation.log:tests/ir/check-hashes.py
 benchmarks/blinker-555/validation.log:tests/benchmarks/run-sim.sh:sim-assert: PASS: blinker-555:
-benchmarks/buck-3v3/validation.log:tests/benchmarks/run-sim.sh:sim-assert: PASS: buck-3v3:"
+benchmarks/buck-3v3/validation.log:tests/benchmarks/run-sim.sh:sim-assert: PASS: buck-3v3:
+benchmarks/esp32s3-devboard/validation.log:tests/benchmarks/check-hand-assertions.py benchmarks/esp32s3-devboard:hand-assert: PASS: esp32s3-devboard:"
 
-# Evidence files that genuinely quote no live gate summary, each with the
-# reason held here so an entry is a decision rather than an escape:
-#   - esp32s3-devboard/validation.log says in its own closing lines that its
-#     tallies are a record of 2026-08-15, not re-runnable evidence, and that
-#     "the evidence you can re-run is the gate" (check-hand-assertions.py);
+# Evidence files that genuinely quote no live gate summary, with the reason
+# held here so an entry is a decision rather than an escape:
 #   - buck-3v3/validation-corners.log is re-derived block by block by
 #     tests/benchmarks/check-corners.py, which re-runs each modified deck; it
 #     quotes no summary line, so there is nothing for THIS engine to compare.
-NO_SUMMARY_EVIDENCE="benchmarks/esp32s3-devboard/validation.log
-benchmarks/buck-3v3/validation-corners.log"
+# The esp32s3 log sat in this list for one round with a reason that was
+# FALSE -- it quotes the live hand-assert summary at its line 169 -- which is
+# exactly the drift the pair engine exists to catch. It is a pair now.
+NO_SUMMARY_EVIDENCE="benchmarks/buck-3v3/validation-corners.log"
 
 # THE PAIR LIST IS A POPULATION CLAIM, and until now it was hand-maintained:
 # a new evidence file quoting a gate summary joined no list and was checked by
@@ -449,11 +460,17 @@ while IFS= read -r pair; do
   evidence="$ROOT/${pair%%:*}"
   rest="${pair#*:}"
   # An optional third field pins WHICH summary line to compare, for a command
-  # that prints one per benchmark.
+  # that prints one per benchmark; the command field may carry ONE
+  # repo-relative argument after a space (check-hand-assertions needs its
+  # benchmark directory).
   case "$rest" in
-    */*.sh:*|*/*.py:*) command="$ROOT/${rest%%:*}"; pattern="${rest#*:}" ;;
-    *) command="$ROOT/$rest"; pattern="" ;;
+    *:*) command_spec="${rest%%:*}"; pattern="${rest#*:}" ;;
+    *) command_spec="$rest"; pattern="" ;;
   esac
+  command_path=${command_spec%% *}
+  command_arg=""
+  [ "$command_spec" = "$command_path" ] || command_arg="$ROOT/${command_spec#* }"
+  command="$ROOT/$command_path"
   [ -f "$evidence" ] && [ -f "$command" ] || continue
   # BOTH summary lines. The first version grepped for "$prefix: PASS", which
   # does not match "$prefix: self-test PASS", so the self-test line above it
@@ -461,8 +478,8 @@ while IFS= read -r pair; do
   # checks. The round-9 fix reconciled the line the round-9 defect was on.
   if [ -n "$pattern" ]; then
     case "$command" in
-      *.sh) fresh=$(bash "$command" 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
-      *)    fresh=$(python3 "$command" 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
+      *.sh) fresh=$(bash "$command" ${command_arg:+"$command_arg"} 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
+      *)    fresh=$(python3 "$command" ${command_arg:+"$command_arg"} 2>/dev/null | grep -m1 -- "$pattern" || true) ;;
     esac
   else
     fresh=$(python3 "$command" 2>/dev/null | grep -m1 ": PASS" || true)
@@ -524,8 +541,8 @@ while IFS= read -r pair; do
     exit 1
   fi
 done <<<"$TRANSCRIPT_PAIRS"
-if [ "$transcripts_checked" -lt 6 ]; then
-  printf 'FAIL: reconciled %s evidence summary line(s), expected 6. A leg that\n' \
+if [ "$transcripts_checked" -lt 7 ]; then
+  printf 'FAIL: reconciled %s evidence summary line(s), expected 7. A leg that\n' \
     "$transcripts_checked" >&2
   printf 'quietly checks nothing is indistinguishable from one that passes.\n' >&2
   exit 1
