@@ -111,11 +111,11 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
-    "parts/lint-part-data.py": (30, 5),
+    "parts/lint-part-data.py": (32, 5),
     "tests/benchmarks/check-assertions.py": (30, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
-    "tests/benchmarks/check-hand-assertions.py": (48, 15),
+    "tests/benchmarks/check-hand-assertions.py": (61, 15),
     "tests/benchmarks/run-sim.sh": (22, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
@@ -130,7 +130,7 @@ CEILINGS = {
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (27, 10),
+    "tests/toolchain/check-pins.py": (28, 10),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -163,7 +163,9 @@ OWNERS = {
     "tests/benchmarks/check-hand-assertions.py": (
         # `current` and `parts` assemble a shown-work fragment being split;
         # neither reports anything.
-        {"problems"}, {"cases", "parts", "shape", "current"}),
+        # `want`, `current` and `parts` assemble a shown-work fragment or a
+        # summation's expected terms; none reports anything.
+        {"problems"}, {"cases", "parts", "shape", "current", "want"}),
     "tests/benchmarks/derive-555-windows.py": (
         {"problems"}, {"cases"}),
     "tests/corpus/check-classification.py": (
@@ -688,6 +690,18 @@ def _restore_stray_mutants(root=None) -> int:
     root = ROOT if root is None else root
     restored = 0
     for stray in sorted(root.rglob("*.coverage-backup")):
+        # NOT another checkout's. A linked worktree nested under this tree
+        # takes a different lock (its own .git/worktrees/<name>/...), so the
+        # two can measure at once -- and this sweep would os.replace a live
+        # backup out from under the other run, whose own restore then raises
+        # out of its finally clause (round 21). .gitignore records that a
+        # worktree has actually sat at .claude/worktrees/.
+        if any((parent / ".git").exists()
+               for parent in stray.parents
+               if parent != root and root in parent.parents):
+            print(f"gate-coverage: leaving {stray.relative_to(root)} alone: "
+                  "it belongs to another checkout nested in this tree.")
+            continue
         original = stray.with_name(stray.name[:-len(".coverage-backup")])
         os.replace(stray, original)
         print(f"gate-coverage: restored {original.relative_to(root)} "
@@ -963,8 +977,16 @@ def self_test_only_gates(makefile_text, bucket_gates, population,
 
 
 def serial_problems(makefile_text):
-    """The Makefile must forbid parallel execution while mutants exist."""
-    if ".NOTPARALLEL" in makefile_text:
+    """The Makefile must forbid parallel execution while mutants exist.
+
+    On a LIVE line: make honours the directive only outside a comment, and
+    this was the one Makefile reader here that tested the raw text, so
+    `#.NOTPARALLEL:` disarmed serialization with the guard returning clean
+    (round 21). Every other reader goes through _live_makefile_lines, which
+    exists because comment-spelled recipe lines had already defeated three
+    census checks."""
+    if any(".NOTPARALLEL" in line
+           for line in _live_makefile_lines(makefile_text)):
         return []
     return ["the Makefile no longer declares .NOTPARALLEL. The coverage "
             "measurement mutates gate files in place, so a parallel make "
@@ -1486,6 +1508,36 @@ def self_test() -> int:
             (_wt_root / ".git").unlink()
             cases.append(("a tree with no .git at all has no cache location",
                           _git_dir(_wt_root) is None))
+        # WIRING for both concurrency guards. Each had a case for the
+        # FUNCTION and none for the CALL SITE, so replacing both with no-ops
+        # left 71/71 green while a second concurrent measurement ran to
+        # completion and printed PASS (round 21).
+        for guard, marker in (("_acquire_measurement_lock", "planted-lock"),
+                              ("_restore_stray_mutants", "planted-restore")):
+            _held = {name: globals()[name]
+                     for name in ("_acquire_measurement_lock",
+                                  "_restore_stray_mutants")}
+
+            def _planted(*args, _m=marker, **kwargs):
+                raise GateUnavailable(_m)
+            # The OTHER guard is neutralised, never left live: this
+            # self-test runs as a child of the parent's own measurement,
+            # which already holds the real lock, so letting the real
+            # _acquire_measurement_lock run here fails on contention with
+            # the parent rather than on the property under test.
+            for name in _held:
+                globals()[name] = (_planted if name == guard
+                                   else (lambda *a, **k: None))
+            try:
+                wired = []
+                try:
+                    check(wired, ceilings={}, owners={})
+                    reached = False
+                except GateUnavailable as exc:
+                    reached = marker in str(exc)
+            finally:
+                globals().update(_held)
+            cases.append((f"{guard} is WIRED into the measurement", reached))
         cases.append(("the cache lives in .git, not the shared temp dir",
                       _mutation_cache_path() is not None
                       and ".git" in str(_mutation_cache_path())))
@@ -1660,7 +1712,15 @@ def self_test() -> int:
         cases.append((f"today's test files are all collected "
                       f"({uncollected_tests()})", not uncollected_tests()))
         real = []
-        measured, unpinned = check(real)
+        try:
+            measured, unpinned = check(real)
+        except GateUnavailable as exc:
+            # `make gate-coverage` runs --self-test first, so the very
+            # contention the lock exists for used to surface here as an
+            # uncaught traceback and exit 1 -- "a gate regressed" -- in the
+            # multi-agent situation the lock was added for (round 21).
+            print(f"gate-coverage: UNAVAILABLE: {exc}", file=sys.stderr)
+            return 2
         cases.append((f"every shipped gate is at or under its ceiling ({real})", not real))
         cases.append(("every named gate was measured", measured == len(CEILINGS)))
         cases.append(("the unpinned shell total is published", unpinned > 0))
