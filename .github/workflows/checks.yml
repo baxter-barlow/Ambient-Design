@@ -33,8 +33,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pinned ngspice, git and Python
+        # The container image is a dated testing snapshot, but apt's default
+        # sources track the LIVE testing archive, which moves independently of
+        # the image digest and dropped ngspice 46+ds-1 on 2026-08-21 while the
+        # image still expected it. apt must point at snapshot.debian.org for
+        # the image's own date so the exact pin stays resolvable; the frozen
+        # snapshot's Release files age past their Valid-Until, hence the
+        # check-valid-until override. Keep the snapshot date in sync with the
+        # image tag above.
         run: |
-          apt-get update
+          rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
+          printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
+          apt-get -o Acquire::Check-Valid-Until=false update
           apt-get install -y --no-install-recommends ngspice=46+ds-1 git python3 python3-yaml
           ngspice --version | head -n 2
       - name: Install pinned PyYAML
@@ -259,9 +269,15 @@ jobs:
         # Exact package pin from toolchain/versions.yaml (ngspice). apt
         # fails loudly if the snapshot no longer resolves this revision;
         # that failure means the pin must be consciously revisited, never
-        # silently upgraded.
+        # silently upgraded. Sources point at snapshot.debian.org for the
+        # image's own date (the live testing archive moves independently of
+        # the pinned image digest and dropped 46+ds-1 on 2026-08-21); the
+        # frozen snapshot's Release files age past their Valid-Until, hence
+        # the override. Keep the snapshot date in sync with the image tag.
         run: |
-          apt-get update
+          rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
+          printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
+          apt-get -o Acquire::Check-Valid-Until=false update
           apt-get install -y --no-install-recommends ngspice=46+ds-1
           ngspice --version | head -n 5
       - name: Install Python and PyYAML for the assertion check
