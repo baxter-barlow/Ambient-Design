@@ -166,10 +166,12 @@ names a session scratchpad path, which AGENTS.md forbids outright.
 
 The reproducible artifact is tests/benchmarks/check-hand-assertions.py. It
 re-derives A1-A8 from assertions.yaml, power-tree.yaml and the part records,
-reconciles three design.md figures against them, runs under `make all`, and
+reconciles design.md figures and every published margin against them,
+recomputes the shown work in this file and power-tree.yaml, runs under
+`make all`, and
 prints:
 
-  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 7 design.md figure(s) reconcile against them; 3 published margin(s) are the gate's own slack; 7 power-tree figure(s) agree; 40 shown-work claim(s) recompute.
+  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 7 design.md figure(s) reconcile against them; 10 published margin(s) are the gate's own slack; 39 power-tree figure(s) agree; 42 shown-work claim(s) recompute.
 
 It also names the two it cannot mechanise and why -- A9_strapping_dc_state
 (a boot-mode truth table, not a numeric relation) and A10_single_pin_nets_l9b
@@ -248,3 +250,41 @@ temperature would be 132.7 C, above this design's own 125 C gate (96.6 C at
 the 62 C/W pour assumption). A5 remains gated at 5.25 V; the basis and the
 derived corner are stated in power-tree.yaml rather than left implicit, and
 choosing which bound this benchmark should model is AMB-126.
+
+=== Correction, 2026-08-21 (AMB-123 round 21) ===
+The shown-work reader shipped last round compared each claim against a
+tolerance taken from its mantissa's decimals with the exponent ignored, so
+`281e-6` was checked to +/-0.5 A: 15 of the 40 claims -- every engineering-
+notation row in this tree -- were being compared at between 1% and 555,556%
+of their own value, and a 1400x error in a mode total passed. The precision
+a row publishes now includes its exponent. Nothing in either file turned out
+to be wrong; the checks were.
+
+Two further ways a claim went unread are closed. Units written INSIDE an
+expression (`0.500 A - 0.39531 A`) made a fragment unevaluable, and an
+unevaluable claim was a silent skip rather than a failure -- so a falsehood
+could be hidden in a row whose recorded claim count asserted full coverage.
+And the population was strings containing `=`, which four of the five T10
+margin rows do not, so they could not even join it. Any string carrying a
+number is in the population now, prose rows named at zero claims.
+
+The T10 margins themselves -- including this benchmark's own "-> T10 PASS"
+verdict -- are reconciled against each mode's total and the declared source
+capability, both the milliamps and the percentage.
+
+The data layer is no longer decoration. sources/edges/loads were read by
+nothing while every summation restated them as literals, so the table and
+the arithmetic claiming to sum it could disagree silently; each summation's
+terms are now bound to the loads they sum, with the three figures that
+deliberately differ (the LED taken at VBUS max, twice, and the dropped 1 uA
+pull-up leakage at the two coarse branches) named with their reasons. And
+every numeric assertion input is classified: bound to the tree path it
+copies, or declared as coming from somewhere else. A1's rail interval, A3's
+worst rail load, A6's PTC hold current and A7's predicted deep-sleep current
+were transcriptions of tree rows that answered to nothing.
+
+A3 recorded 0.39166 A as the worst 3.3 V rail load. That is the LDO INPUT
+current (the p3v3 total plus the 60 uA Iq that flows Vin->GND); its own expr
+binds the operand to sum(p3v3_loads), which is 0.39160 A, and A4 records the
+same physical quantity correctly. Corrected. The 60 uA error was in the
+conservative direction and no verdict moves.
