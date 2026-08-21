@@ -78,9 +78,6 @@ DECK = CASE / "netlist.cir"
 BOM = CASE / "parts.yaml"
 
 VCC = 9.0
-# Tolerances come from the BOM, which is where a 1% resistor is declared to be
-# a 1% resistor. The VALUES come from the deck -- see passives_from_deck.
-RA_TOL, RB_TOL, C_TOL = 0.01, 0.01, 0.05
 
 # SPICE magnitude suffixes, longest first so `meg` is not read as `m`.
 SPICE_SUFFIX = (("meg", 1e6), ("mil", 25.4e-6), ("k", 1e3), ("g", 1e9),
@@ -141,6 +138,38 @@ def passives_from_deck(deck_text: str) -> dict:
     return values
 
 
+def tolerance_from_bom(bom_text: str, ref: str) -> float:
+    """The declared tolerance of one BOM line, as a fraction.
+
+    The comment above these values said they "come from the BOM, which is
+    where a 1% resistor is declared to be a 1% resistor" -- and they were
+    module constants, with `BOM` a dead variable (round 20). Changing CT
+    from `1uF 5%` to `1uF 20%` in the BOM left all three GATED windows
+    byte-identical, because spice_value() parses the number and discards the
+    tolerance token. The windows are as wide as the tolerances, so this was
+    the load-bearing half of the derivation.
+    """
+    block = re.search(rf"^\s*-\s*ref:\s*{re.escape(ref)}\s*$",
+                      bom_text, re.M)
+    if block is None:
+        raise ValueError(
+            f"parts.yaml declares no {ref}; the timing window cannot be "
+            "derived from tolerances the BOM does not state.")
+    value = re.search(r"^\s*value:\s*(.+)$", bom_text[block.end():], re.M)
+    percent = re.search(r"([0-9]*\.?[0-9]+)\s*%",
+                        value.group(1)) if value else None
+    if percent is None:
+        raise ValueError(
+            f"parts.yaml's {ref} states no tolerance; a window derived from "
+            "an assumed tolerance is an assumption published as a bound.")
+    return float(percent.group(1)) / 100.0
+
+
+def _bom_tolerances():
+    text = BOM.read_text(encoding="utf-8")
+    return tuple(tolerance_from_bom(text, ref) for ref in ("RA", "RB", "CT"))
+
+
 def _deck_passives():
     found = passives_from_deck(DECK.read_text(encoding="utf-8"))
     missing = [ref for ref in ("RA", "RB", "CT") if ref not in found]
@@ -156,6 +185,7 @@ _DECK_READ_ERROR = None
 try:
     _PASSIVES = _deck_passives()
     RA, RB, C = _PASSIVES["RA"], _PASSIVES["RB"], _PASSIVES["CT"]
+    RA_TOL, RB_TOL, C_TOL = _bom_tolerances()
 except (OSError, ValueError) as exc:
     # Import must stay safe (check-assertions imports this module), but a
     # derivation over these constants gates a circuit that no longer exists:
@@ -401,6 +431,33 @@ def self_test() -> int:
         ("a readable deck reports no read problem",
          deck_read_problems() == []),
     ]
+
+    # THE TOLERANCES, read from the BOM line that declares them. They were
+    # module constants under a comment saying they came from the BOM, and
+    # `BOM` was a dead variable, so respecifying CT from 5% to 20% left all
+    # three GATED windows byte-identical (round 20). The windows are exactly
+    # as wide as these numbers.
+    def _refusal(thunk):
+        try:
+            thunk()
+        except ValueError as exc:
+            return str(exc)
+        return ""
+
+    _BOM_TEXT = ("parts:\n  - ref: RA\n    value: 100k 1% 0.25W\n"
+                 "  - ref: CT\n    value: 1uF 5% 63V\n")
+    cases.append(("a declared tolerance is read from its BOM line",
+                  tolerance_from_bom(_BOM_TEXT, "RA") == 0.01
+                  and tolerance_from_bom(_BOM_TEXT, "CT") == 0.05))
+    cases.append(("a BOM line stating no tolerance refuses, not assumes",
+                  "states no tolerance" in _refusal(
+                      lambda: tolerance_from_bom(
+                          "parts:\n  - ref: CT\n    value: 1uF 63V\n", "CT"))))
+    cases.append(("a BOM that no longer declares the ref refuses",
+                  "declares no CT" in _refusal(
+                      lambda: tolerance_from_bom("parts:\n", "CT"))))
+    cases.append(("the shipped BOM's own tolerances are what the windows use",
+                  _bom_tolerances() == (RA_TOL, RB_TOL, C_TOL)))
 
     # THE FALLBACK REFUSAL. Round 17 hid RB behind a brace: the module fell
     # back to hard-coded constants while its comment claimed main() reported

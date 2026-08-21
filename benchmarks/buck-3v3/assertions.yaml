@@ -70,7 +70,7 @@ assertions:
     informational_at_rung_0: >-
       Measures the steady-state ripple envelope, not overshoot: the same
       expression over a transient-free window returns the same value, and true
-      overshoot here is ~0.01 mV. See design.md.
+      overshoot here is 0.022 mV. See design.md.
     meas_id: overshoot_pct
     expected:
       max: 5.0

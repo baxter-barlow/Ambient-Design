@@ -9,7 +9,10 @@ set -euo pipefail
 #   - ngspice exits 0 (quit-code protocol);
 #   - the log contains no measurement failure or error lines;
 #   - every declared .meas name produced a value in the log;
-#   - each deck finishes inside the 60 s budget.
+#   - each deck finishes inside its budget: its own runtime_budget_s if
+#     it declares one, otherwise the 60 s default;
+#   - a deck that records measured_runtime_s agrees with its own
+#     validation.log transcript and fits inside its declared budget.
 #
 # Decks run in sorted order for deterministic output. Logs go to a temp
 # directory, never into the repository. Written for bash 3.2+ so it runs
@@ -90,7 +93,12 @@ FAKE
       > "$sandbox/tree/tests/benchmarks/check-hand-assertions.py"
     printf 'ngspice:\n  version: "%s"\n' "$1" > "$sandbox/tree/toolchain/versions.yaml"
     printf 'deck: netlist.cir\n' > "$sandbox/tree/benchmarks/blinker-555/assertions.yaml"
-    printf 'deck: null\n' > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+    # buck-3v3 is named in REQUIRED_RUNTIME_SPECS, so the sandbox fixture
+    # carries the two keys and the transcript they answer to.
+    printf 'deck: null\nruntime_budget_s: 60\nmeasured_runtime_s: 0.1\n' \
+      > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+    printf 'Total elapsed time (seconds) = 0.1\n' \
+      > "$sandbox/tree/benchmarks/buck-3v3/validation.log"
     printf 'deck: null\n' > "$sandbox/tree/benchmarks/esp32s3-devboard/assertions.yaml"
     printf '* deck\n.meas tran f_hz trig\n*SIMLOG f_hz = 1.0\n.end\n' \
       > "$sandbox/tree/benchmarks/blinker-555/netlist.cir"
@@ -165,11 +173,19 @@ FAKE
   expect "a recorded runtime with no transcript to answer to fails" 2 \
     "answers to nothing"
 
+  rebuild 99
+  printf 'deck: null\nruntime_budget_s: 60\n' \
+    > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+  expect "a named deck that drops measured_runtime_s fails" 2 \
+    "declares no measured_runtime_s"
+
   rebuild 99; mkdir "$sandbox/tree/benchmarks/rogue-bench"
   printf '* deck\n.end\n' > "$sandbox/tree/benchmarks/rogue-bench/netlist.cir"
   expect "a benchmark joining without a spec fails" 2 "cannot join the tree ungated"
 
-  rebuild 99; printf 'title: no deck key\n' > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
+  rebuild 99
+  printf 'title: no deck key\nruntime_budget_s: 60\nmeasured_runtime_s: 0.1\n' \
+    > "$sandbox/tree/benchmarks/buck-3v3/assertions.yaml"
   expect "a spec that does not say whether it has a deck fails" 2 "declares no \`deck:\`"
 
   rebuild 99; touch "$sandbox/tree/benchmarks/buck-3v3/HAND_FAIL"
@@ -257,6 +273,19 @@ REQUIRED_BENCHMARKS="blinker-555 buck-3v3 esp32s3-devboard"
 for required in $REQUIRED_BENCHMARKS; do
   [ -f "$BENCH_DIR/$required/assertions.yaml" ] \
     || fail_env "benchmarks/$required/assertions.yaml is missing; a benchmark cannot leave the gate by losing its spec."
+done
+
+# Which decks must DECLARE a runtime budget and a recorded runtime. The
+# enforcement added last round read those two keys wherever it found them and
+# required them nowhere, so deleting two lines from buck-3v3's spec switched
+# it off with every gate green (round 20) -- opt-in data, not a gate. Named,
+# like every other population here.
+REQUIRED_RUNTIME_SPECS="buck-3v3"
+for required in $REQUIRED_RUNTIME_SPECS; do
+  for key in runtime_budget_s measured_runtime_s; do
+    grep -qE "^$key:" "$BENCH_DIR/$required/assertions.yaml" \
+      || fail_env "benchmarks/$required/assertions.yaml declares no $key; a deck named as carrying a runtime budget cannot drop it and leave the check reading nothing."
+  done
 done
 
 # The JOINING direction, which the list above cannot see: a benchmark
