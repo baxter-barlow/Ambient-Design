@@ -203,10 +203,10 @@ correctness proof; each needs a compiler check plus its own test, not a schema f
 python3 ../tests/schemas/validate-schemas.py   # validates ir/ with the pinned jsonschema
 ```
 
-Uses `python3 -m jsonschema` (the pinned jsonschema) when the `jsonschema` package is present, falls
-back to `npx ajv-cli --spec=draft2020`, and degrades (with a distinct non-zero exit code) to
-well-formedness checking if neither validator is available — degraded coverage is reported,
-never hidden.
+Imports the pinned `jsonschema` library. There is no fallback validator and no degraded mode:
+without `jsonschema` the gate prints one FAIL line and exits 2, because an unavailable gate is
+not a pass. (This paragraph described `ir/validate.sh`, which no longer exists; it promised an
+ajv fallback and a well-formedness mode the gate has never had.)
 
 Two case kinds run. The two examples must **validate**; every file in `examples/negative/` must be
 **rejected**. A negative control that validates fails the run, which is what stops the schema from

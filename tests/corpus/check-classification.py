@@ -850,15 +850,20 @@ def summary_block(entries) -> str:
         "| in-scope check family | count |",
         "|---|---|",
     ]
+    # EVERY DECLARED FAMILY, including the empty ones -- the same argument
+    # the at-risk block below makes for itself. Suppressing zero-count rows
+    # published five of the eight declared families, so two check families
+    # no corpus entry exercises (dimension-interval, part-binding) appeared
+    # nowhere at all, and a reader planning the AC2 gate run could not see
+    # that they will be gated by nothing (round 21). Only
+    # ground-architecture's absence was disclosed, in prose, under AMB-124.
     for family in sorted(FAMILIES):
         count = sum(1 for e in in_scope if e.get("family") == family)
-        if count:
-            lines.append(f"| `{family}` | {count} |")
+        lines.append(f"| `{family}` | {count} |")
     lines += ["", "| out-of-scope reason | count |", "|---|---|"]
     for reason in sorted(REASONS):
         count = sum(1 for e in out_scope if e.get("reason") == reason)
-        if count:
-            lines.append(f"| `{reason}` | {count} |")
+        lines.append(f"| `{reason}` | {count} |")
 
     # Emitted unconditionally. An honest disclosure that vanishes when nobody
     # fills it in is worse than none: removal shows up in a diff, but an empty

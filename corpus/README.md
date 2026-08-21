@@ -246,14 +246,19 @@ AC2 gate: the static tier must catch **19 of 21** in-scope bugs (≥90%).
 |---|---|
 | `abs-max-containment` | 3 |
 | `current-budget` | 1 |
+| `dimension-interval` | 0 |
 | `erc-pin-role` | 12 |
+| `ground-architecture` | 0 |
 | `net-topology` | 3 |
+| `part-binding` | 0 |
 | `voltage-domain-crossing` | 2 |
 
 | out-of-scope reason | count |
 |---|---|
 | `d3-gap` | 30 |
+| `dynamic-deferred` | 0 |
 | `dynamic-vocabulary` | 5 |
+| `ground-arch-excluded` | 0 |
 | `not-expressible` | 2 |
 | `v1-non-goal` | 3 |
 
