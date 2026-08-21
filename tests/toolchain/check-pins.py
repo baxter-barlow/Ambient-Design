@@ -207,6 +207,51 @@ def makefile_commands():
 MINIMUM_CI_COMMANDS = 20
 
 
+# CI gate commands that deliberately have no local target, each with the
+# reason. The Makefile states "Everything CI runs, with ONE stated
+# exception"; this is that exception, in the form a gate can read.
+CI_ONLY_COMMANDS = {
+    "docker manifest inspect": "needs network, so it cannot be a local target",
+}
+
+
+def makefile_coverage_problems(makefile_text, workflow_text) -> list[str]:
+    """Every gate CI runs must also be a command `make all` runs.
+
+    Only the Makefile-subset-of-CI direction was enforced, so a gate wired
+    into a workflow and into no target left `make all` green and the pull
+    request red -- the exact condition the Makefile's own comment says used
+    to be true and was fixed by hand, with no guard against it recurring
+    (round 21). A CI command with no local target must be named in
+    CI_ONLY_COMMANDS with its reason."""
+    # By SCRIPT, not by whole line: dco.yml legitimately runs check-dco.sh
+    # over the pull request's commit range where the Makefile runs it over
+    # the whole history, which is a different argument list for the same
+    # gate. What must not differ is which gates exist locally.
+    script = re.compile(r"(?:python3?|bash|sh)\s+(\S+\.(?:py|sh))\b")
+    local = set()
+    for line in makefile_text.splitlines():
+        found = script.search(line.strip())
+        if found:
+            local.add(found.group(1))
+    problems = []
+    for raw in workflow_text.splitlines():
+        # `run: cmd` on one line runs the command just as a block line
+        # does; matching only bare lines missed exactly that spelling.
+        line = re.sub(r"^-?\s*run:\s*", "", raw.strip())
+        found = script.match(line)
+        if not found or found.group(1) in local:
+            continue
+        if any(excused in line for excused in CI_ONLY_COMMANDS):
+            continue
+        problems.append(
+            f"CI runs {found.group(1)} and no Makefile line does. `make all` "
+            "would be green on a tree whose pull request is red, on a check "
+            "a contributor has no way to run locally; add the target, or "
+            "name the command in CI_ONLY_COMMANDS with its reason.")
+    return problems
+
+
 def ci_command_problems(required, workflow_text) -> list[str]:
     """Every gate `make all` runs must appear in a live CI step."""
     problems = []
@@ -960,6 +1005,34 @@ def self_test():
     # main() path.
     import contextlib as _ctx
     import io as _io
+    cases.append(("a CI gate with no Makefile target is caught", any(
+        "no Makefile line does" in x for x in makefile_coverage_problems(
+            "all:\n\tpython3 tests/a.py\n",
+            "        run: python3 tests/ci-only.py\n"))))
+    cases.append(("a CI gate the Makefile also runs is clean",
+                  makefile_coverage_problems(
+                      "all:\n\tpython3 tests/a.py\n",
+                      "          python3 tests/a.py\n") == []))
+    cases.append(("the same gate with different arguments is clean",
+                  makefile_coverage_problems(
+                      "all:\n\tsh x/check-dco.sh $(git rev-list HEAD) HEAD\n",
+                      '          sh x/check-dco.sh "$BASE" "$HEAD"\n') == []))
+    cases.append(("a named CI-only command is excused", any(
+        "no Makefile line does" in x for x in makefile_coverage_problems(
+            "all:\n", "          python3 tests/other.py\n"))
+        and makefile_coverage_problems(
+            "all:\n",
+            "          docker manifest inspect kicad/kicad\n") == []))
+    _real_mc = makefile_coverage_problems
+    globals()["makefile_coverage_problems"] = lambda *_a, **_k: ["planted-mc"]
+    try:
+        with _ctx.redirect_stdout(_io.StringIO()), \
+                _ctx.redirect_stderr(_io.StringIO()):
+            _mc_wired = main([])
+    finally:
+        globals()["makefile_coverage_problems"] = _real_mc
+    cases.append(("the CI-subset-of-Makefile check is WIRED into main()",
+                  _mc_wired == 1))
     _real_ws, _real_cc = whitespace_pin_problems, ci_command_problems
     globals()["whitespace_pin_problems"] = lambda *_a, **_k: ["planted-ws"]
     try:
@@ -1453,6 +1526,8 @@ def main(argv):
         missing_jobs.extend(found)
     required, computed = makefile_commands()
     missing_jobs.extend(ci_command_problems(required, workflow_text))
+    missing_jobs.extend(makefile_coverage_problems(
+        MAKEFILE.read_text(encoding="utf-8"), workflow_text))
     for command in computed:
         print(f"toolchain-pins: args-computed: {command!r} runs in CI with a "
               "different commit range, so it is matched by job name rather "
