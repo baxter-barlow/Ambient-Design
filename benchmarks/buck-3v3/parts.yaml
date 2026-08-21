@@ -5,6 +5,17 @@
 # distributor fact no offline gate can hold true: each MPN was verified
 # against live distributor stock in the AMB-123 audit (last full pass round
 # 18, 2026-08-19, after a fabricated R1 part number shipped for two rounds).
+#
+# WHAT THIS BOM DOES NOT YET CARRY, stated because the header above claims
+# buildability (round 20): three support components the design's own prose
+# relies on have no line here -- the HB-SW bootstrap capacitor, without
+# which the LM25145's integrated high-side driver cannot switch; the RT
+# resistor that U1's notes say programs fsw to 500 kHz; and the SS capacitor
+# that design.md attributes the 500 us soft-start ramp (and therefore the
+# gated startup_overshoot figure) to. The behavioral deck models their
+# EFFECT -- the PWL reference ramp and the fixed switching period -- not the
+# parts, so no gate here notices their absence. Specifying them is
+# benchmark-(b) BOM completeness, AMB-128.
 
 parts:
   - ref: U1
