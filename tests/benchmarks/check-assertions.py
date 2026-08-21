@@ -47,6 +47,7 @@ Usage: check-assertions.py <benchmark-dir> <ngspice-log>
        check-assertions.py --self-test
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -89,6 +90,58 @@ MEAS_LINE = re.compile(
 )
 
 QUANTITY = re.compile(r"^\s*(?P<number>-?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*(?P<unit>[A-Za-z%]*)\s*$")
+
+# A transcript states WHICH engine build captured it. ngspice-46 for
+# Darwin-arm64 and ngspice-46 for Debian amd64 are the same pinned version and
+# still disagree in the 4th significant figure on edge-sampled measurements
+# (i_led_on 9.25223e-3 vs 9.25887e-3, first CI run of this gate, 2026-08-21) —
+# so a verbatim capture can equal a fresh run at recorded precision only on
+# the build that captured it. On any other build the comparison is held to the
+# solver's own tolerance instead, and the run says so out loud. A transcript
+# with no stamp fails: scoping that cannot be read is scoping that is not
+# there, and an unstamped transcript would silently get whichever mode the
+# current machine happens to be.
+ENGINE_STAMP_PREFIX = "Engine build:"
+
+# Two correct runs of the same deck on different builds can each sit the
+# solver's default transient reltol (1e-3) from the true value, so the
+# cross-build bar is twice that; vntol (1e-6) floors it so near-zero values
+# are not held to zero percent. These are ngspice's own knobs, not dials of
+# this gate — the self-test pins both so neither can drift up to absorb a
+# real regression.
+CROSS_BUILD_RTOL = 2e-3
+CROSS_BUILD_ATOL = 1e-6
+
+
+def cross_build_tolerance(recorded_value, recorded_text):
+    """The bar a cross-build comparison is held to.
+
+    The solver term alone is not enough: the RECORD is a rounded
+    transcription, and its rounding residual (up to half an ulp at the
+    precision it was written to) eats the solver budget — a 3-figure record
+    can sit 8e-4 relative from the value it transcribes before any real
+    drift, so holding it to a bare 2e-3 would fail a legitimate run on a
+    correct build. The quantization term restores exactly the allowance the
+    recorded precision already spends.
+    """
+    figures = significant_figures(recorded_text)
+    if recorded_value:
+        magnitude = math.floor(math.log10(abs(recorded_value)))
+        half_ulp = 0.5 * 10.0 ** (magnitude - (figures - 1))
+    else:
+        half_ulp = 0.0
+    return max(CROSS_BUILD_RTOL * abs(recorded_value), CROSS_BUILD_ATOL) + half_ulp
+
+
+def engine_stamp():
+    import platform
+    return f"{platform.system()}-{platform.machine()}"
+
+
+def transcript_stamps(log_text):
+    return [line[len(ENGINE_STAMP_PREFIX):].strip()
+            for line in log_text.splitlines()
+            if line.startswith(ENGINE_STAMP_PREFIX)]
 
 # The recorded `measured:` values are rounded transcriptions of a real run, and
 # they are rounded to DIFFERENT precisions: `0.112` claims three significant
@@ -220,7 +273,8 @@ def meas_id_of(assertion, name):
     return str(assertion.get("meas_id") or name).lower()
 
 
-def check_benchmark(case, spec, log_text, problems, minimum=None):
+def check_benchmark(case, spec, log_text, problems, minimum=None,
+                    cross_build=False):
     """One benchmark's assertions against one ngspice log."""
     measured = parse_log(log_text)
     assertions = spec.get("assertions") or []
@@ -327,6 +381,21 @@ def check_benchmark(case, spec, log_text, problems, minimum=None):
             except ValueError as exc:
                 problems.append(f"{label}: {exc}")
                 continue
+            if cross_build:
+                # The record was transcribed on the transcript's engine build;
+                # this run is on a different one, so recorded precision is not
+                # the right bar — the solver tolerance plus the record's own
+                # rounding allowance is (see cross_build_tolerance).
+                tolerance = cross_build_tolerance(expected_value, str(recorded))
+                if abs(value - expected_value) > tolerance:
+                    problems.append(
+                        f"{label}: the recorded `measured:` value "
+                        f"{expected_value:.6g} differs from this run's "
+                        f"{value:.6g} by more than the cross-build tolerance "
+                        f"({CROSS_BUILD_RTOL:g} relative), so the record is "
+                        "stale on every engine build, not solver noise."
+                    )
+                continue
             figures = significant_figures(recorded)
             if round_to_significant(value, figures) != round_to_significant(
                 expected_value, figures
@@ -369,8 +438,12 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
     recording the old value, with every gate green.
 
     A transcript is a verbatim capture, so every `.meas` value in it must equal
-    the value a fresh run produces, at the precision the transcript states.
-    Returns the number of measurements reconciled.
+    the value a fresh run produces, at the precision the transcript states —
+    on the engine build that captured it. On any other build (the transcript's
+    `Engine build:` stamp differs from this machine's), the same values are
+    held to the solver's cross-build tolerance instead, because two correct
+    builds of the pinned ngspice demonstrably disagree past recorded
+    precision. Returns the number of measurements reconciled.
     """
     log_path = case_dir / "validation.log"
     if not log_path.is_file():
@@ -391,10 +464,21 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
         found = MEAS_LINE.match(line)
         if found:
             fresh.setdefault(found.group("name").lower(), found.group("value"))
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    stamps = transcript_stamps(text)
+    if len(stamps) != 1:
+        problems.append(
+            f"{case_dir.name}/validation.log: carries {len(stamps)} "
+            f"`{ENGINE_STAMP_PREFIX}` line(s); a transcript must state exactly "
+            "one recording build, or its recorded precision cannot be scoped "
+            "to the build that produced it and every other build inherits an "
+            "exactness no solver guarantees.")
+        return 0
+    exact = stamps[0] == engine_stamp()
     reconciled = 0
     seen = set()
     lines_seen = 0
-    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
         found = MEAS_LINE.match(line)
         if not found:
             continue
@@ -413,6 +497,20 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
                 "does not exist is not evidence of anything.")
             continue
         recorded, now = float(found.group("value")), float(fresh[name])
+        if not exact:
+            tolerance = cross_build_tolerance(recorded, found.group("value"))
+            if abs(recorded - now) > tolerance:
+                problems.append(
+                    f"{case_dir.name}/validation.log: records {name} = "
+                    f"{recorded:.6g}, but this run produces {now:.6g} — beyond "
+                    f"the cross-build tolerance ({CROSS_BUILD_RTOL:g} "
+                    f"relative). The transcript was recorded on {stamps[0]} "
+                    f"and this engine build is {engine_stamp()}; a gap this "
+                    "size is a changed deck or a stale record, not solver "
+                    "noise.")
+                continue
+            reconciled += 1
+            continue
         figures = min(significant_figures(found.group("value")),
                       significant_figures(fresh[name]))
         if round_to_significant(recorded, figures) != round_to_significant(now, figures):
@@ -715,11 +813,27 @@ def main(argv):
         return 2
 
     problems = []
+    # The `measured:` values were transcribed from the same authoring run the
+    # transcript captures, so they share its engine-build scoping: exact at
+    # recorded precision on the recording build, solver tolerance elsewhere.
+    # Stamp-count defects (zero or several) are reported by
+    # transcript_problems; here they conservatively leave the exact mode on.
+    transcript_path = case_dir / "validation.log"
+    recorded_stamps = transcript_stamps(
+        transcript_path.read_text(encoding="utf-8", errors="replace")
+        if transcript_path.is_file() else "")
+    cross_build = len(recorded_stamps) == 1 and recorded_stamps[0] != engine_stamp()
+    if cross_build:
+        print(f"sim-assert: note: {case_dir.name}: transcript recorded on "
+              f"{recorded_stamps[0]}, this engine build is {engine_stamp()}; "
+              f"transcript and `measured:` values reconciled within "
+              f"{CROSS_BUILD_RTOL:g} relative (cross-build tolerance), not at "
+              "recorded precision.", file=sys.stderr)
     try:
         spec = load_yaml(spec_path)
         checked = check_benchmark(
             case_dir.name, spec, log_path.read_text(encoding="utf-8", errors="replace"),
-            problems,
+            problems, cross_build=cross_build,
         )
         fresh_text = log_path.read_text(encoding="utf-8", errors="replace")
         # The floor is the number of distinct .meas names the DECK declares,
@@ -772,17 +886,19 @@ def _floor_probe():
 
 def self_test():
     """Prove each rejection fires. A checker nobody has watched fail is prose."""
-    log = "t_period   =  1.01191e+00\nf_osc      =   failed\ni_led_on   =  9.25678e-03\n"
+    log = ("t_period   =  1.01191e+00\nf_osc      =   failed\n"
+           "i_led_on   =  9.25678e-03\ni_zero     =  0.00000e+00\n")
     base = {"assertions": [
         {"name": "osc_period", "meas_id": "t_period",
          "window": ["0.952 s", "1.073 s"], "measured": "1.01191 s"},
     ]}
 
-    def run(spec, text=log):
+    def run(spec, text=log, cross=False):
         problems = []
         # minimum=0: these probes are single assertions by design; the floor is
         # a statement about a real benchmark's population, not about a fixture.
-        check_benchmark("case", spec, text, problems, minimum=0)
+        check_benchmark("case", spec, text, problems, minimum=0,
+                        cross_build=cross)
         return problems
 
     cases = [
@@ -860,18 +976,83 @@ def self_test():
             transcript_problems(case, fresh, ps)
             return ps
 
+    # SAME-BUILD fixtures carry this machine's own stamp, so they exercise the
+    # exact-at-recorded-precision path the shipped transcripts get on the
+    # machine that recorded them. OTHER is any build that is not this one.
+    _STAMP = f"{ENGINE_STAMP_PREFIX} {engine_stamp()}\n"
+    _OTHER = f"{ENGINE_STAMP_PREFIX} Nowhere-riscv128\n"
+
     cases.append(("a transcript matching a fresh run reports nothing", not
-        transcript_probe("t_period   =  1.01191e+00\n", "t_period   =  1.01191e+00\n")))
+        transcript_probe(_STAMP + "t_period   =  1.01191e+00\n", "t_period   =  1.01191e+00\n")))
     cases.append(("a stale transcript value is caught", any(
         "no longer exists" in p for p in transcript_probe(
-            "t_period   =  1.01191e+00\n", "t_period   =  2.00000e+00\n"))))
+            _STAMP + "t_period   =  1.01191e+00\n", "t_period   =  2.00000e+00\n"))))
     cases.append(("a transcript naming a meas the deck dropped is caught", any(
         "no longer emits" in p for p in transcript_probe(
-            "t_ghost    =  1.00000e+00\n", "t_period   =  1.01191e+00\n"))))
+            _STAMP + "t_ghost    =  1.00000e+00\n", "t_period   =  1.01191e+00\n"))))
     cases.append(("ngspice's own exit line is not read as a measurement", not
-        transcript_probe("exit       =  0.00000e+00\n", "t_period   =  1.01191e+00\n")))
+        transcript_probe(_STAMP + "exit       =  0.00000e+00\n", "t_period   =  1.01191e+00\n")))
     cases.append(("a transcript rounded to fewer figures is not failed", not
-        transcript_probe("t_period   =  1.012e+00\n", "t_period   =  1.01191e+00\n")))
+        transcript_probe(_STAMP + "t_period   =  1.012e+00\n", "t_period   =  1.01191e+00\n")))
+
+    # THE ENGINE-BUILD SCOPE. The first CI run of this gate (2026-08-21) showed
+    # the pinned ngspice-46 on two builds disagreeing past recorded precision,
+    # so exactness is scoped to the recording build and every other build is
+    # held to the solver tolerance — visibly, in both directions.
+    cases.append(("a transcript with no engine-build stamp is caught", any(
+        ENGINE_STAMP_PREFIX in p for p in transcript_probe(
+            "t_period   =  1.01191e+00\n", "t_period   =  1.01191e+00\n"))))
+    cases.append(("a transcript with two stamps is caught", any(
+        ENGINE_STAMP_PREFIX in p for p in transcript_probe(
+            _STAMP + _OTHER + "t_period   =  1.01191e+00\n",
+            "t_period   =  1.01191e+00\n"))))
+    cases.append(("cross-build drift inside the solver tolerance passes", not
+        transcript_probe(_OTHER + "t_period   =  1.01191e+00\n",
+                         "t_period   =  1.01300e+00\n")))
+    cases.append(("cross-build drift beyond the solver tolerance is caught", any(
+        "cross-build tolerance" in p for p in transcript_probe(
+            _OTHER + "t_period   =  1.01191e+00\n",
+            "t_period   =  1.01500e+00\n"))))
+    cases.append(("the same build is still held to recorded precision", any(
+        "no longer exists" in p for p in transcript_probe(
+            _STAMP + "t_period   =  1.01191e+00\n",
+            "t_period   =  1.01300e+00\n"))))
+    cases.append(("a cross-build `measured:` within tolerance passes", not run(
+        {"assertions": [
+            {"name": "osc_period", "meas_id": "t_period",
+             "window": ["0.952 s", "1.073 s"], "measured": "1.01300 s"}]},
+        cross=True)))
+    cases.append(("a cross-build `measured:` beyond tolerance is caught", any(
+        "cross-build tolerance" in p for p in run(
+            {"assertions": [
+                {"name": "osc_period", "meas_id": "t_period",
+                 "window": ["0.952 s", "1.073 s"], "measured": "1.01600 s"}]},
+            cross=True))))
+    cases.append(("the cross-build tolerance is a decision, not a dial",
+                  CROSS_BUILD_RTOL == 2e-3 and CROSS_BUILD_ATOL == 1e-6))
+    # The record's own rounding residual must not eat the solver budget: a
+    # 4-figure record sitting 2.09e-3 from a fresh value is within
+    # RTOL + half-ulp (2.03e-3 + 0.5e-3) and must pass; 5.09e-3 must not.
+    cases.append(("a coarse record's rounding allowance is granted cross-build",
+                  not run({"assertions": [
+                      {"name": "osc_period", "meas_id": "t_period",
+                       "window": ["0.952 s", "1.073 s"], "measured": "1.014 s"}]},
+                      cross=True)))
+    cases.append(("the rounding allowance does not swallow real drift", any(
+        "cross-build tolerance" in p for p in run({"assertions": [
+            {"name": "osc_period", "meas_id": "t_period",
+             "window": ["0.952 s", "1.073 s"], "measured": "1.017 s"}]},
+            cross=True))))
+    # Near zero, the relative term vanishes and the vntol floor must carry the
+    # comparison: a 0.1 uA record against a 0 A run is solver noise, not drift.
+    cases.append(("near-zero cross-build values sit on the absolute floor",
+                  not run({"assertions": [
+                      {"name": "leakage", "meas_id": "i_zero",
+                       "window": ["-0.001 A", "0.001 A"],
+                       "measured": "1e-07 A"}]}, cross=True)))
+    cases.append(("the transcript leg grants the absolute floor too", not
+        transcript_probe(_OTHER + "i_zero     =  1.00000e-07\n",
+                         "i_zero     =  0.00000e+00\n")))
 
     # WIRING, as above: main() must turn a finding into a non-zero exit. This
     # drives the real entry point over a benchmark directory whose deck output
@@ -898,6 +1079,40 @@ def self_test():
             _clean = main([str(_case), str(_log)])
     cases.append(("main() exits 1 on a value outside its window", _planted == 1))
     cases.append(("main() exits 0 on a value inside it", _clean == 0))
+
+    # THE MODE SELECTOR IS WIRING TOO. `cross_build = False` hard-coded, or
+    # `= True`, must each fail a case: the first turns CI's cross-build runs
+    # into recorded-precision failures, the second silently trades exactness
+    # for 2e-3 on the very build that recorded the transcript. One fixture,
+    # driven through main() under both stamps: `measured:` values stale at
+    # recorded precision but inside the cross-build tolerance, so the two
+    # modes MUST disagree about the same tree.
+    with _tmp.TemporaryDirectory() as _d2:
+        _mcase = Path(_d2) / "probe"
+        _mcase.mkdir()
+        _rows = "".join(
+            f"  - name: osc_period{i}\n    meas_id: t_period\n"
+            "    window: [0.952 s, 1.073 s]\n    measured: 1.01300 s\n"
+            for i in range(MINIMUM_ASSERTIONS))
+        (_mcase / "assertions.yaml").write_text(
+            "deck: netlist.cir\nassertions:\n" + _rows, encoding="utf-8")
+        _mlog = Path(_d2) / "ng.log"
+        _mlog.write_text("t_period   =  1.01191e+00\n", encoding="utf-8")
+        (_mcase / "validation.log").write_text(
+            _STAMP + "t_period   =  1.01191e+00\n", encoding="utf-8")
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_io.StringIO()):
+            _same_build = main([str(_mcase), str(_mlog)])
+        (_mcase / "validation.log").write_text(
+            _OTHER + "t_period   =  1.01191e+00\n", encoding="utf-8")
+        _err = _io.StringIO()
+        with _ctx.redirect_stdout(_io.StringIO()), _ctx.redirect_stderr(_err):
+            _other_build = main([str(_mcase), str(_mlog)])
+    cases.append(("main() holds the recording build to recorded precision",
+                  _same_build == 1))
+    cases.append(("main() grants another build the cross-build tolerance",
+                  _other_build == 0))
+    cases.append(("the cross-build run says so out loud",
+                  "cross-build tolerance" in _err.getvalue()))
 
     # THE DECK MUST BE THE CIRCUIT THE BOM DECLARES. Nothing compared them, and
     # an auditor retimed the blinker by changing its dominant resistor to a

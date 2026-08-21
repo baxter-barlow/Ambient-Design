@@ -124,10 +124,12 @@ ci:
     # Simulation container for the benchmarks-sim job. The digest pins
     # the image itself, but dated testing-slim images track the live
     # Debian testing apt archive at build time — they are NOT a frozen
-    # package universe, and `apt-get update` inside the job fetches
-    # current testing. Reproducibility of the simulation engine rests on
-    # the exact ngspice package pin above: apt fails loudly the moment
-    # testing drifts past that revision, forcing a conscious re-pin.
+    # package universe. Live testing dropped ngspice 46+ds-1 on
+    # 2026-08-21 (the loud failure this comment predicted), so the CI
+    # jobs now point apt at snapshot.debian.org for the image's own
+    # date: the package pin and the image digest freeze the same moment.
+    # apt still fails loudly if the pin and the snapshot date ever
+    # disagree, forcing a conscious re-pin of both together.
     # Debian stable (trixie) still carries ngspice 44, which is why the
     # job uses testing at all.
     simulation:

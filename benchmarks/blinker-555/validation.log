@@ -15,6 +15,13 @@ against this tree.
 
 Simulator: ** ngspice-46 : Circuit level simulation program
 Command:   ngspice -b netlist.cir
+Engine build: Darwin-arm64
+   (Stamp added 2026-08-21. The first CI run of the transcript gate showed
+   ngspice-46 on Debian amd64 differing from this build in the 4th
+   significant figure on edge-sampled measurements, so the captured values
+   are exact evidence only on the build that captured them; on any other
+   build tests/benchmarks/check-assertions.py reconciles them within the
+   solver's cross-build tolerance and says so in its output.)
 Assertions: tests/benchmarks/check-assertions.py compares every .meas result
            against the window declared in assertions.yaml. That comparison did
            not exist until AMB-123 either — assertions.yaml was read by no code
