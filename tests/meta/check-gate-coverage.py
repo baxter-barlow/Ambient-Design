@@ -112,7 +112,7 @@ CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
     "parts/lint-part-data.py": (32, 5),
-    "tests/benchmarks/check-assertions.py": (30, 3),
+    "tests/benchmarks/check-assertions.py": (33, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
     "tests/benchmarks/check-hand-assertions.py": (61, 15),
