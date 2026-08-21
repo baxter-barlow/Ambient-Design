@@ -1074,6 +1074,21 @@ def self_test():
             {"jobs": {"g": {"steps": [{"shell": "bash {0}",
                                        "run": "python3 x.py"}]}}},
             "probe.yml")[2])))
+    cases.append(("a WORKFLOW-level defaults.run.shell is caught", any(
+        "workflow-level" in x for x in scan_workflow_jobs(
+            {"defaults": {"run": {"shell": "bash {0}"}},
+             "jobs": {"g": {"steps": [{"run": "python3 x.py"}]}}},
+            "probe.yml")[2])))
+    cases.append(("a JOB-level defaults.run.shell is caught", any(
+        "job-level" in x for x in scan_workflow_jobs(
+            {"jobs": {"g": {"defaults": {"run": {"shell": "bash {0}"}},
+                            "steps": [{"run": "python3 x.py"}]}}},
+            "probe.yml")[2])))
+    cases.append(("a defaults block with no shell is left alone",
+                  scan_workflow_jobs(
+                      {"defaults": {"run": {"working-directory": "lang"}},
+                       "jobs": {"g": {"steps": [{"run": "python3 x.py"}]}}},
+                      "probe.yml")[2] == []))
     _exec_dead = scan_workflow_jobs(
         {"jobs": {"g": {"steps": [{"run": "exec true\npython3 x.py"}]}}},
         "probe.yml")
@@ -1268,9 +1283,36 @@ def scan_workflow_jobs(document, workflow_name):
     text = ""
     live = 0
     problems = []
+
+    def _defaults_shell(node):
+        """`defaults.run.shell`, which applies to every run step in scope."""
+        if not isinstance(node, dict):
+            return None
+        run = (node.get("defaults") or {}).get("run")
+        return run.get("shell") if isinstance(run, dict) else None
+
+    # THE SAME OVERRIDE, TWO SCOPES UP. Round 19 wrote the rule against the
+    # STEP key; GitHub applies `defaults.run.shell` at workflow and job level
+    # to every run step underneath, so three lines above `permissions:`
+    # disarmed errexit in every gate step of every job with this gate green
+    # (round 20). Checked where it is written, not where it is felt.
+    workflow_shell = _defaults_shell(document)
+    if workflow_shell is not None:
+        problems.append(
+            f"{workflow_name}: sets a workflow-level `defaults.run.shell` "
+            f"({str(workflow_shell)!r}), which applies to every run step in "
+            "every job; the default errexit shell is the contract a gate "
+            "step runs under.")
     for job_name, job in (document.get("jobs") or {}).items():
         if not isinstance(job, dict):
             continue
+        job_shell = _defaults_shell(job)
+        if job_shell is not None:
+            problems.append(
+                f"{workflow_name}: job {job_name!r} sets a job-level "
+                f"`defaults.run.shell` ({str(job_shell)!r}), which applies "
+                "to every run step in it; the default errexit shell is the "
+                "contract a gate step runs under.")
         if "if" in job:
             problems.append(
                 f"{workflow_name}: job {job_name!r} carries an `if:` "
