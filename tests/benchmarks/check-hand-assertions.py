@@ -564,12 +564,81 @@ def _must_mechanise_probe():
 # Which assertion input is a transcription of which voltage_at_ldo_input row.
 # Named, not counted: a binding that can be deleted without a failure is not
 # a binding. Extend this when a new assertion copies a propagated voltage.
-REQUIRED_TREE_VOLTAGES = {
-    "esp32s3-devboard": (
-        ("A4_ldo_dropout_at_min_vbus", "v_ldo_in_min_v", "worst_min"),
-        ("A5_ldo_thermal_at_wifi_tx", "worst.vin_v", "max"),
-        ("A5_ldo_thermal_at_wifi_tx", "typ.vin_v", "nominal"),
-    ),
+# Every numeric input of every mechanised assertion, and where it comes
+# from. Three hand-kept lists used to cover the transcriptions someone had
+# noticed -- a list of today's known cases, not the population of them --
+# and four more inputs (A1's rail interval, A3's worst rail load, A6's PTC
+# hold current, A7's predicted deep-sleep current) were transcriptions of
+# tree rows that answered to nothing (round 21). Every input is now
+# classified as bound or explicitly not-from-tree, so a new one cannot
+# arrive unclassified.
+#
+# A tree path is a dotted path into power-tree.yaml: a numeric leaf, a
+# {min,max} pair for an interval input, or `<path>#<n>` for the n-th `= X`
+# tail of a shown-work row.
+REQUIRED_TREE_BINDINGS = {
+    "esp32s3-devboard": {
+        "A1_rail_voltage_containment/ldo_vout_v": "edges[3].vout_v",
+        "A2_vbus_budget_t10/capability_a":
+            "sources.usb_host.current_capability_a",
+        "A2_vbus_budget_t10/sum_worst_a":
+            "summary_per_mode.wifi_tx_peak.vbus_total_a#1",
+        "A3_3v3_source_capability/ldo_rating_a": "edges[3].i_rating_a",
+        "A3_3v3_source_capability/worst_rail_a":
+            "summary_per_mode.wifi_tx_peak.p3v3_total_a#1",
+        "A4_ldo_dropout_at_min_vbus/i_load_a":
+            "summary_per_mode.wifi_tx_peak.p3v3_total_a#1",
+        "A4_ldo_dropout_at_min_vbus/v_ldo_in_min_v":
+            "voltage_at_ldo_input.worst_min#1",
+        "A4_ldo_dropout_at_min_vbus/vdo_typ_v_per_a":
+            "edges[3].dropout_v.typ_at_1a",
+        "A4_ldo_dropout_at_min_vbus/vdo_guardband_v_per_a":
+            "edges[3].dropout_v.guardband_v_per_a",
+        "A4_ldo_dropout_at_min_vbus/vout_max_v": "edges[3].vout_v.max",
+        "A5_ldo_thermal_at_wifi_tx/iq_a": "edges[3].iq_a",
+        "A5_ldo_thermal_at_wifi_tx/typ.iout_a":
+            "summary_per_mode.wifi_tx_peak.p3v3_total_a#0",
+        "A5_ldo_thermal_at_wifi_tx/typ.vin_v":
+            "voltage_at_ldo_input.nominal#0",
+        "A5_ldo_thermal_at_wifi_tx/typ.vout_v": "edges[3].vout_v.nom",
+        "A5_ldo_thermal_at_wifi_tx/worst.iout_a":
+            "summary_per_mode.wifi_tx_peak.p3v3_total_a#1",
+        "A5_ldo_thermal_at_wifi_tx/worst.vin_v":
+            "voltage_at_ldo_input.max#1",
+        "A5_ldo_thermal_at_wifi_tx/worst.vout_v": "edges[3].vout_v.min",
+        "A6_ptc_hold_margin/hold_derated_a": "edges[0].hold_derated_50c_a",
+        "A6_ptc_hold_margin/worst_a":
+            "summary_per_mode.wifi_tx_peak.vbus_total_a#1",
+        "A7_deep_sleep_rail_current/predicted_a":
+            "summary_per_mode.deep_sleep.p3v3_total_a#0",
+    },
+}
+
+# The rest, each with the source it does come from. Being on this list is a
+# statement, not an exemption: it says a human checked that power-tree.yaml
+# is not where this number lives.
+INPUTS_NOT_FROM_TREE = {
+    "esp32s3-devboard": {
+        "A1_rail_voltage_containment/module_vdd33_v":
+            "ESP32-S3-WROOM-1 datasheet VDD33 operating range",
+        "A3_3v3_source_capability/module_required_a":
+            "module datasheet Table 6-2 I_VDD min, a requirement on the "
+            "supply rather than a tree quantity",
+        "A5_ldo_thermal_at_wifi_tx/theta_ja_datasheet_c_w":
+            "AP7361C DS37274 thermal table, minimum recommended pad",
+        "A5_ldo_thermal_at_wifi_tx/tj_gate_c":
+            "the design's own gate, below the datasheet limit",
+        "A5_ldo_thermal_at_wifi_tx/typ.ta_c": "the typical ambient condition",
+        "A5_ldo_thermal_at_wifi_tx/worst.ta_c": "the worst ambient condition",
+        "A5_ldo_thermal_at_wifi_tx/worst.theta_ja_c_w":
+            "the ~1 in^2 pour ASSUMPTION, stated as such in A5's caveat",
+        "A7_deep_sleep_rail_current/gate_a": "the design's own sleep gate",
+        "A8_usb_inrush_capacitance/c1_f": "parts.yaml C1 nominal",
+        "A8_usb_inrush_capacitance/c2_f": "parts.yaml C2 nominal",
+        "A8_usb_inrush_capacitance/c3_f": "parts.yaml C3 nominal",
+        "A8_usb_inrush_capacitance/limit_f":
+            "USB 2.0 downstream-port inrush limit",
+    },
 }
 
 # The same binding for propagated voltages that a spec carries as the opening
@@ -596,20 +665,41 @@ REQUIRED_TREE_ROW_HEADS = {
 # the meta-gate. Re-derive it in the same commit that edits a row.
 REQUIRED_SHOWN_WORK_ROWS = {
     "esp32s3-devboard": {
+        "A10_single_pin_nets_l9b/inputs": 0,
+        "A10_single_pin_nets_l9b/kind": 0,
+        "A10_single_pin_nets_l9b/not_mechanisable": 0,
+        "A10_single_pin_nets_l9b/result": 0,
+        "A1_rail_voltage_containment/check_inputs_from.outer": 0,
+        "A1_rail_voltage_containment/margin": 0,
+        "A1_rail_voltage_containment/result": 0,
         "A2_vbus_budget_t10/calc": 1,
+        "A2_vbus_budget_t10/kind": 0,
+        "A2_vbus_budget_t10/margin": 0,
+        "A3_3v3_source_capability/kind": 0,
+        "A3_3v3_source_capability/margin": 0,
+        "A3_3v3_source_capability/note": 0,
         "A4_ldo_dropout_at_min_vbus/calc_rows.datasheet_typ": 3,
         "A4_ldo_dropout_at_min_vbus/calc_rows.inhouse_guardband": 3,
-        # Prose, named at zero so arithmetic cannot arrive here unchecked.
         "A4_ldo_dropout_at_min_vbus/caveat": 0,
         "A4_ldo_dropout_at_min_vbus/secondary_rows.nominal_5p00_typ_vdo": 2,
         "A4_ldo_dropout_at_min_vbus/secondary_rows.usbc_min_4p75_guardband": 1,
         "A5_ldo_thermal_at_wifi_tx/calc_typ": 2,
         "A5_ldo_thermal_at_wifi_tx/calc_worst": 2,
-        "A5_ldo_thermal_at_wifi_tx/calc_worst_datasheet_theta": 1,
-        # The published breach condition: Ta_max = 125 - 0.654 x 110.
-        "A5_ldo_thermal_at_wifi_tx/caveat": 1,
+        "A5_ldo_thermal_at_wifi_tx/calc_worst_datasheet_theta": 2,
+        "A5_ldo_thermal_at_wifi_tx/caveat": 2,
+        "A5_ldo_thermal_at_wifi_tx/inputs_not_gated.worst.theta_ja_c_w": 0,
+        "A5_ldo_thermal_at_wifi_tx/margin": 0,
+        "A6_ptc_hold_margin/margin": 0,
+        "A7_deep_sleep_rail_current/kind": 0,
+        "A7_deep_sleep_rail_current/margin": 0,
+        "A8_usb_inrush_capacitance/caveat": 0,
+        "A8_usb_inrush_capacitance/check_inputs_from.parts[0]": 0,
+        "A8_usb_inrush_capacitance/check_inputs_from.parts[1]": 0,
+        "A8_usb_inrush_capacitance/check_inputs_from.parts[2]": 0,
         "A8_usb_inrush_capacitance/note": 0,
+        "A9_strapping_dc_state/inputs.gpio0": 0,
         "A9_strapping_dc_state/inputs.gpio45": 0,
+        "A9_strapping_dc_state/not_mechanisable": 0,
         "A9_strapping_dc_state/result": 0,
     },
 }
@@ -620,26 +710,48 @@ REQUIRED_SHOWN_WORK_ROWS = {
 # same commit that edits its row.
 REQUIRED_TREE_SHOWN_WORK = {
     "esp32s3-devboard": {
-        # Prose citations, named at zero so arithmetic cannot arrive here
-        # unchecked either.
+        "edges[0].id": 0,
+        "edges[1].id": 0,
+        "edges[2].id": 0,
+        "edges[2].to": 0,
+        "edges[3].from": 0,
+        "edges[3].id": 0,
+        "edges[3].to": 0,
+        "edges[4].from": 0,
+        "edges[4].id": 0,
+        "edges[4].to": 0,
+        "loads.esp32s3_module.modes.deep_sleep.source": 0,
         "loads.esp32s3_module.modes.idle_modem_sleep.source": 0,
-        # The Type-C vSafe5V corner the design does NOT model, derived so
-        # the sentence that names it answers to arithmetic (AMB-126).
+        "loads.esp32s3_module.modes.light_sleep.source": 0,
+        "loads.esp32s3_module.modes.wifi_rx.source": 0,
+        "loads.esp32s3_module.modes.wifi_tx_peak.source": 0,
+        "loads.esp32s3_module.node": 0,
+        "loads.ldo_ground_current.node": 0,
+        "loads.pullup_leakage.node": 0,
+        "loads.pwr_led_d4.node": 0,
+        "loads.status_led_d5.node": 0,
+        "meta.guardband_policy": 0,
+        "sources.usb_host.budget_assumption": 0,
+        "sources.usb_host.note": 0,
         "sources.usb_host.type_c_vsafe5v_corner.p_ldo": 1,
         "sources.usb_host.type_c_vsafe5v_corner.tj_min_pad": 1,
         "sources.usb_host.type_c_vsafe5v_corner.tj_pour_62": 1,
         "sources.usb_host.type_c_vsafe5v_corner.v_ldo_in_max": 1,
-        "loads.esp32s3_module.modes.wifi_tx_peak.source": 0,
+        "sources.usb_host.voltage_max_basis": 0,
         "summary_per_mode.deep_sleep.margin_vs_500mA": 1,
         "summary_per_mode.deep_sleep.p3v3_total_a": 1,
         "summary_per_mode.deep_sleep.vbus_total_a": 1,
+        "summary_per_mode.idle_modem_sleep.margin_vs_500mA": 0,
         "summary_per_mode.idle_modem_sleep.p3v3_total_a": 2,
         "summary_per_mode.idle_modem_sleep.vbus_total_a": 2,
+        "summary_per_mode.light_sleep.margin_vs_500mA": 0,
         "summary_per_mode.light_sleep.p3v3_total_a": 1,
         "summary_per_mode.light_sleep.vbus_total_a": 1,
+        "summary_per_mode.wifi_rx.margin_vs_500mA": 0,
         "summary_per_mode.wifi_rx.p3v3_total_a": 1,
         "summary_per_mode.wifi_rx.vbus_total_a": 1,
         "summary_per_mode.wifi_tx_peak.ldo_input_a": 1,
+        "summary_per_mode.wifi_tx_peak.margin_vs_500mA": 0,
         "summary_per_mode.wifi_tx_peak.p3v3_total_a": 2,
         "summary_per_mode.wifi_tx_peak.vbus_total_a": 2,
         "voltage_at_ldo_input.max": 1,
@@ -648,6 +760,22 @@ REQUIRED_TREE_SHOWN_WORK = {
         "voltage_at_ldo_input.worst_min": 1,
     },
 }
+
+# The unit tokens these documents write beside their numbers. Dropped
+# wherever they appear so `0.500 A - 0.39531 A` is arithmetic; anything not
+# on this list keeps its fragment unevaluable, which is the conservative
+# direction -- a name this does not know stays prose rather than becoming a
+# number by accident.
+# ANY string carrying a number joins the checked population, not only one
+# carrying an `=`. Four of the five T10 margin rows publish a derived
+# headroom with no `=` in sight, so they could not even join, and the
+# joining-direction guard never saw them (round 21). Prose rows sit at zero
+# claims, which is the point: arithmetic cannot arrive in one unnoticed.
+_DIGIT = re.compile(r"[0-9]")
+
+_UNIT_TOKEN = re.compile(
+    r"(?<=[\s(])(?:[munpk]?[AVWFHs]|ohm|R|C|K|Hz|kHz|MHz|ppm|%|dB|dBm)"
+    r"(?=[\s)])")
 
 _ARITHMETIC = re.compile(r"[\s()+\-*/.0-9eE]+")
 _INNER_CLAIM = re.compile(r"\(([^()]*=[^()]*)\)")
@@ -672,12 +800,17 @@ def _tree_voltage_rows(power_text):
 def _eval_arith(text):
     """A shown-work fragment as a number, or None if it is not pure arithmetic.
 
-    `x` is the multiplication sign these documents use; a trailing unit is
-    dropped. Nothing else is accepted -- no names, no calls, no attributes --
-    so a fragment carrying prose simply goes unchecked rather than guessed at.
+    `x` is the multiplication sign these documents use; unit tokens are
+    dropped WHEREVER they appear, not only at the end. Only at the end was
+    enough to make `0.500 A - 0.39531 A = 9.99 A` unevaluable, and an
+    unevaluable claim was a silent skip -- so writing units inside the
+    expression, the style these documents already use, hid a falsehood in a
+    row whose recorded claim count asserted full coverage (round 21).
+    Nothing beyond numbers, the four operators and those units is accepted,
+    so a fragment carrying prose still goes unchecked rather than guessed at.
     """
     import ast
-    candidate = re.sub(r"\s*[A-Za-z%][A-Za-z%/^0-9]*\s*$", "", text.strip())
+    candidate = _UNIT_TOKEN.sub(" ", f" {text.strip()} ")
     candidate = candidate.replace(" x ", " * ").strip()
     if not candidate or not _ARITHMETIC.fullmatch(candidate):
         return None
@@ -741,11 +874,26 @@ def _split_pieces(text):
 
 
 def _half_ulp(text):
-    """The precision the fragment publishes: `+0.257` claims three decimals,
-    so 0.256 is a different number; `90.5` claims one, so 90.548 is not."""
-    decimals = max((len(d) for d in re.findall(r"[0-9]+\.([0-9]+)", text)),
-                   default=0)
-    return 0.5 * 10 ** -decimals
+    """Half the last significant digit of the value the fragment states.
+
+    `+0.257` claims three decimals, so 0.256 is a different number; `90.5`
+    claims one, so 90.548 is not. THE EXPONENT COUNTS: this read decimals
+    off the mantissa alone and returned the tolerance in mantissa units
+    while the compared value was scaled by 10^exp, so `281e-6` was checked
+    to +/-0.5 A and `9.0e-6` to +/-0.05 A -- 15 of the 40 claims were being
+    compared at between 1% and 555,556% of their own value once the power
+    tree's engineering notation entered the population, and a 1400x error
+    in a mode total passed (round 21)."""
+    last = None
+    for match in re.finditer(
+            r"([0-9]+)(?:\.([0-9]+))?(?:[eE]([-+]?[0-9]+))?", text):
+        if match.group(0):
+            last = match
+    if last is None:
+        return 0.5
+    decimals = len(last.group(2) or "")
+    exponent = int(last.group(3) or 0)
+    return 0.5 * 10 ** (exponent - decimals)
 
 
 def _chain_problems(where, chain, problems):
@@ -932,7 +1080,7 @@ def shown_work_problems(spec, label, problems):
             elif isinstance(node, list):
                 for index, value in enumerate(node):
                     walk(value, f"{path}[{index}]")
-            elif isinstance(node, str) and "=" in node:
+            elif isinstance(node, str) and _DIGIT.search(node):
                 rows[f"{ident}/{path}"] = node
 
         for key, value in sorted(assertion.items()):
@@ -965,7 +1113,7 @@ def tree_shown_work_problems(tree, label, problems):
         elif isinstance(node, list):
             for index, value in enumerate(node):
                 walk(value, f"{path}[{index}]")
-        elif isinstance(node, str) and "=" in node:
+        elif isinstance(node, str) and _DIGIT.search(node):
             rows[path] = node
 
     walk(tree, "")
@@ -974,7 +1122,290 @@ def tree_shown_work_problems(tree, label, problems):
         problems)
 
 
-def power_tree_problems(spec, power_text, label, problems):
+# Every mode whose power-tree row publishes a T10 margin, and how many
+# figures that row publishes. Round 20 closed "every margin is replaceable
+# with any number" for assertions.yaml and stopped at that file; the tree
+# publishes the same headroom, including the benchmark's own "-> T10 PASS"
+# verdict, and none of it was read (round 21). Four of the five rows carry
+# no `=` at all, so they could not even join the shown-work population.
+REQUIRED_TREE_MARGINS = {
+    "esp32s3-devboard": {
+        "deep_sleep": 1,
+        "light_sleep": 1,
+        "idle_modem_sleep": 2,
+        "wifi_rx": 1,
+        "wifi_tx_peak": 2,
+    },
+}
+
+
+# What each summation row's operands ARE, term by term. The data layer
+# (loads/edges/sources) was read by nothing: every summation restated the
+# declared currents as bare literals, so the table and the arithmetic that
+# claims to sum it could contradict each other with every gate green (round
+# 21). A term is either a dotted path into the tree, or an explicit
+# (value, reason) pair for a figure that deliberately differs from the
+# declared load -- there are three, and each says why here.
+_LED_AT_VBUS = (0.00325, "the P5V0 LED taken at VBUS max instead of at the "
+                         "node where it is declared; conservative by "
+                         "~0.35 mA and the basis A2's margin is quoted "
+                         "against")
+_NO_PULLUP = "the 1 uA pull-up leakage is dropped at this magnitude"
+REQUIRED_TREE_SUMMATIONS = {
+    "esp32s3-devboard": {
+        "deep_sleep.p3v3_total_a#0": (
+            "loads.esp32s3_module.modes.deep_sleep.i_a",
+            "loads.status_led_d5.modes.deep_sleep.i_a",
+            "loads.pullup_leakage.modes.all.i_a"),
+        "light_sleep.p3v3_total_a#0": (
+            "loads.esp32s3_module.modes.light_sleep.i_a",
+            "loads.status_led_d5.modes.light_sleep.i_a",
+            "loads.pullup_leakage.modes.all.i_a"),
+        "idle_modem_sleep.p3v3_total_a#0": (
+            "loads.esp32s3_module.modes.idle_modem_sleep.i_a.typ",
+            "loads.status_led_d5.modes.idle_modem_sleep.i_a",
+            "loads.pullup_leakage.modes.all.i_a"),
+        "idle_modem_sleep.p3v3_total_a#1": (
+            "loads.esp32s3_module.modes.idle_modem_sleep.i_a.max",
+            "loads.status_led_d5.modes.idle_modem_sleep.i_a"),
+        "wifi_rx.p3v3_total_a#0": (
+            "loads.esp32s3_module.modes.wifi_rx.i_a",
+            "loads.status_led_d5.modes.wifi_rx.i_a",
+            "loads.pullup_leakage.modes.all.i_a"),
+        "wifi_tx_peak.p3v3_total_a#0": (
+            "loads.esp32s3_module.modes.wifi_tx_peak.i_a.typ",
+            "loads.status_led_d5.modes.wifi_tx_peak.i_a",
+            "loads.pullup_leakage.modes.all.i_a"),
+        "wifi_tx_peak.p3v3_total_a#1": (
+            "loads.esp32s3_module.modes.wifi_tx_peak.i_a.worst",
+            "loads.status_led_d5.modes.wifi_tx_peak.i_a"),
+        "deep_sleep.vbus_total_a#0": (
+            "@deep_sleep.p3v3_total_a#0",
+            "loads.ldo_ground_current.modes.all.i_a",
+            "loads.pwr_led_d4.modes.all.i_a",
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "light_sleep.vbus_total_a#0": (
+            "@light_sleep.p3v3_total_a#0",
+            "loads.ldo_ground_current.modes.all.i_a",
+            "loads.pwr_led_d4.modes.all.i_a",
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "idle_modem_sleep.vbus_total_a#0": (
+            "@idle_modem_sleep.p3v3_total_a#0",
+            "loads.ldo_ground_current.modes.all.i_a",
+            "loads.pwr_led_d4.modes.all.i_a",
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "idle_modem_sleep.vbus_total_a#1": (
+            "@idle_modem_sleep.p3v3_total_a#1",
+            "loads.ldo_ground_current.modes.all.i_a",
+            _LED_AT_VBUS,
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "wifi_rx.vbus_total_a#0": (
+            "@wifi_rx.p3v3_total_a#0",
+            "loads.ldo_ground_current.modes.all.i_a",
+            "loads.pwr_led_d4.modes.all.i_a",
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "wifi_tx_peak.ldo_input_a#0": (
+            "@wifi_tx_peak.p3v3_total_a#0",
+            "loads.ldo_ground_current.modes.all.i_a"),
+        "wifi_tx_peak.vbus_total_a#0": (
+            "@wifi_tx_peak.ldo_input_a#0",
+            "loads.pwr_led_d4.modes.all.i_a",
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+        "wifi_tx_peak.vbus_total_a#1": (
+            "@wifi_tx_peak.ldo_input_a#1",
+            _LED_AT_VBUS,
+            "loads.tvs_esd_leakage.modes.all.i_a"),
+    },
+}
+# Branches whose operand list is a single carried-forward result, with
+# nothing to sum: named so they are declared rather than silently skipped.
+_CARRIED_FORWARD = {
+    "wifi_tx_peak.ldo_input_a#1",
+    # A margin, not a summation: tree_margin_problems reconciles it against
+    # the mode's own total and the declared source capability.
+    "deep_sleep.margin_vs_500mA#0",
+}
+
+
+def tree_summation_problems(tree, label, problems):
+    """Each summation's terms must BE the loads the data layer declares."""
+    required = REQUIRED_TREE_SUMMATIONS.get(label, {})
+    modes = tree.get("summary_per_mode") or {}
+    rows = {}
+    for mode, row in modes.items():
+        if not isinstance(row, dict):
+            continue
+        for key, text in row.items():
+            if not isinstance(text, str) or "=" not in text:
+                continue
+            for index, branch in enumerate(text.split(";")):
+                rows[f"{mode}.{key}#{index}"] = branch
+    checked = 0
+    for name, terms in required.items():
+        branch = rows.get(name)
+        if branch is None:
+            problems.append(
+                f"{label}: summation {name} is named as summing declared "
+                "loads and is no longer in the tree.")
+            continue
+        want = []
+        for term in terms:
+            if isinstance(term, tuple):
+                want.append(float(term[0]))
+            elif term.startswith("@"):
+                carried = rows.get(term[1:])
+                if carried is None:
+                    problems.append(
+                        f"{label}: {name} carries forward {term[1:]}, which "
+                        "is not in the tree.")
+                    want = None
+                    break
+                # A branch that only carries a value forward -- `worst:
+                # 391.66e-3` -- states it without an `=`; its result is the
+                # number itself.
+                tail = re.findall(
+                    r"=\s*([0-9.]+(?:[eE][-+]?[0-9]+)?)", carried) or \
+                    re.findall(r"[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?",
+                               carried)
+                want.append(float(tail[-1]))
+            else:
+                try:
+                    want.append(_tree_value(tree, term))
+                except (KeyError, IndexError, ValueError) as exc:
+                    problems.append(
+                        f"{label}: {name} sums {term}, which no longer "
+                        f"resolves ({exc}).")
+                    want = None
+                    break
+        if want is None:
+            continue
+        shown = [float(x) for x in re.findall(
+            r"[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?",
+            re.sub(r"^\s*\w+:\s*", "", branch.split("=")[0]))]
+        if len(shown) != len(want) or any(
+                abs(a - b) > max(5e-4 * abs(b), 5e-9)
+                for a, b in zip(shown, want)):
+            problems.append(
+                f"{label}: summation {name} shows terms {shown} where the "
+                f"loads it is declared to sum are {want}. A total that "
+                "restates its inputs as literals can drift from the table "
+                "it claims to sum.")
+        else:
+            checked += 1
+    for name in sorted(set(rows) - set(required) - _CARRIED_FORWARD):
+        problems.append(
+            f"{label}: summation {name} is not declared as summing anything, "
+            "so its terms answer to no load in the data layer.")
+    return checked
+
+
+def tree_margin_problems(tree, label, problems):
+    """Each published T10 margin must be capability minus that mode's total.
+
+    Both the milliamp figure and the percentage, branch by branch, against
+    the mode's own vbus_total_a row and the source's declared capability --
+    so a re-derived total has to move the margin beside it, and the verdict
+    the row states has to follow from the numbers in it."""
+    required = REQUIRED_TREE_MARGINS.get(label, {})
+    modes = (tree.get("summary_per_mode") or {})
+    published = {name: row["margin_vs_500mA"]
+                 for name, row in modes.items()
+                 if isinstance(row, dict)
+                 and isinstance(row.get("margin_vs_500mA"), str)}
+    capability = (((tree.get("sources") or {}).get("usb_host") or {})
+                  .get("current_capability_a"))
+    if capability is None:
+        problems.append(
+            f"{label}: power-tree.yaml no longer declares the source's "
+            "current_capability_a, so every published margin is measured "
+            "against nothing.")
+        return 0
+    capability_ma = float(capability) * 1000.0
+    checked = 0
+    for mode, expected in required.items():
+        text = published.get(mode)
+        if text is None:
+            problems.append(
+                f"{label}: {mode} is named as publishing a T10 margin and "
+                "no longer does. Margins leave this population by review, "
+                "not by being deleted.")
+            continue
+        totals = [float(x) for x in re.findall(
+            r"=\s*([0-9.]+(?:[eE][-+]?[0-9]+)?)",
+            (modes[mode] or {}).get("vbus_total_a") or "")]
+        figures = re.findall(
+            r"([-+]?[0-9.]+)\s*mA\s*\(([-+]?[0-9.]+)\s*%\)", text)
+        if len(figures) != expected:
+            problems.append(
+                f"{label}/{mode}: publishes {len(figures)} margin figure(s), "
+                f"not the recorded {expected}. A figure this gate cannot "
+                "read is a figure nothing checks.")
+            continue
+        if len(totals) != len(figures):
+            problems.append(
+                f"{label}/{mode}: publishes {len(figures)} margin figure(s) "
+                f"against {len(totals)} VBUS total(s); they are branch for "
+                "branch, so a total without its margin is drift waiting to "
+                "happen.")
+            continue
+        for (stated_ma, stated_pct), total in zip(figures, totals):
+            want_ma = capability_ma - total * 1000.0
+            want_pct = 100.0 * want_ma / capability_ma
+            if abs(float(stated_ma) - want_ma) > _half_ulp(stated_ma):
+                problems.append(
+                    f"{label}/{mode}: publishes a margin of {stated_ma} mA "
+                    f"where its own VBUS total of {total * 1000:.4g} mA "
+                    f"against {capability_ma:g} mA leaves {want_ma:.4g} mA.")
+            elif abs(float(stated_pct) - want_pct) > _half_ulp(stated_pct):
+                problems.append(
+                    f"{label}/{mode}: publishes {stated_pct}% where "
+                    f"{want_ma:.4g} mA of {capability_ma:g} mA is "
+                    f"{want_pct:.4g}%.")
+            else:
+                checked += 1
+        if "T10 PASS" in text and any(
+                capability_ma - total * 1000.0 <= 0 for total in totals):
+            problems.append(
+                f"{label}/{mode}: states T10 PASS while one of its own "
+                "totals leaves no margin against the source capability.")
+    for mode in sorted(set(published) - set(required)):
+        problems.append(
+            f"{label}/{mode}: publishes a T10 margin and is not in the "
+            "checked population, so nothing reconciles it.")
+    return checked
+
+
+def _tree_value(tree, path):
+    """A numeric leaf, a {min,max} interval, or the n-th `= X` tail of a
+    shown-work row, addressed by dotted path with `[i]` for list members and
+    a trailing `#n` for a row's n-th derived result."""
+    row_index = None
+    if "#" in path:
+        path, _, index = path.partition("#")
+        row_index = int(index)
+    node = tree
+    for part in path.split("."):
+        while "[" in part:
+            head, _, rest = part.partition("[")
+            if head:
+                node = node[head]
+            index, _, part = rest.partition("]")
+            node = node[int(index)]
+        if part:
+            node = node[part]
+    if row_index is not None:
+        if not isinstance(node, str):
+            raise ValueError(f"{path} is not a shown-work row")
+        tails = re.findall(r"=\s*([0-9.]+(?:[eE][-+]?[0-9]+)?)", node)
+        return float(tails[row_index])
+    if isinstance(node, dict) and "min" in node and "max" in node:
+        return [float(node["min"]), float(node["max"])]
+    if isinstance(node, (int, float)) and not isinstance(node, bool):
+        return float(node)
+    raise ValueError(f"{path} is not a number, interval or shown-work row")
+
+
+def power_tree_problems(spec, power_text, label, problems, tree=None):
     """The power tree's own summary arithmetic must agree with A2/A6.
 
     check_spec holds each assertion to its recorded inputs; the inputs come
@@ -1013,45 +1444,57 @@ def power_tree_problems(spec, power_text, label, problems):
             f"{label}: no assertion records sum_worst_a/worst_a for the "
             "power tree's total to reconcile against; the cross-file check "
             "is comparing nothing.")
-    # THE VOLTAGE SIDE TOO, AND BY NAME. Round 18 reconciled the current
-    # totals; round 19 changed SS34's Vf max in the tree and watched A4's
-    # physically-failing verdict stay green, with A5's worst-case Vin the
-    # same kind of unreconciled copy one row over. Every assertion input
-    # that is a transcription of a voltage_at_ldo_input row is NAMED below,
-    # so dropping a binding fails the gate instead of quietly shrinking it
-    # -- a set, not a count, the shape that has held elsewhere here.
+    # EVERY INPUT, CLASSIFIED. Not a list of the transcriptions someone
+    # noticed: each numeric input is either bound to the tree path it copies
+    # or named as coming from somewhere else, so a new input arrives
+    # unclassified and fails rather than arriving unchecked.
+    bindings = REQUIRED_TREE_BINDINGS.get(label, {})
+    exempt = INPUTS_NOT_FROM_TREE.get(label, {})
+    for assertion in spec.get("assertions") or []:
+        ident = assertion.get("id")
+        if ident not in MUST_MECHANISE.get(label, ()):
+            continue
+        flat = {}
+        _flatten(assertion.get("inputs") or {}, "", flat)
+        for key in sorted(flat):
+            name = f"{ident}/{key}"
+            if name in exempt:
+                continue
+            if name not in bindings:
+                problems.append(
+                    f"{label}: input {name} is classified neither as a copy "
+                    "of a power-tree.yaml value nor as coming from "
+                    "elsewhere. Every input is one or the other; an "
+                    "unclassified one is a transcription nothing checks.")
+                continue
+            try:
+                want = _tree_value(tree, bindings[name])
+            except (KeyError, IndexError, ValueError) as exc:
+                problems.append(
+                    f"{label}: {name} is bound to power-tree.yaml's "
+                    f"{bindings[name]}, which no longer resolves ({exc}).")
+                continue
+            recorded = flat[key]
+            if isinstance(recorded, list) or isinstance(want, list):
+                pair = want if isinstance(want, list) else [want]
+                got = recorded if isinstance(recorded, list) else [recorded]
+                agree = (len(pair) == len(got)
+                         and all(abs(a - b) <= 5e-4 for a, b in zip(got, pair)))
+            else:
+                agree = abs(recorded - want) <= 5e-4
+            if not agree:
+                problems.append(
+                    f"{label}/{ident}: records {key} = {recorded!r} but "
+                    f"power-tree.yaml's {bindings[name]} is {want!r}. Two "
+                    "files publishing one quantity must agree.")
+            else:
+                checked += 1
+    for name in sorted(set(bindings) & set(exempt)):
+        problems.append(
+            f"{label}: input {name} is both bound to the tree and named as "
+            "coming from elsewhere; it is one or the other.")
+
     rows = _tree_voltage_rows(power_text)
-    for assertion_id, dotted, row_name in REQUIRED_TREE_VOLTAGES.get(label, ()):
-        assertion = next((a for a in spec.get("assertions") or []
-                          if a.get("id") == assertion_id), None)
-        if assertion is None:
-            problems.append(
-                f"{label}: {assertion_id} is named as carrying a copy of "
-                f"power-tree.yaml's {row_name} row and is not in the spec; "
-                "a cross-file binding cannot be dropped by deleting one side.")
-            continue
-        if row_name not in rows:
-            problems.append(
-                f"{label}: power-tree.yaml no longer derives a "
-                f"voltage_at_ldo_input {row_name} row in the form this gate "
-                f"reads, so {assertion_id}'s {dotted} can drift from the "
-                "tree silently.")
-            continue
-        try:
-            recorded = _resolve(assertion.get("inputs") or {}, dotted)
-        except KeyError:
-            problems.append(
-                f"{label}/{assertion_id}: has no input {dotted}, which is "
-                f"named as its copy of power-tree.yaml's {row_name} row.")
-            continue
-        if abs(recorded - rows[row_name]) > 5e-4:
-            problems.append(
-                f"{label}/{assertion_id}: records {dotted} = {recorded:g} "
-                f"but power-tree.yaml's {row_name} propagation derives "
-                f"{rows[row_name]:g} V. A re-derived Vf, PTC or bead value "
-                "must move both files.")
-        else:
-            checked += 1
     # THE SAME BINDING FOR VOLTAGES THAT LIVE IN SHOWN WORK RATHER THAN IN
     # `inputs`. A4's secondary rows open with usbc_min and nominal as bare
     # literals; the shown-work reader proves each row is self-consistent,
@@ -1281,126 +1724,122 @@ def self_test():
                         TREE, "probe", orphan)
     cases.append(("a spec with nothing to reconcile is caught",
                   any("comparing nothing" in x for x in orphan)))
-    # THE VOLTAGE LEG, by NAMED binding: the tree's rows and the assertion
-    # inputs that transcribe them, each direction and each way to lose one.
+    # EVERY INPUT CLASSIFIED, and the tree paths they copy. Three
+    # hand-kept lists covered the transcriptions someone had noticed; four
+    # more inputs were transcriptions of tree rows answering to nothing.
     VTREE = TREE + ('voltage_at_ldo_input:\n'
                     '  worst_min: "4.4 - 0.1 - 0.1 = 4.4 - 0.2 = 4.200 V"\n'
                     '  max:       "5.25 - 0.05 = 5.200 V"\n')
-    VSPEC = {"assertions": [
-        {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-        {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
-        {"id": "A5", "inputs": {"worst": {"vin_v": 5.200}}}]}
-    _real_volt = REQUIRED_TREE_VOLTAGES
-    globals()["REQUIRED_TREE_VOLTAGES"] = {"probe": (
-        ("A4", "v_ldo_in_min_v", "worst_min"),
-        ("A5", "worst.vin_v", "max"))}
+    PTREE = {"edges": [{"vout_v": {"min": 3.2, "max": 3.4, "nom": 3.3}}],
+             "voltage_at_ldo_input": {"worst_min": "4.4 - 0.2 = 4.200 V"},
+             "sources": {"usb_host": {"current_capability_a": 0.5}}}
+    cases.append(("a tree numeric leaf resolves",
+                  _tree_value(PTREE, "edges[0].vout_v.max") == 3.4))
+    cases.append(("a min/max pair resolves as an interval",
+                  _tree_value(PTREE, "edges[0].vout_v") == [3.2, 3.4]))
+    cases.append(("a shown-work row's n-th result resolves",
+                  _tree_value(PTREE, "voltage_at_ldo_input.worst_min#0")
+                  == 4.2))
+    _real_bind, _real_exempt = REQUIRED_TREE_BINDINGS, INPUTS_NOT_FROM_TREE
+    _real_must = MUST_MECHANISE
+    globals()["MUST_MECHANISE"] = {"probe": ("A4",)}
+    globals()["REQUIRED_TREE_BINDINGS"] = {"probe": {
+        "A4/v_ldo_in_min_v": "voltage_at_ldo_input.worst_min#0"}}
+    globals()["INPUTS_NOT_FROM_TREE"] = {"probe": {
+        "A4/vout_max_v": "the LDO datasheet"}}
     try:
-        v_ok = []
-        v_agreed = power_tree_problems(VSPEC, VTREE, "probe", v_ok)
-        cases.append(("both named voltage bindings agree with the tree",
-                      v_agreed == 3 and not v_ok))
-        v_drift = []
+        BSPEC = {"assertions": [
+            {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200,
+                                    "vout_max_v": 3.366}}]}
+        b_ok = []
+        b_n = power_tree_problems(BSPEC, VTREE, "probe", b_ok, tree=PTREE)
+        cases.append(("a bound input agreeing with the tree reconciles",
+                      b_n == 2 and not b_ok))
+        b_drift = []
         power_tree_problems(
             {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.100}},
-                            {"id": "A5", "inputs": {"worst":
-                                                    {"vin_v": 5.200}}}]},
-            VTREE, "probe", v_drift)
-        cases.append(("a voltage input the tree no longer derives is caught",
-                      any("must move both files" in x for x in v_drift)))
-        v_nested = []
+                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.100,
+                                                    "vout_max_v": 3.366}}]},
+            VTREE, "probe", b_drift, tree=PTREE)
+        cases.append(("a bound input the tree contradicts is caught",
+                      any("must agree" in x for x in b_drift)))
+        b_new = []
         power_tree_problems(
             {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
-                            {"id": "A5", "inputs": {"worst":
-                                                    {"vin_v": 5.100}}}]},
-            VTREE, "probe", v_nested)
-        cases.append(("a drifted NESTED voltage input is caught too",
-                      any("worst.vin_v" in x for x in v_nested)))
-        v_gone = []
-        power_tree_problems(VSPEC, TREE, "probe", v_gone)
-        cases.append(("a tree that stops deriving a named row is caught",
-                      sum("in the form this gate reads" in x
-                          for x in v_gone) == 2))
-        v_unbound = []
-        power_tree_problems(
-            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                            {"id": "A4", "inputs": {}},
-                            {"id": "A5", "inputs": {"worst":
-                                                    {"vin_v": 5.200}}}]},
-            VTREE, "probe", v_unbound)
-        cases.append(("deleting the input a binding names is caught",
-                      any("has no input v_ldo_in_min_v" in x
-                          for x in v_unbound)))
-        v_deleted = []
-        power_tree_problems(
-            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}}]},
-            VTREE, "probe", v_deleted)
-        cases.append(("deleting the assertion a binding names is caught",
-                      any("cannot be dropped by deleting one side" in x
-                          for x in v_deleted)))
-
-        # A PROPAGATED VOLTAGE CARRIED AS A SHOWN-WORK ROW'S OPENING
-        # LITERAL, not as an input: usbc_min was the fourth of the four and
-        # answered to nothing, so re-deriving it left A4 publishing a
-        # perfectly self-consistent margin from a superseded voltage.
-        _real_heads = REQUIRED_TREE_ROW_HEADS
-        globals()["REQUIRED_TREE_ROW_HEADS"] = {
-            "probe": (("A4", "secondary_rows.u", "max"),)}
-        try:
-            A5ROW = {"id": "A5", "inputs": {"worst": {"vin_v": 5.200}}}
-            HSPEC = {"assertions": [
-                {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
-                 "secondary_rows": {"u": "5.200 - 1.0 = +4.200 V"}},
-                A5ROW]}
-            h_ok = []
-            h_n = power_tree_problems(HSPEC, VTREE, "probe", h_ok)
-            cases.append(("a row head that matches its tree row reconciles",
-                          h_n == 4 and not h_ok))
-            h_drift = []
-            power_tree_problems(
-                {"assertions": [
-                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
-                     "secondary_rows": {"u": "5.100 - 1.0 = +4.100 V"}},
-                    A5ROW]},
-                VTREE, "probe", h_drift)
-            cases.append(("a row head the tree no longer derives is caught",
-                          any("superseded voltage" in x for x in h_drift)))
-            h_gone = []
-            power_tree_problems(
-                {"assertions": [
-                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
-                    A5ROW]},
-                VTREE, "probe", h_gone)
-            cases.append(("deleting the row a head binding names is caught",
-                          any("is named as opening with" in x
-                              for x in h_gone)))
-            h_prose = []
-            power_tree_problems(
-                {"assertions": [
-                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
-                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
-                     "secondary_rows": {"u": "about five volts"}},
-                    A5ROW]},
-                VTREE, "probe", h_prose)
-            cases.append(("a row head that stops being a number is caught",
-                          any("no longer opens with a number" in x
-                              for x in h_prose)))
-            h_norow = []
-            power_tree_problems(HSPEC, TREE + (
-                'voltage_at_ldo_input:\n'
-                '  worst_min: "4.4 - 0.2 = 4.200 V"\n'), "probe", h_norow)
-            cases.append(("a tree that stops deriving a head's row is caught",
-                          any("can drift from the tree silently" in x
-                              and "secondary_rows.u" in x for x in h_norow)))
-        finally:
-            globals()["REQUIRED_TREE_ROW_HEADS"] = _real_heads
+                            {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200,
+                                                    "vout_max_v": 3.366,
+                                                    "surprise_a": 1.0}}]},
+            VTREE, "probe", b_new, tree=PTREE)
+        cases.append(("an UNCLASSIFIED input is caught",
+                      any("classified neither" in x for x in b_new)))
+        b_gone = []
+        power_tree_problems(BSPEC, VTREE, "probe", b_gone, tree={"edges": []})
+        cases.append(("a binding whose tree path vanished is caught",
+                      any("no longer resolves" in x for x in b_gone)))
+        globals()["INPUTS_NOT_FROM_TREE"] = {"probe": {
+            "A4/vout_max_v": "the LDO datasheet",
+            "A4/v_ldo_in_min_v": "both at once"}}
+        b_both = []
+        power_tree_problems(BSPEC, VTREE, "probe", b_both, tree=PTREE)
+        cases.append(("an input both bound and exempt is caught",
+                      any("it is one or the other" in x for x in b_both)))
     finally:
-        globals()["REQUIRED_TREE_VOLTAGES"] = _real_volt
+        globals()["REQUIRED_TREE_BINDINGS"] = _real_bind
+        globals()["INPUTS_NOT_FROM_TREE"] = _real_exempt
+        globals()["MUST_MECHANISE"] = _real_must
+
+    # A PROPAGATED VOLTAGE CARRIED AS A SHOWN-WORK ROW'S OPENING LITERAL
+    # rather than as an input: usbc_min was the fourth of the four and
+    # answered to nothing, so re-deriving it left A4 publishing a
+    # self-consistent margin from a superseded voltage.
+    _real_heads = REQUIRED_TREE_ROW_HEADS
+    _real_must2 = MUST_MECHANISE
+    globals()["MUST_MECHANISE"] = {"probe": ()}
+    globals()["REQUIRED_TREE_ROW_HEADS"] = {
+        "probe": (("A4", "secondary_rows.u", "max"),)}
+    try:
+        HTREE = TREE + ('voltage_at_ldo_input:\n'
+                        '  max:       "5.25 - 0.05 = 5.200 V"\n')
+        HSPEC = {"assertions": [
+            {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+            {"id": "A4", "secondary_rows": {"u": "5.200 - 1.0 = +4.200 V"}}]}
+        h_ok = []
+        cases.append(("a row head matching its tree row reconciles",
+                      power_tree_problems(HSPEC, HTREE, "probe", h_ok) == 2
+                      and not h_ok))
+        h_drift = []
+        power_tree_problems(
+            {"assertions": [
+                {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                {"id": "A4",
+                 "secondary_rows": {"u": "5.100 - 1.0 = +4.100 V"}}]},
+            HTREE, "probe", h_drift)
+        cases.append(("a row head the tree no longer derives is caught",
+                      any("superseded voltage" in x for x in h_drift)))
+        h_gone = []
+        power_tree_problems(
+            {"assertions": [{"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                            {"id": "A4"}]}, HTREE, "probe", h_gone)
+        cases.append(("deleting the row a head binding names is caught",
+                      any("is named as opening with" in x for x in h_gone)))
+        h_prose = []
+        power_tree_problems(
+            {"assertions": [
+                {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                {"id": "A4", "secondary_rows": {"u": "about five volts"}}]},
+            HTREE, "probe", h_prose)
+        cases.append(("a row head that stops being a number is caught",
+                      any("no longer opens with a number" in x
+                          for x in h_prose)))
+        h_norow = []
+        power_tree_problems(HSPEC, TREE, "probe", h_norow)
+        cases.append(("a tree that stops deriving a head's row is caught",
+                      any("can drift from the tree silently" in x
+                          for x in h_norow)))
+    finally:
+        globals()["REQUIRED_TREE_ROW_HEADS"] = _real_heads
+        globals()["MUST_MECHANISE"] = _real_must2
 
     # SHOWN WORK. A4's guardband row published an answer its own operands
     # stopped producing; nothing read shown work at all until round 19.
@@ -1442,7 +1881,7 @@ def self_test():
         prose = []
         shown_work_problems(
             {"assertions": [{"id": "A4", "calc_rows": {
-                "g": "the margin = comfortable"}}]}, "probe", prose)
+                "g": "the 3 mV margin = comfortable"}}]}, "probe", prose)
         cases.append(("a named row that stops being readable is caught",
                       any("publishes 0 readable claim(s)" in x
                           for x in prose)))
@@ -1572,9 +2011,160 @@ def self_test():
     finally:
         globals()["REQUIRED_MARGINS"] = _real_margins
 
+    # T10 MARGINS in the power tree: capability minus that mode's own total,
+    # both the milliamps and the percentage, plus the verdict the row states.
+    _real_tm = REQUIRED_TREE_MARGINS
+    globals()["REQUIRED_TREE_MARGINS"] = {"probe": {"m": 1}}
+    try:
+        MTREE = {"sources": {"usb_host": {"current_capability_a": 0.5}},
+                 "summary_per_mode": {"m": {
+                     "vbus_total_a": "1 + 2 = 99.56e-3",
+                     "margin_vs_500mA": "400.4 mA (80.1%)"}}}
+        tm_ok = []
+        cases.append(("a T10 margin that is capability minus the total agrees",
+                      tree_margin_problems(MTREE, "probe", tm_ok) == 1
+                      and not tm_ok))
+        tm_ma = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "1 + 2 = 99.56e-3",
+                 "margin_vs_500mA": "999.9 mA (80.1%)"}}}, "probe", tm_ma)
+        cases.append(("a falsified margin figure is caught",
+                      any("leaves 400.4 mA" in x for x in tm_ma)))
+        tm_pct = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "1 + 2 = 99.56e-3",
+                 "margin_vs_500mA": "400.4 mA (10.1%)"}}}, "probe", tm_pct)
+        cases.append(("a falsified margin PERCENTAGE is caught",
+                      any("is 80.09%" in x for x in tm_pct)))
+        tm_count = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "1 + 2 = 99.56e-3",
+                 "margin_vs_500mA": "comfortable"}}}, "probe", tm_count)
+        cases.append(("a margin row with no readable figure is caught",
+                      any("publishes 0 margin figure(s)" in x
+                          for x in tm_count)))
+        tm_verdict = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "1 + 2 = 600e-3",
+                 "margin_vs_500mA": "-100.0 mA (-20.0%) -> T10 PASS"}}},
+            "probe", tm_verdict)
+        cases.append(("a T10 PASS with no margin left is caught",
+                      any("leaves no margin" in x for x in tm_verdict)))
+        tm_cap = []
+        tree_margin_problems(
+            {"summary_per_mode": {"m": {
+                "vbus_total_a": "1 = 0.1", "margin_vs_500mA": "400 mA (80%)"}}},
+            "probe", tm_cap)
+        cases.append(("a tree with no declared capability is caught",
+                      any("measured against nothing" in x for x in tm_cap)))
+        tm_gone = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {}}, "probe", tm_gone)
+        cases.append(("deleting a named mode's T10 margin is caught",
+                      any("no longer does" in x for x in tm_gone)))
+        tm_branch = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "1 = 0.1 ; 2 = 0.2",
+                 "margin_vs_500mA": "400.4 mA (80.1%)"}}}, "probe", tm_branch)
+        cases.append(("a total without its own margin branch is caught",
+                      any("branch for branch" in x for x in tm_branch)))
+        tm_join = []
+        tree_margin_problems(
+            {"sources": {"usb_host": {"current_capability_a": 0.5}},
+             "summary_per_mode": {
+                 "m": {"vbus_total_a": "1 + 2 = 99.56e-3",
+                       "margin_vs_500mA": "400.4 mA (80.1%)"},
+                 "other": {"margin_vs_500mA": "1 mA (2%)"}}}, "probe", tm_join)
+        cases.append(("a mode JOINING with a margin is caught",
+                      any("not in the checked population" in x
+                          for x in tm_join)))
+    finally:
+        globals()["REQUIRED_TREE_MARGINS"] = _real_tm
+
+    # THE DATA LAYER. Every summation term must BE a declared load: the
+    # totals restated the load table as bare literals, so the two could
+    # contradict each other with every gate green.
+    _real_sum, _real_carry = REQUIRED_TREE_SUMMATIONS, _CARRIED_FORWARD
+    globals()["REQUIRED_TREE_SUMMATIONS"] = {"probe": {
+        "m.p3v3_total_a#0": ("loads.a.modes.m.i_a", "loads.b.modes.m.i_a"),
+        "m.vbus_total_a#0": ("@m.p3v3_total_a#0", (0.002, "a stated basis")),
+    }}
+    globals()["_CARRIED_FORWARD"] = set()
+    try:
+        STREE = {"loads": {"a": {"modes": {"m": {"i_a": 0.095}}},
+                           "b": {"modes": {"m": {"i_a": 0.0011}}}},
+                 "summary_per_mode": {"m": {
+                     "p3v3_total_a": "0.095 + 0.0011 = 0.0961",
+                     "vbus_total_a": "0.0961 + 0.002 = 0.0981"}}}
+        s_ok = []
+        cases.append(("summations that sum the declared loads reconcile",
+                      tree_summation_problems(STREE, "probe", s_ok) == 2
+                      and not s_ok))
+        s_drift = []
+        drifted = {"loads": {"a": {"modes": {"m": {"i_a": 0.150}}},
+                             "b": {"modes": {"m": {"i_a": 0.0011}}}},
+                   "summary_per_mode": STREE["summary_per_mode"]}
+        tree_summation_problems(drifted, "probe", s_drift)
+        cases.append(("a declared load the summation no longer sums is "
+                      "caught",
+                      any("declared to sum are" in x for x in s_drift)))
+        s_gone = []
+        tree_summation_problems(
+            {"loads": {"b": {"modes": {"m": {"i_a": 0.0011}}}},
+             "summary_per_mode": STREE["summary_per_mode"]}, "probe", s_gone)
+        cases.append(("a summed load that vanished from the table is caught",
+                      any("no longer resolves" in x for x in s_gone)))
+        s_new = []
+        tree_summation_problems(
+            {"loads": STREE["loads"],
+             "summary_per_mode": {"m": dict(STREE["summary_per_mode"]["m"],
+                                            extra_total_a="1 + 1 = 2")}},
+            "probe", s_new)
+        cases.append(("a summation JOINING undeclared is caught",
+                      any("answer to no load" in x for x in s_new)))
+        s_row = []
+        tree_summation_problems({"loads": STREE["loads"],
+                                 "summary_per_mode": {}}, "probe", s_row)
+        cases.append(("deleting a named summation is caught",
+                      any("no longer in the tree" in x for x in s_row)))
+        s_carry = []
+        tree_summation_problems(
+            {"loads": STREE["loads"],
+             "summary_per_mode": {"m": {
+                 "vbus_total_a": "0.0961 + 0.002 = 0.0981"}}},
+            "probe", s_carry)
+        cases.append(("a summation carrying forward a row that is gone is "
+                      "caught",
+                      any("carries forward" in x for x in s_carry)))
+    finally:
+        globals()["REQUIRED_TREE_SUMMATIONS"] = _real_sum
+        globals()["_CARRIED_FORWARD"] = _real_carry
+
+    # THE EXPONENT COUNTS in the published precision: `281e-6` is not
+    # checked to +/-0.5 A.
+    cases.append(("engineering notation is checked at its own precision",
+                  _half_ulp("281e-6") == 0.5e-6
+                  and _half_ulp("9.0e-6") == 0.5e-7
+                  and _half_ulp("+0.257") == 0.0005))
+    cases.append(("a unit INSIDE the expression is still arithmetic",
+                  _eval_arith(" 0.500 A - 0.39531 A ") is not None
+                  and _eval_arith(" 121.9 C at Ta ") is None))
+
     # WIRING: a planted problem from each cross-file leg must reach main().
     for leg in ("shown_work_problems", "power_tree_problems",
-                "margin_problems", "tree_shown_work_problems"):
+                "margin_problems", "tree_shown_work_problems",
+                "tree_margin_problems", "tree_summation_problems"):
         _real_leg = globals()[leg]
 
         def _planted(*args, _leg=leg, **kwargs):
@@ -1788,11 +2378,16 @@ def main(argv):
         tree_path = case_dir / "power-tree.yaml"
         tree_checked = 0
         if tree_path.is_file():
+            tree_spec = load_yaml(tree_path)
             tree_checked = power_tree_problems(
                 spec, tree_path.read_text(encoding="utf-8"),
-                case_dir.name, problems)
+                case_dir.name, problems, tree=tree_spec)
             claims_checked += tree_shown_work_problems(
-                load_yaml(tree_path), case_dir.name, problems)
+                tree_spec, case_dir.name, problems)
+            tree_checked += tree_summation_problems(
+                tree_spec, case_dir.name, problems)
+            margins_checked += tree_margin_problems(
+                tree_spec, case_dir.name, problems)
     except GateUnavailable as exc:
         print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
