@@ -61,21 +61,31 @@ Measured in the behavioral deck: 0.4844 App at 12 V, 0.5119 App worst case at
 14 V -- slightly above ideal because the loop regulates duty above D = Vout/Vin
 to cover the modeled IR drops (Ron + DCR ~= 26 mOhm x 2 A ~= 53 mV).
 
-Peak current and saturation margin (using measured worst-case ripple):
+Peak current and saturation margin. The steady-state peak follows from the
+measured worst-case ripple, but it is NOT the deck's highest current: the
+1 A -> 2 A load step at 1.5 ms -- the transient `load_step_settling` gates --
+overshoots it, and that transient peak is what the magnetics actually see.
 
-    Ipk = Iout + DIL/2 = 2.0 + 0.5119/2 = 2.256 A
+    Ipk(steady state) = Iout + DIL/2 = 2.0 + 0.5119/2 = 2.256 A
+    Ipk(load step)    = max i(Vsns) over 1.45-1.7 ms  = 2.534 A
+
+This document published the 2.256 A figure as "worst case" and derived its
+saturation margin from it, 12% optimistic in the unsafe direction (round
+21). The margins below are the transient ones.
 
 Part: **Coilcraft XGL6060-103MEC** (10 uH +/-20%, DCR 18.5 mOhm typ /
 20.4 mOhm max, Isat 3.6 A at 10% inductance drop / 5.5 A at 20% / 7.3 A at
 30%, Irms 7.3 A for 20 C rise / 10.0 A for 40 C rise; Coilcraft datasheet
 Document 1621-2, rev. 02/19/26). Saturation margin against the strictest
-rating point: 3.6/2.26 = **1.6x** at the 10%-drop Isat, 5.5/2.26 = 2.4x at
-the 20%-drop rating. A 100% overload transient (4.256 A) stays below the
-5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
+rating point, at the measured transient peak: 3.6/2.534 = **1.42x** at the
+10%-drop Isat, 5.5/2.534 = 2.17x at the 20%-drop rating. (Against the
+steady-state peak alone they would read 1.6x and 2.4x.) A 100% overload
+transient (4.534 A) stays below the 5.5 A 20%-drop rating -- soft-saturating composite core, so inductance sags
 gracefully rather than collapsing. RMS heating: Irms ~= 2.0 A vs 7.3 A
 (20 C rise) rating. The BOM records L at +/-20%: at the -20% corner (8 uH)
-the ripple scales by 1/0.8 to 0.640 App, Ipk rises to 2.32 A, and the
-margins become 3.6/2.32 = 1.55x (10%-drop Isat) and 5.5/2.32 = 2.4x -- the
+the ripple scales by 1/0.8 to 0.640 App, the computed steady-state Ipk
+rises to 2.32 A and the measured load-step peak to 2.566 A, and the margins
+become 3.6/2.566 = 1.40x (10%-drop Isat) and 5.5/2.566 = 2.14x -- the
 conclusions above are computed at nominal L and survive the tolerance
 corner.
 
@@ -133,7 +143,7 @@ Synchronous FETs, both **Infineon BSC059N04LS6** (OptiMOS 6, 40 V, Rds(on)
 
 - Voltage margin: 40 V rating vs 14 V max input plus switch-node ringing
   (budget 2x Vin transient) -> 40/14 = **2.8x** static margin.
-- Current: continuous Id rating tens of amps vs 2.256 A peak.
+- Current: continuous Id rating tens of amps vs the 2.534 A load-step peak.
 - Conduction loss at 2 A, 12 V (D' = 0.30):
   - HS: I^2 x Ron x D'     = 4 x 0.0059 x 0.30 = 7.1 mW
   - LS: I^2 x Ron x (1-D') = 4 x 0.0059 x 0.70 = 16.5 mW
@@ -252,7 +262,7 @@ Original construction, no vendor models:
 What this class deliberately does not model: switching edges (so no measured
 overlap/Coss loss -- budgeted instead, sec. 6), dead-time conduction,
 gate-drive dynamics, and large-signal magnetics saturation (guarded by the
-1.6x margin to even the strictest 10%-drop Isat rating instead). Those
+1.42x margin to even the strictest 10%-drop Isat rating instead). Those
 belong to higher rungs.
 
 ## 9. Results vs. assertions
@@ -368,8 +378,8 @@ against a 60 s budget for three digits nothing downstream reads, and the
 alternative is a gate that cannot detect a deck change at all. Anyone refining
 the timestep for a real reason should re-record the five values and say so.
 
-None of the engineering conclusions move across the sweep: `Ipk` 2.256 A,
-saturation margin 1.6x, ripple margin 13.9x, efficiency 0.92864 (invariant to
+None of the engineering conclusions move across the sweep: steady-state
+`Ipk` 2.256 A, saturation margin 1.42x at the measured load-step peak, ripple margin 13.9x, efficiency 0.92864 (invariant to
 four figures over 4 ns..500 ps, three over the whole sweep: the run at 40 ns
 gives 0.928704, and the five values are 0.928704 / 0.928628 / 0.928644 /
 0.928634 / 0.928635), settling 16.86 us against a 500 us budget.
