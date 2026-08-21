@@ -169,7 +169,7 @@ re-derives A1-A8 from assertions.yaml, power-tree.yaml and the part records,
 reconciles three design.md figures against them, runs under `make all`, and
 prints:
 
-  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 3 design.md figure(s) reconcile against them; 5 power-tree figure(s) agree; 15 shown-work claim(s) recompute.
+  hand-assert: PASS: esp32s3-devboard: 8 assertion(s) follow from their inputs; 7 design.md figure(s) reconcile against them; 3 published margin(s) are the gate's own slack; 7 power-tree figure(s) agree; 40 shown-work claim(s) recompute.
 
 It also names the two it cannot mechanise and why -- A9_strapping_dc_state
 (a boot-mode truth table, not a numeric relation) and A10_single_pin_nets_l9b
@@ -216,3 +216,35 @@ named shown-work row at the precision the row itself publishes, and holds
 A4's and A5's voltage inputs to the power-tree rows they transcribe by name
 -- the current totals alone were reconciled before, which is why a Vf edit
 could flip A4's physical verdict with every gate green.
+
+=== Correction, 2026-08-21 (AMB-123 round 20) ===
+Round 19 gave assertions.yaml's shown work a reader and stopped one file
+short: power-tree.yaml publishes the same kind of derivation -- the mode
+totals and the voltage propagation this log calls the benchmark's original
+evidence -- and only the trailing "= X V" was read, so a row could state
+work its own operands do not produce. Every arithmetic row in both files is
+recomputed now, both directions (a row cannot leave the population by being
+deleted, or join it by being added), each with the count of claims it
+publishes. The same round-19 fix bound three of the four propagated
+voltages; usbc_min, which A4's secondary row carries as a bare opening
+literal, was the fourth and is bound now. No arithmetic in either file
+turned out to be wrong -- every one of the 40 claims recomputes -- but none
+of it was checked.
+
+Two further populations were too small. design.md's reconciled figures were
+three; the two dropout margins A4 exists to publish, the 391.6 mA peak rail
+demand every current row derives from, and the 0.654 W that is the direct
+operand of the gated 121.9 C were outside them, so the document could
+contradict the assertion that computes it. And every `margin:` in this spec
+was replaceable with an arbitrary number: A2's, A3's and A6's are now the
+slack the gate itself computes, and the three that are not a single slack
+(A1's two-sided interval, A5's two thermal bases, A7's ratio) are declared
+as prose rather than left silently unread.
+
+VBUS maximum. The source model takes 500 mA from the USB Type-C spec and
+5.25 V from USB 2.0 -- the more favourable figure from each. Type-C vSafe5V
+is specified 4.75 to 5.5 V, and at 5.5 V the datasheet minimum-pad junction
+temperature would be 132.7 C, above this design's own 125 C gate (96.6 C at
+the 62 C/W pour assumption). A5 remains gated at 5.25 V; the basis and the
+derived corner are stated in power-tree.yaml rather than left implicit, and
+choosing which bound this benchmark should model is AMB-126.

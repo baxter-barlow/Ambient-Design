@@ -12,6 +12,24 @@ sources:
   usb_host:
     node: VBUS_IN
     voltage_v: {min: 4.40, nom: 5.00, max: 5.25}   # USB 2.0 device-side worst min; USB-C nominal-min 4.75 shown in assertions
+    voltage_max_basis: >-
+      The 5.25 V maximum is the USB 2.0 +5% bound. It is NOT the bound
+      implied by the Type-C source this file's budget_assumption targets:
+      Type-C vSafe5V is specified 4.75 to 5.5 V, so a conforming Type-C
+      source may present 5.5 V. Stated because the two figures were taken
+      from whichever spec was more favourable -- Type-C for the 500 mA
+      capability, USB 2.0 for the voltage maximum -- and the maximum is the
+      corner that feeds A5's junction temperature. What that corner would
+      give is derived in type_c_vsafe5v_corner below: above the design's own
+      125 C gate at the datasheet minimum-pad theta_JA, inside it at the
+      62 C/W pour assumption. A5 remains gated at 5.25 V and says so in its
+      caveat; deciding which bound this benchmark should model is AMB-126
+      (the vendor and spec-figure pass), not this note.
+    type_c_vsafe5v_corner:   # NOT modelled; the bound A5 would face at 5.5 V
+      v_ldo_in_max: "5.5 - 0.0277 - 0.0198 - 0.300 = 5.1525 V"
+      p_ldo:        "(5.1525 - 3.234) x 0.3916 + 5.1525 x 60e-6 = 0.7516 W"
+      tj_min_pad:   "50 + 0.7516 x 110 = 132.7 C"
+      tj_pour_62:   "50 + 0.7516 x 62 = 96.6 C"
     current_capability_a: 0.500                     # default USB power; Rd-only sink (R1/R2 5.1k), source Rp not read
     note: "board budgets to 500 mA regardless of possible 1.5/3.0 A Rp advertisement"
     budget_assumption: >-

@@ -572,6 +572,17 @@ REQUIRED_TREE_VOLTAGES = {
     ),
 }
 
+# The same binding for propagated voltages that a spec carries as the opening
+# literal of a shown-work row rather than as an `inputs` key.
+REQUIRED_TREE_ROW_HEADS = {
+    "esp32s3-devboard": (
+        ("A4_ldo_dropout_at_min_vbus",
+         "secondary_rows.usbc_min_4p75_guardband", "usbc_min"),
+        ("A4_ldo_dropout_at_min_vbus",
+         "secondary_rows.nominal_5p00_typ_vdo", "nominal"),
+    ),
+}
+
 # Every shown-work row that must be arithmetically true. A4's guardband row
 # published `3.818 - 3.562 = +0.257 V` for two rounds after the current it
 # derives from moved (the answer is 0.256), because shown work had no reader
@@ -588,11 +599,53 @@ REQUIRED_SHOWN_WORK_ROWS = {
         "A2_vbus_budget_t10/calc": 1,
         "A4_ldo_dropout_at_min_vbus/calc_rows.datasheet_typ": 3,
         "A4_ldo_dropout_at_min_vbus/calc_rows.inhouse_guardband": 3,
-        "A4_ldo_dropout_at_min_vbus/secondary_rows.usbc_min_4p75_guardband": 1,
+        # Prose, named at zero so arithmetic cannot arrive here unchecked.
+        "A4_ldo_dropout_at_min_vbus/caveat": 0,
         "A4_ldo_dropout_at_min_vbus/secondary_rows.nominal_5p00_typ_vdo": 2,
-        "A5_ldo_thermal_at_wifi_tx/calc_worst": 2,
+        "A4_ldo_dropout_at_min_vbus/secondary_rows.usbc_min_4p75_guardband": 1,
         "A5_ldo_thermal_at_wifi_tx/calc_typ": 2,
+        "A5_ldo_thermal_at_wifi_tx/calc_worst": 2,
         "A5_ldo_thermal_at_wifi_tx/calc_worst_datasheet_theta": 1,
+        # The published breach condition: Ta_max = 125 - 0.654 x 110.
+        "A5_ldo_thermal_at_wifi_tx/caveat": 1,
+        "A8_usb_inrush_capacitance/note": 0,
+        "A9_strapping_dc_state/inputs.gpio45": 0,
+        "A9_strapping_dc_state/result": 0,
+    },
+}
+
+# Every power-tree row that publishes arithmetic, and how many claims it
+# publishes. Both directions are enforced, so a new row cannot arrive
+# unchecked and an old one cannot leave unnoticed. Re-derive a count in the
+# same commit that edits its row.
+REQUIRED_TREE_SHOWN_WORK = {
+    "esp32s3-devboard": {
+        # Prose citations, named at zero so arithmetic cannot arrive here
+        # unchecked either.
+        "loads.esp32s3_module.modes.idle_modem_sleep.source": 0,
+        # The Type-C vSafe5V corner the design does NOT model, derived so
+        # the sentence that names it answers to arithmetic (AMB-126).
+        "sources.usb_host.type_c_vsafe5v_corner.p_ldo": 1,
+        "sources.usb_host.type_c_vsafe5v_corner.tj_min_pad": 1,
+        "sources.usb_host.type_c_vsafe5v_corner.tj_pour_62": 1,
+        "sources.usb_host.type_c_vsafe5v_corner.v_ldo_in_max": 1,
+        "loads.esp32s3_module.modes.wifi_tx_peak.source": 0,
+        "summary_per_mode.deep_sleep.margin_vs_500mA": 1,
+        "summary_per_mode.deep_sleep.p3v3_total_a": 1,
+        "summary_per_mode.deep_sleep.vbus_total_a": 1,
+        "summary_per_mode.idle_modem_sleep.p3v3_total_a": 2,
+        "summary_per_mode.idle_modem_sleep.vbus_total_a": 2,
+        "summary_per_mode.light_sleep.p3v3_total_a": 1,
+        "summary_per_mode.light_sleep.vbus_total_a": 1,
+        "summary_per_mode.wifi_rx.p3v3_total_a": 1,
+        "summary_per_mode.wifi_rx.vbus_total_a": 1,
+        "summary_per_mode.wifi_tx_peak.ldo_input_a": 1,
+        "summary_per_mode.wifi_tx_peak.p3v3_total_a": 2,
+        "summary_per_mode.wifi_tx_peak.vbus_total_a": 2,
+        "voltage_at_ldo_input.max": 1,
+        "voltage_at_ldo_input.nominal": 1,
+        "voltage_at_ldo_input.usbc_min": 1,
+        "voltage_at_ldo_input.worst_min": 1,
     },
 }
 
@@ -664,6 +717,29 @@ def _split_top_level(text, sep="="):
     return parts
 
 
+def _split_pieces(text):
+    """Independent chains within one row: `;`, `->` and newlines, OUTSIDE
+    parentheses. Splitting on a `;` inside a parenthesised sub-claim left an
+    unbalanced `(` that swallowed every later `=` into one prose segment, so
+    A5's published breach condition went unread (round 20)."""
+    parts, depth, current, index = [], 0, [], 0
+    while index < len(text):
+        char = text[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        if depth == 0 and (char in ";\n" or text[index:index + 2] == "->"):
+            parts.append("".join(current))
+            current = []
+            index += 2 if text[index:index + 2] == "->" else 1
+            continue
+        current.append(char)
+        index += 1
+    parts.append("".join(current))
+    return parts
+
+
 def _half_ulp(text):
     """The precision the fragment publishes: `+0.257` claims three decimals,
     so 0.256 is a different number; `90.5` claims one, so 90.548 is not."""
@@ -699,15 +775,23 @@ def _row_problems(where, text, problems):
     a parenthesised sub-claim is checked and then substituted by its value;
     a parenthesised annotation that is not arithmetic is dropped."""
     verified = 0
-    for piece in re.split(r";|->|\n", text):
-        working = piece
+    for piece in _split_pieces(text):
+        # A leading `typ:` / `worst:` / `max:` label is a name for the chain,
+        # not part of it. The power tree writes its branches that way, and
+        # leaving the label in made the whole chain unreadable -- an
+        # unreadable chain is an unchecked one (round 20).
+        working = re.sub(r"^\s*[A-Za-z_][A-Za-z0-9_ .-]*:\s*", "", piece)
         resolved = True
         while True:
             match = _INNER_CLAIM.search(working)
             if match is None:
                 break
-            verified += _chain_problems(f"{where} (sub-claim)",
-                                        match.group(1), problems)
+            # RECURSE, do not chain: a parenthesised claim can carry its
+            # own `;`-separated branches, and treating the whole group as
+            # one chain compared a Ta_max from one branch against the other
+            # branch's answer.
+            verified += _row_problems(f"{where} (sub-claim)",
+                                      match.group(1), problems)
             stated = _eval_arith(_split_top_level(match.group(1))[-1])
             if stated is None:
                 resolved = False
@@ -723,36 +807,171 @@ def _row_problems(where, text, problems):
     return verified
 
 
-def shown_work_problems(spec, label, problems):
-    """Every named shown-work row must be present and arithmetically true."""
-    rows = {}
-    for assertion in spec.get("assertions") or []:
-        ident = assertion.get("id")
-        for key, value in sorted(assertion.items()):
-            if key.startswith("calc") and isinstance(value, str):
-                rows[f"{ident}/{key}"] = value
-            elif key in ("calc_rows", "secondary_rows") and isinstance(
-                    value, dict):
-                for name, text in value.items():
-                    if isinstance(text, str):
-                        rows[f"{ident}/{key}.{name}"] = text
+# Every `margin:` an assertion publishes, and how it reconciles. "prose"
+# says the figure is not a single slack this gate can recompute (a two-sided
+# interval, a ratio, a pair of thermal bases) -- declared, not silently
+# unread. Round 20 found every margin here replaceable with an arbitrary
+# number, `make sim` green: the headroom figure a reader acts on.
+REQUIRED_MARGINS = {
+    "esp32s3-devboard": {
+        "A1_rail_voltage_containment": "prose",
+        "A2_vbus_budget_t10": "slack:limit:mA",
+        "A3_3v3_source_capability": "slack:needs0:mA",
+        "A5_ldo_thermal_at_wifi_tx": "prose",
+        "A6_ptc_hold_margin": "slack:need:mA",
+        "A7_deep_sleep_rail_current": "prose",
+    },
+}
+
+_MARGIN_UNITS = {"uA": 1e-6, "mA": 1e-3, "A": 1.0, "mV": 1e-3, "V": 1.0,
+                 "C": 1.0, "uF": 1e-6}
+
+
+def margin_problems(spec, label, problems):
+    """A published margin must be the slack the gate itself computes."""
+    required = REQUIRED_MARGINS.get(label, {})
+    published = {a.get("id"): a for a in spec.get("assertions") or []
+                 if isinstance(a.get("margin"), str)}
     checked = 0
-    for name, expected in REQUIRED_SHOWN_WORK_ROWS.get(label, {}).items():
+    for assertion_id, mode in required.items():
+        assertion = published.get(assertion_id)
+        if assertion is None:
+            problems.append(
+                f"{label}: {assertion_id} is named as publishing a margin "
+                "and no longer does. Margins leave this population by "
+                "review, not by being deleted.")
+            continue
+        if mode == "prose":
+            continue
+        _, operand, unit = mode.split(":")
+        ci = assertion.get("check_inputs") or {}
+        try:
+            have = float(ci["have"])
+            other = (float(ci["needs"][0]) if operand == "needs0"
+                     else float(ci[operand]))
+        except (KeyError, IndexError, TypeError, ValueError):
+            problems.append(
+                f"{label}/{assertion_id}: its margin is named as the slack "
+                f"between have and {operand}, which check_inputs no longer "
+                "records in a form this can read.")
+            continue
+        head = re.match(r"\s*([+-]?[0-9]*\.?[0-9]+)", assertion["margin"])
+        if head is None:
+            problems.append(
+                f"{label}/{assertion_id}: margin no longer opens with a "
+                "number, so the headroom it publishes reconciles against "
+                "nothing.")
+            continue
+        stated = float(head.group(1)) * _MARGIN_UNITS[unit]
+        slack = abs(have - other)
+        if abs(stated - slack) > _half_ulp(head.group(1)) * _MARGIN_UNITS[unit]:
+            problems.append(
+                f"{label}/{assertion_id}: publishes a margin of "
+                f"{head.group(1)} {unit}, but its own check_inputs give a "
+                f"slack of {slack / _MARGIN_UNITS[unit]:.4g} {unit}. The "
+                "headroom a reader acts on has to be the headroom the gate "
+                "computes.")
+        else:
+            checked += 1
+    for assertion_id in sorted(set(published) - set(required)):
+        problems.append(
+            f"{label}: {assertion_id} publishes a margin and is not in the "
+            "checked population, so nothing reconciles it. Add it with how "
+            "it reconciles, or as prose.")
+    return checked
+
+
+def _named_rows_problems(rows, required, label, where, problems):
+    """Hold a set of shown-work rows to a named population, both directions.
+
+    Leaving: a named row that is gone is a failure. Joining: a row that
+    appears and is not named is a failure -- round 20's population closed
+    the leaving direction only, so a new row could arrive unchecked, which
+    is the same list-not-world shape as the deck-parameter floor. The count
+    beside each name is how many `A = B` claims the row publishes, so a
+    claim added in a form this cannot evaluate is a failure rather than a
+    silent skip."""
+    checked = 0
+    for name, expected in required.items():
         if name not in rows:
             problems.append(
-                f"{label}: shown-work row {name} is named as checked "
-                "arithmetic and is not in the spec. Rows leave this "
-                "population by review, not by being deleted.")
+                f"{label}: {where} row {name} is named as checked arithmetic "
+                "and is not in the file. Rows leave this population by "
+                "review, not by being deleted.")
             continue
         verified = _row_problems(f"{label}/{name}", rows[name], problems)
         if verified != expected:
             problems.append(
-                f"{label}: shown-work row {name} publishes {verified} "
-                f"readable claim(s), not the recorded {expected}. A claim "
-                "this gate cannot evaluate is a claim nothing checks; "
-                "re-derive the count in the commit that edits the row.")
+                f"{label}: {where} row {name} publishes {verified} readable "
+                f"claim(s), not the recorded {expected}. A claim this gate "
+                "cannot evaluate is a claim nothing checks; re-derive the "
+                "count in the commit that edits the row.")
         checked += verified
+    for name in sorted(set(rows) - set(required)):
+        problems.append(
+            f"{label}: {where} row {name} publishes arithmetic and is not in "
+            "the checked population, so nothing recomputes it. Add it with "
+            "its claim count.")
     return checked
+
+
+def shown_work_problems(spec, label, problems):
+    """Every shown-work row in the spec, held to the named population."""
+    # ANY string field that carries arithmetic, not a key-prefix list:
+    # `caveat:` published a full equation (`Ta_max = 125 - 0.654 x 110 =
+    # 53.1 C`) that the calc*/secondary_rows population could not see
+    # (round 20). Same walk as the power tree's.
+    rows = {}
+    for assertion in spec.get("assertions") or []:
+        ident = assertion.get("id")
+
+        def walk(node, path):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    walk(value, f"{path}.{key}" if path else str(key))
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    walk(value, f"{path}[{index}]")
+            elif isinstance(node, str) and "=" in node:
+                rows[f"{ident}/{path}"] = node
+
+        for key, value in sorted(assertion.items()):
+            if key in ("id", "expr", "check_inputs_derived"):
+                # `expr` is the relation itself, re-evaluated by check_spec;
+                # check_inputs_derived is a formula over input NAMES, not
+                # arithmetic over literals.
+                continue
+            walk(value, key)
+    return _named_rows_problems(
+        rows, REQUIRED_SHOWN_WORK_ROWS.get(label, {}), label, "shown-work",
+        problems)
+
+
+def tree_shown_work_problems(tree, label, problems):
+    """The power tree's OWN derivations, not just their `= X V` tails.
+
+    Round 19 gave assertions.yaml's shown work a reader and stopped one file
+    short: power-tree.yaml publishes the same kind of derivation -- the mode
+    totals and the voltage propagation validation.log calls this benchmark's
+    original evidence -- and only the trailing result was read, so a row
+    could state work its own operands do not produce (round 20). Same
+    machinery, same named-population discipline."""
+    rows = {}
+
+    def walk(node, path):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{path}.{key}" if path else str(key))
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]")
+        elif isinstance(node, str) and "=" in node:
+            rows[path] = node
+
+    walk(tree, "")
+    return _named_rows_problems(
+        rows, REQUIRED_TREE_SHOWN_WORK.get(label, {}), label, "power-tree",
+        problems)
 
 
 def power_tree_problems(spec, power_text, label, problems):
@@ -831,6 +1050,49 @@ def power_tree_problems(spec, power_text, label, problems):
                 f"but power-tree.yaml's {row_name} propagation derives "
                 f"{rows[row_name]:g} V. A re-derived Vf, PTC or bead value "
                 "must move both files.")
+        else:
+            checked += 1
+    # THE SAME BINDING FOR VOLTAGES THAT LIVE IN SHOWN WORK RATHER THAN IN
+    # `inputs`. A4's secondary rows open with usbc_min and nominal as bare
+    # literals; the shown-work reader proves each row is self-consistent,
+    # which is exactly why a re-derived usbc_min left A4 publishing a
+    # perfectly consistent margin computed from a voltage the tree no longer
+    # derives (round 20) -- the fourth of the four propagated voltages, in
+    # the fix written to close the first three.
+    for assertion_id, row_key, row_name in REQUIRED_TREE_ROW_HEADS.get(
+            label, ()):
+        assertion = next((a for a in spec.get("assertions") or []
+                          if a.get("id") == assertion_id), None)
+        family, _, member = row_key.partition(".")
+        text = ((assertion or {}).get(family) or {}).get(member)
+        if not isinstance(text, str):
+            problems.append(
+                f"{label}: {assertion_id}'s {row_key} is named as opening "
+                f"with power-tree.yaml's {row_name} voltage and is not in "
+                "the spec; a cross-file binding cannot be dropped by "
+                "deleting one side.")
+            continue
+        if row_name not in rows:
+            problems.append(
+                f"{label}: power-tree.yaml no longer derives a "
+                f"voltage_at_ldo_input {row_name} row in the form this gate "
+                f"reads, so {assertion_id}'s {row_key} can drift from the "
+                "tree silently.")
+            continue
+        head = re.match(r"\s*([0-9]*\.?[0-9]+)", text)
+        if head is None:
+            problems.append(
+                f"{label}/{assertion_id}: {row_key} no longer opens with a "
+                f"number, so its copy of the {row_name} voltage is "
+                "unreadable and reconciles against nothing.")
+            continue
+        if abs(float(head.group(1)) - rows[row_name]) > 5e-4:
+            problems.append(
+                f"{label}/{assertion_id}: {row_key} opens at "
+                f"{float(head.group(1)):g} V but power-tree.yaml's "
+                f"{row_name} propagation derives {rows[row_name]:g} V. A "
+                "self-consistent row computed from a superseded voltage is "
+                "the drift this binding exists to catch.")
         else:
             checked += 1
     return checked
@@ -1078,6 +1340,65 @@ def self_test():
         cases.append(("deleting the assertion a binding names is caught",
                       any("cannot be dropped by deleting one side" in x
                           for x in v_deleted)))
+
+        # A PROPAGATED VOLTAGE CARRIED AS A SHOWN-WORK ROW'S OPENING
+        # LITERAL, not as an input: usbc_min was the fourth of the four and
+        # answered to nothing, so re-deriving it left A4 publishing a
+        # perfectly self-consistent margin from a superseded voltage.
+        _real_heads = REQUIRED_TREE_ROW_HEADS
+        globals()["REQUIRED_TREE_ROW_HEADS"] = {
+            "probe": (("A4", "secondary_rows.u", "max"),)}
+        try:
+            A5ROW = {"id": "A5", "inputs": {"worst": {"vin_v": 5.200}}}
+            HSPEC = {"assertions": [
+                {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
+                 "secondary_rows": {"u": "5.200 - 1.0 = +4.200 V"}},
+                A5ROW]}
+            h_ok = []
+            h_n = power_tree_problems(HSPEC, VTREE, "probe", h_ok)
+            cases.append(("a row head that matches its tree row reconciles",
+                          h_n == 4 and not h_ok))
+            h_drift = []
+            power_tree_problems(
+                {"assertions": [
+                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
+                     "secondary_rows": {"u": "5.100 - 1.0 = +4.100 V"}},
+                    A5ROW]},
+                VTREE, "probe", h_drift)
+            cases.append(("a row head the tree no longer derives is caught",
+                          any("superseded voltage" in x for x in h_drift)))
+            h_gone = []
+            power_tree_problems(
+                {"assertions": [
+                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200}},
+                    A5ROW]},
+                VTREE, "probe", h_gone)
+            cases.append(("deleting the row a head binding names is caught",
+                          any("is named as opening with" in x
+                              for x in h_gone)))
+            h_prose = []
+            power_tree_problems(
+                {"assertions": [
+                    {"id": "A2", "inputs": {"sum_worst_a": 0.395}},
+                    {"id": "A4", "inputs": {"v_ldo_in_min_v": 4.200},
+                     "secondary_rows": {"u": "about five volts"}},
+                    A5ROW]},
+                VTREE, "probe", h_prose)
+            cases.append(("a row head that stops being a number is caught",
+                          any("no longer opens with a number" in x
+                              for x in h_prose)))
+            h_norow = []
+            power_tree_problems(HSPEC, TREE + (
+                'voltage_at_ldo_input:\n'
+                '  worst_min: "4.4 - 0.2 = 4.200 V"\n'), "probe", h_norow)
+            cases.append(("a tree that stops deriving a head's row is caught",
+                          any("can drift from the tree silently" in x
+                              and "secondary_rows.u" in x for x in h_norow)))
+        finally:
+            globals()["REQUIRED_TREE_ROW_HEADS"] = _real_heads
     finally:
         globals()["REQUIRED_TREE_VOLTAGES"] = _real_volt
 
@@ -1121,8 +1442,8 @@ def self_test():
         prose = []
         shown_work_problems(
             {"assertions": [{"id": "A4", "calc_rows": {
-                "g": "the margin is comfortable"}}]}, "probe", prose)
-        cases.append(("a named row with no readable claim is caught",
+                "g": "the margin = comfortable"}}]}, "probe", prose)
+        cases.append(("a named row that stops being readable is caught",
                       any("publishes 0 readable claim(s)" in x
                           for x in prose)))
         gained = []
@@ -1138,11 +1459,122 @@ def self_test():
         cases.append(("deleting a named shown-work row is caught",
                       any("named as checked arithmetic" in x
                           for x in absent)))
+        joined = []
+        shown_work_problems(
+            {"assertions": [{"id": "A4", "calc_rows": {
+                "g": "margin = 3.818 - 3.562 = +0.256 V",
+                "sneaky": "1 + 1 = 3 V"}}]}, "probe", joined)
+        cases.append(("a row JOINING outside the population is caught",
+                      any("not in the checked population" in x
+                          for x in joined)))
     finally:
         globals()["REQUIRED_SHOWN_WORK_ROWS"] = _real_rows
 
+    # THE POWER TREE'S OWN DERIVATIONS. Round 19 gave assertions.yaml a
+    # reader and stopped one file short; the tree publishes the same kind of
+    # work and only its `= X V` tail was read.
+    _real_tree_rows = REQUIRED_TREE_SHOWN_WORK
+    globals()["REQUIRED_TREE_SHOWN_WORK"] = {"probe": {"v.worst_min": 1}}
+    try:
+        tree_ok = []
+        n_tree = tree_shown_work_problems(
+            {"v": {"worst_min": "4.40 - 0.20 - 0.40 = 3.80 V"}},
+            "probe", tree_ok)
+        cases.append(("a true power-tree derivation is counted",
+                      n_tree == 1 and not tree_ok))
+        tree_bad = []
+        tree_shown_work_problems(
+            {"v": {"worst_min": "4.40 - 0.90 - 0.40 = 3.80 V"}},
+            "probe", tree_bad)
+        cases.append(("a power-tree row its own operands refute is caught",
+                      any("does not round to 3.8" in x for x in tree_bad)))
+        tree_joined = []
+        tree_shown_work_problems(
+            {"v": {"worst_min": "4.40 - 0.20 - 0.40 = 3.80 V",
+                   "bonus": "1 + 1 = 3 V"}}, "probe", tree_joined)
+        cases.append(("a power-tree row JOINING unnamed is caught",
+                      any("not in the checked population" in x
+                          for x in tree_joined)))
+        # A `typ:` / `worst:` label names the chain; leaving it in made the
+        # whole chain unreadable, and an unreadable chain is unchecked.
+        globals()["REQUIRED_TREE_SHOWN_WORK"] = {"probe": {"v.worst_min": 2}}
+        labelled = []
+        n_labelled = tree_shown_work_problems(
+            {"v": {"worst_min": "typ: 1.0 + 2.0 = 3.0 A ; worst: 2.0 + 2.0 "
+                                "= 4.0 A"}}, "probe", labelled)
+        cases.append(("labelled typ/worst branches are BOTH read",
+                      n_labelled == 2 and not labelled))
+        half_read = []
+        tree_shown_work_problems(
+            {"v": {"worst_min": "typ: 1.0 + 2.0 = 3.0 A ; worst: about 4 A"}},
+            "probe", half_read)
+        cases.append(("a branch that stops being readable is caught",
+                      any("not the recorded 2" in x for x in half_read)))
+    finally:
+        globals()["REQUIRED_TREE_SHOWN_WORK"] = _real_tree_rows
+
+    # PUBLISHED MARGINS. Every one of these was replaceable with an
+    # arbitrary number, `make sim` green, until round 20.
+    _real_margins = REQUIRED_MARGINS
+    globals()["REQUIRED_MARGINS"] = {"probe": {"A2": "slack:limit:mA",
+                                               "A5": "prose"}}
+    try:
+        m_ok = []
+        n_m = margin_problems(
+            {"assertions": [
+                {"id": "A2", "check_inputs": {"have": 0.39531, "limit": 0.5},
+                 "margin": "+104.7 mA (20.9%)"},
+                {"id": "A5", "margin": "worst +34.5 C at 62 C/W"}]},
+            "probe", m_ok)
+        cases.append(("a margin that is the gate's own slack reconciles",
+                      n_m == 1 and not m_ok))
+        m_bad = []
+        margin_problems(
+            {"assertions": [
+                {"id": "A2", "check_inputs": {"have": 0.39531, "limit": 0.5},
+                 "margin": "+999.7 mA (99.9%)"},
+                {"id": "A5", "margin": "prose"}]}, "probe", m_bad)
+        cases.append(("a margin that is not the computed slack is caught",
+                      any("headroom a reader acts on" in x for x in m_bad)))
+        m_gone = []
+        margin_problems({"assertions": [{"id": "A5", "margin": "prose"}]},
+                        "probe", m_gone)
+        cases.append(("deleting a named margin is caught",
+                      any("no longer does" in x for x in m_gone)))
+        m_unreadable = []
+        margin_problems(
+            {"assertions": [
+                {"id": "A2", "check_inputs": {"have": 0.39531, "limit": 0.5},
+                 "margin": "comfortable"},
+                {"id": "A5", "margin": "prose"}]}, "probe", m_unreadable)
+        cases.append(("a margin that stops opening with a number is caught",
+                      any("reconciles against nothing" in x
+                          for x in m_unreadable)))
+        m_operand = []
+        margin_problems(
+            {"assertions": [
+                {"id": "A2", "check_inputs": {"have": 0.39531},
+                 "margin": "+104.7 mA"},
+                {"id": "A5", "margin": "prose"}]}, "probe", m_operand)
+        cases.append(("a margin whose operand the spec dropped is caught",
+                      any("no longer records in a form this can read" in x
+                          for x in m_operand)))
+        m_new = []
+        margin_problems(
+            {"assertions": [
+                {"id": "A2", "check_inputs": {"have": 0.39531, "limit": 0.5},
+                 "margin": "+104.7 mA"},
+                {"id": "A5", "margin": "prose"},
+                {"id": "A9", "margin": "+1 mA"}]}, "probe", m_new)
+        cases.append(("a margin JOINING outside the population is caught",
+                      any("not in the checked population" in x
+                          for x in m_new)))
+    finally:
+        globals()["REQUIRED_MARGINS"] = _real_margins
+
     # WIRING: a planted problem from each cross-file leg must reach main().
-    for leg in ("shown_work_problems", "power_tree_problems"):
+    for leg in ("shown_work_problems", "power_tree_problems",
+                "margin_problems", "tree_shown_work_problems"):
         _real_leg = globals()[leg]
 
         def _planted(*args, _leg=leg, **kwargs):
@@ -1182,6 +1614,22 @@ DOC_FIGURES = {
         (r"Tj = \*\*([\d.]+) C\*\*", "A5_ldo_thermal_at_wifi_tx", "have", 1.0),
         (r"1 A rating gives ([\d.]+) mA margin", "A3_3v3_source_capability",
          "rating_margin_mA", 1.0),
+        # THE MARGINS A4 EXISTS TO PUBLISH. Round 20 found the two dropout
+        # margins -- the numbers a reader acts on -- outside this population
+        # while the comment above claimed it held the load-bearing ones, so
+        # design.md could contradict the assertion that computes them.
+        (r"\(0\.34 V/A\),\s+required V_in = [\d.]+ V -> \*\*\+([\d.]+) mV "
+         r"margin\*\*", "A4_ldo_dropout_at_min_vbus", "a4_typ_margin_mV",
+         1.0),
+        (r"guardband,\s+required V_in = [\d.]+ V -> \*\*\+([\d.]+) mV "
+         r"margin\*\*", "A4_ldo_dropout_at_min_vbus",
+         "a4_guardband_margin_mV", 1.0),
+        # The peak rail demand every current row derives from, and the
+        # dissipation that is the direct operand of the gated 121.9 C.
+        (r"= \*\*([\d.]+) mA\*\*; module datasheet",
+         "A4_ldo_dropout_at_min_vbus", "i_load_mA", 1.0),
+        (r"Ta = 50 C, VBUS 5\.25 V: P = ([\d.]+) W",
+         "A5_ldo_thermal_at_wifi_tx", "a5_power_W", 1.0),
     ),
 }
 
@@ -1208,6 +1656,22 @@ def doc_problems(case_dir, spec, problems):
         ci = assertion.get("check_inputs") or {}
         if operand == "sum_parts":
             want = sum(float(v) for v in ci.get("parts") or [])
+        elif operand == "a4_typ_margin_mV":
+            inputs = assertion.get("inputs") or {}
+            want = (float(ci.get("have"))
+                    - (float(inputs["vout_max_v"])
+                       + float(inputs["vdo_typ_v_per_a"])
+                       * float(inputs["i_load_a"]))) * 1000.0
+        elif operand == "a4_guardband_margin_mV":
+            want = (float(ci.get("have")) - float(ci.get("need"))) * 1000.0
+        elif operand == "i_load_mA":
+            want = float((assertion.get("inputs") or {})["i_load_a"]) * 1000.0
+        elif operand == "a5_power_W":
+            worst = (assertion.get("inputs") or {})["worst"]
+            want = ((float(worst["vin_v"]) - float(worst["vout_v"]))
+                    * float(worst["iout_a"])
+                    + float(worst["vin_v"])
+                    * float((assertion.get("inputs") or {})["iq_a"]))
         elif operand == "rating_margin_mA":
             # Margin over the WORST PEAK -- needs[0], worst_rail_a -- which is
             # what the sentence says ("608 mA margin over worst peak and 2x the
@@ -1320,12 +1784,15 @@ def main(argv):
         asserts_checked = check_spec(spec, case_dir.name, problems)
         figures_checked = doc_problems(case_dir, spec, problems)
         claims_checked = shown_work_problems(spec, case_dir.name, problems)
+        margins_checked = margin_problems(spec, case_dir.name, problems)
         tree_path = case_dir / "power-tree.yaml"
         tree_checked = 0
         if tree_path.is_file():
             tree_checked = power_tree_problems(
                 spec, tree_path.read_text(encoding="utf-8"),
                 case_dir.name, problems)
+            claims_checked += tree_shown_work_problems(
+                load_yaml(tree_path), case_dir.name, problems)
     except GateUnavailable as exc:
         print(f"hand-assert: UNAVAILABLE: {exc}", file=sys.stderr)
         return 2
@@ -1336,7 +1803,8 @@ def main(argv):
         return 1
     print(f"hand-assert: PASS: {case_dir.name}: {asserts_checked} assertion(s) "
           f"follow from their inputs; {figures_checked} design.md figure(s) "
-          f"reconcile against them; {tree_checked} power-tree figure(s) agree; "
+          f"reconcile against them; {margins_checked} published margin(s) are "
+          f"the gate's own slack; {tree_checked} power-tree figure(s) agree; "
           f"{claims_checked} shown-work claim(s) recompute.")
     return 0
 
