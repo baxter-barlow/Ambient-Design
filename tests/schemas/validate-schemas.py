@@ -62,6 +62,29 @@ SCHEMA_ROOTS = {
 
 NEGATIVE_DIR_NAME = "negative"
 
+
+def negative_control_floor_problems(root, controls, failures, minimum=None):
+    """The control population may not shrink by accident.
+
+    Reported through `failures` like every other check here, and taking its
+    floor as an argument. Both matter: reporting through a bare
+    `print(...); return 1` put this site outside the coverage meta-gate's
+    measured population, and testing `root == DEFAULT_ROOT` inline meant no
+    self-test case could ever reach it -- the self-test drives main() over
+    temp roots. The floor that exists to stop 31% of the controls being
+    deleted was itself deletable with every gate green (round 20)."""
+    if minimum is None:
+        if root != DEFAULT_ROOT:
+            # A floor is a statement about THIS tree's population, not a
+            # minimum any tree must meet.
+            return
+        minimum = MINIMUM_NEGATIVE_CONTROLS
+    if controls < minimum:
+        failures.append(
+            f"{controls} negative control(s), below the floor of {minimum}. "
+            "Controls are the only evidence these schemas reject anything; "
+            "losing them silently shrinks that evidence.")
+
 # The negative-control population may not shrink by accident. Failing only at
 # ZERO meant 31% of the controls could be deleted with `make all` green — and
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
@@ -350,6 +373,37 @@ def self_test() -> int:
     cases.append(("an example matched by no suffix rule is caught",
                   code == 1 and "no example-to-schema mapping" in text))
 
+    # THE FLOOR ITSELF. It was written to stop 31% of the controls being
+    # deleted, and until round 20 nothing exercised it: it printed straight
+    # to stderr (invisible to the coverage meta-gate) behind a
+    # `root == DEFAULT_ROOT` test no temp-root case could satisfy.
+    _floor = []
+    negative_control_floor_problems(Path("/nowhere"), 4, _floor, minimum=5)
+    cases.append(("a control population under its floor is caught",
+                  any("below the floor of 5" in x for x in _floor)))
+    _at_floor = []
+    negative_control_floor_problems(Path("/nowhere"), 5, _at_floor, minimum=5)
+    cases.append(("a population at its floor passes", _at_floor == []))
+    _other_tree = []
+    negative_control_floor_problems(Path("/nowhere"), 0, _other_tree)
+    cases.append(("this tree's floor is not imposed on another tree",
+                  _other_tree == []))
+    # WIRING: raise the real floor above the real population and main() --
+    # over the real root, the only place the floor applies -- must go red.
+    _real_floor = MINIMUM_NEGATIVE_CONTROLS
+    _real_argv = sys.argv
+    globals()["MINIMUM_NEGATIVE_CONTROLS"] = 10_000
+    sys.argv = [_real_argv[0]]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()) as _err:
+            _wired = main()
+    finally:
+        globals()["MINIMUM_NEGATIVE_CONTROLS"] = _real_floor
+        sys.argv = _real_argv
+    cases.append(("the floor is WIRED into main() over the real tree",
+                  _wired == 1 and "below the floor of 10000" in _err.getvalue()))
+
     code, text = run({"stability": "stable"}, {"n1.part.json": control})
     cases.append(("an invalid POSITIVE example is caught", code == 1))
 
@@ -423,23 +477,14 @@ def main() -> int:
         )
         totals = [a + b for a, b in zip(totals, counts)]
 
+    negative_control_floor_problems(root, totals[2], failures)
+
     if failures:
         for failure in failures:
             print(f"schemas: FAIL: {failure}", file=sys.stderr)
         print(f"schemas: {len(failures)} failure(s).", file=sys.stderr)
         return 1
 
-    # Only for THIS repository's population. The floor is a statement about how
-    # many controls this tree has, not a minimum any tree must meet, and the
-    # self-test legitimately drives main() over a two-file root.
-    if root == DEFAULT_ROOT and totals[2] < MINIMUM_NEGATIVE_CONTROLS:
-        print(
-            f"schemas: FAIL: {totals[2]} negative control(s), below the floor of "
-            f"{MINIMUM_NEGATIVE_CONTROLS}. Controls are the only evidence these "
-            "schemas reject anything; losing them silently shrinks that evidence.",
-            file=sys.stderr,
-        )
-        return 1
     print(
         f"schemas: PASS: {totals[0]} schema(s) across {len(present)} root(s), "
         f"{totals[1]} valid example(s), "
