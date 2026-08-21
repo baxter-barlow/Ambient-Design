@@ -48,11 +48,11 @@ assertions:
     check: at-least-all
     check_inputs:
       have: 1.0
-      needs: [0.39166, 0.500]
+      needs: [0.39160, 0.500]
     check_inputs_from: {have: ldo_rating_a, needs: [worst_rail_a, module_required_a]}
     kind: current-budget containment, 3.3 V rail
     expr: "ldo.i_rating >= max(sum(p3v3_loads)) AND ldo.i_rating >= module.required_source"
-    inputs: {ldo_rating_a: 1.000, worst_rail_a: 0.39166, module_required_a: 0.500}  # Table 6-2 I_VDD min 0.5 A
+    inputs: {ldo_rating_a: 1.000, worst_rail_a: 0.39160, module_required_a: 0.500}  # worst_rail_a is the P3V3 LOAD sum (power-tree wifi_tx_peak p3v3_total worst), not the LDO input current: 0.39166 was the input row, 60 uA high, and this operand's own expr names sum(p3v3_loads). Table 6-2 I_VDD min 0.5 A
     margin: "+608 mA vs worst load; 2.0x the module's required 500 mA source capability"
     status: PASS
     note: "AP2112K (600 mA) passes here but fails A5; AMS1117 passes here but fails A4 — intended benchmark traps"
@@ -108,10 +108,10 @@ assertions:
       theta_ja_datasheet_c_w: 110   # AP7361C DS37274 Rev. 5-2 thermal table, SOT223, Note 9: "mounted on FR-4 substrate PC board, with minimum recommended pad layout" (note states no airflow condition and no board size for SOT223)
     calc_worst: "P = 1.669 x 0.3916 + 4.903 x 60e-6 = 0.65358 + 0.00029 = 0.654 W; Tj = 50 + 0.654 x 62 = 90.5 C"
     calc_typ:   "P = 1.285 x 0.3561 = 0.458 W; Tj = 25 + 0.458 x 62 = 53.4 C"
-    calc_worst_datasheet_theta: "same P = 0.654 W; Tj = 50 + 0.654 x 110 = 121.9 C  -> +3.1 C to the 125 C gate"
+    calc_worst_datasheet_theta: "same P = 0.654 W; Tj = 50 + 0.654 x 110 = 121.9 C  -> headroom to the 125 C gate = 125 - 121.9 = +3.1 C"
     margin: "worst +34.5 C at 62 C/W (pour assumed); only +3.1 C at the datasheet 110 C/W minimum-pad figure. 125 C is the design gate (datasheet operating Tj range extends to 150 C; thermal shutdown ~150 C)"
     status: PASS (layout-dependent)
-    caveat: "The PASS depends on layout: theta_ja 62 C/W assumes SOT-223 on ~1 in^2 outer-layer pour (AN1028 range 40-110 C/W) and is an ASSUMPTION, not vendor data. At the datasheet minimum-pad figure of 110 C/W, Tj = 121.9 C at Ta = 50 C — under the 125 C gate at every stated condition, but with only 3.1 C headroom, and Ta > 53.1 C at minimum pad would breach the gate (Ta_max = 125 - 0.654 x 110 = 53.1 C; at 62 C/W Ta_max = 84.5 C). The layout must provide copper pour at or near the 62 C/W assumption; verify against the actual pour before freeze. VBUS max is modelled at the USB 2.0 5.25 V bound, not the Type-C vSafe5V 5.5 V bound the source model otherwise targets: at 5.5 V the minimum-pad figure exceeds this gate. Basis and derived corner in power-tree.yaml (voltage_max_basis, type_c_vsafe5v_corner); the choice of bound is AMB-126"
+    caveat: "The PASS depends on layout: theta_ja 62 C/W assumes SOT-223 on ~1 in^2 outer-layer pour (AN1028 range 40-110 C/W) and is an ASSUMPTION, not vendor data. At the datasheet minimum-pad figure of 110 C/W, Tj = 121.9 C at Ta = 50 C — under the 125 C gate at every stated condition, but with only 3.1 C headroom, and Ta > 53.1 C at minimum pad would breach the gate (Ta_max = 125 - 0.654 x 110 = 53.1 C; at 62 C/W, Ta_max = 125 - 0.654 x 62 = 84.5 C). The layout must provide copper pour at or near the 62 C/W assumption; verify against the actual pour before freeze. VBUS max is modelled at the USB 2.0 5.25 V bound, not the Type-C vSafe5V 5.5 V bound the source model otherwise targets: at 5.5 V the minimum-pad figure exceeds this gate. Basis and derived corner in power-tree.yaml (voltage_max_basis, type_c_vsafe5v_corner); the choice of bound is AMB-126"
 
   - id: A6_ptc_hold_margin
     check: at-least
