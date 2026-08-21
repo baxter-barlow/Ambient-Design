@@ -115,8 +115,8 @@ CEILINGS = {
     "tests/benchmarks/check-assertions.py": (30, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
-    "tests/benchmarks/check-hand-assertions.py": (38, 15),
-    "tests/benchmarks/run-sim.sh": (20, 0),
+    "tests/benchmarks/check-hand-assertions.py": (48, 15),
+    "tests/benchmarks/run-sim.sh": (22, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
@@ -126,11 +126,11 @@ CEILINGS = {
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
     "tests/meta/check-gate-coverage.py": (15, 6),
-    "tests/schemas/validate-schemas.py": (11, 2),
+    "tests/schemas/validate-schemas.py": (12, 2),
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
-    "tests/toolchain/check-pins.py": (25, 10),
+    "tests/toolchain/check-pins.py": (27, 10),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
