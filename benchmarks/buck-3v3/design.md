@@ -322,8 +322,11 @@ it should be re-derived against a real switching model at rung 1.
 same expression over 1.20-1.40 ms — a window containing no startup transient,
 since soft-start ends at 600 us — gives 0.0459 % against the assertion's
 0.0466 %. The residual true overshoot is `vout_max_startup 3.29754` (at
-1.117 ms) against `vmax_late 3.29751`, about 0.03 mV. The reported figure is
-half the peak-to-peak ripple over the mean; it would report nearly the same
+1.117 ms) against `vmax_late 3.29751`, 0.022 mV -- the .meas difference,
+2.21932e+01 uV, not the difference of the two six-figure printouts, which
+rounds to 0.03 mV and is the figure this sentence used to publish. The
+reported figure is half the peak-to-peak ripple over the mean; it would
+report nearly the same
 number on a converter with no soft-start at all. (A previous revision quoted
 0.0466 %/3.29753 for this probe — numbers no single window over the shipped
 deck produces; the exact-match figure only arises from a window that still
