@@ -557,8 +557,38 @@ def self_test():
             _clean = main()
     finally:
         globals()["lint"], sys.argv = _real, _argv
+    # THE UNPERFORMABLE-CHECK CEILING, and its wiring. It reported through a
+    # bare print and no case reached it, so the guard that stops L12 opting
+    # out of itself was deletable with everything green (round 21).
+    _over = unchecked_ceiling_problems(["a", "b", "c"], maximum=2)
+    _at = unchecked_ceiling_problems(["a", "b"], maximum=2)
+    _real_ceiling = unchecked_ceiling_problems
+    def _plant_ceiling(*_a, problems=None, **_k):
+        (problems if problems is not None else []).append("planted-ceiling")
+        return problems
+    globals()["unchecked_ceiling_problems"] = _plant_ceiling
+    try:
+        sys.argv = ["lint-part-data.py"]
+        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+            _ceiling_wired = main()
+    finally:
+        globals()["unchecked_ceiling_problems"] = _real_ceiling
+        sys.argv = _argv
     for _name, _ok in (("main() exits non-zero when lint reports a problem", _planted == 1),
-                       ("main() exits zero when it does not", _clean == 0)):
+                       ("main() exits zero when it does not", _clean == 0),
+                       ("more unperformable checks than the ceiling is caught",
+                        any("above the ceiling of 2" in x for x in _over)),
+                       ("a record set at the ceiling passes", _at == []),
+                       ("the unperformable-check ceiling is WIRED into main()",
+                        _ceiling_wired == 1),
+                       ("a required record that vanished is caught",
+                        any("named as required" in x for x in
+                            required_records_problems(
+                                [], required=("gone.part.json",)))),
+                       ("a present required record is not reported",
+                        required_records_problems(
+                            [Path("here.part.json")],
+                            required=("here.part.json",)) == [])):
         print(f"self-test {'ok:  ' if _ok else 'FAIL:'} {_name}")
         failures += 0 if _ok else 1
 
@@ -633,6 +663,37 @@ def self_test():
 # deliberately and name the record; drifting up is how a rule opts out of
 # itself.
 MAXIMUM_UNCHECKED = 2
+
+
+def required_records_problems(files, required=None, problems=None):
+    """Every named record must be among the files being linted."""
+    problems = [] if problems is None else problems
+    present = {path.name for path in files}
+    gone = [name for name in (REQUIRED_RECORDS if required is None
+                              else required) if name not in present]
+    if gone:
+        problems.append(
+            f"record(s) {gone} are named as required and are not present. "
+            "Deleting one took the reported count from 5 to 4 and exited 0.")
+    return problems
+
+
+def unchecked_ceiling_problems(unchecked, maximum=None, problems=None):
+    """More unperformable checks than the recorded ceiling is a failure.
+
+    Appends to the caller's accumulator rather than returning a fresh list,
+    so the report site lands in the coverage meta-gate's counted population
+    -- being outside it is half of why this guard was deletable green."""
+    problems = [] if problems is None else problems
+    maximum = MAXIMUM_UNCHECKED if maximum is None else maximum
+    if len(unchecked) > maximum:
+        problems.append(
+            f"{len(unchecked)} check(s) could not be performed, above the "
+            f"ceiling of {maximum}. A rule that opts out of itself by "
+            "changing the shape of the data it reads is not a rule; raise "
+            "this deliberately and say which record needs it: "
+            + "; ".join(unchecked))
+    return problems
 
 # Records that must exist. Deleting one took `5 record(s)` to `4` and exited 0:
 # a linter with fewer things to lint is indistinguishable from a clean tree.
@@ -784,18 +845,13 @@ def main() -> int:
                 print(f"  {problem}", file=sys.stderr)
             return 1
 
-    # Each named record must be among the files being linted. A count that can
-    # shrink silently is the same defect as a floor with slack in it.
-    if not args:
-        present = {path.name for path in files}
-        gone = [name for name in REQUIRED_RECORDS if name not in present]
-        if gone:
-            print(f"lint: FAIL: record(s) {gone} are named as required and are "
-                  "not present. Deleting one took the reported count from 5 to "
-                  "4 and exited 0.", file=sys.stderr)
-            return 1
-
     problems, unchecked = [], []
+    # Each named record must be among the files being linted. A count that can
+    # shrink silently is the same defect as a floor with slack in it. Reported
+    # through `problems`, like the unperformable-check ceiling beside it and
+    # for the same reason (round 21).
+    if not args:
+        required_records_problems(files, problems=problems)
     for path in files:
         try:
             doc = json.loads(path.read_text(encoding="utf-8"))
@@ -818,17 +874,18 @@ def main() -> int:
     # nothing bounded how many checks could become notes -- so rewriting a
     # numeric abs_max as a relative one turned a firing L12 into silence, and
     # a +/-999 V recommended range on a pin whose abs_max is already relative
-    # is indistinguishable from correct data. Four NE555 pins carry relative
-    # bounds legitimately; that is the number this ceiling encodes.
-    if len(unchecked) > MAXIMUM_UNCHECKED:
-        print(f"lint: FAIL: {len(unchecked)} check(s) could not be performed, "
-              f"above the ceiling of {MAXIMUM_UNCHECKED}. A rule that opts out "
-              "of itself by changing the shape of the data it reads is not a "
-              "rule; raise this deliberately and say which record needs it.",
-              file=sys.stderr)
-        for note in unchecked:
-            print(f"  unchecked: {note}", file=sys.stderr)
-        return 1
+    # is indistinguishable from correct data. Two checks are unperformable
+    # today, both on diodes-ap7361c-33e-13 pin OUT; that is the number this
+    # ceiling encodes.
+    #
+    # Reported through `problems` like every other check here. A bare
+    # `print(...); return 1` is outside the coverage meta-gate's counted
+    # population by its own docstring, and no self-test case reached this
+    # one, so the guard that stops L12 opting out of itself could itself be
+    # deleted with the gate, its self-test and the measurement all green
+    # (round 21) -- the shape already closed for MINIMUM_AGREEMENTS,
+    # MINIMUM_NEGATIVE_CONTROLS and MINIMUM_ENTRIES.
+    unchecked_ceiling_problems(unchecked, problems=problems)
     for note in unchecked:
         print(f"lint: unchecked: {note}")
 

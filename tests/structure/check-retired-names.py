@@ -154,9 +154,16 @@ def scan_repository() -> list[str]:
         full = ROOT / rel
         try:
             text = full.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue
-        except IsADirectoryError:
+        except (FileNotFoundError, IsADirectoryError):
+            # The PATH is still checked, exactly as for the two branches
+            # below: this file's own rule is that an entry the scanner
+            # cannot read must be reported, "which is the same failure as
+            # not looking at paths". These two returned early instead, and
+            # IsADirectoryError is reachable here today -- the repository
+            # tracks symlinks to directories under .claude/skills/, so a
+            # tracked path carrying the retired name was reported by
+            # nothing (round 21).
+            hits.extend(scan_files([(rel, "")]))
             continue
         except UnicodeDecodeError:
             # A binary carrying the name is still the name; reporting beats
@@ -319,6 +326,24 @@ def self_test() -> int:
             wiring_cases.append(
                 ("an undecodable file is reported, not skipped",
                  any("(binary, not scanned)" in h for h in binary_found)))
+
+            # A TRACKED DIRECTORY, which is what a symlink to a directory
+            # reads as: the path must still be checked. This branch used to
+            # `continue` without scanning, and the repository tracks four
+            # such symlinks under .claude/skills/ today (round 21).
+            (ROOT / "ael-skills").mkdir()
+            globals()["tracked_files"] = lambda: ["ael-skills"]
+            dir_found = scan_repository()
+            wiring_cases.append(
+                ("a tracked directory still gets its PATH checked",
+                 any(h.startswith("ael-skills") for h in dir_found)))
+
+            missing = "aed/gone.md"
+            globals()["tracked_files"] = lambda: [missing]
+            gone_found = scan_repository()
+            wiring_cases.append(
+                ("a tracked path that is not on disk still gets checked",
+                 any(h.startswith(missing) for h in gone_found)))
 
             locked = ROOT / "locked.md"
             # chmod 0o000 does not stop root: DAC checks are bypassed at
