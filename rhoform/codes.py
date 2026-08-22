@@ -32,7 +32,7 @@ truncation marker). T6 waivers, when they land (AMB-56), downgrade at the
 reporting layer without touching the registry.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import re
 
 CODE_RE = re.compile(r"^RHO[0-9]{4}$")

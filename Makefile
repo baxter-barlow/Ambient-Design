@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests gate-coverage sim golden
+.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance eval-tests gate-coverage sim golden
 
 # gate-coverage MUTATES gate files in place (blank one report site, run the
 # self-test, restore). Under -j another target can execute a gate while its
@@ -25,7 +25,7 @@ all: check policy sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure pins schemas lint ir-hashes corpus bakeoff grammar eval-tests gate-coverage
+check: structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance eval-tests gate-coverage
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -103,6 +103,28 @@ grammar:
 	cd lang && python3 -m grammar.rhoform_syntax --check
 	cd lang && python3 -m grammar.conformance
 	python3 -m unittest discover -s lang/tests -t lang -p 'test_grammar.py'
+	python3 -m unittest discover -s lang/tests -t lang -p 'test_production_anchor.py'
+
+# The diagnostics framework and code registry (rhoform/, AMB-48). The gate
+# holds the registry to its own rules, to the GA spec's transcribed catalog,
+# and to the wire schema's restated vocabularies; the unittest sweep covers
+# the whole production package (framework, parser, quantities) and is
+# stdlib-only except for the parser tests, which skip without the lark pin —
+# the grammar/conformance gates exit 2 for that absence, so a missing lark
+# is still loud.
+diagnostics:
+	python3 tests/diagnostics/check-registry.py --self-test
+	python3 tests/diagnostics/check-registry.py
+	python3 -m unittest discover -s rhoform/tests -t .
+
+# The language spec's conformance suite (spec/, AMB-42/AMB-43): accept cases
+# parse clean, reject cases reproduce their committed diagnostic streams
+# byte for byte, the T3 normal-form vectors hold all three properties, and
+# every list the spec restates is reconciled against its source of truth.
+# Needs the lark and jsonschema pins; exits 2 without them.
+conformance:
+	python3 tests/conformance/check-conformance.py --self-test
+	python3 tests/conformance/check-conformance.py
 
 # Measurement-harness tests (eval/). stdlib unittest only, so this needs no
 # dependency beyond the pinned interpreter; the harness's optional tiktoken

@@ -190,11 +190,13 @@ jobs:
         with:
           # Keep in sync with toolchain/versions.yaml (python.version).
           python-version: "3.12"
-      - name: Install the pinned parser generator
+      - name: Install the pinned parser generator and schema validator
         # Unlike the bake-off gate this one is NOT stdlib-only, and cannot be:
         # a Lark artifact that is never handed to Lark is a text file with
-        # opinions. Keep in sync with toolchain/versions.yaml.
-        run: python3 -m pip install lark==1.3.0
+        # opinions. jsonschema rides along for the conformance gate, which
+        # validates every expected diagnostic line against the wire schema.
+        # Keep in sync with toolchain/versions.yaml.
+        run: python3 -m pip install lark==1.3.0 jsonschema==4.26.0
       - name: Artifacts match their source of truth
         run: cd lang && python3 -m grammar.rhoform_syntax --check
       - name: The frozen grammar parses the corpus
@@ -205,6 +207,23 @@ jobs:
         # there would report a green suite that never loaded the grammar and
         # never exercised a single negative control.
         run: python3 -m unittest discover -s lang/tests -t lang -p 'test_grammar.py'
+      - name: The production package agrees with the prototypes
+        # The anchors that hold while both generations are in the tree: one
+        # Indenter config, one unit table, and a production parser that
+        # accepts every corpus rendering the frozen grammar accepts.
+        run: python3 -m unittest discover -s lang/tests -t lang -p 'test_production_anchor.py'
+      - name: Diagnostic registry and framework
+        # Same reasoning as the frozen-syntax tests riding here: this job
+        # has the lark pin, so the 36 parser cases actually run instead of
+        # reporting a green suite that never parsed anything.
+        run: |
+          python3 tests/diagnostics/check-registry.py --self-test
+          python3 tests/diagnostics/check-registry.py
+          python3 -m unittest discover -s rhoform/tests -t .
+      - name: Language conformance suite
+        run: |
+          python3 tests/conformance/check-conformance.py --self-test
+          python3 tests/conformance/check-conformance.py
 
   eval-harness:
     name: Measurement harness
