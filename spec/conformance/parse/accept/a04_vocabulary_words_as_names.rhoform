@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.1
+module Vocab:
+    input = new lib.Button
+    output = new lib.Led
+    input.a ~ output.k

@@ -1,0 +1,2 @@
+module M:
+    port p passive

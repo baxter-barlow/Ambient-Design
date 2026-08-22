@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.1
+module Duty:
+    assert d static duty_cycle (OUT) within 0.5 to 0.6
+    assert n static overshoot (OUT) at most 3

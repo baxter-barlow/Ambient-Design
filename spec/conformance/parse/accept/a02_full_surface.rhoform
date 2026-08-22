@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.1
+module Full:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            package = "axial_0207"
+        hardware test_point
+        dnp
+        no exclude_from_bom
+    net VCC (voltage_domain = "5V"):
+        vin
+        r1.a
+    isolated r1.b
+    vin ~ r1.a
+    table rhoform.lib.passive.Resistor part abstract (resistance, part.package):
+        ra 1kohm "0402"
+        rb 2kohm "0402"
+    assert f static frequency (VCC) within 0.9 to 1.1
+    assert v dynamic operating_point (VCC) at least 4.75V

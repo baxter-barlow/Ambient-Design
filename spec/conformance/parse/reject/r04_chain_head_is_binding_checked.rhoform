@@ -1,0 +1,3 @@
+#pragma rhoform-syntax 0.1
+module M:
+    net.a ~ x

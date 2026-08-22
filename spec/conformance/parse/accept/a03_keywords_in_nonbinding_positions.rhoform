@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.1
+module Keywords:
+    r1 = new lib.R:
+        pin net passive
+        pin table passive
+    x ~ r1.net

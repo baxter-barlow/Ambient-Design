@@ -1,0 +1,3 @@
+#pragma rhoform-syntax 0.1
+module M:
+    assert v static operating_point (OUT) at most 100kohm +/- 1%

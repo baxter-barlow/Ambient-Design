@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.1
+module Wrapped:
+    r1 = new rhoform.lib.passive.Resistor(
+        resistance = 100kohm +/- 1%,
+        count = 8)

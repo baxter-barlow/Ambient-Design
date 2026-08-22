@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.1
+module M:
+    r = new lib.R:
+        pin a passive
+      dnp

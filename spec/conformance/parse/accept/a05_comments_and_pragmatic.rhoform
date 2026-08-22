@@ -1,0 +1,7 @@
+# a banner comment before the header
+#pragmatic: this word is a comment, not a malformed pragma
+#pragma rhoform-syntax 0.1
+module Comments:
+    port p passive  # trailing comment
+    # a comment-only line inside a block
+    q = new lib.R
