@@ -208,6 +208,38 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("character",),
         rule="L5",
     ),
+    CodeDef(
+        code="RHO1012",
+        slug="toleranced-quantity-in-plain-position",
+        severity="error",
+        message=(
+            "`{literal}` carries a tolerance or interval, but this "
+            "position takes a plain quantity."
+        ),
+        params=("literal",),
+        rule="T3/T4",
+    ),
+    CodeDef(
+        code="RHO1013",
+        slug="midline-pragma",
+        severity="error",
+        message=(
+            "`#pragma` may only begin a line; mid-line pragma text is "
+            "neither a comment nor a header (a frozen v0.1 decision)."
+        ),
+        rule="L8",
+    ),
+    CodeDef(
+        code="RHO1014",
+        slug="control-character",
+        severity="error",
+        message=(
+            "control character {codepoint}; sources are printable ASCII "
+            "plus LF."
+        ),
+        params=("codepoint",),
+        rule="L5",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that

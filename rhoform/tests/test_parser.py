@@ -109,6 +109,31 @@ class ByteLevelTest(unittest.TestCase):
         result = _parse(PRAGMA + "\r\nmodule M:\n    port p passive\n")
         self.assertEqual(_codes(result), ["RHO1003"])
 
+    def test_spans_stay_byte_true_after_an_invalid_utf8_byte(self):
+        # Review round 1: a replace-mode decode turned one invalid byte
+        # into a three-byte U+FFFD and every later span drifted by two.
+        raw = (PRAGMA + "\nmodule M:\n    port p passive\n").encode()
+        mutated = raw[:35] + b"\xff" + raw[35:40] + b"\t" + raw[40:]
+        result = _parse(mutated.decode("utf-8", errors="surrogateescape"))
+        diags = [json.loads(line)
+                 for line in result.diagnostics.render().splitlines()]
+        self.assertEqual([d["code"] for d in diags],
+                         ["RHO1002", "RHO1001"])
+        self.assertEqual(diags[0]["spans"][0]["byte_start"], 35)
+        self.assertEqual(diags[0]["params"]["codepoint"],
+                         "0xFF (not valid UTF-8)")
+        tab_at = diags[1]["spans"][0]["byte_start"]
+        self.assertEqual(mutated[tab_at], 0x09)
+
+    def test_ascii_control_characters_have_their_own_code(self):
+        # DEL is ASCII; reporting it as "non-ASCII character U+007F" was
+        # factually wrong (review round 1).
+        result = _parse(PRAGMA + "\nmodule M:\n    port p\x7f passive\n")
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["code"], "RHO1014")
+        self.assertEqual(diag["slug"], "control-character")
+        self.assertEqual(diag["params"], {"codepoint": "U+007F"})
+
     def test_byte_defects_suppress_the_grammar_parse(self):
         # One tab must not ALSO produce a parse error about the text
         # around it: pre-syntactic defects gate the syntactic read.
@@ -215,9 +240,62 @@ module N:
                         "        pin a passive\n      dnp\n")
         self.assertEqual(_codes(result), ["RHO1008"])
         diag = json.loads(result.diagnostics.render())
-        self.assertEqual(diag["params"], {"column": 6})
+        # 1-based, agreeing with the span's col_start: the wire format
+        # must not carry two column conventions in one line (review
+        # round 1).
+        self.assertEqual(diag["params"], {"column": 7})
+        self.assertEqual(diag["spans"][0]["col_start"], 7)
         self.assertEqual(diag["spans"][0]["line_start"], 5)
         self.assertIsNotNone(result.tree)
+
+    def test_a_broken_first_statement_orphans_its_block_silently(self):
+        # Review round 1: the reactive orphan rule only worked when a
+        # sibling statement preceded the broken header; with the broken
+        # statement LEADING its block, the Indenter established the level
+        # one deeper and charged the orphan one diagnostic per line (20
+        # on a 40-line block, then no tree).
+        body = "".join(f"        pin p{i} passive\n" for i in range(40))
+        result = _parse(PRAGMA + "\nmodule M:\n    r = neww lib.R:\n"
+                        + body + "module N:\n    port x passive\n")
+        self.assertEqual(_codes(result), ["RHO1006"])
+        self.assertIsNotNone(result.tree)
+        modules = [
+            str(next(child for child in node.children
+                     if getattr(child, "type", None) == "FREE_NAME"))
+            for node in result.tree.find_data("module_def")
+        ]
+        self.assertEqual(modules, ["N"])
+
+    def test_an_authors_empty_block_still_reports(self):
+        # The emptied-header silencing must apply ONLY to blocks recovery
+        # itself emptied: a genuinely empty module is the author's
+        # defect, reported once, and the file after it still parses.
+        result = _parse(PRAGMA + "\nmodule Empty:\nmodule M:\n"
+                        "    prt p passive\n    port q passive\n")
+        self.assertEqual(_codes(result), ["RHO1006", "RHO1006"])
+        self.assertIsNotNone(result.tree)
+
+    def test_a_toleranced_quantity_in_a_plain_position_is_one_diagnostic(self):
+        # Review round 1: ` +/- 1%` after a plain quantity lexes as
+        # nothing, and the generic path charged one unexpected-character
+        # per operator character. The defect is the literal's FORM.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    assert v static operating_point (OUT) "
+                        "at most 100kohm +/- 1%\n")
+        self.assertEqual(_codes(result), ["RHO1012"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["params"], {"literal": "100kohm +/- 1%"})
+        source = (PRAGMA + "\nmodule M:\n"
+                  "    assert v static operating_point (OUT) "
+                  "at most 100kohm +/- 1%\n")
+        span = diag["spans"][0]
+        self.assertEqual(source[span["byte_start"]:span["byte_end"]],
+                         "100kohm +/- 1%")
+
+    def test_a_midline_pragma_is_one_diagnostic(self):
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    port p passive  #pragma x\n")
+        self.assertEqual(_codes(result), ["RHO1013"])
 
     def test_bad_dedents_inside_brackets_are_not_layout(self):
         # The re-derivation walker must mirror the Indenter: a wrapped

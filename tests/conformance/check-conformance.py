@@ -210,7 +210,8 @@ def vector_problems(vector_path):
 
 
 def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
-                      blocks=None, cap=None):
+                      blocks=None, cap=None, severities=None,
+                      applicability=None):
     """Leg 4: every restated list equals its source of truth."""
     if sot is None:
         import importlib.util
@@ -225,8 +226,14 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
         from rhoform.codes import BLOCKS as blocks
     if cap is None:
         from rhoform.diagnostics import OUTPUT_CAP as cap
+    if severities is None:
+        from rhoform.codes import SEVERITIES as severities
+    if applicability is None:
+        from rhoform.diagnostics import APPLICABILITY as applicability
 
     problems = []
+    lexical_md = (spec_dir / "01-lexical-structure.md").read_text(
+        encoding="utf-8")
     grammar_md = (spec_dir / "02-grammar.md").read_text(encoding="utf-8")
     literals_md = (spec_dir / "03-literals.md").read_text(encoding="utf-8")
     diag_md = (spec_dir / "06-diagnostics.md").read_text(encoding="utf-8")
@@ -308,6 +315,74 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
         problems.append(
             f"06-diagnostics.md states a {cap_match.group(1)}-diagnostic "
             f"cap; the framework's OUTPUT_CAP is {cap}"
+        )
+
+    # Vocabularies 06 restates as definition bullets ('- `word` — ...').
+    # The first review round found the applicability and severity lists
+    # restated but reconciled by nothing — exactly the drift channel the
+    # spec's own "machine-reconciled or absent" rule forbids.
+    def bullet_words(text, heading):
+        lines = text.split("\n")
+        try:
+            start = lines.index(heading) + 1
+        except ValueError:
+            return None
+        words = []
+        for line in lines[start:]:
+            if line.startswith("#"):
+                break
+            match = re.match(r"- `([a-z-]+)` —", line)
+            if match:
+                words.append(match.group(1))
+        return words
+
+    for heading, truth, name in (
+        ("## Severity and tier", list(severities), "severity"),
+        ("## Fix-its", list(applicability), "applicability"),
+    ):
+        stated = bullet_words(diag_md, heading)
+        if stated is None:
+            problems.append(
+                f"06-diagnostics.md lost the '{heading}' section this "
+                "reconciliation reads"
+            )
+        elif stated != truth:
+            problems.append(
+                f"06-diagnostics.md {name} bullets {stated} != the "
+                f"framework's vocabulary {truth}"
+            )
+
+    # The counts 02 states in prose, and the pragma 01 restates in its
+    # fence: both pinned, same review finding.
+    for pattern, want, where in (
+        (r"The (\d+) words the grammar spells as literals",
+         len(sot.KEYWORDS), "keyword count"),
+        (r"The (\d+) words no v0\.1 rule uses",
+         len(sot.RESERVED_FUTURE), "reserved-word count"),
+    ):
+        match = re.search(pattern, grammar_md)
+        if match is None:
+            problems.append(
+                f"02-grammar.md no longer states the {where} in the "
+                "expected form"
+            )
+        elif int(match.group(1)) != want:
+            problems.append(
+                f"02-grammar.md states {match.group(1)} for the {where}; "
+                f"the grammar source of truth has {want}"
+            )
+
+    fence = re.search(r"```text\n(#pragma[^\n]*)\n```", lexical_md)
+    if fence is None:
+        problems.append(
+            "01-lexical-structure.md no longer shows the pragma in its "
+            "fenced block"
+        )
+    elif fence.group(1) != sot.PRAGMA_TEXT:
+        problems.append(
+            f"01-lexical-structure.md shows the pragma as "
+            f"{fence.group(1)!r}; the source of truth says "
+            f"{sot.PRAGMA_TEXT!r}"
         )
     return problems
 
@@ -589,6 +664,69 @@ def self_test() -> int:
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a drifted block table is caught",
                       any("block table" in p for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
+
+        diag_md = spec_copy / "06-diagnostics.md"
+        diag_md.write_text(diag_md.read_text().replace(
+            "- `warning` — annotates.\n", ""))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a dropped severity bullet is caught",
+                      any("severity bullets" in p for p in problems)))
+
+        diag_md.write_text(
+            (spec_copy / "06-diagnostics.md").read_text().replace(
+                "- `needs-review` —", "- `needs-a-look` —"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a renamed applicability bullet is caught",
+                      any("applicability bullets" in p for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
+
+        grammar_md = spec_copy / "02-grammar.md"
+        grammar_md.write_text(grammar_md.read_text().replace(
+            "The 24 words the grammar spells", "The 23 words the grammar spells"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a drifted keyword count is caught",
+                      any("keyword count" in p for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
+
+        lexical_md = spec_copy / "01-lexical-structure.md"
+        lexical_md.write_text(lexical_md.read_text().replace(
+            "#pragma rhoform-syntax 0.1", "#pragma rhoform-syntax 0.2"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a drifted pragma restatement is caught",
+                      any("shows the pragma as" in p for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
+
+        # Deleting a restatement outright must be as loud as drifting it:
+        # these three branches survived the first coverage measurement.
+        diag_md = spec_copy / "06-diagnostics.md"
+        diag_md.write_text(diag_md.read_text().replace(
+            "## Severity and tier", "## Severities"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a deleted severity section is caught",
+                      any("lost the '## Severity and tier'" in p
+                          for p in problems)))
+
+        grammar_md = spec_copy / "02-grammar.md"
+        grammar_md.write_text(grammar_md.read_text().replace(
+            "The 24 words the grammar spells as literals",
+            "the grammar's literal words"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a deleted keyword-count sentence is caught",
+                      any("no longer states the keyword count" in p
+                          for p in problems)))
+
+        lexical_md = spec_copy / "01-lexical-structure.md"
+        lexical_md.write_text(lexical_md.read_text().replace(
+            "```text\n#pragma", "```\npragma"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a deleted pragma fence is caught",
+                      any("no longer shows the pragma" in p
+                          for p in problems)))
 
     # WIRING: all four floors feed main(). Raise each over the real
     # population in turn — three of the four were deletable when only the

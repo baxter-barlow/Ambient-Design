@@ -48,7 +48,13 @@ transcription to the spec's catalog.
 
 ## Severity and tier
 
-`error` gates; `warning` annotates; `note` carries non-gating context.
+The severity vocabulary is closed (reconciled against the registry's
+constants by the conformance gate):
+
+- `error` — gates (V1).
+- `warning` — annotates.
+- `note` — non-gating context: safety notes, the truncation marker.
+
 Severity is fixed per code in the registry. Per-site waivers (T6), when
 they land, downgrade at the reporting layer and are surfaced in reports;
 they do not touch the registry. The `tier` field carries the V1
@@ -79,7 +85,8 @@ anchor to; their `entity` is null and their spans are raw.
 
 A fix-it is a message, an applicability level, and one or more edits
 (span plus replacement; a zero-length span inserts, an empty replacement
-deletes). Applicability is the closed three-level vocabulary:
+deletes). Applicability is the closed three-level vocabulary (reconciled
+against the framework's constants by the conformance gate):
 
 - `machine-applicable` — applying the edits verbatim is believed
   correct; the agent re-runs the check rather than trusting it blindly.
