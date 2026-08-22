@@ -1,4 +1,0 @@
-#pragma rhoform-syntax 0.1
-module M:
-    r = new lib.R(x = 5ÿF)
-    port p passive
