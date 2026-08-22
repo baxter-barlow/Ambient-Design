@@ -240,6 +240,17 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("codepoint",),
         rule="L5",
     ),
+    CodeDef(
+        code="RHO1015",
+        slug="unclosed-bracket",
+        severity="error",
+        message=(
+            "`{bracket}` opened here is never closed; everything after "
+            "it joins one logical line until it is."
+        ),
+        params=("bracket",),
+        rule="L5",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that

@@ -318,6 +318,53 @@ module N:
         self.assertEqual(len(diags), 1)
         self.assertEqual(diags[0]["spans"][0]["line_start"], 3)
 
+    def test_an_unclosed_bracket_is_one_diagnostic_at_the_opener(self):
+        # Review round 4: inside `(` line breaks are not layout, so one
+        # forgotten closer swallowed the following lines, blamed them one
+        # by one, and then looped eighteen byte-identical diagnostics on
+        # an EOF DEDENT sitting on already-blanked text.
+        result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R(x = 1\n"
+                        "    port p passive\n    port q passive\n")
+        diags = [json.loads(line)
+                 for line in result.diagnostics.render().splitlines()]
+        self.assertEqual([d["code"] for d in diags], ["RHO1015"])
+        self.assertEqual(diags[0]["spans"][0]["line_start"], 3)
+        self.assertEqual(diags[0]["params"], {"bracket": "("})
+        self.assertIsNotNone(result.tree)
+
+    def test_recovery_aborts_rather_than_repeating_itself(self):
+        # The failsafe behind the bracket fix: a round that blanks
+        # nothing must abort, because the next round would emit the
+        # identical diagnostic. No committed shape reaches this any
+        # more; the guard is pinned by never seeing byte-identical
+        # repeated lines on ANY input in this suite's floods.
+        junk = PRAGMA + "\nmodule M:\n" + "".join(
+            f"    ~{index} junk~\n" for index in range(30)
+        )
+        lines = _parse(junk).diagnostics.render().splitlines()
+        self.assertEqual(len(lines), len(set(lines)),
+                         "recovery repeated itself byte for byte")
+
+    def test_operator_literals_quote_the_author_not_the_blanks(self):
+        # Review round 4: a second-round RHO1010 built its literal from
+        # the mutated parse text and quoted recovery's own spaces.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r = new lib.R(x = 2V +/- +/- 5%)\n")
+        for line in result.diagnostics.render().splitlines():
+            literal = json.loads(line)["params"].get("literal", "")
+            self.assertNotIn("   ", literal,
+                             "a literal param quoted blanked text")
+
+    def test_a_midline_operator_with_a_string_head_is_one_junk_unit(self):
+        # Review round 4: `+/-` after a non-quantity head charged one
+        # RHO1011 per operator character.
+        result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R:\n"
+                        '        part "2V" +/- 5%\n')
+        codes = _codes(result)
+        self.assertEqual(codes.count("RHO1011"), 1, codes)
+        diag = json.loads(result.diagnostics.render().splitlines()[0])
+        self.assertEqual(diag["params"], {"character": "`+/-`"})
+
     def test_junk_as_a_blocks_only_content_stays_one_diagnostic(self):
         # Review round 3: the RHO1011 path lacked the suspect-parent
         # bookkeeping every other blanking path had, so a junk character
