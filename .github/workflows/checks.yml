@@ -63,6 +63,14 @@ jobs:
           git --version
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Mark the workspace safe for git
+        # checkout@v7 adds safe.directory to a TEMPORARY global config under
+        # an overridden HOME that exists only while the action runs (its log
+        # says so verbatim), so every later step in a container job sees the
+        # runner-owned workspace as dubious and git refuses to operate — the
+        # retired-names gate and the coverage meta-gate's tree digest both
+        # need git here. Persist the exception where the steps actually look.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install pinned PyYAML
         # check-layout.sh FAILS (exit 2) when PyYAML is absent -- an
         # unavailable gate is not a pass -- so this install is what lets the
@@ -307,6 +315,12 @@ jobs:
           git --version
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Mark the workspace safe for git
+        # Same reason as the structure job: checkout@v7's safe.directory
+        # lives in a temporary HOME that is gone before the next step runs,
+        # and the coverage meta-gate's tree digest needs git in this
+        # container. Persist the exception in the steps' real HOME.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install Python and PyYAML for the assertion check
         # tests/benchmarks/check-assertions.py reads benchmarks/*/assertions.yaml.
         # Installed explicitly rather than relied on: the checker exits 2 without
