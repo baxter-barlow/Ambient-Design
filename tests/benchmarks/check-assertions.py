@@ -392,8 +392,13 @@ def check_benchmark(case, spec, log_text, problems, minimum=None,
                         f"{label}: the recorded `measured:` value "
                         f"{expected_value:.6g} differs from this run's "
                         f"{value:.6g} by more than the cross-build tolerance "
-                        f"({CROSS_BUILD_RTOL:g} relative), so the record is "
-                        "stale on every engine build, not solver noise."
+                        f"({CROSS_BUILD_RTOL:g} relative). Either the deck "
+                        "changed, the record is stale, or this engine build "
+                        "sits farther from the recording build than the "
+                        "tolerance models (measured on Debian arm64 for "
+                        "ripple-type measurements, whose small values ride "
+                        "on large nodes) — re-record on this build or widen "
+                        "CROSS_BUILD_RTOL deliberately, never silently."
                     )
                 continue
             figures = significant_figures(recorded)
@@ -505,9 +510,11 @@ def transcript_problems(case_dir, fresh_text, problems, minimum_measurements=Non
                     f"{recorded:.6g}, but this run produces {now:.6g} — beyond "
                     f"the cross-build tolerance ({CROSS_BUILD_RTOL:g} "
                     f"relative). The transcript was recorded on {stamps[0]} "
-                    f"and this engine build is {engine_stamp()}; a gap this "
-                    "size is a changed deck or a stale record, not solver "
-                    "noise.")
+                    f"and this engine build is {engine_stamp()}; either the "
+                    "deck changed, the record is stale, or this build sits "
+                    "farther from the recording build than the tolerance "
+                    "models — re-record on this build or widen "
+                    "CROSS_BUILD_RTOL deliberately, never silently.")
                 continue
             reconciled += 1
             continue
