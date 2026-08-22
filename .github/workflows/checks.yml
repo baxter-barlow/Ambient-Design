@@ -30,9 +30,14 @@ jobs:
     container:
       image: debian:testing-20260803-slim@sha256:90e4367c69a75bb80e2f3b043a4bdaf2f0b97eed9bf9bbc05a29af42d3ffdfc2
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pinned ngspice, git and Python
+        # BEFORE checkout, deliberately: the slim image has no git, and
+        # actions/checkout without git falls back to a REST tarball download
+        # that produces no .git directory at all — the coverage meta-gate
+        # keys its cache on the git-tracked tree and its self-test requires
+        # a computable digest, so a gitless checkout fails it (first seen on
+        # this branch's first CI run, 2026-08-21).
+        #
         # The container image is a dated testing snapshot, but apt's default
         # sources track the LIVE testing archive, which moves independently of
         # the image digest and dropped ngspice 46+ds-1 on 2026-08-21 while the
@@ -41,12 +46,21 @@ jobs:
         # snapshot's Release files age past their Valid-Until, hence the
         # check-valid-until override. Keep the snapshot date in sync with the
         # image tag above.
+        #
+        # No python3-yaml here: the snapshot's Debian package is PyYAML
+        # 6.0.3 without a pip RECORD, and the pinned 6.0.2 install below
+        # cannot downgrade a Debian-owned package (uninstall-no-record-file,
+        # first seen 2026-08-21). pip is the sole provider of PyYAML in this
+        # job.
         run: |
           rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
           printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends ngspice=46+ds-1 git python3 python3-yaml
+          apt-get install -y --no-install-recommends ngspice=46+ds-1 git python3
           ngspice --version | head -n 2
+          git --version
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install pinned PyYAML
         # check-layout.sh FAILS (exit 2) when PyYAML is absent -- an
         # unavailable gate is not a pass -- so this install is what lets the
@@ -263,9 +277,15 @@ jobs:
     container:
       image: debian:testing-20260803-slim@sha256:90e4367c69a75bb80e2f3b043a4bdaf2f0b97eed9bf9bbc05a29af42d3ffdfc2
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install pinned ngspice
+      - name: Install pinned ngspice and git
+        # BEFORE checkout, deliberately: the slim image has no git, and
+        # actions/checkout without git falls back to a REST tarball download
+        # that produces no .git directory — the coverage meta-gate keys its
+        # cache on the git-tracked tree and its self-test requires a
+        # computable digest, so a gitless checkout fails the "Gates are
+        # pinned by their own self-tests" step (first seen on this branch's
+        # first CI run, 2026-08-21).
+        #
         # Exact package pin from toolchain/versions.yaml (ngspice). apt
         # fails loudly if the snapshot no longer resolves this revision;
         # that failure means the pin must be consciously revisited, never
@@ -278,8 +298,11 @@ jobs:
           rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
           printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends ngspice=46+ds-1
+          apt-get install -y --no-install-recommends ngspice=46+ds-1 git
           ngspice --version | head -n 5
+          git --version
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Python and PyYAML for the assertion check
         # tests/benchmarks/check-assertions.py reads benchmarks/*/assertions.yaml.
         # Installed explicitly rather than relied on: the checker exits 2 without
