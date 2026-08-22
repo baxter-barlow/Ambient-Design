@@ -480,6 +480,34 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     # frame, and the emptied-header search then blamed the line above the
     # real defect (review round 2).
     parse_text = normalize(parse_text)
+
+    def author_text(a: int, b: int) -> str:
+        """The AUTHOR's bytes for [a, b) of the (shifted) parse text.
+
+        Structured params must quote what the author wrote; a literal
+        read from `parse_text` after a blanking round quotes recovery's
+        own spaces (review round 4)."""
+        lo = max(0, min(a - shift, len(data)))
+        hi = max(lo, min(b - shift, len(data)))
+        return data[lo:hi].decode("utf-8", "surrogateescape")
+
+    # Unclosed brackets first, statically: inside `(` or `[` line breaks
+    # are not layout, so one forgotten closer swallows every later line
+    # into one logical line and the parse errors blame those innocent
+    # lines — and, worse, the EOF-flushed DEDENT then lands on text
+    # recovery already blanked, where blanking makes no progress (review
+    # round 4 measured eighteen byte-identical diagnostics). The prototype
+    # lexer had exactly this check; the registry now has its code.
+    for _ in range(_RECOVERY_LIMIT):
+        unclosed = _first_unclosed_bracket(parse_text)
+        if unclosed is None:
+            break
+        opener, bracket = unclosed
+        _, opener_line_end = _line_bounds(parse_text, opener)
+        sink.add("RHO1015", {"bracket": bracket},
+                 primary=span_at(opener, opener + 1))
+        parse_text = _blank(parse_text, opener, opener_line_end)
+
     blanked_lines: dict[int, int] = {}
     # Headers whose subordinate lines RECOVERY blanked. Only these may be
     # silenced when the parser later wants the block they no longer
@@ -493,6 +521,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     # blanks at least one character, so line-count-plus-limit terminates.
     budget = parse_text.count("\n") + _RECOVERY_LIMIT + 4
     for _ in range(budget):
+        iteration_text = parse_text
         try:
             return loaded.parser.parse(parse_text)
         except UnexpectedCharacters as exc:
@@ -529,8 +558,9 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 # of the operator. The defect is the literal's FORM in a
                 # plain-quantity position; say that once, with the whole
                 # literal in the span, and blank only the unconsumed tail.
-                match_start, match_end, literal = quantity_tail
-                sink.add("RHO1012", {"literal": literal},
+                match_start, match_end, _ = quantity_tail
+                sink.add("RHO1012",
+                         {"literal": author_text(match_start, match_end)},
                          primary=span_at(match_start, match_end))
                 parse_text = _blank(parse_text, pos, match_end)
             elif (operator := _tolerance_operator(
@@ -543,16 +573,22 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 # character (review rounds 2 and 3). The literal is
                 # malformed, which is true in bound and value positions
                 # alike.
-                head, blank_end, literal, reason = operator
+                head, blank_end, reason = operator
                 sink.add(
                     "RHO1010",
-                    {"literal": literal, "reason": reason},
+                    {"literal": author_text(head, blank_end),
+                     "reason": reason},
                     primary=span_at(head, blank_end),
                 )
                 parse_text = _blank(parse_text, pos, blank_end)
             else:
-                sink.add("RHO1011", {"character": f"`{char}`"},
-                         primary=span_at(pos, pos + 1))
+                # A mid-line `+/-` with no quantity head (a string head,
+                # say) is still ONE junk unit, not three characters
+                # (review round 4, the genus's last visible instance).
+                unit = ("+/-" if parse_text[pos:pos + 3] == "+/-"
+                        else char)
+                sink.add("RHO1011", {"character": f"`{unit}`"},
+                         primary=span_at(pos, pos + len(unit)))
                 content_start = line_start + _indent_of(parse_text,
                                                         line_start)
                 if pos == content_start:
@@ -574,7 +610,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                     parse_text = _blank_block(parse_text, line_start,
                                               line_indent)
                 else:
-                    parse_text = _blank(parse_text, pos, pos + 1)
+                    parse_text = _blank(parse_text, pos, pos + len(unit))
         except UnexpectedToken as exc:
             token = exc.token
             expected_names = set(exc.accepts or exc.expected)
@@ -701,6 +737,13 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             return None
         if len(sink) - baseline >= _RECOVERY_LIMIT:
             return None
+        if parse_text == iteration_text:
+            # No byte changed this round: the error position sits on text
+            # recovery already blanked, so the next round would emit the
+            # identical diagnostic — round 4 measured eighteen of them.
+            # Every handler is SUPPOSED to blank something; this is the
+            # failsafe for the paths that forget.
+            return None
     return None  # pragma: no cover - budget exhausted without emitting
 
 
@@ -766,8 +809,10 @@ _MAGNITUDE_RUN = re.compile(r"\s*-?[0-9.]*[A-Za-z0-9/%]*")
 
 def _tolerance_operator(loaded: _Loaded, text: str, line_start: int,
                         line_end: int, pos: int):
-    """(head_start, blank_end, literal, reason) for a `+/-` at `pos` whose
-    literal never became a full form, or None.
+    """(head_start, blank_end, reason) for a `+/-` at `pos` whose
+    literal never became a full form, or None. The literal PARAM is the
+    caller's to build — from the author's bytes, not from `text`, which
+    may already carry recovery's blanks (review round 4).
 
     The complete-form-in-a-plain-position case is _straddling_quantity's;
     this covers everything the operator can do wrong: magnitude missing,
@@ -792,9 +837,35 @@ def _tolerance_operator(loaded: _Loaded, text: str, line_start: int,
                 reason = ("a tolerance is spelled "
                           "`<value> +/- <magnitude>` with exactly one "
                           "space on each side of the operator")
-            return (line_start + match.start(), blank_end,
-                    text[line_start + match.start():blank_end], reason)
+            return (line_start + match.start(), blank_end, reason)
     return None
+
+
+def _first_unclosed_bracket(text: str):
+    """(offset, bracket) of the first `(` or `[` never closed, or None.
+
+    Mirrors the lexer's reality: strings end at their line, comments run
+    to end of line, and a closer with no opener is someone else's error
+    (the depth floors at zero, matching the prototype lexer)."""
+    stack: list[tuple[int, str]] = []
+    position = 0
+    while position < len(text):
+        start, end = _line_bounds(text, position)
+        in_string = False
+        for index in range(start, end):
+            char = text[index]
+            if in_string:
+                in_string = char != '"'
+            elif char == '"':
+                in_string = True
+            elif char == "#":
+                break
+            elif char in "([":
+                stack.append((index, char))
+            elif char in ")]" and stack:
+                stack.pop()
+        position = end + 1
+    return stack[0] if stack else None
 
 
 def _no_content_remains(text: str) -> bool:

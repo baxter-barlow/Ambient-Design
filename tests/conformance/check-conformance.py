@@ -48,7 +48,7 @@ SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
 # is the suite shrinking out from under the spec, and must be a decision
 # recorded here.
 MINIMUM_ACCEPT_CASES = 8
-MINIMUM_REJECT_CASES = 15
+MINIMUM_REJECT_CASES = 16
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
 

@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.1
+module M:
+    r = new rhoform.lib.passive.Resistor(resistance = 100kohm
+    port p passive
