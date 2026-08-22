@@ -1,0 +1,61 @@
+{
+  "category": "ground-architecture",
+  "code": "RHO4001",
+  "entity": "/amp/agnd",
+  "fixits": [
+    {
+      "applicability": "has-placeholders",
+      "edits": [
+        {
+          "byte_end": 130,
+          "byte_start": 130,
+          "col_end": 35,
+          "col_start": 35,
+          "file": "designs/psu.rhoform",
+          "line_end": 7,
+          "line_start": 7,
+          "replacement": "\n    <tie> = new NetTie\n    <tie>.a ~ agnd\n    <tie>.b ~ pgnd"
+        }
+      ],
+      "message": "join agnd and pgnd at one point with a NetTie",
+      "placeholders": [
+        "tie"
+      ]
+    }
+  ],
+  "message": "ground kinds conflict: `agnd` is signal, `pgnd` is power.",
+  "params": {
+    "kind_a": "signal",
+    "kind_b": "power",
+    "net_a": "agnd",
+    "net_b": "pgnd"
+  },
+  "schema": "rhoform-diagnostic/0",
+  "severity": "error",
+  "slug": "ground-kind-conflict",
+  "spans": [
+    {
+      "byte_end": 130,
+      "byte_start": 100,
+      "col_end": 35,
+      "col_start": 5,
+      "file": "designs/psu.rhoform",
+      "label": "the conflicting connection",
+      "line_end": 7,
+      "line_start": 7,
+      "primary": true
+    },
+    {
+      "byte_end": 340,
+      "byte_start": 300,
+      "col_end": 45,
+      "col_start": 5,
+      "file": "designs/psu.rhoform",
+      "label": "instantiated from",
+      "line_end": 20,
+      "line_start": 20,
+      "primary": false
+    }
+  ],
+  "tier": "static"
+}

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/rhoform/schemas/diagnostic/0.schema.json",
+  "title": "Rhoform Diagnostic v0",
+  "description": "ONE line of the A1 newline-delimited JSON diagnostic stream (requirement A1: stable codes, byte spans, structured params separate from message strings, fix-its with applicability levels, deterministic capped output). The stream itself is zero or more of these objects, one per line, in the canonical order rhoform/diagnostics.py defines; each line stands alone, which is why files are named by repository-relative path here rather than through a stream-level file table. Emitted only by rhoform.diagnostics; the registry in rhoform/codes.py is the sole source of codes, slugs, severities and categories, and the registry gate holds the two in step. The spec's diagnostics section (spec/language/06-diagnostics.md) is the normative prose for this format.",
+  "type": "object",
+  "additionalProperties": false,
+  "patternProperties": {
+    "^x_": {
+      "type": ["string", "number", "boolean", "null"],
+      "description": "Reserved extension point, scalars only (the same rule the part-data schema learned the hard way: structured x_ members hide defects from negative controls)."
+    }
+  },
+  "required": ["schema", "code", "slug", "severity", "category", "tier", "message", "params", "entity", "spans", "fixits"],
+  "properties": {
+    "schema": {
+      "const": "rhoform-diagnostic/0",
+      "description": "Format discriminator. This schema describes version 0; a breaking change to any field ships as rhoform-diagnostic/1, never as a silent mutation."
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^RHO[0-9]{4}$",
+      "description": "The stable registry code. RHO + exactly four digits; the leading digit is the block (0 framework, 1 syntax, 2 elaboration, 3 types, 4 ground-architecture, 5 verification, 6 parts, 7 interop). A code means one thing forever; retired codes are never reassigned."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "The code's kebab-case slug, denormalized from the registry so a human reading one line needs no lookup table."
+    },
+    "severity": {
+      "enum": ["error", "warning", "note"],
+      "description": "error gates (V1), warning annotates, note carries non-gating context (safety notes, the truncation marker). Fixed per code in the registry; waivers (T6) downgrade at the reporting layer, not here."
+    },
+    "category": {
+      "enum": ["framework", "syntax", "elaboration", "types", "ground-architecture", "verification", "parts", "interop"],
+      "description": "The code's block name, denormalized from the registry."
+    },
+    "tier": {
+      "enum": ["static", "dynamic", null],
+      "description": "The V1 assertion tier, when the diagnostic reports an assertion result — V1 makes the tier visible in every diagnostic. Null for diagnostics that are not assertion results."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The human-rendered message. RENDERED from the registry template and the params — it can never say something the params do not — so consumers that want structure read params and consumers that want prose read this, and the two cannot disagree."
+    },
+    "params": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "description": "The structured parameters, exactly the set the registry declares for the code (enforced at emission; a JSON Schema cannot express the per-code contract, the registry gate does). Values are JSON scalars or arrays of scalars."
+    },
+    "entity": {
+      "type": ["string", "null"],
+      "description": "The IR entity identity this diagnostic anchors to (instance/assertion path or net name), per the source-map schema's diagnostic-anchor rule; spans below are its resolution through the map. Null for pre-elaboration stages (lexer, parser), which have no IR to anchor to and carry raw spans."
+    },
+    "spans": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/LabeledSpan" },
+      "contains": { "properties": { "primary": { "const": true } }, "required": ["primary"] },
+      "minContains": 1,
+      "maxContains": 1,
+      "description": "Byte spans into the author's own files, exactly one primary. Field vocabulary is ir/source-map.schema.json's: byte offsets authoritative, line/col denormalized."
+    },
+    "fixits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FixIt" },
+      "description": "Suggested fixes, possibly none. Ordered by preference; an agent applying a machine-applicable fix-it verbatim is expected to re-run the check, not to trust it blindly."
+    }
+  },
+  "$defs": {
+    "SpanFields": {
+      "type": "object",
+      "required": ["file", "byte_start", "byte_end", "line_start", "col_start", "line_end", "col_end"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative POSIX path of the source file. Never absolute, never host-specific (determinism contract)."
+        },
+        "byte_start": { "type": "integer", "minimum": 0, "description": "0-based byte offset of the first byte of the span." },
+        "byte_end": { "type": "integer", "minimum": 0, "description": "0-based byte offset one past the last byte (end-exclusive); >= byte_start. Equal offsets are an insertion point." },
+        "line_start": { "type": "integer", "minimum": 1, "description": "1-based line of the span's first character." },
+        "col_start": { "type": "integer", "minimum": 1, "description": "1-based column of the span's first character, counted in Unicode scalar values." },
+        "line_end": { "type": "integer", "minimum": 1, "description": "1-based line of the span's last character." },
+        "col_end": { "type": "integer", "minimum": 1, "description": "1-based column just past the span's last character." }
+      }
+    },
+    "LabeledSpan": {
+      "allOf": [{ "$ref": "#/$defs/SpanFields" }],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["primary", "label"],
+      "properties": {
+        "primary": { "type": "boolean", "description": "Exactly one span per diagnostic is primary; the canonical emission order sorts on it." },
+        "label": { "type": ["string", "null"], "description": "What this span shows the reader (e.g. \"declared here\", \"instantiated from\"). Null when the span speaks for itself." }
+      }
+    },
+    "Edit": {
+      "allOf": [{ "$ref": "#/$defs/SpanFields" }],
+      "type": "object",
+      "unevaluatedProperties": false,
+      "required": ["replacement"],
+      "properties": {
+        "replacement": { "type": "string", "description": "Text replacing the span's bytes. A zero-length span makes this an insertion; an empty replacement makes it a deletion. Under has-placeholders, <name> markers appear here and are declared in the fix-it's placeholders." }
+      }
+    },
+    "FixIt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message", "applicability", "placeholders", "edits"],
+      "properties": {
+        "message": { "type": "string", "minLength": 1 },
+        "applicability": {
+          "enum": ["machine-applicable", "needs-review", "has-placeholders"],
+          "description": "machine-applicable: applying the edits verbatim is believed correct. needs-review: concrete edits, human judgment required. has-placeholders: the edits carry <name> markers the author must fill (this is how a fix-it INSERTS a component with a synthesized name, per the ground-architecture checker notes)."
+        },
+        "placeholders": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+          "description": "Every <name> marker present in the edits, declared so a literal angle-bracket text can never be mistaken for a placeholder. Non-empty exactly when applicability is has-placeholders."
+        },
+        "edits": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Edit" },
+          "description": "At least one edit: a fix with no edit is a message, and messages belong in the diagnostic."
+        }
+      }
+    }
+  }
+}
