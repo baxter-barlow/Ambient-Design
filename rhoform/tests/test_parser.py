@@ -207,6 +207,25 @@ module N:
         result = _parse(PRAGMA + "\nmodule M:")
         self.assertEqual(_codes(result), ["RHO1007"])
 
+    def test_a_dedent_to_no_open_level_is_reported_not_swallowed(self):
+        # Regression: lark's DedentError is not an UnexpectedInput, and
+        # the first version returned NO tree and NO diagnostics for this
+        # file — the one combination the framework must never produce.
+        result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R:\n"
+                        "        pin a passive\n      dnp\n")
+        self.assertEqual(_codes(result), ["RHO1008"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["params"], {"column": 6})
+        self.assertEqual(diag["spans"][0]["line_start"], 5)
+        self.assertIsNotNone(result.tree)
+
+    def test_bad_dedents_inside_brackets_are_not_layout(self):
+        # The re-derivation walker must mirror the Indenter: a wrapped
+        # parameter list's continuation lines carry no layout.
+        result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R(\n"
+                        "  a = 1,\n        b = 2)\n")
+        self.assertTrue(result.ok, _codes(result))
+
     def test_recovery_is_bounded_and_the_bound_is_stated(self):
         from rhoform.parser import _RECOVERY_LIMIT
 

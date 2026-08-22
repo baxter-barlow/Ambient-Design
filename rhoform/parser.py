@@ -432,6 +432,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     """Parse, reporting and blanking one defect per round. Returns the
     final tree, or None when recovery was abandoned."""
     from lark.exceptions import UnexpectedCharacters, UnexpectedToken
+    from lark.indenter import DedentError
 
     def span_at(pos: int, end: int) -> Span:
         start = max(0, min(pos - shift, len(data)))
@@ -525,11 +526,62 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             )
             blanked_lines[start] = _indent_of(parse_text, start)
             parse_text = _blank(parse_text, start, end)
+        except DedentError:
+            # The Indenter raises without a position, so the offending
+            # line is re-derived by walking the layout the way it does.
+            # Swallowing this used to return no tree AND no diagnostics —
+            # the one combination the framework must never produce.
+            located = _first_bad_dedent(parse_text)
+            if located is None:  # pragma: no cover - defensive
+                return None
+            start, end, column = located
+            sink.add("RHO1008", {"column": column},
+                     primary=span_at(start, end))
+            parse_text = _blank(parse_text, start, end)
         except Exception:  # pragma: no cover - lark internals
             return None
         if len(sink) - baseline >= _RECOVERY_LIMIT:
             return None
     return None  # pragma: no cover - budget exhausted without emitting
+
+
+def _first_bad_dedent(text: str):
+    """(line_start, line_end, column) of the first dedent matching no open
+    level, mirroring the Indenter: blank and comment-only lines carry no
+    layout, and lines inside brackets are not layout at all."""
+    levels = [0]
+    depth = 0
+    position = 0
+    while position < len(text):
+        start, end = _line_bounds(text, position)
+        line = text[start:end]
+        stripped = line.strip()
+        in_layout = depth == 0
+        # Bracket depth for the NEXT line: count brackets outside strings
+        # and comments on this one.
+        in_string = False
+        for char in line:
+            if in_string:
+                in_string = char != '"'
+            elif char == '"':
+                in_string = True
+            elif char == "#":
+                break
+            elif char in "([":
+                depth += 1
+            elif char in ")]":
+                depth = max(0, depth - 1)
+        if in_layout and stripped and not stripped.startswith("#"):
+            indent = _indent_of(text, start)
+            if indent > levels[-1]:
+                levels.append(indent)
+            else:
+                while indent < levels[-1]:
+                    levels.pop()
+                if indent != levels[-1]:
+                    return start, end, indent
+        position = end + 1
+    return None
 
 
 def _no_content_remains(text: str) -> bool:

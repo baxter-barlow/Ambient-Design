@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.1
+module M:
+    prt p passive
+    x = neww lib.R
+    port q passive
