@@ -36,7 +36,9 @@ jobs:
         # that produces no .git directory at all — the coverage meta-gate
         # keys its cache on the git-tracked tree and its self-test requires
         # a computable digest, so a gitless checkout fails it (first seen on
-        # this branch's first CI run, 2026-08-21).
+        # this branch's first CI run, 2026-08-21). ca-certificates rides
+        # along: git-over-https cannot verify github.com without CA roots,
+        # which the slim image also omits.
         #
         # The container image is a dated testing snapshot, but apt's default
         # sources track the LIVE testing archive, which moves independently of
@@ -56,7 +58,7 @@ jobs:
           rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
           printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends ngspice=46+ds-1 git python3
+          apt-get install -y --no-install-recommends ngspice=46+ds-1 git ca-certificates python3
           ngspice --version | head -n 2
           git --version
       - name: Check out repository
@@ -284,7 +286,9 @@ jobs:
         # cache on the git-tracked tree and its self-test requires a
         # computable digest, so a gitless checkout fails the "Gates are
         # pinned by their own self-tests" step (first seen on this branch's
-        # first CI run, 2026-08-21).
+        # first CI run, 2026-08-21). ca-certificates rides along:
+        # git-over-https cannot verify github.com without CA roots, which
+        # the slim image also omits.
         #
         # Exact package pin from toolchain/versions.yaml (ngspice). apt
         # fails loudly if the snapshot no longer resolves this revision;
@@ -298,7 +302,7 @@ jobs:
           rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list
           printf 'deb http://snapshot.debian.org/archive/debian/20260803T000000Z testing main\n' > /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false update
-          apt-get install -y --no-install-recommends ngspice=46+ds-1 git
+          apt-get install -y --no-install-recommends ngspice=46+ds-1 git ca-certificates
           ngspice --version | head -n 5
           git --version
       - name: Check out repository
