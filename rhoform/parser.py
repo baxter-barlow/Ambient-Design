@@ -473,6 +473,13 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
 
     # line start -> the line's indent BEFORE it was blanked; the emptied-
     # header rule needs the original depth, not a field of spaces' depth.
+    # Normalized ONCE, up front, so every token position — including the
+    # EOF-flushed DEDENTs that borrow from the synthesized final newline —
+    # indexes into the text the loop actually edits. Normalizing only at
+    # the parse call left a file without a final newline one byte out of
+    # frame, and the emptied-header search then blamed the line above the
+    # real defect (review round 2).
+    parse_text = normalize(parse_text)
     blanked_lines: dict[int, int] = {}
     # Headers whose subordinate lines RECOVERY blanked. Only these may be
     # silenced when the parser later wants the block they no longer
@@ -487,7 +494,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     budget = parse_text.count("\n") + _RECOVERY_LIMIT + 4
     for _ in range(budget):
         try:
-            return loaded.parser.parse(normalize(parse_text))
+            return loaded.parser.parse(parse_text)
         except UnexpectedCharacters as exc:
             pos = exc.pos_in_stream
             if pos >= len(parse_text):  # pragma: no cover - defensive
@@ -526,6 +533,22 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 sink.add("RHO1012", {"literal": literal},
                          primary=span_at(match_start, match_end))
                 parse_text = _blank(parse_text, pos, match_end)
+            elif (head := _truncated_tolerance(loaded, parse_text,
+                                               line_start, pos)) is not None:
+                # `100kohm +/-` with the magnitude forgotten: no full
+                # form straddles the failure, but the operator after a
+                # quantity head is still one defect, not one per
+                # character (review round 2). The literal is malformed —
+                # RHO1010's territory in either position — rather than
+                # merely in the wrong place.
+                sink.add(
+                    "RHO1010",
+                    {"literal": parse_text[head:pos + 3],
+                     "reason": "the `+/-` operator has no magnitude "
+                               "after it"},
+                    primary=span_at(head, pos + 3),
+                )
+                parse_text = _blank(parse_text, pos, pos + 3)
             else:
                 sink.add("RHO1011", {"character": f"`{char}`"},
                          primary=span_at(pos, pos + 1))
@@ -646,7 +669,12 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             parent = _parent_header(parse_text, start, indent)
             if parent is not None:
                 suspect_headers.add(parent)
+            blanked_lines[start] = indent
             parse_text = _blank(parse_text, start, end)
+            # Its block goes with it, same rule as a parse-error line:
+            # round 2's review found the flood the round-1 fix removed
+            # from the UnexpectedToken path alive and well on this one.
+            parse_text = _blank_block(parse_text, start, indent)
         except Exception:  # pragma: no cover - lark internals
             return None
         if len(sink) - baseline >= _RECOVERY_LIMIT:
@@ -708,6 +736,20 @@ def _straddling_quantity(loaded: _Loaded, text: str, line_start: int,
         if match.start() < relative < match.end():
             return (line_start + match.start(), line_start + match.end(),
                     match.group(0))
+    return None
+
+
+def _truncated_tolerance(loaded: _Loaded, text: str, line_start: int,
+                         pos: int):
+    """Start offset of a quantity head whose `+/-` at `pos` never gets a
+    magnitude, or None. The complete-form case is _straddling_quantity's;
+    this covers the operator with nothing (usable) after it."""
+    if text[pos:pos + 3] != "+/-":
+        return None
+    line = text[line_start:pos]
+    for match in loaded.quantity_re.finditer(line):
+        if match.end() == len(line) - 1 and line.endswith(" "):
+            return line_start + match.start()
     return None
 
 
@@ -845,8 +887,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     path = Path(args[0])
     try:
-        source = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        # surrogateescape, not strict: a file with an invalid byte is a
+        # DIAGNOSABLE input — RHO1002 with the exact byte span — and a
+        # strict read answered a spec-defined error class with exit 2
+        # and no diagnostics (review round 2). Exit 2 is for the tool
+        # being unable to run, and it can run on this.
+        source = path.read_bytes().decode("utf-8", errors="surrogateescape")
+    except OSError as exc:
         print(f"parser: FAIL: cannot read {path}: {exc}", file=sys.stderr)
         return 2
     try:

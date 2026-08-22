@@ -297,6 +297,43 @@ module N:
                         "    port p passive  #pragma x\n")
         self.assertEqual(_codes(result), ["RHO1013"])
 
+    def test_a_bad_dedent_line_takes_its_block_with_it(self):
+        # Review round 2: the DedentError path blanked only the line, so
+        # a bad-dedent line that introduced a block fed the block back
+        # one RHO1006 per line — the round-1 flood on a second path.
+        body = "".join(f"          pin q{i} passive\n" for i in range(40))
+        result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R:\n"
+                        "        pin a passive\n      s = new lib.C:\n"
+                        + body + "    port p passive\n")
+        self.assertEqual(_codes(result), ["RHO1008"])
+        self.assertIsNotNone(result.tree)
+
+    def test_a_truncated_file_without_final_newline_blames_its_own_line(self):
+        # Review round 2: the EOF-flushed DEDENT's position sat one byte
+        # out of frame when the file had no final newline, and the
+        # emptied-header search blamed the line ABOVE the real defect.
+        result = _parse(PRAGMA + "\nmodule M:\n    r1 = new lib.R:")
+        diags = [json.loads(line)
+                 for line in result.diagnostics.render().splitlines()]
+        self.assertEqual(len(diags), 1)
+        self.assertEqual(diags[0]["spans"][0]["line_start"], 3)
+
+    def test_a_truncated_tolerance_is_one_malformed_literal(self):
+        # Review round 2: `100kohm +/-` with no magnitude fell back to
+        # one unexpected-character per operator character. It is a
+        # malformed literal (RHO1010) — true in bound AND value
+        # positions, unlike a wrong-form claim.
+        for body, literal in (
+            ("assert v static operating_point (OUT) at most 100kohm +/-",
+             "100kohm +/-"),
+            ("r = new lib.R(x = 2V +/-)", "2V +/-"),
+        ):
+            result = _parse(PRAGMA + "\nmodule M:\n    " + body + "\n")
+            self.assertEqual(_codes(result), ["RHO1010"], body)
+            diag = json.loads(result.diagnostics.render())
+            self.assertEqual(diag["params"]["literal"], literal)
+            self.assertIn("no magnitude", diag["params"]["reason"])
+
     def test_bad_dedents_inside_brackets_are_not_layout(self):
         # The re-derivation walker must mirror the Indenter: a wrapped
         # parameter list's continuation lines carry no layout.
@@ -488,6 +525,21 @@ class MainTest(unittest.TestCase):
             lines = out.getvalue().splitlines()
             self.assertEqual(len(lines), 1)
             self.assertEqual(json.loads(lines[0])["code"], "RHO1009")
+
+            # A file with an invalid byte is a DIAGNOSABLE input: exit 1
+            # with an RHO1002 whose span names the byte, never exit 2
+            # with nothing (review round 2 found the strict read made
+            # the pre-scan's whole invalid-byte path unreachable here).
+            binary = Path(tmp) / "binary.rhoform"
+            binary.write_bytes(PRAGMA.encode() +
+                               b"\nmodule M:\n    x = 5\xffF\n")
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(main([str(binary)]), 1)
+            emitted = [json.loads(line)
+                       for line in out.getvalue().splitlines()]
+            self.assertEqual([d["code"] for d in emitted], ["RHO1002"])
+            self.assertIn("not valid UTF-8",
+                          emitted[0]["params"]["codepoint"])
 
             with contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(main([str(Path(tmp) / "ghost")]), 2)

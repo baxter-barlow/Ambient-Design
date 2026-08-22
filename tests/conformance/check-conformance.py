@@ -48,7 +48,7 @@ SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
 # is the suite shrinking out from under the spec, and must be a decision
 # recorded here.
 MINIMUM_ACCEPT_CASES = 8
-MINIMUM_REJECT_CASES = 14
+MINIMUM_REJECT_CASES = 15
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
 
@@ -84,10 +84,17 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     validator = jsonschema.validators.validator_for(schema)(schema)
 
+    def read_case(case):
+        # surrogateescape, exactly like the parser CLI: a case with an
+        # invalid byte is a legitimate reject fixture, and a strict read
+        # here made that class of case structurally unpinnable (review
+        # round 2).
+        return case.read_bytes().decode("utf-8", errors="surrogateescape")
+
     problems = []
     accept_cases = sorted(accept_dir.glob("*.rhoform"))
     for case in accept_cases:
-        result = parse(case.read_text(encoding="utf-8"), file=case.name)
+        result = parse(read_case(case), file=case.name)
         if not result.ok:
             emitted = result.diagnostics.render().splitlines()
             codes = [json.loads(line)["code"] for line in emitted]
@@ -102,7 +109,7 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
         expected_path = case.with_name(
             case.name[:-len(".rhoform")] + ".expected.ndjson")
         expected_files.discard(expected_path)
-        result = parse(case.read_text(encoding="utf-8"), file=case.name)
+        result = parse(read_case(case), file=case.name)
         stream = result.diagnostics.render()
         if not stream:
             problems.append(
