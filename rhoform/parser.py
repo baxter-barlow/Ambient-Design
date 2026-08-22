@@ -491,23 +491,6 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
         hi = max(lo, min(b - shift, len(data)))
         return data[lo:hi].decode("utf-8", "surrogateescape")
 
-    # Unclosed brackets first, statically: inside `(` or `[` line breaks
-    # are not layout, so one forgotten closer swallows every later line
-    # into one logical line and the parse errors blame those innocent
-    # lines — and, worse, the EOF-flushed DEDENT then lands on text
-    # recovery already blanked, where blanking makes no progress (review
-    # round 4 measured eighteen byte-identical diagnostics). The prototype
-    # lexer had exactly this check; the registry now has its code.
-    for _ in range(_RECOVERY_LIMIT):
-        unclosed = _first_unclosed_bracket(parse_text)
-        if unclosed is None:
-            break
-        opener, bracket = unclosed
-        _, opener_line_end = _line_bounds(parse_text, opener)
-        sink.add("RHO1015", {"bracket": bracket},
-                 primary=span_at(opener, opener + 1))
-        parse_text = _blank(parse_text, opener, opener_line_end)
-
     blanked_lines: dict[int, int] = {}
     # Headers whose subordinate lines RECOVERY blanked. Only these may be
     # silenced when the parser later wants the block they no longer
@@ -516,12 +499,59 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     # tracked precisely rather than inferred from any-blanking-happened.
     suspect_headers: set[int] = set()
     baseline = len(sink)
+
+    # Unclosed brackets first, statically: inside `(` or `[` line breaks
+    # are not layout, so one forgotten closer swallows every later line
+    # into one logical line and the parse errors blame those innocent
+    # lines — and, worse, the EOF-flushed DEDENT then lands on text
+    # recovery already blanked, where blanking makes no progress (review
+    # round 4 measured eighteen byte-identical diagnostics). The prototype
+    # lexer had exactly this check; the registry now has its code. The
+    # statement's WRAPPED CONTINUATION goes with it — the shadow-block
+    # rule every other blanking path follows — or each deeper-indented
+    # parameter line draws its own spurious diagnostic once the opener
+    # that suspended layout is gone (review round 5).
+    for _ in range(_RECOVERY_LIMIT):
+        unclosed = _first_unclosed_bracket(parse_text)
+        if unclosed is None:
+            break
+        opener, bracket = unclosed
+        opener_line_start, opener_line_end = _line_bounds(parse_text,
+                                                          opener)
+        line_indent = _indent_of(parse_text, opener_line_start)
+        sink.add("RHO1015", {"bracket": bracket},
+                 primary=span_at(opener, opener + 1))
+        parse_text = _blank(parse_text, opener, opener_line_end)
+        parse_text = _blank_block(parse_text, opener_line_start,
+                                  line_indent)
+        if not parse_text[opener_line_start:opener_line_end].strip():
+            # The opener led its line, so the whole statement is gone
+            # and its enclosing block may now be empty — recovery's
+            # emptiness, silenced by the suspects rule like any other.
+            blanked_lines[opener_line_start] = line_indent
+            parent = _parent_header(parse_text, opener_line_start,
+                                    line_indent)
+            if parent is not None:
+                suspect_headers.add(parent)
     # Iterations, not diagnostics: silent blanking rounds (orphaned blocks,
     # emptied headers) consume iterations without emitting, and every round
     # blanks at least one character, so line-count-plus-limit terminates.
     budget = parse_text.count("\n") + _RECOVERY_LIMIT + 4
+    previous_text = None
     for _ in range(budget):
-        iteration_text = parse_text
+        # Both guards live at the TOP so no handler's `continue` can slip
+        # past them: the missing-block path did exactly that, emitting
+        # thirty diagnostics past a limit of twenty (review round 5).
+        if len(sink) - baseline >= _RECOVERY_LIMIT:
+            return None
+        if parse_text == previous_text:
+            # No byte changed since the last round: the error position
+            # sits on text recovery already blanked, and the next round
+            # would emit the identical diagnostic — round 4 measured
+            # eighteen of them. Every handler is SUPPOSED to blank
+            # something; this is the failsafe for the paths that forget.
+            return None
+        previous_text = parse_text
         try:
             return loaded.parser.parse(parse_text)
         except UnexpectedCharacters as exc:
@@ -734,15 +764,6 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # from the UnexpectedToken path alive and well on this one.
             parse_text = _blank_block(parse_text, start, indent)
         except Exception:  # pragma: no cover - lark internals
-            return None
-        if len(sink) - baseline >= _RECOVERY_LIMIT:
-            return None
-        if parse_text == iteration_text:
-            # No byte changed this round: the error position sits on text
-            # recovery already blanked, so the next round would emit the
-            # identical diagnostic — round 4 measured eighteen of them.
-            # Every handler is SUPPOSED to blank something; this is the
-            # failsafe for the paths that forget.
             return None
     return None  # pragma: no cover - budget exhausted without emitting
 

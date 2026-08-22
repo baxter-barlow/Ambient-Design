@@ -332,6 +332,30 @@ module N:
         self.assertEqual(diags[0]["params"], {"bracket": "("})
         self.assertIsNotNone(result.tree)
 
+    def test_an_unclosed_bracket_takes_its_wrapped_continuation_along(self):
+        # Review round 5: blanking only the opener's line tail left the
+        # deeper-indented wrapped-parameter lines to be blamed one by
+        # one — the shadow-block rule applies to this path like every
+        # other.
+        wrapped = "".join(f"        p{i} = {i},\n" for i in range(8))
+        result = _parse(PRAGMA + "\nmodule W:\n    r1 = new lib.R(\n"
+                        + wrapped + "module N:\n    port x passive\n")
+        self.assertEqual(_codes(result), ["RHO1015"])
+        self.assertIsNotNone(result.tree)
+
+    def test_the_recovery_limit_binds_on_every_path(self):
+        # Review round 5: the missing-block path's `continue` skipped
+        # both loop guards, so thirty empty headers emitted thirty
+        # diagnostics past a limit of twenty — and each round was a full
+        # reparse, quadratic on header count.
+        from rhoform.parser import _RECOVERY_LIMIT
+
+        source = PRAGMA + "\n" + "".join(
+            f"module M{index}:\n" for index in range(30)
+        )
+        result = _parse(source)
+        self.assertLessEqual(len(result.diagnostics), _RECOVERY_LIMIT)
+
     def test_recovery_aborts_rather_than_repeating_itself(self):
         # The failsafe behind the bracket fix: a round that blanks
         # nothing must abort, because the next round would emit the
