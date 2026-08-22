@@ -318,6 +318,35 @@ def self_test() -> int:
     cases.append(("the emission probes pass on the real framework",
                   emission_probe_problems() == []))
 
+    # The probes' own report sites: each fires only when the framework
+    # STOPS refusing, so a stub framework is planted to prove the reports
+    # are wired — otherwise all three appends are deletable and the probe
+    # leg degrades to three try-blocks that check nothing.
+    class _AcceptsAnything:
+        @staticmethod
+        def new(*args, **kwargs):
+            return None
+
+    def _lenient_fixit(*args, **kwargs):
+        return None
+
+    real_diag, real_fixit = diag_module.Diagnostic, diag_module.FixIt
+    diag_module.Diagnostic = _AcceptsAnything
+    diag_module.FixIt = _lenient_fixit
+    try:
+        stubbed = emission_probe_problems()
+    finally:
+        diag_module.Diagnostic, diag_module.FixIt = real_diag, real_fixit
+    cases.append(("a framework that stops refusing undeclared codes is "
+                  "reported", any("undeclared code was accepted" in p
+                                  for p in stubbed)))
+    cases.append(("a framework that stops refusing param mismatches is "
+                  "reported", any("missing a declared member" in p
+                                  for p in stubbed)))
+    cases.append(("a framework that stops refusing placeholder abuse is "
+                  "reported", any("no declared placeholder" in p
+                                  for p in stubbed)))
+
     # WIRING: registry_problems feeds main(). Plant a duplicate through
     # the module global and main() must go red — the same shape as
     # validate-schemas' floor-wiring case.

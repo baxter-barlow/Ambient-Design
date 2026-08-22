@@ -118,8 +118,10 @@ CEILINGS = {
     "tests/benchmarks/check-hand-assertions.py": (61, 15),
     "tests/benchmarks/run-sim.sh": (22, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
+    "tests/conformance/check-conformance.py": (23, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
+    "tests/diagnostics/check-registry.py": (12, 0),
     "tests/eval/check-run-records.py": (62, 9),
     "tests/ir/check-hashes.py": (20, 2),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
@@ -168,10 +170,17 @@ OWNERS = {
         {"problems"}, {"cases", "parts", "shape", "current", "want"}),
     "tests/benchmarks/derive-555-windows.py": (
         {"problems"}, {"cases"}),
+    "tests/conformance/check-conformance.py": (
+        # `body` collects a spec section's lines and `detail` assembles one
+        # message's clause list; neither reports anything.
+        {"problems"}, {"cases", "body", "detail"}),
     "tests/corpus/check-classification.py": (
         {"problems"}, {"lines", "checks", "results", "alone_fails"}),
     "tests/corpus/check-corpus.py": (
         {"problems"}, {"cases", "numbers", "spans"}),
+    "tests/diagnostics/check-registry.py": (
+        # `out` rebuilds a planted registry tuple in the self-test.
+        {"problems"}, {"cases", "out"}),
     "tests/eval/check-run-records.py": (
         {"problems", "problems_out", "out"}, {"cases"}),
     "tests/ir/check-hashes.py": (

@@ -75,6 +75,14 @@ parts/examples/*.part.json
     separate from this repository's own licence, defined in
     parts/part-data.schema.json.
 
+spec/
+
+    The Rhoform language specification, including the conformance suite's
+    case files and expected outputs, is licensed CC-BY-4.0 rather than
+    Apache-2.0 (the E2/E3 boundary: specifications are CC-BY-4.0). The
+    conformance GATE that runs those cases is code and stays Apache-2.0
+    under tests/. See LICENSES.md and spec/README.md.
+
 atopile
 
     Rhoform's surface syntax adopts constructs from atopile, which is

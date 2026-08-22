@@ -481,6 +481,66 @@ def self_test() -> int:
         cases.append(("a drifted rejection reason is caught",
                       any("pinned fragment" in p for p in problems)))
 
+        write_vectors([{"input": "zzz", "canonical": "zzz"}], [])
+        problems, _, _ = vector_problems(vec)
+        cases.append(("an unparseable vector input is caught",
+                      any("does not parse" in p for p in problems)))
+
+        # The property checks fire only when the ENGINE breaks, so a
+        # broken engine is planted: normal_form maps i -> c -> c2 and the
+        # parse stub disagrees with itself about value and form. All four
+        # property sites must report — without this they are deletable,
+        # and the properties the spec advertises would be prose.
+        import rhoform.quantities as quantities_module
+
+        class _StubQuantity:
+            def __init__(self, text):
+                self._text = text
+
+            def key(self):
+                return ("stub", self._text)
+
+            @property
+            def form(self):
+                return "exact" if self._text == "i" else "interval-bare"
+
+        real_nf = quantities_module.normal_form
+        real_pq = quantities_module.parse_quantity
+        quantities_module.normal_form = lambda t: {"i": "c", "c": "c2"}[t]
+        quantities_module.parse_quantity = _StubQuantity
+        try:
+            write_vectors([{"input": "i", "canonical": "c"}], [])
+            problems, _, _ = vector_problems(vec)
+        finally:
+            quantities_module.normal_form = real_nf
+            quantities_module.parse_quantity = real_pq
+        for fragment, label in (
+            ("not idempotent", "a non-idempotent normal form is reported"),
+            ("changed the VALUE", "a value-changing normal form is reported"),
+            ("changed form", "a form-changing normal form is reported"),
+            ("does not re-lex", "an unlexable canonical is reported"),
+        ):
+            cases.append((label, any(fragment in p for p in problems)))
+
+        # The wire-schema leg on expected streams: point SCHEMA_PATH at a
+        # schema the real emission cannot satisfy and the leg must report,
+        # or it is a validator whose report line is deletable.
+        global SCHEMA_PATH
+        strict = Path(tmp) / "strict.schema.json"
+        strict.write_text(json.dumps({
+            "type": "object",
+            "properties": {"code": {"const": "RHONONE"}},
+        }))
+        real_schema_path = SCHEMA_PATH
+        SCHEMA_PATH = strict
+        try:
+            problems, _, _ = parse_case_problems(accept, reject)
+        finally:
+            SCHEMA_PATH = real_schema_path
+        cases.append(("an expected stream violating the wire schema is "
+                      "reported", any("violates the wire schema" in p
+                                      for p in problems)))
+
         spec_copy = Path(tmp) / "language"
         shutil.copytree(SPEC_LANG, spec_copy)
         cases.append(("the real spec restatements reconcile",
@@ -514,18 +574,37 @@ def self_test() -> int:
         cases.append(("a drifted output cap is caught",
                       any("OUTPUT_CAP" in p for p in problems)))
 
-    # WIRING: floors feed main(). Raise one over the real population.
-    global MINIMUM_ACCEPT_CASES
-    real_floor = MINIMUM_ACCEPT_CASES
-    MINIMUM_ACCEPT_CASES = 10_000
-    try:
-        with contextlib.redirect_stdout(io.StringIO()), \
-                contextlib.redirect_stderr(io.StringIO()) as err:
-            wired = main()
-    finally:
-        MINIMUM_ACCEPT_CASES = real_floor
-    cases.append(("the case floor is WIRED into main()",
-                  wired == 1 and "below the floor" in err.getvalue()))
+        diag_md.write_text(diag_md.read_text().replace(
+            "capped at **500 diagnostics**", "capped at very many"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a cap statement dropped from the prose is caught",
+                      any("no longer states the output cap" in p
+                          for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
+
+        diag_md = spec_copy / "06-diagnostics.md"
+        diag_md.write_text(diag_md.read_text().replace(
+            "| RHO0xxx | framework |", "| RHO0xxx | meta |"))
+        problems = doc_sync_problems(spec_dir=spec_copy)
+        cases.append(("a drifted block table is caught",
+                      any("block table" in p for p in problems)))
+
+    # WIRING: all four floors feed main(). Raise each over the real
+    # population in turn — three of the four were deletable when only the
+    # accept floor had a case.
+    for floor_name in ("MINIMUM_ACCEPT_CASES", "MINIMUM_REJECT_CASES",
+                       "MINIMUM_VECTORS", "MINIMUM_ERROR_VECTORS"):
+        real_floor = globals()[floor_name]
+        globals()[floor_name] = 10_000
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                wired = main()
+        finally:
+            globals()[floor_name] = real_floor
+        cases.append((f"the {floor_name} floor is WIRED into main()",
+                      wired == 1 and "below the floor" in err.getvalue()))
 
     failures = 0
     for name, ok in cases:
