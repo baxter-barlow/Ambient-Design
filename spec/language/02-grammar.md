@@ -46,7 +46,7 @@ against the grammar source of truth by the conformance gate.
 
 ### Reserved for v1
 
-Eight words no v0.1 rule uses, excluded from binding positions now
+The 8 words no v0.1 rule uses, excluded from binding positions now
 because reserving a word later is a breaking change (E1). Each is
 required by an approved requirement a later milestone implements.
 

@@ -14,6 +14,9 @@ printable ASCII (0x20–0x7E) or LF (0x0A). In particular:
   spellings for one indentation.
 - A **carriage return** (0x0D) is an error: sources use LF line endings
   only.
+- Any other **control character** (NUL, VT, FF, DEL, ...) is an error;
+  it is reported as a control character, not as "non-ASCII", because DEL
+  is ASCII and a diagnostic must not say otherwise.
 - Any **non-ASCII** byte sequence is an error. The ASCII spellings exist
   for every symbol the language needs (`+/-` for ±, `u` for µ, `ohm` for
   Ω, `degC` for °C).

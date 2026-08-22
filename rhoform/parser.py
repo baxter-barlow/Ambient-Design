@@ -26,22 +26,32 @@ token whenever the parser was stuck in a state no statement boundary could
 satisfy; restart parsing is quadratic in the worst case and correct, and
 the recovery limit bounds the constant.
 
-Two shapes get special handling so one defect is one diagnostic:
+Four shapes get special handling so one defect is one diagnostic:
 
   - The L8 pragma. A missing or wrong header is ONE RHO1005 with a
     machine-applicable fix-it; the parse then runs over the source with a
     correct header prepended (and the wrong one blanked), and every
-    reported offset is translated back so spans never name synthetic text.
-  - An orphaned block. When a statement line was blanked and the parser
-    then stumbles on the INDENT of the block it introduced, the whole
-    block is blanked without further diagnostics — the defect was the
-    header, and its body deserves silence, not one error per line.
+    reported offset is translated back so spans never name synthetic
+    text. A pragma appearing MID-line is the frozen v0.1 decision,
+    reported once as RHO1013, not per character.
+  - A blanked statement's block. Blanking a parse-error line also blanks
+    its subordinate block, unconditionally: the defect was the statement,
+    and its body deserves silence, not one error per line. (A reactive
+    rule that waited for the block's INDENT to be rejected missed the
+    case where the broken statement led its block — the Indenter simply
+    established the level one deeper; review round 1.)
+  - A quantity in the wrong FORM. ` +/- 1%` after a plain quantity lexes
+    as nothing, so the generic path would charge one diagnostic per
+    operator character; RHO1012 names the whole literal once instead.
+  - An unterminated string blanks to end of line, not by the quote
+    alone, so its words are not re-parsed as junk names.
 
-Stage order: (1) a byte pre-scan reports every tab, carriage return, and
-non-ASCII character with byte spans (RHO1001/1003/1002) and, when any
-fire, skips the grammar parse — those defects are pre-syntactic, and
-diagnosing the structure of text the author did not legally write would
-blame lines for bytes; (2) the pragma pre-check; (3) the restart parse;
+Stage order: (1) a byte pre-scan reports every tab, carriage return,
+control character, and non-ASCII byte with byte spans
+(RHO1001/1003/1014/1002) and, when any fire, skips the grammar parse —
+those defects are pre-syntactic, and diagnosing the structure of text
+the author did not legally write would blame lines for bytes; (2) the
+pragma pre-check; (3) the restart parse;
 (4) post-parse file-local checks the prototype also made at parse level:
 closed-vocabulary words (RHO1009) and quantity-literal semantics (RHO1010,
 via rhoform.quantities). The table-row arity check is deliberately NOT
@@ -164,6 +174,7 @@ class _Loaded:
     pragma_text: str
     keyword_of: dict
     vocabularies: dict
+    quantity_re: object  # the SoT's full five-form literal pattern
 
 
 _CACHE: _Loaded | None = None
@@ -217,6 +228,7 @@ def _load() -> _Loaded:
         pragma_text=pragma_text,
         keyword_of=keyword_of,
         vocabularies=dict(sot.CLOSED_VOCABULARIES),
+        quantity_re=re.compile(sot.LEXER_QUANTITY),
     )
     return _CACHE
 
@@ -267,14 +279,21 @@ def _expected_list(names, keyword_of: dict) -> str:
 
 
 def _prescan(file: str, data: bytes, sink: Diagnostics) -> bool:
-    """Byte-level legality: tabs, CR, non-ASCII. True when clean."""
+    """Byte-level legality: tabs, CR, control chars, non-ASCII. True when
+    clean. Offsets accumulate in BYTES over a surrogateescape decoding,
+    because that round-trips every byte exactly: a decode with
+    errors="replace" turned one invalid byte into a three-byte U+FFFD and
+    every span after it drifted by two — a violation of the one promise
+    byte spans make (found by the first independent review)."""
     clean = True
-    text = data.decode("utf-8", errors="replace")
+    text = data.decode("utf-8", errors="surrogateescape")
     # Walk BYTES for offsets, characters for codepoints: a multi-byte
     # UTF-8 character is one diagnostic at its first byte, not three.
     offset = 0
     for char in text:
-        width = len(char.encode("utf-8", errors="replace"))
+        code = ord(char)
+        escaped_byte = 0xDC80 <= code <= 0xDCFF  # surrogateescape's range
+        width = 1 if escaped_byte else len(char.encode("utf-8"))
         if char == "\t":
             clean = False
             span = span_from_bytes(file, data, offset, offset + 1)
@@ -298,10 +317,21 @@ def _prescan(file: str, data: bytes, sink: Diagnostics) -> bool:
                     (Edit(span, ""),),
                 ),),
             )
-        elif not (" " <= char <= "~") and char != "\n":
+        elif (code < 0x20 and char != "\n") or code == 0x7F:
+            # ASCII control characters are not "non-ASCII": DEL reported
+            # as U+007F under a non-ascii slug was factually wrong, so
+            # they carry their own code (review round 1).
+            clean = False
+            span = span_from_bytes(file, data, offset, offset + 1)
+            sink.add("RHO1014", {"codepoint": f"U+{code:04X}"},
+                     primary=span)
+        elif code > 0x7E:
             clean = False
             span = span_from_bytes(file, data, offset, offset + width)
-            codepoint = f"U+{ord(char):04X}"
+            if escaped_byte:
+                codepoint = f"0x{code - 0xDC00:02X} (not valid UTF-8)"
+            else:
+                codepoint = f"U+{code:04X}"
             replacement = {"±": "+/-", "µ": "u", "μ": "u",
                            "Ω": "ohm", "Ω": "ohm"}.get(char)
             fixits = ()
@@ -441,9 +471,15 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             start -= 1
         return span_from_bytes(file, data, start, stop)
 
-    # line start -> the line's indent BEFORE it was blanked; the orphan
-    # rule needs the original depth, not the depth of a field of spaces.
+    # line start -> the line's indent BEFORE it was blanked; the emptied-
+    # header rule needs the original depth, not a field of spaces' depth.
     blanked_lines: dict[int, int] = {}
+    # Headers whose subordinate lines RECOVERY blanked. Only these may be
+    # silenced when the parser later wants the block they no longer
+    # introduce — an author's own genuinely empty block, with unrelated
+    # errors elsewhere, must still be reported, so "we emptied it" is
+    # tracked precisely rather than inferred from any-blanking-happened.
+    suspect_headers: set[int] = set()
     baseline = len(sink)
     # Iterations, not diagnostics: silent blanking rounds (orphaned blocks,
     # emptied headers) consume iterations without emitting, and every round
@@ -457,13 +493,39 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             if pos >= len(parse_text):  # pragma: no cover - defensive
                 return None
             char = parse_text[pos]
+            line_start, line_end = _line_bounds(parse_text, pos)
+            quantity_tail = _straddling_quantity(
+                loaded, parse_text, line_start, line_end, pos)
             if char == '"':
                 # The whole unterminated literal is the defect; blanking
                 # only the quote would re-parse its words as junk names
                 # and charge the author once per word.
-                _, line_end = _line_bounds(parse_text, pos)
                 sink.add("RHO1004", {}, primary=span_at(pos, line_end))
+                line_indent = _indent_of(parse_text, line_start)
                 parse_text = _blank(parse_text, pos, line_end)
+                if not parse_text[line_start:line_end].strip():
+                    # The literal WAS the line: its enclosing block may
+                    # now be empty, and that emptiness is recovery's.
+                    parent = _parent_header(
+                        parse_text, line_start, line_indent)
+                    if parent is not None:
+                        suspect_headers.add(parent)
+            elif re.match(r"#pragma(?![A-Za-z0-9_])", parse_text[pos:]):
+                # A `#pragma` the lexer refuses is mid-line (the header
+                # pre-check settled line-initial ones): one diagnostic
+                # for the frozen decision, not one per character of it.
+                sink.add("RHO1013", {}, primary=span_at(pos, line_end))
+                parse_text = _blank(parse_text, pos, line_end)
+            elif quantity_tail is not None:
+                # ` +/- 1%` after a plain quantity lexes as nothing, so
+                # the generic path charged one diagnostic per character
+                # of the operator. The defect is the literal's FORM in a
+                # plain-quantity position; say that once, with the whole
+                # literal in the span, and blank only the unconsumed tail.
+                match_start, match_end, literal = quantity_tail
+                sink.add("RHO1012", {"literal": literal},
+                         primary=span_at(match_start, match_end))
+                parse_text = _blank(parse_text, pos, match_end)
             else:
                 sink.add("RHO1011", {"character": f"`{char}`"},
                          primary=span_at(pos, pos + 1))
@@ -477,20 +539,53 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # PREVIOUS line; their END is the first content column of the
             # line they actually describe. Anchoring them at end_pos is
             # what keeps the orphaned-block rule pointed at the right line.
-            if token.type in ("_INDENT", "_DEDENT"):
+            if token.type == "$END":
+                # $END borrows its position from the last real token,
+                # which can itself be an EOF-flushed DEDENT carrying none;
+                # end-of-text is what it means either way.
+                pos = len(parse_text)
+            elif token.type in ("_INDENT", "_DEDENT"):
                 pos = token.end_pos if token.end_pos is not None else 0
             else:
                 pos = token.start_pos if token.start_pos is not None else 0
 
-            if token.type in ("_DEDENT", "$END") \
-                    and "_INDENT" in expected_names and blanked_lines:
-                # A block emptied by earlier blanking: its header now
-                # introduces nothing. The header is the defect's shadow,
-                # not a second defect — blank it silently and go again.
-                header = _nearest_content_line_above(
+            if "_INDENT" in expected_names:
+                # The parser wants a block that is not there. Whatever
+                # token arrived instead — the next module's keyword, a
+                # DEDENT, end of file — the ARRIVING line is never the
+                # defect; the empty-bodied header above it is. Blaming
+                # the arrival blanked innocent statements (review round
+                # 1's flood). So: find the header; if recovery itself
+                # emptied it (a suspect), silence it — its emptiness is
+                # our shadow; if the author wrote it empty, report ONE
+                # diagnostic and blank the header, so everything after
+                # it, including further defects, still gets parsed.
+                header = _content_line_above(
                     parse_text, min(pos, len(parse_text)))
                 if header is not None:
-                    blanked_lines[header] = _indent_of(parse_text, header)
+                    if header not in suspect_headers:
+                        arrival = span_at(
+                            min(pos, len(parse_text)),
+                            min(token.end_pos
+                                if token.end_pos is not None else pos + 1,
+                                len(parse_text)),
+                        )
+                        if token.type == "$END":
+                            sink.add("RHO1007", {"expected": expected},
+                                     primary=arrival)
+                        else:
+                            sink.add(
+                                "RHO1006",
+                                {"found": _describe_token(
+                                    token, loaded.keyword_of),
+                                 "expected": expected},
+                                primary=arrival,
+                            )
+                    indent = _indent_of(parse_text, header)
+                    parent = _parent_header(parse_text, header, indent)
+                    if parent is not None:
+                        suspect_headers.add(parent)
+                    blanked_lines[header] = indent
                     start, end = _line_bounds(parse_text, header)
                     parse_text = _blank(parse_text, start, end)
                     continue
@@ -508,13 +603,6 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
 
             pos = min(pos, len(parse_text) - 1)
             start, end = _line_bounds(parse_text, pos)
-            above = _nearest_line_above(parse_text, start)
-            if token.type == "_INDENT" and above in blanked_lines:
-                # The block whose header was just blanked: silence, not a
-                # diagnostic per line.
-                parse_text = _blank_block(
-                    parse_text, above, blanked_lines[above])
-                continue
             sink.add(
                 "RHO1006",
                 {"found": _describe_token(token, loaded.keyword_of),
@@ -524,8 +612,21 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                     token.end_pos if token.end_pos is not None else pos + 1,
                 ),
             )
-            blanked_lines[start] = _indent_of(parse_text, start)
+            indent = _indent_of(parse_text, start)
+            parent = _parent_header(parse_text, start, indent)
+            if parent is not None:
+                suspect_headers.add(parent)
+            blanked_lines[start] = indent
             parse_text = _blank(parse_text, start, end)
+            # The blanked statement's subordinate block goes with it,
+            # UNCONDITIONALLY: a reactive rule that waited for the block's
+            # INDENT to be rejected missed the case where the broken
+            # statement led its block — the Indenter then established the
+            # enclosing level at the orphan's own depth and charged it one
+            # diagnostic per line (review round 1). A statement's block
+            # belongs to the statement; when the line had no block, this
+            # blanks nothing.
+            parse_text = _blank_block(parse_text, start, indent)
         except DedentError:
             # The Indenter raises without a position, so the offending
             # line is re-derived by walking the layout the way it does.
@@ -534,9 +635,17 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             located = _first_bad_dedent(parse_text)
             if located is None:  # pragma: no cover - defensive
                 return None
-            start, end, column = located
-            sink.add("RHO1008", {"column": column},
-                     primary=span_at(start, end))
+            start, end, indent = located
+            # 1-based, like every other column in the wire format, and
+            # the span opens exactly where the param points — at the
+            # dedented CONTENT, not the indentation before it. A
+            # diagnostic whose prose and span disagree by one is worse
+            # than either convention alone.
+            sink.add("RHO1008", {"column": indent + 1},
+                     primary=span_at(start + indent, end))
+            parent = _parent_header(parse_text, start, indent)
+            if parent is not None:
+                suspect_headers.add(parent)
             parse_text = _blank(parse_text, start, end)
         except Exception:  # pragma: no cover - lark internals
             return None
@@ -584,6 +693,24 @@ def _first_bad_dedent(text: str):
     return None
 
 
+def _straddling_quantity(loaded: _Loaded, text: str, line_start: int,
+                         line_end: int, pos: int):
+    """(start, end, literal) of a full-form quantity literal on this line
+    that CONTAINS the failing position strictly inside it, or None.
+
+    This is how ` +/- 1%` after a plain quantity is recognized: the lexer
+    consumed the plain head as its own token and then found no token at
+    the operator, but the LINE, read with the SoT's full five-form
+    pattern, shows one literal straddling the failure."""
+    line = text[line_start:line_end]
+    relative = pos - line_start
+    for match in loaded.quantity_re.finditer(line):
+        if match.start() < relative < match.end():
+            return (line_start + match.start(), line_start + match.end(),
+                    match.group(0))
+    return None
+
+
 def _no_content_remains(text: str) -> bool:
     """True when nothing but blank lines, comments, and the pragma is left."""
     for line in text.split("\n"):
@@ -600,18 +727,35 @@ def _nearest_line_above(text: str, line_start: int) -> int:
     return text.rfind("\n", 0, line_start - 1) + 1
 
 
-def _nearest_content_line_above(text: str, offset: int):
-    """Start offset of the closest line at or above `offset` that still
-    has content (not blank, not comment-only), or None."""
-    start, _ = _line_bounds(text, min(offset, max(len(text) - 1, 0)))
-    while True:
-        _, end = _line_bounds(text, start)
-        content = text[start:end].strip()
+def _content_line_above(text: str, offset: int):
+    """Start offset of the closest content line (not blank, not
+    comment-only) STRICTLY above `offset`'s line, or None."""
+    start = text.rfind("\n", 0, min(offset, len(text))) + 1
+    while start > 0:
+        start = _nearest_line_above(text, start)
+        s, e = _line_bounds(text, start)
+        content = text[s:e].strip()
         if content and not content.startswith("#"):
-            return start
+            return s
         if start == 0:
             return None
-        start = _nearest_line_above(text, start)
+    return None
+
+
+def _parent_header(text: str, line_start: int, indent: int):
+    """The nearest content line above `line_start` with a SMALLER indent —
+    the statement this line's block belongs to, or None at top level."""
+    position = line_start
+    while position > 0:
+        position = _nearest_line_above(text, position)
+        s, e = _line_bounds(text, position)
+        content = text[s:e].strip()
+        if content and not content.startswith("#") \
+                and _indent_of(text, s) < indent:
+            return s
+        if position == 0:
+            return None
+    return None
 
 
 def parse(source: str, file: str = "design.rhoform",

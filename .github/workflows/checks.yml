@@ -214,8 +214,8 @@ jobs:
         run: python3 -m unittest discover -s lang/tests -t lang -p 'test_production_anchor.py'
       - name: Diagnostic registry and framework
         # Same reasoning as the frozen-syntax tests riding here: this job
-        # has the lark pin, so the 36 parser cases actually run instead of
-        # reporting a green suite that never parsed anything.
+        # has the lark pin, so the lark-gated parser cases actually run
+        # instead of reporting a green suite that never parsed anything.
         run: |
           python3 tests/diagnostics/check-registry.py --self-test
           python3 tests/diagnostics/check-registry.py
