@@ -88,8 +88,24 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
         # surrogateescape, exactly like the parser CLI: a case with an
         # invalid byte is a legitimate reject fixture, and a strict read
         # here made that class of case structurally unpinnable (review
-        # round 2).
+        # round 2). But the repository REFUSES tracked bytes that are not
+        # valid UTF-8 (the retired-names scanner fails closed on binary,
+        # by policy — round 3 caught a committed 0xFF turning `make all`
+        # red), so such fixtures are committed as `.rhoform.escaped`:
+        # ASCII with Python-style byte escapes, decoded here to the raw
+        # bytes a third-party implementation should feed its reader.
+        if case.name.endswith(".escaped"):
+            escaped = case.read_text(encoding="ascii")
+            raw = (escaped.encode("ascii").decode("unicode_escape")
+                   .encode("latin-1"))
+            return raw.decode("utf-8", errors="surrogateescape")
         return case.read_bytes().decode("utf-8", errors="surrogateescape")
+
+    def case_stem(case):
+        name = case.name
+        if name.endswith(".rhoform.escaped"):
+            return name[:-len(".rhoform.escaped")]
+        return name[:-len(".rhoform")]
 
     problems = []
     accept_cases = sorted(accept_dir.glob("*.rhoform"))
@@ -103,13 +119,19 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
                 f"{codes or 'no tree'}"
             )
 
-    reject_cases = sorted(reject_dir.glob("*.rhoform"))
+    reject_cases = sorted(
+        list(reject_dir.glob("*.rhoform"))
+        + list(reject_dir.glob("*.rhoform.escaped"))
+    )
     expected_files = set(reject_dir.glob("*.expected.ndjson"))
     for case in reject_cases:
-        expected_path = case.with_name(
-            case.name[:-len(".rhoform")] + ".expected.ndjson")
+        stem = case_stem(case)
+        expected_path = case.with_name(stem + ".expected.ndjson")
         expected_files.discard(expected_path)
-        result = parse(read_case(case), file=case.name)
+        # The logical case name, escaped or not: the wire `file` field
+        # must not leak the encoding an implementation happens to store
+        # the fixture in.
+        result = parse(read_case(case), file=stem + ".rhoform")
         stream = result.diagnostics.render()
         if not stream:
             problems.append(
@@ -533,6 +555,31 @@ def self_test() -> int:
         cases.append(("a reject case that stopped rejecting is caught",
                       any("no diagnostics" in p for p in problems)))
         (reject / "r03_clean.rhoform").unlink()
+
+        # The escaped-fixture mechanism: an invalid-byte case committed
+        # as ASCII escapes must decode, emit against the LOGICAL file
+        # name, and round-trip byte-exactly like any other case.
+        (reject / "r04_escaped.rhoform.escaped").write_text(
+            "#pragma rhoform-syntax 0.1\\nmodule M:\\n"
+            "    r = new lib.R(c = 5\\xffF)\\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            problems, _, n_reject = parse_case_problems(
+                accept, reject, write=True)
+        escaped_expected = reject / "r04_escaped.expected.ndjson"
+        first = (json.loads(escaped_expected.read_text().splitlines()[0])
+                 if escaped_expected.is_file() else {})
+        cases.append(("an escaped invalid-byte case decodes and pins",
+                      problems == [] and n_reject == 2
+                      and first.get("code") == "RHO1002"
+                      and "not valid UTF-8" in str(
+                          first.get("params", {}).get("codepoint"))
+                      and first.get("spans", [{}])[0].get("file")
+                      == "r04_escaped.rhoform"))
+        problems, _, _ = parse_case_problems(accept, reject)
+        cases.append(("an escaped case round-trips byte-exact",
+                      problems == []))
+        (reject / "r04_escaped.rhoform.escaped").unlink()
+        escaped_expected.unlink()
 
         vec = Path(tmp) / "vectors.json"
 

@@ -533,26 +533,48 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 sink.add("RHO1012", {"literal": literal},
                          primary=span_at(match_start, match_end))
                 parse_text = _blank(parse_text, pos, match_end)
-            elif (head := _truncated_tolerance(loaded, parse_text,
-                                               line_start, pos)) is not None:
-                # `100kohm +/-` with the magnitude forgotten: no full
-                # form straddles the failure, but the operator after a
-                # quantity head is still one defect, not one per
-                # character (review round 2). The literal is malformed —
-                # RHO1010's territory in either position — rather than
-                # merely in the wrong place.
+            elif (operator := _tolerance_operator(
+                    loaded, parse_text, line_start, line_end, pos)
+                  ) is not None:
+                # A `+/-` after a quantity head that never became a full
+                # literal — magnitude forgotten, spacing wrong, operator
+                # doubled. One RHO1010 with a reason that matches the
+                # actual shape, not one unexpected-character per operator
+                # character (review rounds 2 and 3). The literal is
+                # malformed, which is true in bound and value positions
+                # alike.
+                head, blank_end, literal, reason = operator
                 sink.add(
                     "RHO1010",
-                    {"literal": parse_text[head:pos + 3],
-                     "reason": "the `+/-` operator has no magnitude "
-                               "after it"},
-                    primary=span_at(head, pos + 3),
+                    {"literal": literal, "reason": reason},
+                    primary=span_at(head, blank_end),
                 )
-                parse_text = _blank(parse_text, pos, pos + 3)
+                parse_text = _blank(parse_text, pos, blank_end)
             else:
                 sink.add("RHO1011", {"character": f"`{char}`"},
                          primary=span_at(pos, pos + 1))
-                parse_text = _blank(parse_text, pos, pos + 1)
+                content_start = line_start + _indent_of(parse_text,
+                                                        line_start)
+                if pos == content_start:
+                    # Junk LEADING a line: no statement can open here,
+                    # and blanking one character both manufactured
+                    # indentation the author never wrote and left the
+                    # residue to be blamed on innocent lines (review
+                    # round 3, the third instance of the rounds-1/2
+                    # genus). The line goes as a whole, with the same
+                    # block and suspect-parent bookkeeping as a parse
+                    # error.
+                    line_indent = _indent_of(parse_text, line_start)
+                    parent = _parent_header(parse_text, line_start,
+                                            line_indent)
+                    if parent is not None:
+                        suspect_headers.add(parent)
+                    blanked_lines[line_start] = line_indent
+                    parse_text = _blank(parse_text, line_start, line_end)
+                    parse_text = _blank_block(parse_text, line_start,
+                                              line_indent)
+                else:
+                    parse_text = _blank(parse_text, pos, pos + 1)
         except UnexpectedToken as exc:
             token = exc.token
             expected_names = set(exc.accepts or exc.expected)
@@ -739,17 +761,39 @@ def _straddling_quantity(loaded: _Loaded, text: str, line_start: int,
     return None
 
 
-def _truncated_tolerance(loaded: _Loaded, text: str, line_start: int,
-                         pos: int):
-    """Start offset of a quantity head whose `+/-` at `pos` never gets a
-    magnitude, or None. The complete-form case is _straddling_quantity's;
-    this covers the operator with nothing (usable) after it."""
+_MAGNITUDE_RUN = re.compile(r"\s*-?[0-9.]*[A-Za-z0-9/%]*")
+
+
+def _tolerance_operator(loaded: _Loaded, text: str, line_start: int,
+                        line_end: int, pos: int):
+    """(head_start, blank_end, literal, reason) for a `+/-` at `pos` whose
+    literal never became a full form, or None.
+
+    The complete-form-in-a-plain-position case is _straddling_quantity's;
+    this covers everything the operator can do wrong: magnitude missing,
+    spacing not exactly one on each side, operator doubled. The head must
+    be a quantity on the same line with only spaces between it and the
+    operator — a bare `+/-` with no head stays with the generic paths.
+    The reason names the actual shape, because a stable structured param
+    carrying a false sentence is worse than none (review round 3: the
+    'no magnitude' reason on `100kohm +/-5%`, which has one)."""
     if text[pos:pos + 3] != "+/-":
         return None
-    line = text[line_start:pos]
-    for match in loaded.quantity_re.finditer(line):
-        if match.end() == len(line) - 1 and line.endswith(" "):
-            return line_start + match.start()
+    before = text[line_start:pos]
+    for match in loaded.quantity_re.finditer(before):
+        gap = before[match.end():]
+        if gap != "" and gap.strip() == "":
+            tail = _MAGNITUDE_RUN.match(text, pos + 3)
+            blank_end = min(tail.end() if tail else pos + 3, line_end)
+            after = text[pos + 3:blank_end]
+            if not after.strip():
+                reason = "the `+/-` operator has no magnitude after it"
+            else:
+                reason = ("a tolerance is spelled "
+                          "`<value> +/- <magnitude>` with exactly one "
+                          "space on each side of the operator")
+            return (line_start + match.start(), blank_end,
+                    text[line_start + match.start():blank_end], reason)
     return None
 
 

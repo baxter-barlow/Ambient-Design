@@ -24,7 +24,16 @@ final newline.
 
 Each `<case>.rhoform` is paired with `<case>.expected.ndjson`: the
 byte-exact A1 diagnostic stream the reference implementation emits for
-it (each line conforms to `rhoform/diagnostic.schema.json`). The gate
+it (each line conforms to `rhoform/diagnostic.schema.json`).
+
+One encoding exception: a case whose bytes are DELIBERATELY not valid
+UTF-8 (the invalid-byte diagnostic class) is committed as
+`<case>.rhoform.escaped` — ASCII text with Python-style byte escapes
+(`\xff`, `\n`) — because this repository refuses tracked files that are
+not valid UTF-8 (its retired-name scanner fails closed on binary, by
+policy). The gate decodes the escapes to raw bytes before parsing; a
+third-party runner must do the same. The expected stream's `file` field
+carries the logical `<case>.rhoform` name either way. The gate
 compares bytes, so codes, spans, params, fix-its, AND canonical order
 are all pinned — a span that drifts by one byte is a red gate, which is
 the point: diagnostics are the repair loop's substrate (P2), and their

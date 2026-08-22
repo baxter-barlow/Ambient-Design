@@ -318,6 +318,45 @@ module N:
         self.assertEqual(len(diags), 1)
         self.assertEqual(diags[0]["spans"][0]["line_start"], 3)
 
+    def test_junk_as_a_blocks_only_content_stays_one_diagnostic(self):
+        # Review round 3: the RHO1011 path lacked the suspect-parent
+        # bookkeeping every other blanking path had, so a junk character
+        # alone in a block got a second diagnostic blaming the next
+        # module's keyword and erased an innocent header from the tree.
+        result = _parse(PRAGMA + "\nmodule M:\n    @\nmodule N:\n"
+                        "    port p passive\n")
+        self.assertEqual(_codes(result), ["RHO1011"])
+        modules = [
+            str(next(child for child in node.children
+                     if getattr(child, "type", None) == "FREE_NAME"))
+            for node in result.tree.find_data("module_def")
+        ]
+        self.assertEqual(modules, ["N"])
+
+    def test_junk_leading_a_line_does_not_manufacture_indentation(self):
+        # Same finding's second artifact: blanking one leading character
+        # left ` /- 5%` — indentation the author never wrote — and the
+        # next diagnostic described recovery's own edit.
+        result = _parse(PRAGMA + "\n+/- 5%\nmodule M:\n"
+                        "    port p passive\n")
+        self.assertEqual(_codes(result), ["RHO1011"])
+
+    def test_tolerance_spacing_defects_get_accurate_reasons(self):
+        # Review round 3: the operator rule was one character narrow,
+        # and `100kohm +/-5%` was told it had "no magnitude" — a false
+        # sentence pinned into a stable structured param.
+        for body, fragment in (
+            ("assert v static operating_point (OUT) at most "
+             "100kohm  +/- 5%", "exactly one space"),
+            ("r = new lib.R(x = 2V +/-5%)", "exactly one space"),
+            ("assert v static operating_point (OUT) at most "
+             "100kohm  +/-", "no magnitude"),
+        ):
+            result = _parse(PRAGMA + "\nmodule M:\n    " + body + "\n")
+            self.assertEqual(_codes(result), ["RHO1010"], body)
+            diag = json.loads(result.diagnostics.render())
+            self.assertIn(fragment, diag["params"]["reason"], body)
+
     def test_a_truncated_tolerance_is_one_malformed_literal(self):
         # Review round 2: `100kohm +/-` with no magnitude fell back to
         # one unexpected-character per operator character. It is a
