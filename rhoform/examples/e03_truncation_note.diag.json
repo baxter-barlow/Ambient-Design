@@ -1,0 +1,32 @@
+{
+  "category": "framework",
+  "code": "RHO0001",
+  "entity": null,
+  "fixits": [],
+  "message": "diagnostic output capped: showing 1 of 2; 1 suppressed (1 error(s), 0 warning(s), 0 note(s)).",
+  "params": {
+    "shown": 1,
+    "suppressed": 1,
+    "suppressed_errors": 1,
+    "suppressed_notes": 0,
+    "suppressed_warnings": 0,
+    "total": 2
+  },
+  "schema": "rhoform-diagnostic/0",
+  "severity": "note",
+  "slug": "diagnostics-truncated",
+  "spans": [
+    {
+      "byte_end": 3,
+      "byte_start": 2,
+      "col_end": 4,
+      "col_start": 3,
+      "file": "a.rhoform",
+      "label": "first suppressed diagnostic was here",
+      "line_end": 1,
+      "line_start": 1,
+      "primary": true
+    }
+  ],
+  "tier": null
+}

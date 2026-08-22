@@ -58,6 +58,7 @@ SCHEMA_ROOTS = {
     "parts": ((".part.json", "part-data.schema.json"),),
     "eval": ((".run.json", "run-result.schema.json"),),
     "lang": ((".design.json", "design-model.schema.json"),),
+    "rhoform": ((".diag.json", "diagnostic.schema.json"),),
 }
 
 NEGATIVE_DIR_NAME = "negative"
@@ -88,8 +89,9 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # The negative-control population may not shrink by accident. Failing only at
 # ZERO meant 31% of the controls could be deleted with `make all` green — and
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
-# same change that legitimately removes one.
-MINIMUM_NEGATIVE_CONTROLS = 49
+# same change that legitimately removes one. 49 -> 59 when the diagnostic
+# wire-format schema landed with its ten controls (AMB-48).
+MINIMUM_NEGATIVE_CONTROLS = 59
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
