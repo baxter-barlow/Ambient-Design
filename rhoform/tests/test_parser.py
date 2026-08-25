@@ -356,6 +356,80 @@ module N:
         result = _parse(source)
         self.assertLessEqual(len(result.diagnostics), _RECOVERY_LIMIT)
 
+    def test_the_mid_line_pragma_path_does_not_charge_for_its_shadow(self):
+        # Review round 6: the RHO1013 path blanked its line and carried
+        # none of the bookkeeping its siblings carry, so when the pragma
+        # was the block's only content recovery emptied the block and
+        # then billed the author for the emptiness it had just created.
+        # `#pragma x` rather than a well-formed one: a pragma the PRAGMA
+        # terminal matches is a token error, and only the unmatched shape
+        # reaches this character-level path.
+        result = _parse(PRAGMA + "\nmodule M:\n    #pragma x\n")
+        control = _parse(PRAGMA + "\nmodule M:\n    @\n")
+        self.assertEqual(_codes(result), ["RHO1013"])
+        self.assertEqual(len(_codes(result)), len(_codes(control)))
+
+    def test_an_unterminated_string_that_is_its_whole_line(self):
+        # Review round 6: the RHO1004 path seeded suspect_headers but
+        # never recorded blanked_lines, so consuming the file's only
+        # statement left the $END guard unable to tell recovery's own
+        # emptiness from the author's. Both pinned cases put the string
+        # mid-line, so this branch was never measured.
+        result = _parse(PRAGMA + '\n"axial 0207\n')
+        self.assertEqual(_codes(result), ["RHO1004"])
+
+    def test_an_unterminated_string_leading_a_block_takes_the_block(self):
+        # The same omission's other half: without _blank_block the
+        # orphaned body re-anchors the Indenter and draws RHO1008.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        '    "axial 0207\n        pin a passive 1\n')
+        self.assertEqual(_codes(result), ["RHO1004"])
+
+    def test_a_bracket_left_unclosed_by_recovery_is_still_found(self):
+        # Review round 6's top finding, after the verifier corrected its
+        # mechanism: the source below is BALANCED, so the pre-pass is
+        # right to pass on it. Recovery then blanks the line carrying the
+        # surplus `)`, which is what creates the unclosed `(` — and the
+        # pre-pass ran once before the loop and never saw the text it
+        # had itself mutated. One defect per line, not one per innocent
+        # line after it.
+        tail = "".join(f"    port p{index} passive\n" for index in range(12))
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        "    assert v static frequency (OUT)) at least 1kHz\n"
+                        + tail)
+        self.assertNotIn("RHO1015", _codes(result)[1:])
+        self.assertLess(len(_codes(result)), 5)
+
+    def test_a_square_bracket_is_an_illegal_character_not_a_bracket(self):
+        # Review round 6: `[` was scanned as layout-suspending, but the
+        # frozen v0.1 grammar declares no LSQB terminal, so RHO1015's
+        # message ("everything after it joins one logical line") asserts
+        # a mechanism that cannot run. Its mirror `]` was already right.
+        opened = _parse(PRAGMA + "\nmodule M:\n    port p passive [\n")
+        closed = _parse(PRAGMA + "\nmodule M:\n    port p passive ]\n")
+        self.assertEqual(_codes(opened), ["RHO1011"])
+        self.assertEqual(_codes(opened), _codes(closed))
+
+    def test_byte_level_prescan_does_not_scale_quadratically(self):
+        # Review round 6: span_from_bytes rebuilt the whole-file newline
+        # index on every call and _prescan called it once per offending
+        # byte, so a file of illegal bytes cost O(n^2) — 40 KB took 45
+        # seconds. Compilation is required to terminate in bounded work.
+        import time
+
+        def elapsed(count):
+            source = PRAGMA + "\n" + ("\u00e9" * count) + "\n"
+            start = time.perf_counter()
+            _parse(source)
+            return time.perf_counter() - start
+
+        base = elapsed(2000)
+        wide = elapsed(8000)
+        # Four times the input must not cost anything like sixteen times
+        # the work; a generous ceiling still fails hard on true O(n^2).
+        self.assertLess(wide, max(base, 0.05) * 8)
+
     def test_recovery_aborts_rather_than_repeating_itself(self):
         # The failsafe behind the bracket fix: a round that blanks
         # nothing must abort, because the next round would emit the

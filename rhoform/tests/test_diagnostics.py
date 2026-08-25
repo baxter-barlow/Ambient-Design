@@ -259,6 +259,34 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(params["suppressed"], 2)
         self.assertEqual(params["suppressed_errors"], 2)
 
+    def test_the_cap_holds_when_extend_aliases_a_diagnostic(self):
+        # Review round 6: capped() partitioned kept from suppressed by
+        # id(), but extend() splices the other collector's items BY
+        # REFERENCE, so one object can hold two slots. When the retention
+        # cut fell between two aliased occurrences both survived — the
+        # cap was exceeded and the note's own shown+suppressed no longer
+        # summed to total. Every existing cap test builds through add(),
+        # which allocates a fresh object per call, so this branch was
+        # never measured.
+        sink = Diagnostics(cap=5)
+        for offset in range(4):
+            sink.add("RHO1004", {}, primary=_span(offset, offset + 1))
+        aliased = Diagnostics()
+        aliased.add("RHO1004", {}, primary=_span(20, 21))
+        sink.extend(aliased)
+        sink.extend(aliased)
+        for offset in (40, 41, 42):
+            sink.add("RHO1004", {}, primary=_span(offset, offset + 1))
+
+        emitted = sink.capped()
+        note = emitted[-1]
+        self.assertEqual(note.code, "RHO0001")
+        self.assertEqual(len(emitted), 6)  # cap + the truncation note
+        params = dict(note.params)
+        self.assertEqual(params["shown"], len(emitted) - 1)
+        self.assertEqual(params["shown"] + params["suppressed"],
+                         params["total"])
+
     def test_the_cap_retains_errors_over_warnings_and_notes(self):
         sink = Diagnostics(cap=2)
         sink.add("RHO4007", {"domain_ids": ["a", "b"]},

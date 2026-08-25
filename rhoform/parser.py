@@ -500,39 +500,80 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     suspect_headers: set[int] = set()
     baseline = len(sink)
 
-    # Unclosed brackets first, statically: inside `(` or `[` line breaks
-    # are not layout, so one forgotten closer swallows every later line
-    # into one logical line and the parse errors blame those innocent
-    # lines — and, worse, the EOF-flushed DEDENT then lands on text
-    # recovery already blanked, where blanking makes no progress (review
-    # round 4 measured eighteen byte-identical diagnostics). The prototype
-    # lexer had exactly this check; the registry now has its code. The
-    # statement's WRAPPED CONTINUATION goes with it — the shadow-block
-    # rule every other blanking path follows — or each deeper-indented
-    # parameter line draws its own spurious diagnostic once the opener
-    # that suspended layout is gone (review round 5).
-    for _ in range(_RECOVERY_LIMIT):
-        unclosed = _first_unclosed_bracket(parse_text)
-        if unclosed is None:
-            break
-        opener, bracket = unclosed
-        opener_line_start, opener_line_end = _line_bounds(parse_text,
-                                                          opener)
-        line_indent = _indent_of(parse_text, opener_line_start)
-        sink.add("RHO1015", {"bracket": bracket},
-                 primary=span_at(opener, opener + 1))
-        parse_text = _blank(parse_text, opener, opener_line_end)
-        parse_text = _blank_block(parse_text, opener_line_start,
-                                  line_indent)
-        if not parse_text[opener_line_start:opener_line_end].strip():
-            # The opener led its line, so the whole statement is gone
-            # and its enclosing block may now be empty — recovery's
-            # emptiness, silenced by the suspects rule like any other.
-            blanked_lines[opener_line_start] = line_indent
-            parent = _parent_header(parse_text, opener_line_start,
-                                    line_indent)
-            if parent is not None:
-                suspect_headers.add(parent)
+    def consume(start: int, end: int, *, destroys_statement: bool) -> None:
+        """Blank [start, end) and carry EVERY piece of shadow bookkeeping.
+
+        THE ONE BLANKING PATH. Six of the eighteen findings across five
+        review rounds were a single shape: a handler blanked text and
+        carried some but not all of the bookkeeping its siblings carried.
+        The rule was written in comments at six call sites, so every new
+        site re-derived it and one more site got it wrong. It lives in one
+        function now, where a handler cannot carry a subset of it.
+
+        Three steps:
+
+        1. The span is blanked.
+        2. The statement's subordinate block goes with it — always when
+           the blank destroyed the statement outright, and otherwise when
+           the blank emptied the line, which destroys it just as surely.
+           A block belongs to its statement; an orphan re-anchors the
+           Indenter and draws one diagnostic per line (review round 1).
+        3. When the line is now empty it is recorded in `blanked_lines`,
+           so the $END guard can tell recovery's own emptiness from the
+           author's, and its enclosing header joins `suspect_headers`, so
+           the block WE emptied is never charged to the author.
+
+        A blank that leaves residue on the line takes step 1 alone: the
+        statement still stands, and the next round diagnoses what is left
+        of it (this is what pins r12's second diagnostic).
+        """
+        nonlocal parse_text
+        line_start, line_end = _line_bounds(parse_text, start)
+        # Read BEFORE blanking: an all-space line misreports its depth.
+        indent = _indent_of(parse_text, line_start)
+        parse_text = _blank(parse_text, start, end)
+        emptied = not parse_text[line_start:line_end].strip()
+        if destroys_statement or emptied:
+            parse_text = _blank_block(parse_text, line_start, indent)
+        if not emptied:
+            return
+        blanked_lines[line_start] = indent
+        parent = _parent_header(parse_text, line_start, indent)
+        if parent is not None:
+            suspect_headers.add(parent)
+
+    def drain_unclosed_brackets() -> None:
+        """Report and blank every unclosed `(`, before each parse attempt.
+
+        Inside `(` a line break is not layout, so one forgotten closer
+        swallows every later line into a single logical line and the parse
+        errors blame those innocent lines — and the EOF-flushed DEDENT
+        then lands on text recovery already blanked, where blanking makes
+        no progress (review round 4 measured eighteen byte-identical
+        diagnostics). The prototype lexer had exactly this check.
+
+        On EVERY round, not once up front: a file that is balanced as
+        written can be left unbalanced by recovery blanking the line that
+        carried the surplus closer, and a pre-pass that ran before the
+        loop never saw the text it had itself mutated — the genus's
+        "verify against mutated state" half (review round 6).
+        """
+        while True:
+            unclosed = _first_unclosed_bracket(parse_text)
+            if unclosed is None:
+                return
+            opener, bracket = unclosed
+            _, opener_line_end = _line_bounds(parse_text, opener)
+            sink.add("RHO1015", {"bracket": bracket},
+                     primary=span_at(opener, opener + 1))
+            if len(sink) - baseline >= _RECOVERY_LIMIT:
+                return
+            # The statement's WRAPPED CONTINUATION goes with it: inside a
+            # bracket those deeper-indented lines are the same logical
+            # line, and each draws its own spurious diagnostic once the
+            # opener that suspended layout is gone (review round 5).
+            consume(opener, opener_line_end, destroys_statement=True)
+
     # Iterations, not diagnostics: silent blanking rounds (orphaned blocks,
     # emptied headers) consume iterations without emitting, and every round
     # blanks at least one character, so line-count-plus-limit terminates.
@@ -552,6 +593,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # something; this is the failsafe for the paths that forget.
             return None
         previous_text = parse_text
+        drain_unclosed_brackets()
         try:
             return loaded.parser.parse(parse_text)
         except UnexpectedCharacters as exc:
@@ -567,21 +609,13 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 # only the quote would re-parse its words as junk names
                 # and charge the author once per word.
                 sink.add("RHO1004", {}, primary=span_at(pos, line_end))
-                line_indent = _indent_of(parse_text, line_start)
-                parse_text = _blank(parse_text, pos, line_end)
-                if not parse_text[line_start:line_end].strip():
-                    # The literal WAS the line: its enclosing block may
-                    # now be empty, and that emptiness is recovery's.
-                    parent = _parent_header(
-                        parse_text, line_start, line_indent)
-                    if parent is not None:
-                        suspect_headers.add(parent)
+                consume(pos, line_end, destroys_statement=False)
             elif re.match(r"#pragma(?![A-Za-z0-9_])", parse_text[pos:]):
                 # A `#pragma` the lexer refuses is mid-line (the header
                 # pre-check settled line-initial ones): one diagnostic
                 # for the frozen decision, not one per character of it.
                 sink.add("RHO1013", {}, primary=span_at(pos, line_end))
-                parse_text = _blank(parse_text, pos, line_end)
+                consume(pos, line_end, destroys_statement=False)
             elif quantity_tail is not None:
                 # ` +/- 1%` after a plain quantity lexes as nothing, so
                 # the generic path charged one diagnostic per character
@@ -592,7 +626,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 sink.add("RHO1012",
                          {"literal": author_text(match_start, match_end)},
                          primary=span_at(match_start, match_end))
-                parse_text = _blank(parse_text, pos, match_end)
+                consume(pos, match_end, destroys_statement=False)
             elif (operator := _tolerance_operator(
                     loaded, parse_text, line_start, line_end, pos)
                   ) is not None:
@@ -610,7 +644,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                      "reason": reason},
                     primary=span_at(head, blank_end),
                 )
-                parse_text = _blank(parse_text, pos, blank_end)
+                consume(pos, blank_end, destroys_statement=False)
             else:
                 # A mid-line `+/-` with no quantity head (a string head,
                 # say) is still ONE junk unit, not three characters
@@ -630,17 +664,9 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                     # genus). The line goes as a whole, with the same
                     # block and suspect-parent bookkeeping as a parse
                     # error.
-                    line_indent = _indent_of(parse_text, line_start)
-                    parent = _parent_header(parse_text, line_start,
-                                            line_indent)
-                    if parent is not None:
-                        suspect_headers.add(parent)
-                    blanked_lines[line_start] = line_indent
-                    parse_text = _blank(parse_text, line_start, line_end)
-                    parse_text = _blank_block(parse_text, line_start,
-                                              line_indent)
+                    consume(line_start, line_end, destroys_statement=True)
                 else:
-                    parse_text = _blank(parse_text, pos, pos + len(unit))
+                    consume(pos, pos + len(unit), destroys_statement=False)
         except UnexpectedToken as exc:
             token = exc.token
             expected_names = set(exc.accepts or exc.expected)
@@ -692,13 +718,8 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                                  "expected": expected},
                                 primary=arrival,
                             )
-                    indent = _indent_of(parse_text, header)
-                    parent = _parent_header(parse_text, header, indent)
-                    if parent is not None:
-                        suspect_headers.add(parent)
-                    blanked_lines[header] = indent
                     start, end = _line_bounds(parse_text, header)
-                    parse_text = _blank(parse_text, start, end)
+                    consume(start, end, destroys_statement=True)
                     continue
 
             if token.type == "$END":
@@ -723,12 +744,6 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                     token.end_pos if token.end_pos is not None else pos + 1,
                 ),
             )
-            indent = _indent_of(parse_text, start)
-            parent = _parent_header(parse_text, start, indent)
-            if parent is not None:
-                suspect_headers.add(parent)
-            blanked_lines[start] = indent
-            parse_text = _blank(parse_text, start, end)
             # The blanked statement's subordinate block goes with it,
             # UNCONDITIONALLY: a reactive rule that waited for the block's
             # INDENT to be rejected missed the case where the broken
@@ -737,7 +752,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # diagnostic per line (review round 1). A statement's block
             # belongs to the statement; when the line had no block, this
             # blanks nothing.
-            parse_text = _blank_block(parse_text, start, indent)
+            consume(start, end, destroys_statement=True)
         except DedentError:
             # The Indenter raises without a position, so the offending
             # line is re-derived by walking the layout the way it does.
@@ -754,15 +769,10 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # than either convention alone.
             sink.add("RHO1008", {"column": indent + 1},
                      primary=span_at(start + indent, end))
-            parent = _parent_header(parse_text, start, indent)
-            if parent is not None:
-                suspect_headers.add(parent)
-            blanked_lines[start] = indent
-            parse_text = _blank(parse_text, start, end)
             # Its block goes with it, same rule as a parse-error line:
             # round 2's review found the flood the round-1 fix removed
             # from the UnexpectedToken path alive and well on this one.
-            parse_text = _blank_block(parse_text, start, indent)
+            consume(start, end, destroys_statement=True)
         except Exception:  # pragma: no cover - lark internals
             return None
     return None  # pragma: no cover - budget exhausted without emitting
@@ -790,9 +800,9 @@ def _first_bad_dedent(text: str):
                 in_string = True
             elif char == "#":
                 break
-            elif char in "([":
+            elif char == "(":
                 depth += 1
-            elif char in ")]":
+            elif char == ")":
                 depth = max(0, depth - 1)
         if in_layout and stripped and not stripped.startswith("#"):
             indent = _indent_of(text, start)
@@ -863,11 +873,21 @@ def _tolerance_operator(loaded: _Loaded, text: str, line_start: int,
 
 
 def _first_unclosed_bracket(text: str):
-    """(offset, bracket) of the first `(` or `[` never closed, or None.
+    """(offset, bracket) of the first `(` never closed, or None.
 
     Mirrors the lexer's reality: strings end at their line, comments run
     to end of line, and a closer with no opener is someone else's error
-    (the depth floors at zero, matching the prototype lexer)."""
+    (the depth floors at zero, matching the prototype lexer).
+
+    `(` only. The frozen v0.1 grammar declares no LSQB/RSQB terminal, so
+    `[` is simply an illegal character — the Indenter never sees one and
+    layout is never suspended by it. Scanning `[` here relabelled that
+    illegal character as an unclosed bracket and made RHO1015 assert a
+    mechanism that cannot run, while its mirror `]` was already reported
+    correctly as RHO1011 (review round 6). `_INDENTER` still lists
+    LSQB/RSQB because it is anchored byte-for-byte to the frozen
+    lang/grammar/ source of truth; those entries are inert, because the
+    token types they name never occur."""
     stack: list[tuple[int, str]] = []
     position = 0
     while position < len(text):
@@ -881,9 +901,9 @@ def _first_unclosed_bracket(text: str):
                 in_string = True
             elif char == "#":
                 break
-            elif char in "([":
+            elif char == "(":
                 stack.append((index, char))
-            elif char in ")]" and stack:
+            elif char == ")" and stack:
                 stack.pop()
         position = end + 1
     return stack[0] if stack else None
