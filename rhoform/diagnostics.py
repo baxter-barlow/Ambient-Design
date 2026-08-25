@@ -100,6 +100,30 @@ class Span:
         }
 
 
+# One-entry memo of the newline index, keyed by object identity. Building
+# it is O(file), and the byte-level prescan asks for one span per offending
+# byte, so recomputing it per call made a file of illegal bytes cost
+# O(n^2) — 40 KB took 45 seconds, and compilation is required to terminate
+# in bounded work (review round 6). A pure memo: the same `data` always
+# yields the same list, so nothing observable depends on whether it hit.
+# The entry holds a strong reference, which is what makes the identity
+# test safe — the object cannot be freed and its id reused while cached.
+_LINE_INDEX: tuple[bytes, list[int]] | None = None
+
+
+def _line_starts(data: bytes) -> list[int]:
+    global _LINE_INDEX
+    cached = _LINE_INDEX
+    if cached is not None and cached[0] is data:
+        return cached[1]
+    starts = [0]
+    for index, byte in enumerate(data):
+        if byte == 0x0A:
+            starts.append(index + 1)
+    _LINE_INDEX = (data, starts)
+    return starts
+
+
 def span_from_bytes(file: str, data: bytes, byte_start: int,
                     byte_end: int) -> Span:
     """A Span over `data` with line/col denormalized from the byte offsets.
@@ -119,10 +143,7 @@ def span_from_bytes(file: str, data: bytes, byte_start: int,
         raise ValueError(
             f"span [{byte_start}, {byte_end}) outside 0..{len(data)}"
         )
-    starts = [0]
-    for i, byte in enumerate(data):
-        if byte == 0x0A:
-            starts.append(i + 1)
+    starts = _line_starts(data)
 
     def locate(offset: int) -> tuple[int, int]:
         line_index = bisect_right(starts, offset) - 1
@@ -376,20 +397,30 @@ class Diagnostics:
         ordered = sorted(self._items, key=Diagnostic.sort_key)
         if len(ordered) <= self._cap:
             return ordered
+        # Retention is decided by POSITION in `ordered`, never by object
+        # identity. `extend` splices the other collector's items by
+        # reference, so one Diagnostic can occupy two positions; an
+        # id()-keyed set kept both while only one consumed a cap slot,
+        # which overshot the cap and left the note's shown+suppressed no
+        # longer summing to total (review round 6).
         by_retention = sorted(
-            ordered, key=lambda d: (_SEVERITY_RANK[d.severity],
-                                    Diagnostic.sort_key(d))
+            range(len(ordered)),
+            key=lambda i: (_SEVERITY_RANK[ordered[i].severity],
+                           Diagnostic.sort_key(ordered[i])),
         )
-        retained = set(map(id, by_retention[:self._cap]))
-        kept = [d for d in ordered if id(d) in retained]
-        suppressed = [d for d in ordered if id(d) not in retained]
+        retained = set(by_retention[:self._cap])
+        kept = [d for i, d in enumerate(ordered) if i in retained]
+        suppressed = [d for i, d in enumerate(ordered) if i not in retained]
         tallies = {"error": 0, "warning": 0, "note": 0}
         for diagnostic in suppressed:
             tallies[diagnostic.severity] += 1
         note = Diagnostic.new(
             "RHO0001",
             {
-                "shown": self._cap,
+                # What was ACTUALLY emitted, not what the cap allows: a
+                # note whose own arithmetic does not close is worse than
+                # no note at all.
+                "shown": len(kept),
                 "total": len(ordered),
                 "suppressed": len(suppressed),
                 "suppressed_errors": tallies["error"],

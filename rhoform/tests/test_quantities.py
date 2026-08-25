@@ -3,12 +3,34 @@ form-preserving — plus the parse semantics the spec section states.
 The conformance vectors in spec/conformance/ re-check the same properties
 over the published vector table; these tests pin the engine itself."""
 
+import decimal
 import unittest
 from decimal import Decimal
 
 from rhoform.quantities import (
     FORMS, QuantityError, UNITS, normal_form, parse_quantity,
 )
+
+
+class AmbientContextTest(unittest.TestCase):
+    """Review round 6: _plain() called Decimal.normalize() outside the
+    module's 60-digit local context, so the normal form rounded at the
+    AMBIENT context's precision — process-global mutable state no caller
+    of normal_form() controls. Both checks that claimed to pin
+    value-exactness measured the wrong population: the precision test
+    used 20 significant digits, safely under the default 28, and the
+    idempotence checks compare key() to key(), so both sides round
+    identically and the comparison is blind to the loss."""
+
+    def test_a_literal_past_the_default_precision_is_not_rounded(self):
+        literal = "1.0000000000000000000000000001ohm"
+        self.assertEqual(normal_form(literal), literal)
+
+    def test_the_normal_form_ignores_the_ambient_decimal_context(self):
+        literal = "1.0000000000000000000000000001ohm"
+        with decimal.localcontext() as ctx:
+            ctx.prec = 5
+            self.assertEqual(normal_form(literal), literal)
 
 
 class ParseTest(unittest.TestCase):

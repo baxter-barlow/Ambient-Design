@@ -416,14 +416,42 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
     return problems
 
 
-def main(write=False) -> int:
+def unavailable_reason():
+    """Why the gate cannot run, or None when both pins are present.
+
+    Two dependencies, two failure SHAPES. A missing jsonschema raises
+    ImportError at import time. A missing lark does not: rhoform.parser
+    imports fine (it does not import lark at module scope), and the
+    absence surfaces only when `_load()` raises LarkUnavailable, which
+    subclasses RuntimeError because the parser reports it as a runtime
+    condition. A guard catching ImportError alone let the lark case
+    through as an uncaught traceback and exit 1 — reporting an
+    environment problem as a conformance violation, the opposite of the
+    "an unavailable gate is not a pass" rule this file states four times
+    (review round 6).
+
+    The obvious test misses it: with no pins installed at all, jsonschema
+    raises first and the gate exits 2, so the lark branch is never
+    reached. The self-test therefore plants the failure directly.
+    """
     try:
         import jsonschema  # noqa: F401
-        from rhoform import parser as _parser  # noqa: F401
-        _parser._load()
+        from rhoform import parser as _parser
+        from rhoform.parser import LarkUnavailable
     except ImportError as exc:
+        return str(exc)
+    try:
+        _parser._load()
+    except (ImportError, LarkUnavailable) as exc:
+        return str(exc)
+    return None
+
+
+def main(write=False) -> int:
+    reason = unavailable_reason()
+    if reason is not None:
         print(
-            f"conformance: UNAVAILABLE: {exc}. Install the pins from "
+            f"conformance: UNAVAILABLE: {reason}. Install the pins from "
             "toolchain/versions.yaml (lark==1.3.0, jsonschema==4.26.0); "
             "an unavailable gate is not a pass.",
             file=sys.stderr,
@@ -484,12 +512,9 @@ def self_test() -> int:
     import shutil
     import tempfile
 
-    try:
-        import jsonschema  # noqa: F401
-        from rhoform import parser as _parser
-        _parser._load()
-    except ImportError as exc:
-        print(f"conformance: UNAVAILABLE: {exc}", file=sys.stderr)
+    reason = unavailable_reason()
+    if reason is not None:
+        print(f"conformance: UNAVAILABLE: {reason}", file=sys.stderr)
         return 2
 
     cases = []
@@ -797,6 +822,25 @@ def self_test() -> int:
             globals()[floor_name] = real_floor
         cases.append((f"the {floor_name} floor is WIRED into main()",
                       wired == 1 and "below the floor" in err.getvalue()))
+
+    # A missing lark must exit 2, not 1. Planted rather than discovered:
+    # uninstalling both pins hits the jsonschema branch first, so the
+    # only way to measure THIS branch is to make _load() fail on its own.
+    from rhoform import parser as _parser
+    from rhoform.parser import LarkUnavailable
+
+    def _no_lark():
+        raise LarkUnavailable("lark is not installed (planted)")
+
+    real_load, _parser._load = _parser._load, _no_lark
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            absent = main()
+    finally:
+        _parser._load = real_load
+    cases.append(("a missing lark exits 2 (UNAVAILABLE), never 1",
+                  absent == 2 and "UNAVAILABLE" in err.getvalue()))
 
     failures = 0
     for name, ok in cases:

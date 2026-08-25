@@ -37,9 +37,8 @@ an indentation matching no open level is an error.
 Blank lines and comment-only lines carry no layout: they neither open
 nor close a block, wherever they appear.
 
-Inside parentheses `(` `)` and square brackets `[` `]`, line breaks and
-indentation are not layout — a parameter list may wrap. Brackets MUST
-balance by end of file.
+Inside parentheses `(` `)`, line breaks and indentation are not layout —
+a parameter list may wrap. Parentheses MUST balance by end of file.
 
 ## Comments
 

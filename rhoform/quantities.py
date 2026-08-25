@@ -164,10 +164,30 @@ def _plain(value: Decimal) -> str:
     `normalize()` strips trailing zeros but renders 1000 as `1E+3`;
     `format(..., "f")` re-expands it. Zero is special-cased because
     `Decimal("0.0").normalize()` is `0` but `-0` must not print a sign.
+
+    `normalize()` is a CONTEXT operation, so it rounds to the ambient
+    context's precision — 28 by default. Called bare it made the normal
+    form depend on process-global mutable state that no caller of
+    `normal_form()` controls, and silently rounded any literal past 28
+    significant digits: `1.0000000000000000000000000001ohm` normalized to
+    `1ohm`, discarding the whole fractional part (review round 6). Every
+    call site sits outside the module's own `localcontext` blocks, so the
+    context belongs here, on the operation that needs it.
+
+    The precision is the value's own digit count whenever that exceeds
+    the module's, so the operation cannot round whatever it is handed.
+    That is what makes this module's "normalization NEVER rounds" and the
+    spec's T3 value-exactness true rather than merely intended — and both
+    checks that claimed to pin it measured the wrong population: the
+    precision test used 20 significant digits, comfortably under the
+    default 28, and the idempotence checks compare `key()` to `key()`,
+    where both sides round identically.
     """
     if value == 0:
         return "0"
-    return format(value.normalize(), "f")
+    with localcontext() as ctx:
+        ctx.prec = max(_PRECISION, len(value.as_tuple().digits))
+        return format(value.normalize(), "f")
 
 
 def dimension_of(unit: str) -> str:

@@ -14,6 +14,13 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# The repository root too: this file imports `rhoform` as well as `grammar`,
+# and the command lang/README.md publishes runs from lang/, where only the
+# Makefile's cwd happened to make the production package importable. The
+# suite-count test reconciles the README's numbers against discovery but
+# loads the suite in-process from the root, so it never ran the published
+# command and the six errors it produced were invisible (review round 6).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 try:
     import lark  # noqa: F401
