@@ -32,6 +32,30 @@ class AmbientContextTest(unittest.TestCase):
             ctx.prec = 5
             self.assertEqual(normal_form(literal), literal)
 
+    def test_no_precision_boundary_survives_anywhere_in_the_module(self):
+        # Review round 7: making `_plain()` adaptive MOVED the 28-digit
+        # boundary to 60 rather than removing it, because to_base(),
+        # parse_quantity() and _canonical_pair() still pinned the floor
+        # flat. A 70-digit literal collapsed to `1ohm` exactly as a
+        # 30-digit one used to. The assertion compares against the
+        # LITERAL, not against another key() — the conformance gate's
+        # value-exactness leg compares key() to key(), so both sides
+        # round identically and it is structurally blind to this.
+        for digits in (28, 40, 60, 61, 70, 120, 300):
+            literal = "1." + "0" * (digits - 2) + "1ohm"
+            self.assertEqual(normal_form(literal), literal, f"{digits} digits")
+
+    def test_deep_precision_survives_a_unit_shift_and_a_tolerance(self):
+        # The paths beyond _plain(): a power-of-ten shift through
+        # to_base()/_canonical_pair(), and the one place two
+        # author-supplied numbers are multiplied together.
+        deep = "1." + "0" * 68 + "1"
+        self.assertEqual(normal_form(deep + "kohm"), deep + "kohm")
+        toleranced = f"{deep}ohm +/- {deep}%"
+        self.assertEqual(normal_form(toleranced), toleranced)
+        self.assertEqual(normal_form(normal_form(toleranced)),
+                         normal_form(toleranced))
+
 
 class ParseTest(unittest.TestCase):
     def test_the_five_forms_parse_to_their_form_names(self):
