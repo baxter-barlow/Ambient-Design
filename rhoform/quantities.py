@@ -110,6 +110,27 @@ _QUANTITY_RE = re.compile(
 
 _PRECISION = 60
 
+
+def _wide_enough(*values: Decimal) -> int:
+    """A precision that cannot round arithmetic over `values`.
+
+    `_PRECISION` is a FLOOR, not a ceiling. Pinning it flat meant a
+    literal past 60 significant digits rounded exactly the way a literal
+    past 28 did before this was adaptive: `1.0...01ohm` with 70 digits
+    became `1ohm`, the whole fractional part gone. Round 6 fixed the
+    28-digit boundary in `_plain()` alone, which MOVED the boundary
+    rather than removing it, and round 7 found it again one order of
+    magnitude out — the same half-fix shape it caught in the prescan.
+
+    Summing the operands' digit counts is the exact bound for a product
+    (the one place two author-supplied numbers meet is `value` times a
+    percentage tolerance) and is generous for the power-of-ten shifts
+    that make up the rest of the arithmetic, which move the exponent and
+    neither create nor destroy significant digits.
+    """
+    return max(_PRECISION,
+               sum(len(value.as_tuple().digits) for value in values))
+
 FORMS = ("exact", "tolerance-absolute", "tolerance-percent",
          "interval-bracketed", "interval-bare")
 
@@ -186,7 +207,7 @@ def _plain(value: Decimal) -> str:
     if value == 0:
         return "0"
     with localcontext() as ctx:
-        ctx.prec = max(_PRECISION, len(value.as_tuple().digits))
+        ctx.prec = _wide_enough(value)
         return format(value.normalize(), "f")
 
 
@@ -205,7 +226,7 @@ def to_base(value: Decimal, unit: str) -> Decimal:
     if dimension == "temperature":
         return value
     with localcontext() as ctx:
-        ctx.prec = _PRECISION
+        ctx.prec = _wide_enough(value, multiplier)
         return +(value * multiplier)
 
 
@@ -224,8 +245,16 @@ def parse_quantity(text: str) -> Quantity:
     dimension = dimension_of(unit)
     value = Decimal(match.group("value"))
 
+    # Every number the literal carries, measured before the context is
+    # opened: `Decimal(str)` is exact and context-independent, so this
+    # cannot itself round. The widest arithmetic here is value times a
+    # percentage tolerance, which is why the digit counts are summed.
     with localcontext() as ctx:
-        ctx.prec = _PRECISION
+        ctx.prec = _wide_enough(*(
+            Decimal(match.group(name))
+            for name in ("value", "tol", "lo_v", "hi_v", "to_v")
+            if match.group(name) is not None
+        ))
 
         if match.group("tol") is not None:
             tol_unit = match.group("tol_unit")
@@ -325,7 +354,7 @@ def _canonical_pair(value: Decimal, unit: str) -> str:
         base = next(sym for sym, mult in ladder if mult == 1)
         return "0" + base
     with localcontext() as ctx:
-        ctx.prec = _PRECISION
+        ctx.prec = _wide_enough(value, UNITS[unit][1])
         base_value = +(value * UNITS[unit][1])
         chosen = None
         for symbol, mult in ladder:

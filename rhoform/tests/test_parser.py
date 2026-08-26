@@ -385,21 +385,68 @@ module N:
                         '    "axial 0207\n        pin a passive 1\n')
         self.assertEqual(_codes(result), ["RHO1004"])
 
-    def test_a_bracket_left_unclosed_by_recovery_is_still_found(self):
-        # Review round 6's top finding, after the verifier corrected its
-        # mechanism: the source below is BALANCED, so the pre-pass is
-        # right to pass on it. Recovery then blanks the line carrying the
-        # surplus `)`, which is what creates the unclosed `(` — and the
-        # pre-pass ran once before the loop and never saw the text it
-        # had itself mutated. One defect per line, not one per innocent
-        # line after it.
+    def test_a_bracket_orphaned_by_recovery_is_blanked_not_blamed(self):
+        # Review rounds 6 and 7, together. The source below is BALANCED as
+        # written, so no RHO1015 may be emitted for it — round 7 measured
+        # 49 false ones over 7,848 bracket-balanced mutants after round 6
+        # moved the drain inside the loop and let it report there. But
+        # recovery DOES blank the line carrying the surplus `)`, which
+        # orphans the opener, and leaving that opener in place floods the
+        # rest of the file (round 4 measured eighteen). Blank it, say
+        # nothing: suppressing the flood never needed a diagnostic.
         tail = "".join(f"    port p{index} passive\n" for index in range(12))
         result = _parse(PRAGMA + "\nmodule M:\n"
                         "    r1 = new lib.R(resistance = 100kohm\n"
                         "    assert v static frequency (OUT)) at least 1kHz\n"
                         + tail)
-        self.assertNotIn("RHO1015", _codes(result)[1:])
+        self.assertNotIn("RHO1015", _codes(result))
         self.assertLess(len(_codes(result)), 5)
+
+    def test_a_balanced_wrapped_call_never_draws_an_unclosed_bracket(self):
+        # Accept fixture a07 minus one comma — the single most common
+        # slip in the one construct the language lets wrap. The `(` on
+        # line 3 IS closed on line 5, so RHO1015's message would be a
+        # false statement about the author's bytes, and because the sink
+        # sorts by source order it would land FIRST: a repair loop reading
+        # top-down inserts `)` on line 3 and destroys the statement.
+        result = _parse(PRAGMA + "\nmodule Wrapped:\n"
+                        "    r1 = new rhoform.lib.passive.Resistor(\n"
+                        "        resistance = 100kohm +/- 1%\n"
+                        "        count = 8)\n")
+        self.assertNotIn("RHO1015", _codes(result))
+        self.assertEqual(_codes(result), ["RHO1006"])
+
+    def test_a_broken_wrapped_call_does_not_flood_the_lines_below(self):
+        # A missing comma inside a wrapped call, with a block under it.
+        # At 63e4256 this drew FIVE diagnostics: the real one at `count`
+        # and four more blaming `pin`, `pn` and `port` for not being `)`
+        # or `,` — the joined-line flood. It must not draw a false
+        # RHO1015 either (round 7). One diagnostic, naming the real
+        # defect; the statement's block is its shadow under the round-1
+        # rule, so the `pn` typo waits for the next compile.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(\n"
+                        "        resistance = 10kohm\n"
+                        "        count = 8):\n"
+                        "        pin a passive 1\n"
+                        "        pn b passive 2\n"
+                        "    port vin power_in\n")
+        self.assertEqual(_codes(result), ["RHO1006"])
+        self.assertIn("count", result.diagnostics.render())
+
+    def test_an_unterminated_string_inside_a_call_is_a_string_error(self):
+        # Review round 7: the bracket scanner's `in_string` flag treats an
+        # unterminated string as ending at the newline, so it swallowed
+        # the `)` that closes the call and reported the `(` as unclosed.
+        # RHO1004 was never emitted, and applying RHO1015's advice —
+        # adding a `)` — reproduced the identical diagnostic, so a repair
+        # loop could not converge. The lexer's real behaviour is an error
+        # at the opening quote; STRING cannot span a newline.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        '    r1 = new lib.R(mpn = "RC0402)\n'
+                        "    port vin power_in\n")
+        self.assertIn("RHO1004", _codes(result))
+        self.assertNotIn("RHO1015", _codes(result))
 
     def test_a_square_bracket_is_an_illegal_character_not_a_bracket(self):
         # Review round 6: `[` was scanned as layout-suspending, but the
@@ -418,17 +465,31 @@ module N:
         # seconds. Compilation is required to terminate in bounded work.
         import time
 
-        def elapsed(count):
-            source = PRAGMA + "\n" + ("\u00e9" * count) + "\n"
+        # Round 7 found it STILL quadratic in line length, and found this
+        # test unable to say so: the `max(base, 0.05)` floor absorbed a
+        # 3.5x-per-doubling curve. The floor is gone, and both shapes are
+        # measured \u2014 one long line and the same byte count spread over
+        # many lines \u2014 because the per-line term is the one that hid.
+        def elapsed(build, count):
             start = time.perf_counter()
-            _parse(source)
+            _parse(build(count))
             return time.perf_counter() - start
 
-        base = elapsed(2000)
-        wide = elapsed(8000)
-        # Four times the input must not cost anything like sixteen times
-        # the work; a generous ceiling still fails hard on true O(n^2).
-        self.assertLess(wide, max(base, 0.05) * 8)
+        shapes = {
+            "one long line":
+                lambda n: PRAGMA + "\n" + ("\u00e9" * n) + "\n",
+            "many short lines":
+                lambda n: PRAGMA + "\n" + ("\u00e9\n" * n),
+        }
+        for name, build in shapes.items():
+            elapsed(build, 500)  # warm the interpreter, discard
+            small = elapsed(build, 4000)
+            large = elapsed(build, 16000)
+            # Four times the work: linear is ~4x, quadratic ~16x. The 8x
+            # ceiling leaves headroom for timing noise on a loaded machine
+            # and still fails hard on a quadratic curve.
+            self.assertLess(large, max(small, 1e-4) * 8,
+                            f"{name}: {small:.4f}s -> {large:.4f}s")
 
     def test_recovery_aborts_rather_than_repeating_itself(self):
         # The failsafe behind the bracket fix: a round that blanks

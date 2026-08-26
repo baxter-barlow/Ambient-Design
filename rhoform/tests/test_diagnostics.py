@@ -259,6 +259,42 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(params["suppressed"], 2)
         self.assertEqual(params["suppressed_errors"], 2)
 
+    def test_the_column_index_agrees_with_decoding_at_every_offset(self):
+        # Review round 7: the per-line column table is built with an
+        # incremental decoder, which is NOT trivially the same thing as
+        # decoding each prefix. This pins the equivalence exhaustively —
+        # every offset of every case, against the exact expression the
+        # fallback path uses — because a column is byte-exactly pinned by
+        # the conformance suite and a silent drift would move every span
+        # after it.
+        from rhoform.diagnostics import span_from_bytes
+
+        cases = [
+            b"plain ascii line\n",
+            "résistance = 100kΩ\n".encode("utf-8"),      # valid multi-byte
+            b"a\xc3\n",                                   # truncated 2-byte
+            b"a\xe2\x82\n",                               # truncated 3-byte
+            b"a\xff\xfe b\n",                             # invalid bytes
+            b"\xf0\x9f\x92\xa9 four-byte\n",              # 4-byte codepoint
+            b"mixed \xc3\xa9 \xff \xe2\x82\xac end\n",
+            b"no trailing newline \xc3\xa9",
+            b"\n\n\xc3\xa9\n",                            # empty lines
+        ]
+        for data in cases:
+            starts = [0] + [i + 1 for i, b in enumerate(data) if b == 0x0A]
+            for offset in range(len(data) + 1):
+                if offset == len(data) and offset in starts:
+                    continue
+                span = span_from_bytes("f.rhoform", data, offset, offset)
+                line_index = max(i for i, s in enumerate(starts)
+                                 if s <= offset)
+                exact = len(
+                    data[starts[line_index]:offset].decode("utf-8", "replace")
+                ) + 1
+                self.assertEqual(
+                    span.col_start, exact,
+                    f"{data!r} offset {offset}: {span.col_start} != {exact}")
+
     def test_the_cap_holds_when_extend_aliases_a_diagnostic(self):
         # Review round 6: capped() partitioned kept from suppressed by
         # id(), but extend() splices the other collector's items BY

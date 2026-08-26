@@ -542,8 +542,8 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
         if parent is not None:
             suspect_headers.add(parent)
 
-    def drain_unclosed_brackets() -> None:
-        """Report and blank every unclosed `(`, before each parse attempt.
+    def drain_unclosed_brackets(*, report: bool) -> None:
+        """Blank every unclosed `(`. Name it only on the author's text.
 
         Inside `(` a line break is not layout, so one forgotten closer
         swallows every later line into a single logical line and the parse
@@ -552,27 +552,44 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
         no progress (review round 4 measured eighteen byte-identical
         diagnostics). The prototype lexer had exactly this check.
 
-        On EVERY round, not once up front: a file that is balanced as
-        written can be left unbalanced by recovery blanking the line that
-        carried the surplus closer, and a pre-pass that ran before the
-        loop never saw the text it had itself mutated — the genus's
-        "verify against mutated state" half (review round 6).
+        `report=True` runs ONCE, before any handler has edited anything.
+        An imbalance in that text is the AUTHOR's, and earns RHO1015 plus
+        the statement's wrapped continuation — inside a bracket those
+        deeper-indented lines are the same logical line, and each draws
+        its own spurious diagnostic once the opener is gone (round 5).
+
+        Every later pass runs on text `consume()` has mutated, where an
+        imbalance may be RECOVERY'S: blanking the line that carried the
+        closer leaves the opener dangling. Blanking it still stops the
+        flood; NAMING it does not, and is false — "`(` opened here is
+        never closed" is a claim about a source whose brackets balance,
+        and it sorts first, so a repair loop closes a parenthesis that
+        was never open (round 7 measured 49 false RHO1015 across 7,848
+        bracket-balanced mutants). Only the opener character goes, never
+        the statement: taking the block erased independent defects that
+        had nothing to do with the bracket.
+
+        Filtering instead by "was this opener unclosed in the ORIGINAL
+        text?" does not work, and was measured: round 6's real case is
+        itself count-balanced as written, so that filter silences the one
+        RHO1015 that is correct.
         """
+        nonlocal parse_text
         while True:
             unclosed = _first_unclosed_bracket(parse_text)
             if unclosed is None:
                 return
             opener, bracket = unclosed
             _, opener_line_end = _line_bounds(parse_text, opener)
-            sink.add("RHO1015", {"bracket": bracket},
-                     primary=span_at(opener, opener + 1))
-            if len(sink) - baseline >= _RECOVERY_LIMIT:
-                return
-            # The statement's WRAPPED CONTINUATION goes with it: inside a
-            # bracket those deeper-indented lines are the same logical
-            # line, and each draws its own spurious diagnostic once the
-            # opener that suspended layout is gone (review round 5).
+            if report:
+                sink.add("RHO1015", {"bracket": bracket},
+                         primary=span_at(opener, opener + 1))
+                if len(sink) - baseline >= _RECOVERY_LIMIT:
+                    return
             consume(opener, opener_line_end, destroys_statement=True)
+
+    # The author's own brackets, judged on the author's own bytes.
+    drain_unclosed_brackets(report=True)
 
     # Iterations, not diagnostics: silent blanking rounds (orphaned blocks,
     # emptied headers) consume iterations without emitting, and every round
@@ -593,7 +610,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
             # something; this is the failsafe for the paths that forget.
             return None
         previous_text = parse_text
-        drain_unclosed_brackets()
+        drain_unclosed_brackets(report=False)
         try:
             return loaded.parser.parse(parse_text)
         except UnexpectedCharacters as exc:
@@ -905,6 +922,22 @@ def _first_unclosed_bracket(text: str):
                 stack.append((index, char))
             elif char == ")" and stack:
                 stack.pop()
+        if in_string:
+            # An unterminated string is a LEXICAL ERROR at the opening
+            # quote, not a string that ends at the newline — STRING is
+            # single-line and cannot span one. Scanning past it swallowed
+            # the rest of the line, INCLUDING a `)` that closes an open
+            # call, so the stack from here on is fiction. Stop: RHO1004
+            # is the true defect, and reporting a bracket instead
+            # preempted it entirely and produced advice whose application
+            # reproduced the identical diagnostic, so an agent's repair
+            # loop could not converge (review round 7).
+            #
+            # A genuine unclosed bracket ABOVE an unterminated string
+            # goes unnamed for this round; that is the one-defect-per-
+            # round trade, and the string's own recovery blanks it so the
+            # next round scans honestly.
+            return None
         position = end + 1
     return stack[0] if stack else None
 

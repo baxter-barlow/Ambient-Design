@@ -207,7 +207,16 @@ def vector_problems(vector_path):
             continue
         if normal_form(got) != got:
             problems.append(f"vector {text!r}: normal form not idempotent")
-        if parse_quantity(got).key() != parse_quantity(text).key():
+        # Compare the DECIMALS, not the two key() strings. `key()` renders
+        # through `_plain()`, so any rounding there was applied identically
+        # to both sides and the comparison could not see it — which is how
+        # a literal past the precision floor collapsed to `1ohm` with this
+        # leg green, twice (review rounds 6 and 7). Decimal equality is
+        # exact and context-independent, and treats 1.0 and 1.00 as equal,
+        # which is the normalization this leg is meant to allow.
+        before, after = parse_quantity(text), parse_quantity(got)
+        if ((before.nominal, before.lower, before.upper)
+                != (after.nominal, after.lower, after.upper)):
             problems.append(
                 f"vector {text!r}: normalization changed the VALUE — the "
                 "one thing T3 forbids"
@@ -645,6 +654,8 @@ def self_test() -> int:
         # parse stub disagrees with itself about value and form. All four
         # property sites must report — without this they are deletable,
         # and the properties the spec advertises would be prose.
+        from decimal import Decimal
+
         import rhoform.quantities as quantities_module
 
         class _StubQuantity:
@@ -653,6 +664,23 @@ def self_test() -> int:
 
             def key(self):
                 return ("stub", self._text)
+
+            # The value leg reads the DECIMALS, not key(), so the stub
+            # carries them: a stub missing a field the gate reads makes
+            # that leg unreachable in the self-test, which is the same
+            # measuring-the-wrong-population defect the gate exists to
+            # prevent. Distinct per text, so the leg sees a real change.
+            @property
+            def nominal(self):
+                return Decimal(sum(ord(char) for char in self._text))
+
+            @property
+            def lower(self):
+                return Decimal(sum(ord(char) for char in self._text))
+
+            @property
+            def upper(self):
+                return Decimal(sum(ord(char) for char in self._text))
 
             @property
             def form(self):

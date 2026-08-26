@@ -38,6 +38,7 @@ first, and states its cap too).
 
 from bisect import bisect_right
 from dataclasses import dataclass
+import codecs
 import json
 import re
 
@@ -108,20 +109,63 @@ class Span:
 # yields the same list, so nothing observable depends on whether it hit.
 # The entry holds a strong reference, which is what makes the identity
 # test safe — the object cannot be freed and its id reused while cached.
-_LINE_INDEX: tuple[bytes, list[int]] | None = None
+_LINE_INDEX: tuple[bytes, list[int], dict[int, list[int] | None]] | None = None
 
 
-def _line_starts(data: bytes) -> list[int]:
+def _index_of(data: bytes):
     global _LINE_INDEX
     cached = _LINE_INDEX
     if cached is not None and cached[0] is data:
-        return cached[1]
+        return cached[1], cached[2]
     starts = [0]
     for index, byte in enumerate(data):
         if byte == 0x0A:
             starts.append(index + 1)
-    _LINE_INDEX = (data, starts)
-    return starts
+    _LINE_INDEX = (data, starts, {})
+    return starts, _LINE_INDEX[2]
+
+
+def _line_columns(data: bytes, starts: list[int], columns: dict,
+                  line_index: int) -> list[int] | None:
+    """Codepoint counts for every byte offset in one line, or None.
+
+    `columns[i]` is `len(data[line_start:line_start + i].decode("utf-8",
+    "replace"))` — the exact quantity `locate()` needs — for every `i` at
+    once, built in one pass instead of one decode per call.
+
+    Removing the per-call file scan (review round 6) left the per-call
+    LINE scan: `locate()` still sliced and decoded an O(column) prefix
+    every time, and the prescan asks once per offending byte, so a single
+    long line still cost O(line^2) — 16 KB on one line took 0.46s and a
+    megabyte would take half an hour (review round 7, which also caught
+    that the round-6 regression test was calibrated in the flat region
+    and so could not fail).
+
+    Built with an incremental decoder, which differs from decoding a
+    prefix in exactly one way: where a prefix ends mid-sequence, the bulk
+    decode emits one U+FFFD for the dangling bytes and the incremental
+    decoder is still holding them. Adding one whenever bytes are pending
+    reconciles the two. That reasoning is CHECKED rather than trusted —
+    the line total is compared against a real decode, and a mismatch
+    returns None so the caller falls back to the exact per-call slice.
+    """
+    if line_index in columns:
+        return columns[line_index]
+    line_start = starts[line_index]
+    line_stop = (starts[line_index + 1] if line_index + 1 < len(starts)
+                 else len(data))
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    table = [0]
+    emitted = 0
+    for byte in data[line_start:line_stop]:
+        emitted += len(decoder.decode(bytes((byte,))))
+        pending = 1 if decoder.getstate()[0] else 0
+        table.append(emitted + pending)
+    exact = len(data[line_start:line_stop].decode("utf-8", "replace"))
+    if table[-1] != exact:  # pragma: no cover - defensive
+        table = None
+    columns[line_index] = table
+    return table
 
 
 def span_from_bytes(file: str, data: bytes, byte_start: int,
@@ -143,20 +187,25 @@ def span_from_bytes(file: str, data: bytes, byte_start: int,
         raise ValueError(
             f"span [{byte_start}, {byte_end}) outside 0..{len(data)}"
         )
-    starts = _line_starts(data)
+    starts, columns = _index_of(data)
+
+    def column(line_index: int, offset: int) -> int:
+        table = _line_columns(data, starts, columns, line_index)
+        if table is not None:
+            return table[offset - starts[line_index]] + 1
+        prefix = data[starts[line_index]:offset]
+        return len(prefix.decode("utf-8", "replace")) + 1
 
     def locate(offset: int) -> tuple[int, int]:
         line_index = bisect_right(starts, offset) - 1
-        prefix = data[starts[line_index]:offset]
-        return line_index + 1, len(prefix.decode("utf-8", "replace")) + 1
+        return line_index + 1, column(line_index, offset)
 
     line_start, col_start = locate(byte_start)
     if byte_end == byte_start:
         return Span(file, byte_start, byte_end,
                     line_start, col_start, line_start, col_start)
     line_end, _ = locate(byte_end - 1)
-    end_prefix = data[starts[line_end - 1]:byte_end]
-    col_end = len(end_prefix.decode("utf-8", "replace")) + 1
+    col_end = column(line_end - 1, byte_end)
     return Span(file, byte_start, byte_end,
                 line_start, col_start, line_end, col_end)
 
