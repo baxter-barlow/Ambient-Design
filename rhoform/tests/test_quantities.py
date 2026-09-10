@@ -111,6 +111,28 @@ class AmbientContextTest(unittest.TestCase):
         self.assertEqual(quantity.upper,
                          self._exact(lambda: f + p * Decimal("1e-12")))
 
+        # The span term ALONE. Every case above carries a wide value, and
+        # a wide value makes the computed spread wide too, so the
+        # digit-count term already covered the sum and the span term was
+        # never the maximum: deleting it passed every test (round 8's
+        # focused pass). A SHORT value with a tolerance sixty orders of
+        # magnitude down has two digits in all and sixty-two positions in
+        # its sum; without the span term the trap refuses a valid literal.
+        one, tiny = Decimal(1), Decimal("0." + "0" * 59 + "1")
+        quantity = parse_quantity("1V +/- 0." + "0" * 59 + "1V")
+        self.assertEqual(quantity.lower, self._exact(lambda: one - tiny))
+        self.assertEqual(quantity.upper, self._exact(lambda: one + tiny))
+        pct = Decimal("0." + "0" * 57 + "1")
+        quantity = parse_quantity("1ohm +/- 0." + "0" * 57 + "1%")
+        self.assertEqual(quantity.lower, self._exact(lambda: one - pct / 100))
+        self.assertEqual(quantity.upper, self._exact(lambda: one + pct / 100))
+        volts, microvolts = Decimal("3.3"), Decimal("0." + "0" * 58 + "1")
+        quantity = parse_quantity("3.3V +/- 0." + "0" * 58 + "1uV")
+        self.assertEqual(quantity.lower,
+                         self._exact(lambda: volts - microvolts * Decimal("1e-6")))
+        self.assertEqual(quantity.upper,
+                         self._exact(lambda: volts + microvolts * Decimal("1e-6")))
+
     def test_every_form_keeps_every_field_exact_under_wide_operands(self):
         # All five forms, all three fields, in base units, against the
         # reference. The literal text is built from the STRINGS: Decimal's
@@ -161,12 +183,18 @@ class AmbientContextTest(unittest.TestCase):
         # mirror, a million zeros after the point, rounded to ZERO and
         # normalized to `0mohm`, whose own normal form is `0ohm`: text
         # idempotence and value-exactness both gone, silently. Both are
-        # refused now, with the same reason.
+        # refused now, with the same reason — and at every site alike:
+        # round 8's pass found parse_quantity() ACCEPTING the million-zero
+        # literal (its site's precision estimate had widened Etiny) while
+        # key() and normal_form() on the returned Quantity refused it.
         with self.assertRaises(QuantityError) as caught:
             parse_quantity("1" + "0" * 1_000_000 + "kohm")
         self.assertIn("refused rather than rounded", caught.exception.reason)
+        deep_zero = "0." + "0" * 1_000_060 + "1mohm"
         with self.assertRaises(QuantityError):
-            normal_form("0." + "0" * 1_000_060 + "1mohm")
+            parse_quantity(deep_zero)
+        with self.assertRaises(QuantityError):
+            normal_form(deep_zero)
 
 
 class ParseTest(unittest.TestCase):

@@ -457,9 +457,10 @@ module N:
         # — the round-4 flood, one RHO1006 per innocent `port`, both real
         # defects unnamed, and past twenty lines no tree at all. Both
         # baselines named both. The scanner now gives up on the STRING'S
-        # LINE only: a `)` the string swallowed is applied to the stack as
-        # the closer it was meant to be, the line's own openers are
-        # unknowable and dropped, and everything above it stands.
+        # TAIL only: the tail's own brackets pair off among themselves, a
+        # closer left over closes the opener whose statement this line
+        # continues, and every opener before the quote — on this line and
+        # above it — stands.
         between = "".join(f"    port p{i} passive\n" for i in range(24))
         result = _parse(PRAGMA + "\nmodule M:\n"
                         "    r1 = new lib.R(resistance = 100kohm\n"
@@ -520,6 +521,132 @@ module N:
                         "    port p passive\n")
         self.assertNotIn("RHO1015", _codes(closed))
         self.assertIn("RHO1006", _codes(closed))
+
+    def test_a_swallowed_closer_never_reaches_a_sibling_statements_opener(self):
+        # Round 8's focused pass: the leftover `)` in the tail popped the
+        # INNERMOST opener wherever it lived. With no opener of its own
+        # before the quote — `package = "0402)` for `"0402"`, the commonest
+        # shape — the pop landed on an unclosed call two statements up,
+        # the once-only reporting pass saw an empty stack, and the flood
+        # the fix was landed to remove came back (98 of 71,391 mutants,
+        # every one named correctly at round 6). A closer can only close
+        # an opener whose statement THIS LINE continues, under the block
+        # model the shadow rule uses.
+        between = "".join(f"    port p{i} passive\n" for i in range(12))
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        + between +
+                        "    r2 = new lib.R:\n"
+                        "        part abstract:\n"
+                        '            package = "0402)\n')
+        codes = _codes(result)
+        self.assertIn("RHO1015", codes)
+        self.assertIn("RHO1004", codes)
+        self.assertIsNotNone(result.tree)
+        blamed = {d.primary.line_start for d in result.diagnostics}
+        self.assertFalse(blamed & set(range(4, 16)), sorted(blamed))
+        # Thirty lines between: past the recovery limit, where the flood
+        # left no tree at all.
+        far = "".join(f"    port p{i} passive\n" for i in range(30))
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        + far + '    part "axial 0207)\n')
+        self.assertIn("RHO1015", _codes(result))
+        self.assertIsNotNone(result.tree)
+        self.assertLessEqual(len(_codes(result)), 3)
+
+    def test_a_closer_hidden_by_a_stray_quote_does_not_close_a_call_above(self):
+        # The other trigger: a stray `"` before `(` hides this line's own
+        # opener inside a terminated string, so the `)` after it is a
+        # leftover with no opener on the line — and popped the call above.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        "    port p0 passive\n"
+                        "    port p1 passive\n"
+                        '    net VCC "(voltage_domain = "5V"):\n'
+                        "        p0\n"
+                        "    port q passive\n")
+        codes = _codes(result)
+        self.assertIn("RHO1015", codes)
+        self.assertIsNotNone(result.tree)
+        blamed = {d.primary.line_start for d in result.diagnostics}
+        self.assertFalse(blamed & {4, 5}, sorted(blamed))
+
+    def test_a_wrapped_continuation_may_still_close_its_own_call(self):
+        # The gate keeps round 8's answer where the closer IS the
+        # statement's: a wrapped call whose `)` follows the broken string
+        # on a deeper-indented continuation line. RHO1004 only.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r2 = new lib.R(\n"
+                        '        mpn = "RC0402)\n'
+                        "    port p passive\n")
+        self.assertIn("RHO1004", _codes(result))
+        self.assertNotIn("RHO1015", _codes(result))
+
+    def test_a_bracket_inside_a_swallowed_tail_is_text_not_an_opener(self):
+        # The opener half of the tail rule, pinned: `part "10k (E96` must
+        # not draw RHO1015 pointing INSIDE the literal — the round-7 genus,
+        # a false bracket claim preempting the string. Round 8's pass found
+        # a scanner that read the tail as code passing every test.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R:\n"
+                        '        part "10k (E96\n'
+                        "    port p passive\n")
+        self.assertIn("RHO1004", _codes(result))
+        self.assertNotIn("RHO1015", _codes(result))
+
+    def test_three_defects_on_four_lines_name_one_and_blame_nothing_below(self):
+        # Case D from round 8's pass, which no round ever got right: an
+        # unclosed call, then a wrapped call whose string lost its closing
+        # quote to a `)` typo AND keeps its real closer below. The tail's
+        # `)` is read as the wrapped call's closer (that statement
+        # continues onto its line), so the real `)` then pairs with the
+        # call above and the scanner sees balance. The chosen expectation:
+        # one diagnostic at the first place the lexer's reality breaks, a
+        # tree, nothing blamed below it — never the flood, never a false
+        # RHO1015 (round 6 drew one at line 4).
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        "    r2 = new lib.R(\n"
+                        '        mpn = "RC0402),\n'
+                        "        count = 8)\n")
+        codes = _codes(result)
+        self.assertEqual(len(codes), 1, codes)
+        self.assertNotIn("RHO1015", codes)
+        self.assertIsNotNone(result.tree)
+
+    def test_a_leftover_closer_on_a_sibling_line_after_recovery_stays_silent(self):
+        # The report=False passes run the same scanner on text recovery
+        # has blanked. Balanced as written — the surplus `)` on the assert
+        # line closes r1's `(` — so no RHO1015 may ever appear; once the
+        # assert line is blanked the `(` is orphaned, and the `"...)` line
+        # below sits at sibling indent, so its leftover `)` must not close
+        # it: the silent drain blanks it instead. No flood, a tree.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        "    assert v static frequency (OUT)) at least 1kHz\n"
+                        "    port p0 passive\n"
+                        "    r2 = new lib.R:\n"
+                        '        part "axial 0207)\n')
+        codes = _codes(result)
+        self.assertNotIn("RHO1015", codes)
+        self.assertIn("RHO1004", codes)
+        self.assertIsNotNone(result.tree)
+        blamed = {d.primary.line_start for d in result.diagnostics}
+        self.assertNotIn(5, blamed, sorted(blamed))
+
+    def test_a_same_indent_continuation_inside_a_call_reads_as_a_sibling(self):
+        # Lexer-legal but outside the block model: a wrapped call whose
+        # continuation sits at the opener's own indent. The gate reads it
+        # as a sibling statement, so a leftover `)` there does not close
+        # the call and the call is named unclosed. A decided expectation,
+        # not a consequence: the `(` IS unclosed under the lexer's rules
+        # once the string is a lexical error.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r2 = new lib.R(\n"
+                        '    mpn = "RC0402)\n'
+                        "    port p passive\n")
+        self.assertIn("RHO1015", _codes(result))
 
     def test_a_square_bracket_is_an_illegal_character_not_a_bracket(self):
         # Review round 6: `[` was scanned as layout-suspending, but the

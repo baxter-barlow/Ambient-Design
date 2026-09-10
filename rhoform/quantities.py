@@ -44,7 +44,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import (
     ROUND_HALF_EVEN, Context, Decimal, DivisionByZero, Inexact,
-    InvalidOperation, Overflow, localcontext,
+    InvalidOperation, Overflow, Subnormal, localcontext,
 )
 
 # Unit table: symbol -> (dimension, multiplier to the dimension's base unit).
@@ -162,10 +162,15 @@ def _exact_context(*operands: Decimal):
     alone. `Overflow` is caught for the same reason from the other side:
     a numeral of a million digits leaves Decimal's default exponent range
     inside `to_base()`, and until round 8 escaped `parse()` as a
-    traceback, which compilation-is-total forbids; its mirror, a million
-    zeros after the point, rounded to ZERO and is an `Inexact` like any
-    other. No realistic literal reaches either; the point is that the
-    unrealistic one gets a diagnostic, not a crash and not a new value.
+    traceback, which compilation-is-total forbids. Its mirror, a million
+    zeros after the point, is refused by the `Subnormal` trap the moment
+    a result drops below `Emin` — at EVERY site alike. Trapping only the
+    rounding let the refusal depend on which site's precision estimate
+    happened to widen `Etiny`: `parse()` accepted a literal that `key()`
+    and `normal_form()` then refused (round 8's focused pass). The floor
+    is a property of the literal, not of the site. No realistic literal
+    reaches either end; the point is that the unrealistic one gets one
+    diagnostic, everywhere, not a crash and not a new value.
 
     Every field is set, none inherited. `localcontext()` COPIES the
     ambient context, so fixing the precision alone (round 6) left the
@@ -182,11 +187,12 @@ def _exact_context(*operands: Decimal):
         capitals=1,
         clamp=0,
         flags=[],
-        traps=[InvalidOperation, DivisionByZero, Overflow, Inexact],
+        traps=[InvalidOperation, DivisionByZero, Overflow, Subnormal,
+               Inexact],
     )) as ctx:
         try:
             yield ctx
-        except (Inexact, Overflow):
+        except (Inexact, Overflow, Subnormal):
             raise QuantityError(
                 "the literal's exact value cannot be carried at the working "
                 "precision or exponent range rhoform.quantities derived for "
