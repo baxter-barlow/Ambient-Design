@@ -142,12 +142,22 @@ def _line_columns(data: bytes, starts: list[int], columns: dict,
     and so could not fail).
 
     Built with an incremental decoder, which differs from decoding a
-    prefix in exactly one way: where a prefix ends mid-sequence, the bulk
-    decode emits one U+FFFD for the dangling bytes and the incremental
-    decoder is still holding them. Adding one whenever bytes are pending
-    reconciles the two. That reasoning is CHECKED rather than trusted —
-    the line total is compared against a real decode, and a mismatch
-    returns None so the caller falls back to the exact per-call slice.
+    prefix in exactly one place: where a prefix ends mid-sequence, the
+    bulk decode has already emitted U+FFFD for the dangling bytes and the
+    incremental decoder is still holding them. Decoding the held bytes on
+    their own, with the same handler, reconciles the two — it yields the
+    identical run: one U+FFFD for a truncated valid prefix, one PER BYTE
+    for `ED A0..BF`, which CPython buffers so `surrogatepass` can work
+    incrementally although no continuation can make it valid. Round 7
+    added a flat one for "pending" and was one short at exactly that
+    offset; the line total healed a byte later, so the check below passed
+    while an interior entry was wrong and RHO1002 reported a one-byte
+    defect as an empty column range (round 8, the focused pass). The
+    total is still CHECKED against a real decode, and a mismatch returns
+    None so the caller falls back to the exact per-call slice — but that
+    check sees the total only, which is why the unit tests enumerate every
+    two- and three-byte lead sequence against a bulk decode at every
+    offset instead of trusting this paragraph.
     """
     if line_index in columns:
         return columns[line_index]
@@ -159,8 +169,8 @@ def _line_columns(data: bytes, starts: list[int], columns: dict,
     emitted = 0
     for byte in data[line_start:line_stop]:
         emitted += len(decoder.decode(bytes((byte,))))
-        pending = 1 if decoder.getstate()[0] else 0
-        table.append(emitted + pending)
+        pending = decoder.getstate()[0]
+        table.append(emitted + len(pending.decode("utf-8", "replace")))
     exact = len(data[line_start:line_stop].decode("utf-8", "replace"))
     if table[-1] != exact:  # pragma: no cover - defensive
         table = None

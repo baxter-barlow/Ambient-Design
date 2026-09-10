@@ -448,6 +448,79 @@ module N:
         self.assertIn("RHO1004", _codes(result))
         self.assertNotIn("RHO1015", _codes(result))
 
+    def test_an_unclosed_bracket_above_an_unterminated_string_is_named(self):
+        # Round 8, the focused pass over round 7: the bail-out above made
+        # the bracket scanner give up on the WHOLE FILE the moment any
+        # line ended inside a string. With the reporting pass running
+        # once, that silenced RHO1015 for the entire compile, and inside
+        # the unnamed `(` every following line was one logical line again
+        # — the round-4 flood, one RHO1006 per innocent `port`, both real
+        # defects unnamed, and past twenty lines no tree at all. Both
+        # baselines named both. The scanner now gives up on the STRING'S
+        # LINE only: a `)` the string swallowed is applied to the stack as
+        # the closer it was meant to be, the line's own openers are
+        # unknowable and dropped, and everything above it stands.
+        between = "".join(f"    port p{i} passive\n" for i in range(24))
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        + between +
+                        "    r2 = new lib.R:\n"
+                        '        part "axial 0207\n')
+        codes = _codes(result)
+        self.assertIn("RHO1015", codes)
+        self.assertIn("RHO1004", codes)
+        self.assertIsNotNone(result.tree)
+        self.assertLessEqual(len(codes), 3)
+        blamed = {d.primary.line_start for d in result.diagnostics}
+        self.assertFalse(blamed & set(range(4, 28)), sorted(blamed))
+
+    def test_an_unterminated_string_above_an_unclosed_bracket_names_both(self):
+        # The other ordering lost the bracket too: the reporting pass saw
+        # the string and returned, the string's recovery blanked its line,
+        # and the next pass found the `(` — silently, because only the
+        # first pass reports. The bracket is the author's, on the author's
+        # text; it is named on the first pass.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        "    r0 = new lib.R:\n"
+                        '        part "axial 0207\n'
+                        "    r1 = new lib.R(resistance = 100kohm\n"
+                        "    port vin power_in\n")
+        codes = _codes(result)
+        self.assertIn("RHO1004", codes)
+        self.assertIn("RHO1015", codes)
+
+    def test_adjacent_unterminated_strings_in_calls_each_draw_rho1004(self):
+        # Two statements, each `(mpn = "RC0)` with the closer inside the
+        # unterminated string. After the first RHO1004 blanks its literal
+        # the first `(` is orphaned; the silent drain exists to blank it,
+        # but the file-global bail-out saw the SECOND line's string and
+        # left the orphan alive, so the second statement was joined into
+        # the first and blamed as `unexpected r1` — false about the
+        # author's `r1` — while its own string went unnamed.
+        result = _parse(PRAGMA + "\nmodule M:\n"
+                        '    r0 = new lib.R(mpn = "RC0)\n'
+                        '    r1 = new lib.R(mpn = "RC1)\n'
+                        "    port p passive\n")
+        self.assertEqual(_codes(result).count("RHO1004"), 2)
+        self.assertNotIn("RHO1006", _codes(result))
+
+    def test_a_swallowed_tails_own_brackets_pair_off_before_its_closers(self):
+        # The tail an unterminated string swallows can hold a balanced
+        # pair of its own — a bracketed interval — and only a closer that
+        # pair does not account for was meant for an opener outside the
+        # string. Counting every `)` in the tail popped the call's `(`
+        # whose real closer had been deleted, so a genuinely unclosed
+        # bracket went unnamed (round 8's two-edit sweep: 64 such files).
+        unclosed = _parse(PRAGMA + "\nmodule M:\n"
+                          '    d = new lib.Led(color = red", i = 9mA (8mA to 10mA)\n'
+                          "    port p passive\n")
+        self.assertIn("RHO1015", _codes(unclosed))
+        closed = _parse(PRAGMA + "\nmodule M:\n"
+                        '    d = new lib.Led(color = red", i = 9mA (8mA to 10mA))\n'
+                        "    port p passive\n")
+        self.assertNotIn("RHO1015", _codes(closed))
+        self.assertIn("RHO1006", _codes(closed))
+
     def test_a_square_bracket_is_an_illegal_character_not_a_bracket(self):
         # Review round 6: `[` was scanned as layout-suspending, but the
         # frozen v0.1 grammar declares no LSQB terminal, so RHO1015's
@@ -470,10 +543,20 @@ module N:
         # 3.5x-per-doubling curve. The floor is gone, and both shapes are
         # measured \u2014 one long line and the same byte count spread over
         # many lines \u2014 because the per-line term is the one that hid.
+        # CPU time, best of three. The round-7 version compared ONE wall-
+        # clock sample against another and a preempted large run failed
+        # it on a linear implementation: 5-10% of runs under 2-4x CPU
+        # oversubscription, which is an ordinary shared CI runner (round
+        # 8). Time spent waiting for a core is not work, and the minimum
+        # of three is the sample least disturbed by whatever else ran.
         def elapsed(build, count):
-            start = time.perf_counter()
-            _parse(build(count))
-            return time.perf_counter() - start
+            source = build(count)
+            samples = []
+            for _ in range(3):
+                start = time.process_time()
+                _parse(source)
+                samples.append(time.process_time() - start)
+            return min(samples)
 
         shapes = {
             "one long line":
@@ -483,11 +566,15 @@ module N:
         }
         for name, build in shapes.items():
             elapsed(build, 500)  # warm the interpreter, discard
-            small = elapsed(build, 4000)
-            large = elapsed(build, 16000)
-            # Four times the work: linear is ~4x, quadratic ~16x. The 8x
-            # ceiling leaves headroom for timing noise on a loaded machine
-            # and still fails hard on a quadratic curve.
+            small = elapsed(build, 16000)
+            large = elapsed(build, 64000)
+            # Four times the work: linear is ~4x, quadratic ~16x, and the
+            # 8x ceiling sits between them. Sizes matter as much as the
+            # ceiling: at 4000 -> 16000 the per-line quadratic term round
+            # 7 removed measured only 9-11x, a margin one GC pass erased,
+            # and it survived a full-suite run in ten (round 8). Here the
+            # curves have separated — ~4x linear against ~13x for that
+            # defect — so the verdict is about the code, not the noise.
             self.assertLess(large, max(small, 1e-4) * 8,
                             f"{name}: {small:.4f}s -> {large:.4f}s")
 

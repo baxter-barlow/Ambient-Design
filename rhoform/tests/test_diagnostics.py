@@ -279,6 +279,18 @@ class CollectorTest(unittest.TestCase):
             b"mixed \xc3\xa9 \xff \xe2\x82\xac end\n",
             b"no trailing newline \xc3\xa9",
             b"\n\n\xc3\xa9\n",                            # empty lines
+            # Round 8: an encoded surrogate — what CESU-8, WTF-8 and Java's
+            # modified UTF-8 emit for every astral character. CPython's
+            # incremental decoder BUFFERS `ED A0..BF` at a chunk boundary
+            # (so `surrogatepass` can work incrementally) where a bulk
+            # decode emits two U+FFFD, so "one for the pending bytes" was
+            # one short at exactly that offset; the line total healed a
+            # byte later and the total-only check never fired. Round 7's
+            # nine cases held no such pair.
+            b"port \xed\xa0\x80 p passive\n",
+            b"ab\xed\xa7M\n",
+            b"\xed\xbf\xbf\xed\xa0\x80=\xc1(\n",
+            b"ends mid-surrogate \xed\xa0",               # pending at EOF
         ]
         for data in cases:
             starts = [0] + [i + 1 for i, b in enumerate(data) if b == 0x0A]
@@ -294,6 +306,40 @@ class CollectorTest(unittest.TestCase):
                 self.assertEqual(
                     span.col_start, exact,
                     f"{data!r} offset {offset}: {span.col_start} != {exact}")
+
+    def test_the_column_table_matches_a_bulk_decode_for_every_byte_pair(self):
+        # Round 8: the property is "table[i] == len(line[:i].decode(
+        # 'utf-8', 'replace'))" at EVERY i, and a hand-picked case list is
+        # the wrong population for a decoder whose buffering policy is not
+        # documented as part of its contract. Every two-byte sequence with
+        # a non-ASCII lead, and every three-byte sequence with a lead in
+        # E0..F4 and a continuation second byte, each embedded mid-line;
+        # the table must be exact AND the fast path must have held (a None
+        # here means the total-only check fired, and round 8 measured the
+        # per-call fallback it selects as quadratic again).
+        from rhoform.diagnostics import _index_of, _line_columns
+
+        def check(line: bytes):
+            # The table spans the line INCLUDING its newline byte, so it
+            # has len(data) + 1 entries: one per byte offset, 0..len.
+            data = line + b"\n"
+            starts, columns = _index_of(data)
+            table = _line_columns(data, starts, columns, 0)
+            self.assertIsNotNone(table, line)
+            exact = [len(data[:i].decode("utf-8", "replace"))
+                     for i in range(len(data) + 1)]
+            self.assertEqual(table, exact, line)
+
+        for lead in range(0x80, 0x100):
+            for second in range(0x100):
+                if second == 0x0A:
+                    continue
+                check(b"a" + bytes((lead, second)) + b"z")
+        thirds = (0x00, 0x41, 0x80, 0xA0, 0xBF, 0xC0, 0xED, 0xFF)
+        for lead in range(0xE0, 0xF5):
+            for second in range(0x80, 0xC0):
+                for third in thirds:
+                    check(b"a" + bytes((lead, second, third)) + b"z")
 
     def test_the_cap_holds_when_extend_aliases_a_diagnostic(self):
         # Review round 6: capped() partitioned kept from suppressed by
