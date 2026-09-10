@@ -565,14 +565,15 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
         never closed" is a claim about a source whose brackets balance,
         and it sorts first, so a repair loop closes a parenthesis that
         was never open (round 7 measured 49 false RHO1015 across 7,848
-        bracket-balanced mutants). Only the opener character goes, never
-        the statement: taking the block erased independent defects that
-        had nothing to do with the bracket.
+        bracket-balanced mutants).
 
-        Filtering instead by "was this opener unclosed in the ORIGINAL
-        text?" does not work, and was measured: round 6's real case is
-        itself count-balanced as written, so that filter silences the one
-        RHO1015 that is correct.
+        Both passes CONSUME the same way — the opener through its line
+        end and the deeper-indented block beneath it — because inside a
+        bracket those lines are one logical line and each draws its own
+        spurious diagnostic once the opener is gone (round 5). They differ
+        only in whether they say anything. An independent defect inside
+        that block is its shadow, the same rule every emptied statement
+        follows.
         """
         nonlocal parse_text
         while True:
@@ -910,12 +911,13 @@ def _first_unclosed_bracket(text: str):
     while position < len(text):
         start, end = _line_bounds(text, position)
         in_string = False
+        quote_at = start
         for index in range(start, end):
             char = text[index]
             if in_string:
                 in_string = char != '"'
             elif char == '"':
-                in_string = True
+                in_string, quote_at = True, index
             elif char == "#":
                 break
             elif char == "(":
@@ -927,17 +929,38 @@ def _first_unclosed_bracket(text: str):
             # quote, not a string that ends at the newline — STRING is
             # single-line and cannot span one. Scanning past it swallowed
             # the rest of the line, INCLUDING a `)` that closes an open
-            # call, so the stack from here on is fiction. Stop: RHO1004
-            # is the true defect, and reporting a bracket instead
-            # preempted it entirely and produced advice whose application
-            # reproduced the identical diagnostic, so an agent's repair
-            # loop could not converge (review round 7).
+            # call, and naming that call's `(` as unclosed preempted the
+            # true RHO1004 with advice whose application reproduced the
+            # identical diagnostic (review round 7).
             #
-            # A genuine unclosed bracket ABOVE an unterminated string
-            # goes unnamed for this round; that is the one-defect-per-
-            # round trade, and the string's own recovery blanks it so the
-            # next round scans honestly.
-            return None
+            # Round 7 answered by giving up on the WHOLE FILE, which
+            # silenced RHO1015 for the entire compile whenever any line
+            # ended inside a string — and inside the unnamed `(` every
+            # later line was one logical line again, the round-4 flood
+            # (round 8 measured twenty innocent `port` lines blamed, both
+            # real defects unnamed, and no tree past the recovery limit).
+            # Only the SWALLOWED TAIL is fiction, and it is read the way the
+            # author meant it: its own `(` and `)` pair off among
+            # themselves (a bracketed interval inside the tail closes
+            # itself), and only a closer left over was meant for an opener
+            # outside the string, which it closes as it would have.
+            # Everything before the quote — on this line and above it — is
+            # text the lexer reaches, so an opener there that the tail does
+            # not close is as unclosed as any other and stays on the stack
+            # for a later line, or for RHO1015. (Round 8's first two cuts
+            # got both halves wrong in turn: dropping this line's own
+            # openers as "unknowable" lost 94 true RHO1015 across the
+            # two-edit sweep, and counting every `)` in the tail lost 64
+            # more to intervals that had closed themselves.)
+            depth_inside = 0
+            for char in text[quote_at:end]:
+                if char == "(":
+                    depth_inside += 1
+                elif char == ")":
+                    if depth_inside:
+                        depth_inside -= 1
+                    elif stack:
+                        stack.pop()
         position = end + 1
     return stack[0] if stack else None
 

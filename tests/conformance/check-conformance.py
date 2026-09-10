@@ -207,13 +207,18 @@ def vector_problems(vector_path):
             continue
         if normal_form(got) != got:
             problems.append(f"vector {text!r}: normal form not idempotent")
-        # Compare the DECIMALS, not the two key() strings. `key()` renders
-        # through `_plain()`, so any rounding there was applied identically
-        # to both sides and the comparison could not see it — which is how
-        # a literal past the precision floor collapsed to `1ohm` with this
-        # leg green, twice (review rounds 6 and 7). Decimal equality is
-        # exact and context-independent, and treats 1.0 and 1.00 as equal,
-        # which is the normalization this leg is meant to allow.
+        # Compare the DECIMALS the parse semantics expose, not key(), which
+        # renders through `_plain()`: this leg is about the FIELDS a
+        # downstream check consumes. Be exact about what it can see. Both
+        # sides pass through the same parse_quantity(), so a rounding
+        # applied to BOTH is invisible here by construction, and round 8
+        # measured that the committed table (20 significant digits at
+        # most) could not trip any precision floor this module has had.
+        # This leg pins that normalization PRESERVES the parse semantics;
+        # exactness against exact arithmetic is pinned by
+        # rhoform/tests/test_quantities.py, and the deep vectors in the
+        # table give the rendering leg a population past every old floor
+        # (28, then 60) so a returning one is caught on real data.
         before, after = parse_quantity(text), parse_quantity(got)
         if ((before.nominal, before.lower, before.upper)
                 != (after.nominal, after.lower, after.upper)):
@@ -663,7 +668,12 @@ def self_test() -> int:
                 self._text = text
 
             def key(self):
-                return ("stub", self._text)
+                # CONSTANT on purpose: the value leg must read the fields
+                # below, and with a key() that never changes, a leg that
+                # quietly went back to comparing key() to key() cannot
+                # make the self-test case fire (round 8 found the
+                # previous per-text key let exactly that revert pass).
+                return ("stub",)
 
             # The value leg reads the DECIMALS, not key(), so the stub
             # carries them: a stub missing a field the gate reads makes

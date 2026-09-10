@@ -12,10 +12,11 @@ parse acceptance against theirs, so the port cannot quietly diverge.
 EXACT DECIMALS, NEVER FLOATS. Same posture as the prototype and for the
 same reason: `0.1` is not an IEEE double, and a tolerance band is exactly
 where that stops being a curiosity. All arithmetic is `decimal.Decimal`
-under a 60-digit local context, and every normal-form rewrite is a
-power-of-ten shift, so normalization NEVER rounds — value-exactness (T3) is
-a property of the construction, and the conformance vectors re-check it
-anyway.
+under a local context sized from its own operands (never narrower than 60
+digits) that REFUSES to round rather than rounding silently, and every
+normal-form rewrite is a power-of-ten shift, so normalization NEVER rounds
+— value-exactness (T3) is a property of the construction, and the
+conformance vectors re-check it anyway.
 
 THE NORMAL FORM, in one paragraph (normative text: the spec's
 literal-normal-form section; this docstring paraphrases). Every
@@ -39,8 +40,12 @@ table lie about what the language accepts.
 """
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
-from decimal import Decimal, localcontext
+from decimal import (
+    ROUND_HALF_EVEN, Context, Decimal, DivisionByZero, Inexact,
+    InvalidOperation, Overflow, localcontext,
+)
 
 # Unit table: symbol -> (dimension, multiplier to the dimension's base unit).
 # CLOSED ON PURPOSE, exactly as the prototype's: an unknown unit is an error
@@ -112,7 +117,7 @@ _PRECISION = 60
 
 
 def _wide_enough(*values: Decimal) -> int:
-    """A precision that cannot round arithmetic over `values`.
+    """A precision that cannot round a product OR a sum of `values`.
 
     `_PRECISION` is a FLOOR, not a ceiling. Pinning it flat meant a
     literal past 60 significant digits rounded exactly the way a literal
@@ -122,14 +127,71 @@ def _wide_enough(*values: Decimal) -> int:
     rather than removing it, and round 7 found it again one order of
     magnitude out — the same half-fix shape it caught in the prescan.
 
-    Summing the operands' digit counts is the exact bound for a product
-    (the one place two author-supplied numbers meet is `value` times a
-    percentage tolerance) and is generous for the power-of-ten shifts
-    that make up the rest of the arithmetic, which move the exponent and
-    neither create nor destroy significant digits.
+    Two bounds, because the module has two kinds of operation. Summing
+    the operands' digit counts is exact for a PRODUCT and generous for
+    the power-of-ten shifts that make up most of the arithmetic, which
+    move the exponent and neither create nor destroy significant digits.
+    It says nothing about a SUM: `value - spread` with the spread many
+    orders of magnitude below the value needs every position from the
+    value's leading digit down to the spread's trailing one, however few
+    digits either operand has on its own. Round 7's bound covered the
+    product and left that one sum — the third time this defect was fixed
+    for the term in front of it and not the sibling (round 8, the focused
+    pass). The span term is that sibling: highest adjusted exponent to
+    lowest exponent, plus one for the inclusive count and one for a carry.
+
+    Callers pass the operands of the operation they are about to do, not
+    the numbers the literal started with: the sum's operand is the spread
+    as COMPUTED, whose exponent is not any literal number's.
     """
-    return max(_PRECISION,
-               sum(len(value.as_tuple().digits) for value in values))
+    digits = sum(len(value.as_tuple().digits) for value in values)
+    span = (max(value.adjusted() for value in values)
+            - min(value.as_tuple().exponent for value in values) + 2)
+    return max(_PRECISION, digits, span)
+
+
+@contextmanager
+def _exact_context(*operands: Decimal):
+    """A local context wide enough for `operands` that cannot round quietly.
+
+    The bound above is the ESTIMATE; the `Inexact` trap is the CHECK. An
+    operation that would discard a nonzero digit raises instead, and the
+    literal is refused with a stable reason — a value silently changed on
+    the way in is the one thing T3 forbids, and three rounds of moving the
+    boundary are three reasons not to trust the next bound on inspection
+    alone. `Overflow` is caught for the same reason from the other side:
+    a numeral of a million digits leaves Decimal's default exponent range
+    inside `to_base()`, and until round 8 escaped `parse()` as a
+    traceback, which compilation-is-total forbids; its mirror, a million
+    zeros after the point, rounded to ZERO and is an `Inexact` like any
+    other. No realistic literal reaches either; the point is that the
+    unrealistic one gets a diagnostic, not a crash and not a new value.
+
+    Every field is set, none inherited. `localcontext()` COPIES the
+    ambient context, so fixing the precision alone (round 6) left the
+    exponent range and the rounding mode to whatever the process had
+    last set: an ambient `Emax` of 5 made `5000000MHz` overflow and be
+    refused (round 8). Hermetic means the same literal parses to the same
+    value in every process state.
+    """
+    with localcontext(Context(
+        prec=_wide_enough(*operands),
+        rounding=ROUND_HALF_EVEN,
+        Emin=-999999,
+        Emax=999999,
+        capitals=1,
+        clamp=0,
+        flags=[],
+        traps=[InvalidOperation, DivisionByZero, Overflow, Inexact],
+    )) as ctx:
+        try:
+            yield ctx
+        except (Inexact, Overflow):
+            raise QuantityError(
+                "the literal's exact value cannot be carried at the working "
+                "precision or exponent range rhoform.quantities derived for "
+                "it; it was refused rather than rounded"
+            ) from None
 
 FORMS = ("exact", "tolerance-absolute", "tolerance-percent",
          "interval-bracketed", "interval-bare")
@@ -206,8 +268,7 @@ def _plain(value: Decimal) -> str:
     """
     if value == 0:
         return "0"
-    with localcontext() as ctx:
-        ctx.prec = _wide_enough(value)
+    with _exact_context(value):
         return format(value.normalize(), "f")
 
 
@@ -225,8 +286,7 @@ def to_base(value: Decimal, unit: str) -> Decimal:
     dimension, multiplier = UNITS[unit]
     if dimension == "temperature":
         return value
-    with localcontext() as ctx:
-        ctx.prec = _wide_enough(value, multiplier)
+    with _exact_context(value, multiplier):
         return +(value * multiplier)
 
 
@@ -247,14 +307,14 @@ def parse_quantity(text: str) -> Quantity:
 
     # Every number the literal carries, measured before the context is
     # opened: `Decimal(str)` is exact and context-independent, so this
-    # cannot itself round. The widest arithmetic here is value times a
-    # percentage tolerance, which is why the digit counts are summed.
-    with localcontext() as ctx:
-        ctx.prec = _wide_enough(*(
-            Decimal(match.group(name))
-            for name in ("value", "tol", "lo_v", "hi_v", "to_v")
-            if match.group(name) is not None
-        ))
+    # cannot itself round. The widest PRODUCT here is value times a
+    # percentage tolerance, which the digit-count sum covers; the one SUM
+    # re-derives its width below from the spread it actually computed.
+    with _exact_context(*(
+        Decimal(match.group(name))
+        for name in ("value", "tol", "lo_v", "hi_v", "to_v")
+        if match.group(name) is not None
+    )) as ctx:
 
         if match.group("tol") is not None:
             tol_unit = match.group("tol_unit")
@@ -278,6 +338,10 @@ def parse_quantity(text: str) -> Quantity:
                     )
                 spread = +(magnitude * UNITS[tol_unit][1] / UNITS[unit][1])
                 components = ((value, unit), (magnitude, tol_unit))
+            # The sum's operands are the value and the spread AS COMPUTED;
+            # a spread far below the value needs the whole span between
+            # them, which no count of the literal's own digits bounds.
+            ctx.prec = _wide_enough(value, spread)
             lower, upper, nominal = +(value - spread), +(value + spread), value
 
         elif match.group("lo_v") is not None:
@@ -353,8 +417,7 @@ def _canonical_pair(value: Decimal, unit: str) -> str:
     if value == 0:
         base = next(sym for sym, mult in ladder if mult == 1)
         return "0" + base
-    with localcontext() as ctx:
-        ctx.prec = _wide_enough(value, UNITS[unit][1])
+    with _exact_context(value, UNITS[unit][1]):
         base_value = +(value * UNITS[unit][1])
         chosen = None
         for symbol, mult in ladder:
