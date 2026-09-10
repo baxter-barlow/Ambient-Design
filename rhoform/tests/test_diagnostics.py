@@ -341,6 +341,31 @@ class CollectorTest(unittest.TestCase):
                 for third in thirds:
                     check(b"a" + bytes((lead, second, third)) + b"z")
 
+    def test_col_end_is_exact_for_spans_that_cross_or_end_at_a_newline(self):
+        # Round 8's pass: every col_end assertion in this file sat
+        # mid-line, so an off-by-one for a span ending exactly at a line
+        # start — its last byte the newline above — was pinned only by the
+        # conformance case r12 on the wire. Every (start, end) pair of a
+        # few multi-line strings, against the per-call slice round 6 used.
+        from rhoform.diagnostics import span_from_bytes
+
+        for data in (b"ab\ncd\n", b"\xc3\xa9\xff\ncd\n\n\xe2\x82",
+                     b"one\n\ntwo \xed\xa0\x80\nthree"):
+            starts = [0] + [i + 1 for i, b in enumerate(data) if b == 0x0A]
+            for start in range(len(data) + 1):
+                for end in range(start, len(data) + 1):
+                    if end == start:
+                        continue
+                    span = span_from_bytes("f.rhoform", data, start, end)
+                    last = end - 1
+                    line_end = max(i for i, s in enumerate(starts)
+                                   if s <= last)
+                    exact = len(data[starts[line_end]:end]
+                                .decode("utf-8", "replace")) + 1
+                    self.assertEqual(
+                        (span.line_end, span.col_end), (line_end + 1, exact),
+                        f"{data!r} [{start}, {end})")
+
     def test_the_cap_holds_when_extend_aliases_a_diagnostic(self):
         # Review round 6: capped() partitioned kept from suppressed by
         # id(), but extend() splices the other collector's items BY

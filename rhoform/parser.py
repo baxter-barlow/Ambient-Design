@@ -890,6 +890,36 @@ def _tolerance_operator(loaded: _Loaded, text: str, line_start: int,
     return None
 
 
+def _continues_statement(text: str, opener: int, line_start: int,
+                         reach: dict[int, int]) -> bool:
+    """Is the line at `line_start` the same statement as the opener's?
+
+    The same physical line, or a wrapped continuation: every content line
+    from the opener's line to this one is indented deeper than the
+    opener's line — the block model `_blank_block` uses, so the scanner
+    and the shadow rule agree on where a statement ends. `reach` memoizes,
+    per opener and per scan, the start of the first content line that
+    ends its run, so a long continuation is walked once rather than once
+    per leftover closer."""
+    opener_start, opener_end = _line_bounds(text, opener)
+    if opener_start == line_start:
+        return True
+    if opener not in reach:
+        indent = _indent_of(text, opener_start)
+        limit = len(text)
+        position = opener_end + 1
+        while position < len(text):
+            start, end = _line_bounds(text, position)
+            content = text[start:end].strip()
+            if (content and not content.startswith("#")
+                    and _indent_of(text, start) <= indent):
+                limit = start
+                break
+            position = end + 1
+        reach[opener] = limit
+    return line_start < reach[opener]
+
+
 def _first_unclosed_bracket(text: str):
     """(offset, bracket) of the first `(` never closed, or None.
 
@@ -907,6 +937,7 @@ def _first_unclosed_bracket(text: str):
     lang/grammar/ source of truth; those entries are inert, because the
     token types they name never occur."""
     stack: list[tuple[int, str]] = []
+    reach: dict[int, int] = {}
     position = 0
     while position < len(text):
         start, end = _line_bounds(text, position)
@@ -942,11 +973,20 @@ def _first_unclosed_bracket(text: str):
             # Only the SWALLOWED TAIL is fiction, and it is read the way the
             # author meant it: its own `(` and `)` pair off among
             # themselves (a bracketed interval inside the tail closes
-            # itself), and only a closer left over was meant for an opener
-            # outside the string, which it closes as it would have.
-            # Everything before the quote — on this line and above it — is
-            # text the lexer reaches, so an opener there that the tail does
-            # not close is as unclosed as any other and stays on the stack
+            # itself), and a closer left over was meant for an opener
+            # outside the string — but only one whose STATEMENT this line
+            # continues: the same line, or a wrapped continuation under
+            # the block model `_blank_block` uses. Spending it on whatever
+            # opener was innermost let `package = "0402)` two statements
+            # below an unclosed call close THAT call: the once-only
+            # reporting pass then saw balance, named nothing, and the
+            # flood this rule exists to prevent came back — 98 of 71,391
+            # mutants in round 8's focused pass, every one named correctly
+            # at round 6. A leftover `)` on a sibling-indent line was meant
+            # for something the scanner cannot see, and the opener above
+            # stays as unclosed as it is. Everything before the quote — on
+            # this line and above it — is text the lexer reaches, so an
+            # opener there that the tail does not close stays on the stack
             # for a later line, or for RHO1015. (Round 8's first two cuts
             # got both halves wrong in turn: dropping this line's own
             # openers as "unknowable" lost 94 true RHO1015 across the
@@ -959,7 +999,8 @@ def _first_unclosed_bracket(text: str):
                 elif char == ")":
                     if depth_inside:
                         depth_inside -= 1
-                    elif stack:
+                    elif stack and _continues_statement(
+                            text, stack[-1][0], start, reach):
                         stack.pop()
         position = end + 1
     return stack[0] if stack else None
