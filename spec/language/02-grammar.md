@@ -144,15 +144,16 @@ grammar source of truth by the conformance gate.
 ### Imports
 
 ```text
-import Divider from "lib/divider.rhoform"
-import Led, Resistor from "lib/parts.rhoform"
+import Divider from "./lib/divider"
+import Led, Resistor from "acme/parts/leds"
 ```
 
 An import line names one or more definitions, comma-separated, and the
 file they come from as a string. Import lines follow the pragma and
 precede the first definition; none may appear later. Each imported name
 is bound, so it follows the binding rule in [Names](#names). What the
-path is relative to and what it may name are elaboration's.
+path is relative to and what it may name are the package layer's
+([08 — Packages and imports](08-packages.md)).
 
 ### Component definitions
 

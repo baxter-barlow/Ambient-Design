@@ -1,0 +1,7 @@
+#pragma rhoform-syntax 0.2
+
+import Panel from "./main"
+
+component Led:
+    pin a passive 1
+    pin k passive 2

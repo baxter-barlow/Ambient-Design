@@ -84,7 +84,7 @@ the author wrapped over several lines is written on one line.
 
 | Statement | Canonical shape | Order of its lists |
 |---|---|---|
-| import | `import Led, Resistor from "lib/parts.rhoform"` | names sorted |
+| import | `import Led, Resistor from "./lib/parts"` | names sorted |
 | module | `module Power:` | (its body: see Ordering) |
 | component | `component UsbC:` with one pin per line, or `component Fiducial` with no pins | (its body: pins sorted by name) |
 | parameter list | `module Divider(r_top: resistance = 10kohm, stages: int = 1):` | parameters keep source order |

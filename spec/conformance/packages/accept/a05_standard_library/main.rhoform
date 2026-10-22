@@ -1,0 +1,18 @@
+# The bundled standard library across an import: lib/divider.rhoform
+# names `rhoform.lib.passive.Resistor` and this file names
+# `rhoform.lib.semiconductor.Led`. Both resolve, both modules are
+# sources of the compilation, and the source_hash lists them by their
+# fixed path `rhoform/lib/<module>.rhoform`, not under this package.
+#pragma rhoform-syntax 0.2
+
+import Divider from "./lib/divider"
+
+module Board:
+    port gnd passive
+    port vin power_in
+    d1 = new rhoform.lib.semiconductor.Led
+    div = new Divider
+    vin ~ div.top
+    div.mid ~ d1.a
+    d1.k ~ gnd
+    div.bottom ~ gnd

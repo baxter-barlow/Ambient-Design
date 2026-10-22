@@ -3,7 +3,7 @@
 Two halves. The library's own files: each module is a canonical syntax 0.2
 file of `component` definitions only, and every definition can be
 instantiated. And what elaboration does with them: a name under the
-reserved prefix `rhoform.lib.` resolves to a definition or is RHO2048,
+reserved prefix `rhoform.lib.` resolves to a definition or is RHO2067,
 only the modules a compilation names are read and listed (E-8), and a
 module the toolchain ships broken is reported rather than raised.
 """
@@ -166,7 +166,7 @@ class ResolutionTest(unittest.TestCase):
             with self.subTest(name=name):
                 result = self.elaborate(f"module Top:\n    r = new {name}\n")
                 self.assertEqual([d["code"] for d in _diagnostics(result)],
-                                 ["RHO2048"])
+                                 ["RHO2067"])
                 self.assertIsNone(result.design)
 
     def test_other_dotted_names_stay_ad_hoc(self):
@@ -206,7 +206,7 @@ class ResolutionTest(unittest.TestCase):
         result = self.elaborate(
             "module Top:\n    r = new rhoform.lib.Passive.Resistor\n")
         self.assertEqual([d["code"] for d in _diagnostics(result)],
-                         ["RHO2048"])
+                         ["RHO2067"])
 
     def test_inline_pins_must_restate_the_definition(self):
         result = self.elaborate(
@@ -278,7 +278,7 @@ class ResolutionTest(unittest.TestCase):
             "module Top:\n    r = new rhoform.lib.passive.Resistor\n",
             library=library)
         codes = [d["code"] for d in _diagnostics(result)]
-        self.assertIn("RHO2048", codes)
+        self.assertIn("RHO2067", codes)
         self.assertTrue(any(d["spans"][0]["file"]
                             == "rhoform/lib/passive.rhoform"
                             for d in _diagnostics(result)))
@@ -293,7 +293,7 @@ class ResolutionTest(unittest.TestCase):
             P + "module Top:\n    r = new rhoform.lib.passive.Resistor\n",
             "rhoform/lib/passive.rhoform")
         self.assertEqual([d["code"] for d in _diagnostics(result)],
-                         ["RHO2048"])
+                         ["RHO2067"])
 
     def test_a_missing_library_directory_resolves_nothing(self):
         from rhoform.elaborate import Library
@@ -302,7 +302,7 @@ class ResolutionTest(unittest.TestCase):
             "module Top:\n    r = new rhoform.lib.passive.Resistor\n",
             library=Library(self.tmp / "absent"))
         self.assertEqual([d["code"] for d in _diagnostics(result)],
-                         ["RHO2048"])
+                         ["RHO2067"])
 
 
 if __name__ == "__main__":

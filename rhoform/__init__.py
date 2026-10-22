@@ -4,10 +4,13 @@ This package is the tool the roadmap calls `rhoform` — the diagnostics
 framework (R17/A1), the lexer/parser generated from the grammar (R12/L5),
 which reads syntax 0.1 and its strict superset 0.2, the quantity-literal
 reference implementation that anchors the spec's T3 normal form (R54/T3),
-the elaborator (R13, with R15's fabrication facts) that flattens a parsed
+the package layer (R14b, `rhoform.package`) that reads `rhoform.toml`
+manifests and an entry file's import closure, the bundled standard
+library of components (`rhoform/lib/`, names under `rhoform.lib.`), the
+elaborator (R13, with R15's fabrication facts) that flattens a parsed
 design into IR v0 and its source map, serialized and hashed by
-`rhoform.ir` (all of syntax 0.2 except `import`, which waits on the package
-layer), the canonical formatter (R16) for both syntax versions, and the
+`rhoform.ir` (all of syntax 0.2), the
+canonical formatter (R16) for both syntax versions, and the
 command line (R18, `python3 -m rhoform check|fmt`, in `rhoform.cli`).
 
 It deliberately imports nothing from `lang.bakeoff` (the throwaway

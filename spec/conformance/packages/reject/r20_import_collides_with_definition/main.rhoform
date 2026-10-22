@@ -1,0 +1,16 @@
+# An imported name may not also be a definition of the importing
+# file.
+#pragma rhoform-syntax 0.2
+
+import Led from "./leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd
+
+component Led:
+    pin a passive 1
+    pin k passive 2

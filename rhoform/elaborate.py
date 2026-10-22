@@ -15,8 +15,10 @@ THE PASSES, in order, each total over its input:
      relative to the compile root with `/` turned into `.` and each
      segment made an identifier; then each definition's parameter list;
   B. each module's own ports, each component's pins;
-  C. the instantiation graph: a single-word definition must be a module
-     or component of the file; a dotted one under the reserved prefix
+  C. imports bind names (each imported name must be a definition of the
+     file it comes from, and binds once per file); then the instantiation
+     graph: a single-word definition must be a module or component of the
+     file or imported into it; a dotted one under the reserved prefix
      `rhoform.lib.` must be a component of the bundled standard library
      (see THE STANDARD LIBRARY), and any other dotted one is an ad-hoc
      component whose ports are exactly its inline `pin` statements;
@@ -66,8 +68,12 @@ parameter list, when it has one, checks the arguments.
 
 REPLICATION is budgeted: loop iterations and array members together are
 capped at EXPANSION_LIMIT per design, counted over every instance, so a
-source that parses cannot make elaboration slow. `import` is the one 0.2
-construct still refused here (RHO2033): it needs the package layer.
+source that parses cannot make elaboration slow.
+
+FILES. A compilation is the entry file plus the files it imports, which
+the package layer (`rhoform/package.py`) finds, reads and resolves; this
+module binds the imported names. Called with files and no resolution, it
+resolves their imports among exactly those files.
 """
 
 from dataclasses import dataclass, field, replace
@@ -666,13 +672,17 @@ class _UnionFind:
 
 def elaborate(results, *, root: str | None = None,
               sink: Diagnostics | None = None,
+              imports: dict | None = None,
               library: Library | None = None) -> Elaboration:
     """Elaborate a compilation: `results[0]` is the entry file's
-    ParseResult, any others are further sources it may read. `root`
-    names the root module explicitly; otherwise it is the unique module
-    of the entry file that nothing instantiates. `library` is the
-    standard library names under `rhoform.lib.` resolve against: the
-    bundled one unless a test supplies another."""
+    ParseResult, any others are the files it imports. `root` names the
+    root module explicitly; otherwise it is the unique module of the entry
+    file that nothing instantiates. `imports` is the package layer's
+    resolution of every file's import statements (`package.load`); when
+    it is None they are resolved among `results` alone (`package.link`),
+    and any problem doing so stops elaboration as it would at load.
+    `library` is the standard library names under `rhoform.lib.` resolve
+    against: the bundled one unless a test supplies another."""
     results = list(results)
     sink = sink if sink is not None else Diagnostics()
     if not results:
@@ -682,20 +692,14 @@ def elaborate(results, *, root: str | None = None,
             if result.diagnostics is not sink:
                 sink.extend(result.diagnostics)
         return Elaboration(None, sink)
-    # INTERIM: imports parse, but resolving them is the package layer's job
-    # (wave 2b). Each `import` is refused once and nothing else is
-    # reported: a check run without them would blame every name they bind.
-    imports = [result.span_of(node) for result in results
-               for node in result.tree.children
-               if _is_tree(node) and node.data == "import_stmt"]
-    if imports:
-        for span in imports:
-            sink.add("RHO2033",
-                     {"construct": "an `import` statement",
-                      "tool": "elaborator"},
-                     primary=span)
-        return Elaboration(None, sink)
-    design = _Elaborator(results, sink,
+    if imports is None:
+        from .package import link
+
+        errors = sink.counts()["error"]
+        imports = link(results, sink)
+        if sink.counts()["error"] > errors:
+            return Elaboration(None, sink)
+    design = _Elaborator(results, sink, imports,
                          BUNDLED if library is None else library).run(root)
     if sink.has_errors:
         design = None
@@ -714,12 +718,16 @@ def elaborate_source(source: str, path: str = "design.rhoform", *,
 
 
 class _Elaborator:
-    def __init__(self, results, sink: Diagnostics, library: Library):
+    def __init__(self, results, sink: Diagnostics, imports: dict,
+                 library: Library):
         self.results = results
         self.sink = sink
+        self.imports = imports
         self.library = library
         self.defs: list[_Definition] = []
         self.visible: dict[str, dict[str, _Definition]] = {}
+        self.unbound: dict[str, set] = {}  # file -> names an import failed
+        self.library_files: set[str] = set()  # paths of library modules read
         self.models: dict = {}  # (id(defn), env key) -> _Model
         self.model_order: dict = {}  # id(defn) -> [_Model], first-use order
         self.static: dict = {}  # id(defn) -> _Findings
@@ -804,6 +812,7 @@ class _Elaborator:
         for result in list(self.results):
             self.collect_definitions(result)
         self.load_library()
+        self.bind_imports()
         for defn in self.defs:
             self.within(defn, self.collect_params, defn)
         for defn in self.defs:
@@ -863,6 +872,7 @@ class _Elaborator:
                 self.sink.extend(result.diagnostics)
                 continue
             self.results.append(result)
+            self.library_files.add(result.file)
             self.collect_definitions(result, library=True)
 
     def collect_definitions(self, result, library: bool = False) -> None:
@@ -899,6 +909,45 @@ class _Elaborator:
                                library=library)
             table[name] = defn
             self.defs.append(defn)
+
+    def bind_imports(self) -> None:
+        """Make each imported name visible in its importing file as the
+        definition of that name in the file it comes from. Only a file's
+        own definitions can be imported (nothing is re-exported). A name
+        whose import failed is remembered, so the uses of it stay quiet:
+        the import is the one defect."""
+        own = {file: dict(table) for file, table in self.visible.items()}
+        for result in self.results:
+            table = self.visible.setdefault(result.file, {})
+            unbound = self.unbound.setdefault(result.file, set())
+            bound = {}
+            for record in self.imports.get(result.file, ()):
+                defined = own.get(record.target) if record.target else None
+                for name, span in record.names:
+                    if name in own.get(result.file, {}):
+                        self.report(
+                            "RHO2066",
+                            {"name": name, "first": "by its own definition"},
+                            span, secondary=((table[name].header,
+                                              "defined here"),))
+                        continue
+                    if name in bound:
+                        self.report(
+                            "RHO2066",
+                            {"name": name, "first": "by an earlier import"},
+                            span, secondary=((bound[name],
+                                              "first imported here"),))
+                        continue
+                    bound[name] = span
+                    if defined is None:
+                        unbound.add(name)
+                    elif name not in defined:
+                        unbound.add(name)
+                        self.report(
+                            "RHO2065", {"name": name, "file": record.target},
+                            span, fixits=_did_you_mean(name, defined, span))
+                    else:
+                        table[name] = defined[name]
 
     def collect_params(self, defn: _Definition) -> None:
         node = _tree(defn.tree, "params")
@@ -1041,17 +1090,21 @@ class _Elaborator:
 
     def unresolved(self, defn, qualified) -> None:
         """Report a qualified name `resolve` found nothing for: RHO2005
-        for a single word, RHO2048 under the library's reserved prefix,
-        each with the one close match as a fix-it when there is one."""
+        for a single word, RHO2067 under the library's reserved prefix,
+        each with the one close match as a fix-it when there is one. A
+        single word whose import failed is not reported again: the import
+        is the one defect."""
         words = _words(qualified)
         name = ".".join(words)
         span = defn.result.span_of(qualified)
         if len(words) == 1:
+            if name in self.unbound.get(defn.result.file, ()):
+                return
             self.report("RHO2005", {"name": name}, span,
                         fixits=_did_you_mean(
                             name, self.visible[defn.result.file], span))
             return
-        self.report("RHO2048", {"name": name}, span,
+        self.report("RHO2067", {"name": name}, span,
                     fixits=self.library_fixits(words, span))
 
     def library_fixits(self, words, span) -> tuple:
@@ -1179,7 +1232,8 @@ class _Elaborator:
         names = [d.name for d in local]
         if root is not None:
             chosen = self.visible[entry.file].get(root)
-            if chosen is None or chosen.kind != "module":
+            if chosen is None or chosen.kind != "module" \
+                    or chosen.result is not entry:
                 self.report("RHO2003", {"name": root, "candidates": names},
                             span_from_bytes(entry.file, entry.data, 0, 0))
                 return None
@@ -2467,9 +2521,16 @@ class _Elaborator:
                             secondary=secondary)
 
     def flatten(self, root_def, instances, visits) -> ElaboratedDesign:
-        entry = self.results[0]
-        pragma = next(c for c in entry.tree.children
-                      if not _is_tree(c) and c.type == "PRAGMA")
+        # The design's language version is the newest any of its authored
+        # files declares. Only a 0.2 file can import, so today that is
+        # always the entry file's. The standard library is the
+        # toolchain's, written in whatever syntax it implements, so its
+        # files do not raise the version of a design that uses it.
+        version = max((str(c).split()[-1] for r in self.results
+                       if r.file not in self.library_files
+                       for c in r.tree.children
+                       if not _is_tree(c) and c.type == "PRAGMA"),
+                      key=lambda v: tuple(int(p) for p in v.split(".")))
         found = _UnionFind()
         labels, statements, isolated, checks = [], [], [], []
         for model, path, depth, trace in visits:
@@ -2603,7 +2664,7 @@ class _Elaborator:
                 "impossible")
         return ElaboratedDesign(
             design_name=root_def.name,
-            language_version=str(pragma).split()[-1] + ".0",
+            language_version=version + ".0",
             instances=sorted(instances, key=lambda i: i.path),
             nets=sorted(nets, key=lambda n: n.name),
             assertions=sorted(assertions, key=lambda a: a.path),

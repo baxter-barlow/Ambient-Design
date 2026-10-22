@@ -1,0 +1,12 @@
+# A bare version string implies a registry, and v1 has none: a
+# dependency is an inline table with a source (R14a M2).
+#pragma rhoform-syntax 0.2
+
+import Led from "./leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

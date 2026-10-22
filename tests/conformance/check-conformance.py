@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gate: the conformance suite holds the implementation to the spec.
 
-Six legs:
+Seven legs:
 
   1. PARSE ACCEPT: every spec/conformance/parse/accept case parses with
      zero diagnostics.
@@ -33,17 +33,25 @@ Six legs:
      ir/netlist-ir.schema.json; every elaborate/reject case parses clean
      and its elaboration diagnostic stream equals its .expected.ndjson
      byte for byte, each line valid on the wire schema. Every block-2 code
-     a source can trigger must be emitted by some reject case, and the
-     closed lists 04 restates are reconciled against the elaborator.
+     a source can trigger must be emitted by some reject case (of this leg
+     or the next), and the closed lists 04 restates are reconciled against
+     the elaborator.
+  7. PACKAGE CASES (spec/language/08-packages.md): each case is a
+     directory, compiled with itself as the compile root from its one
+     `main.rhoform` through the package layer (manifests, imports, the
+     import closure). packages/accept cases elaborate with zero
+     diagnostics to IR equal to their expected.ir.json byte for byte, valid
+     against the IR schema; packages/reject cases' streams equal their
+     expected.ndjson byte for byte, each line valid on the wire schema.
 
 Population floors on cases and vectors keep the suite from shrinking by
 accident, the same posture as the schema gate's negative-control floor.
 
 Exit 0 pass, 1 violation, 2 when the pinned lark or jsonschema is
 missing (an unavailable gate is not a pass). `--write` regenerates the
-reject and formatter cases' expected files, and the elaboration
-cases' expected IR and streams, from the reference implementation;
-the git diff is the review artifact.
+reject and formatter cases' expected files, and the elaboration and
+package cases' expected IR and streams, from the reference
+implementation; the git diff is the review artifact.
 
 Usage: check-conformance.py [--self-test | --write]
 """
@@ -65,12 +73,12 @@ SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
 # Today's populations. Cases may be added freely; a DROP below the floor
 # is the suite shrinking out from under the spec, and must be a decision
 # recorded here. Syntax 0.2 added a09-a16 and r17-r23, and its canonical
-# form f17-f24.
-MINIMUM_ACCEPT_CASES = 16
+# form f17-f24; bodyless component definitions added a17 and f25.
+MINIMUM_ACCEPT_CASES = 17
 MINIMUM_REJECT_CASES = 23
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
-MINIMUM_FMT_CASES = 24
+MINIMUM_FMT_CASES = 25
 
 # Elaboration cases (leg 5). The reject floor is one case per block-2 code
 # a source can trigger; the coverage check below is what keeps that true
@@ -78,8 +86,18 @@ MINIMUM_FMT_CASES = 24
 # 0.2's semantics added a09-a14 and r35-r48; a08 came with AMB-132.
 ELABORATE = CONFORMANCE / "elaborate"
 IR_SCHEMA_PATH = ROOT / "ir" / "netlist-ir.schema.json"
-MINIMUM_ELABORATE_ACCEPT_CASES = 14
-MINIMUM_ELABORATE_REJECT_CASES = 46
+# r33 went with RHO2033, the interim refusal of imports, when the package
+# layer gave imports their semantics: 46 -> 45. The standard library added
+# a15-a16 and r49-r51.
+MINIMUM_ELABORATE_ACCEPT_CASES = 16
+MINIMUM_ELABORATE_REJECT_CASES = 48
+
+# Package cases (leg 7): one directory per case, added with R14b; a05
+# came with the standard library.
+PACKAGES = CONFORMANCE / "packages"
+MINIMUM_PACKAGE_ACCEPT_CASES = 5
+MINIMUM_PACKAGE_REJECT_CASES = 20
+PACKAGE_ENTRY = "main.rhoform"
 
 # Block-2 codes no source text can trigger, each with its reason. Every
 # other active block-2 code must be emitted by at least one reject case,
@@ -829,9 +847,9 @@ def elaborate_coverage_problems(emitted_codes, registry=None,
     problems = []
     for code in sorted(block - set(exempt) - set(emitted_codes)):
         problems.append(
-            f"{code}: no elaborate/reject case emits it; every block-2 code "
-            "a source can trigger needs one (or a reason in "
-            "NOT_SOURCE_TRIGGERED)"
+            f"{code}: no elaborate/reject or packages/reject case emits it; "
+            "every block-2 code a source can trigger needs one (or a reason "
+            "in NOT_SOURCE_TRIGGERED)"
         )
     for code in sorted(set(exempt) - block):
         problems.append(
@@ -841,9 +859,30 @@ def elaborate_coverage_problems(emitted_codes, registry=None,
     return problems
 
 
+def _list_sentence_problems(spec_dir, doc, truths, owner):
+    """Each closed list `doc` restates as one sentence 'LEAD `a`, `b` and
+    `c`.' equals its constant in `owner`, sorted."""
+    text = " ".join((spec_dir / doc).read_text(encoding="utf-8").split())
+    problems = []
+    for lead, truth in truths.items():
+        match = re.search(re.escape(lead) + r"([^.]*)\.", text)
+        if match is None:
+            problems.append(
+                f"{doc} no longer states '{lead} ...', the restatement "
+                "this reconciliation reads"
+            )
+            continue
+        stated = _WORD.findall(match.group(1))
+        if stated != sorted(truth):
+            problems.append(
+                f"{doc}: '{lead}' lists {stated}; the {owner}'s list is "
+                f"{sorted(truth)}"
+            )
+    return problems
+
+
 def elaboration_doc_problems(spec_dir=SPEC_LANG, truths=None):
-    """The closed lists 04 restates, each as one sentence 'LEAD `a`, `b`
-    and `c`.', equal the elaborator's own constants."""
+    """The closed lists 04 restates equal the elaborator's constants."""
     if truths is None:
         from rhoform import elaborate as elaborator
 
@@ -855,31 +894,32 @@ def elaboration_doc_problems(spec_dir=SPEC_LANG, truths=None):
             "The static measurement kinds are":
                 elaborator.STATIC_MEASUREMENTS,
         }
-    text = " ".join((spec_dir / "04-elaboration.md").read_text(
-        encoding="utf-8").split())
-    problems = []
-    for lead, truth in truths.items():
-        match = re.search(re.escape(lead) + r"([^.]*)\.", text)
-        if match is None:
-            problems.append(
-                f"04-elaboration.md no longer states '{lead} ...', the "
-                "restatement this reconciliation reads"
-            )
-            continue
-        stated = _WORD.findall(match.group(1))
-        if stated != sorted(truth):
-            problems.append(
-                f"04-elaboration.md: '{lead}' lists {stated}; the "
-                f"elaborator's list is {sorted(truth)}"
-            )
-    return problems
+    return _list_sentence_problems(spec_dir, "04-elaboration.md", truths,
+                                   "elaborator")
 
 
-def elaborate_leg_problems(write=False):
-    """Leg 5 as main() runs it: (problems, accept_count, reject_count)."""
+def package_doc_problems(spec_dir=SPEC_LANG, truths=None):
+    """The closed lists 08 restates equal the package layer's constants."""
+    if truths is None:
+        from rhoform import package
+
+        truths = {
+            "The [package] keys are": package.PACKAGE_KEYS,
+            "The required [package] keys are":
+                package.REQUIRED_PACKAGE_KEYS,
+            "The dependency keys are": package.DEPENDENCY_KEYS,
+            "The reserved namespaces are": package.RESERVED_NAMESPACES,
+        }
+    return _list_sentence_problems(spec_dir, "08-packages.md", truths,
+                                   "package layer")
+
+
+def elaborate_leg_problems(write=False, package_codes=()):
+    """Leg 5 as main() runs it: (problems, accept_count, reject_count).
+    Block-2 coverage counts the package cases' codes too."""
     problems, accepts, rejects, codes = elaborate_case_problems(
         ELABORATE / "accept", ELABORATE / "reject", write=write)
-    problems += elaborate_coverage_problems(codes)
+    problems += elaborate_coverage_problems(set(codes) | set(package_codes))
     problems += elaboration_doc_problems()
     if accepts < MINIMUM_ELABORATE_ACCEPT_CASES:
         problems.append(
@@ -1051,7 +1091,8 @@ def elaborate_self_test_cases(tmp):
                   elaborate_coverage_problems(triggerable) == []))
     problems = elaborate_coverage_problems(triggerable - {"RHO2001"})
     cases.append(("a block-2 code no reject case emits is caught",
-                  any(p.startswith("RHO2001: no elaborate/reject case")
+                  any(p.startswith("RHO2001: no elaborate/reject or "
+                                   "packages/reject case")
                       for p in problems)))
     problems = elaborate_coverage_problems(block, exempt={"RHO2999": "x"})
     cases.append(("a stale NOT_SOURCE_TRIGGERED entry is caught",
@@ -1094,6 +1135,369 @@ def elaborate_self_test_cases(tmp):
             globals()[floor_name] = real_floor
         cases.append((f"the {floor_name} floor is WIRED into main()",
                       wired == 1 and "below the floor" in err.getvalue()))
+    return cases
+
+
+# ---- leg 7: package cases (spec/language/08-packages.md) ---------------
+
+def package_case_problems(accept_dir, reject_dir, write=False):
+    """Returns (problems, accept_count, reject_count, emitted_codes).
+
+    A case is a directory and its own compile root. Its entry is its one
+    `main.rhoform`, wherever it sits (a case with a path dependency keeps
+    each package in a directory of its own); its expectation is
+    `expected.ir.json` (accept) or `expected.ndjson` (reject) at the case
+    root, and nothing else there may be an expectation of the other kind.
+    """
+    import jsonschema
+
+    from rhoform import package
+    from rhoform.diagnostics import Diagnostics
+    from rhoform.elaborate import elaborate
+    from rhoform.ir import emit
+
+    def validator(path):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        return jsonschema.validators.validator_for(schema)(schema)
+
+    wire = validator(SCHEMA_PATH)
+    ir_schema = validator(IR_SCHEMA_PATH)
+    problems = []
+
+    def compile_case(case, where):
+        """(stream, design) of a case, or None when it cannot be run."""
+        entries = sorted(case.rglob(PACKAGE_ENTRY))
+        if len(entries) != 1:
+            problems.append(
+                f"{where}: holds {len(entries)} {PACKAGE_ENTRY} files; a "
+                "package case has exactly one entry")
+            return None
+        sink = Diagnostics()
+        try:
+            compilation = package.load(
+                entries[0].relative_to(case).as_posix(), case, sink)
+        except package.ReadFailure as exc:
+            problems.append(f"{where}: could not be read: {exc}")
+            return None
+        design = None
+        if compilation.ok:
+            design = elaborate(compilation.results, sink=sink,
+                               imports=compilation.imports).design
+        return sink.render(), design
+
+    def cases_in(directory, kind):
+        found = sorted(directory.iterdir()) if directory.is_dir() else []
+        for stray in (p for p in found if not p.is_dir()):
+            problems.append(
+                f"packages/{kind}/{stray.name}: not a case directory; each "
+                "package case is a directory of its own")
+        return [p for p in found if p.is_dir()]
+
+    accept_cases = cases_in(accept_dir, "accept")
+    for case in accept_cases:
+        where = f"packages/accept/{case.name}"
+        expected = case / "expected.ir.json"
+        if (case / "expected.ndjson").exists():
+            problems.append(
+                f"{where}: holds expected.ndjson, a reject case's "
+                "expectation; an accept case's is expected.ir.json")
+        compiled = compile_case(case, where)
+        if compiled is None:
+            continue
+        stream, design = compiled
+        if design is None or stream:
+            codes = [json.loads(line)["code"] for line in stream.splitlines()]
+            problems.append(
+                f"{where}: expected a clean compilation, got "
+                f"{codes or 'no design'}")
+            continue
+        ir_bytes = emit(design)[0]
+        for error in ir_schema.iter_errors(json.loads(ir_bytes)):
+            problems.append(
+                f"{where}: the IR violates ir/netlist-ir.schema.json at "
+                f"/{'/'.join(map(str, error.absolute_path))}: "
+                f"{error.message}")
+        if write:
+            expected.write_bytes(ir_bytes)
+            print(f"conformance: wrote {_shown(expected)}")
+            continue
+        if not expected.is_file():
+            problems.append(
+                f"{where}: no expected.ir.json; run --write and review the "
+                "diff")
+            continue
+        if expected.read_bytes() != ir_bytes:
+            problems.append(
+                f"{where}: the IR diverges from expected.ir.json (if the "
+                "change is deliberate, --write and review the byte diff)")
+
+    emitted_codes = set()
+    reject_cases = cases_in(reject_dir, "reject")
+    for case in reject_cases:
+        where = f"packages/reject/{case.name}"
+        expected = case / "expected.ndjson"
+        if (case / "expected.ir.json").exists():
+            problems.append(
+                f"{where}: holds expected.ir.json, an accept case's "
+                "expectation; a reject case's is expected.ndjson")
+        compiled = compile_case(case, where)
+        if compiled is None:
+            continue
+        stream, _design = compiled
+        if not stream:
+            problems.append(
+                f"{where}: produced no diagnostics; a reject case that "
+                "stopped rejecting is an accepted defect")
+            continue
+        lines = [json.loads(line) for line in stream.splitlines()]
+        emitted_codes.update(line["code"] for line in lines)
+        for number, line in enumerate(lines, 1):
+            for error in wire.iter_errors(line):
+                problems.append(
+                    f"{where}: line {number} violates the wire schema at "
+                    f"/{'/'.join(map(str, error.absolute_path))}: "
+                    f"{error.message}")
+        if write:
+            expected.write_text(stream, encoding="utf-8")
+            print(f"conformance: wrote {_shown(expected)}")
+            continue
+        if not expected.is_file():
+            problems.append(
+                f"{where}: no expected.ndjson; run --write and review the "
+                "diff")
+            continue
+        if expected.read_text(encoding="utf-8") != stream:
+            want = [json.loads(line)["code"] for line in
+                    expected.read_text(encoding="utf-8").splitlines()
+                    if line.strip()]
+            problems.append(
+                f"{where}: diagnostic stream diverges from expected.ndjson "
+                f"(emitted {[line['code'] for line in lines]}, expected "
+                f"{want}; if the change is deliberate, --write and review "
+                "the byte diff)")
+    return problems, len(accept_cases), len(reject_cases), emitted_codes
+
+
+def package_leg_problems(write=False):
+    """Leg 7 as main() runs it: (problems, accept_count, reject_count,
+    emitted codes)."""
+    problems, accepts, rejects, codes = package_case_problems(
+        PACKAGES / "accept", PACKAGES / "reject", write=write)
+    problems += package_doc_problems()
+    if accepts < MINIMUM_PACKAGE_ACCEPT_CASES:
+        problems.append(
+            f"{accepts} package accept case(s), below the floor of "
+            f"{MINIMUM_PACKAGE_ACCEPT_CASES}")
+    if rejects < MINIMUM_PACKAGE_REJECT_CASES:
+        problems.append(
+            f"{rejects} package reject case(s), below the floor of "
+            f"{MINIMUM_PACKAGE_REJECT_CASES}")
+    return problems, accepts, rejects, codes
+
+
+def package_self_test_cases(tmp):
+    """Leg 7's self-test cases, over planted case directories under
+    `tmp`. Every report site in package_case_problems has a case that
+    fails when the site is blanked."""
+    import contextlib
+    import io
+    import shutil
+    from unittest import mock
+
+    global SCHEMA_PATH, IR_SCHEMA_PATH
+
+    cases = []
+    accept = Path(tmp) / "packages" / "accept"
+    reject = Path(tmp) / "packages" / "reject"
+    accept.mkdir(parents=True)
+    reject.mkdir(parents=True)
+    pragma = "#pragma rhoform-syntax 0.2\n"
+    led = pragma + "\ncomponent Led:\n    pin a passive\n    pin k passive\n"
+    top = (pragma + 'import Led from "./leds"\n\nmodule Top:\n'
+           "    d = new Led\n    d.a ~ d.k\n")
+
+    def plant(case, files):
+        for name, text in files.items():
+            path = case / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+
+    def run(write=False):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return package_case_problems(accept, reject, write=write)
+
+    def strict(name, code_const):
+        path = Path(tmp) / name
+        path.write_text(json.dumps({
+            "type": "object",
+            "properties": {code_const[0]: {"const": code_const[1]}},
+        }))
+        return path
+
+    # -- accept
+    good = accept / "a01_import"
+    plant(good, {"main.rhoform": top, "leds.rhoform": led})
+    problems, n_accept, _, _ = run()
+    cases.append(("a package accept case without expected IR is caught",
+                  any("a01_import: no expected.ir.json" in p
+                      for p in problems) and n_accept == 1))
+    problems, _, _, _ = run(write=True)
+    cases.append(("--write creates a package case's expected IR and passes",
+                  problems == [] and (good / "expected.ir.json").is_file()))
+    expected_ir = good / "expected.ir.json"
+    ir_bytes = expected_ir.read_bytes()
+    expected_ir.write_bytes(ir_bytes.replace(b'"Top"', b'"Tap"'))
+    problems, _, _, _ = run()
+    cases.append(("a drifted package expected IR is caught",
+                  any("a01_import: the IR diverges" in p for p in problems)))
+    expected_ir.write_bytes(ir_bytes)
+
+    (good / "expected.ndjson").write_text("")
+    problems, _, _, _ = run()
+    cases.append(("a reject expectation in an accept case is caught",
+                  any("a01_import: holds expected.ndjson" in p
+                      for p in problems)))
+    (good / "expected.ndjson").unlink()
+
+    (accept / "notes.txt").write_text("x")
+    problems, _, _, _ = run()
+    cases.append(("a stray file among the package cases is caught",
+                  any("packages/accept/notes.txt: not a case directory" in p
+                      for p in problems)))
+    (accept / "notes.txt").unlink()
+
+    dirty = accept / "a02_dirty"
+    plant(dirty, {"main.rhoform": top})
+    problems, _, _, _ = run()
+    cases.append(("a package accept case that does not compile is caught",
+                  any("a02_dirty: expected a clean compilation" in p
+                      and "RHO2060" in p for p in problems)))
+    plant(dirty, {"sub/main.rhoform": top})
+    problems, _, _, _ = run()
+    cases.append(("a package case with two entries is caught",
+                  any("a02_dirty: holds 2 main.rhoform files" in p
+                      for p in problems)))
+    shutil.rmtree(dirty)
+
+    real_ir_schema = IR_SCHEMA_PATH
+    IR_SCHEMA_PATH = strict("strict-package-ir.schema.json",
+                            ("header", "never"))
+    try:
+        problems, _, _, _ = run()
+    finally:
+        IR_SCHEMA_PATH = real_ir_schema
+    cases.append(("package IR violating the IR schema is reported",
+                  any("a01_import: the IR violates" in p for p in problems)))
+
+    from rhoform import package
+
+    def unreadable(self, key):
+        raise package.ReadFailure(self.root / key, OSError("planted"))
+
+    with mock.patch.object(package._Loader, "read", unreadable):
+        problems, _, _, _ = run()
+    cases.append(("an unreadable package case is reported, not a crash",
+                  any("a01_import: could not be read" in p
+                      for p in problems)))
+
+    # -- reject
+    bad = reject / "r01_missing"
+    plant(bad, {"main.rhoform": top})
+    problems, _, n_reject, _ = run()
+    cases.append(("a package reject case without expected output is caught",
+                  any("r01_missing: no expected.ndjson" in p
+                      for p in problems) and n_reject == 1))
+    problems, _, _, codes = run(write=True)
+    expected = bad / "expected.ndjson"
+    cases.append(("--write creates a package case's expected stream",
+                  problems == [] and expected.is_file()
+                  and codes == {"RHO2060"}))
+    stream = expected.read_text()
+    obj = json.loads(stream)
+    obj["spans"][0]["byte_start"] += 1
+    expected.write_text(
+        json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+    problems, _, _, _ = run()
+    cases.append(("a one-byte span drift in a package stream is caught",
+                  any("r01_missing: diagnostic stream diverges" in p
+                      for p in problems)))
+    expected.write_text(stream)
+
+    (bad / "expected.ir.json").write_text("{}")
+    problems, _, _, _ = run()
+    cases.append(("an accept expectation in a reject case is caught",
+                  any("r01_missing: holds expected.ir.json" in p
+                      for p in problems)))
+    (bad / "expected.ir.json").unlink()
+
+    clean = reject / "r02_clean"
+    plant(clean, {"main.rhoform": top, "leds.rhoform": led})
+    problems, _, _, _ = run()
+    cases.append(("a package reject case that stopped rejecting is caught",
+                  any("r02_clean: produced no diagnostics" in p
+                      for p in problems)))
+    shutil.rmtree(clean)
+
+    real_schema = SCHEMA_PATH
+    SCHEMA_PATH = strict("strict-package-wire.schema.json",
+                         ("code", "RHONONE"))
+    try:
+        problems, _, _, _ = run()
+    finally:
+        SCHEMA_PATH = real_schema
+    cases.append(("a package stream violating the wire schema is reported",
+                  any("r01_missing: line 1 violates the wire schema" in p
+                      for p in problems)))
+
+    # -- both floors feed main()
+    for floor_name in ("MINIMUM_PACKAGE_ACCEPT_CASES",
+                       "MINIMUM_PACKAGE_REJECT_CASES"):
+        real_floor = globals()[floor_name]
+        globals()[floor_name] = 10_000
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                wired = main()
+        finally:
+            globals()[floor_name] = real_floor
+        cases.append((f"the {floor_name} floor is WIRED into main()",
+                      wired == 1 and "below the floor" in err.getvalue()))
+
+    # -- the lists 08 restates
+    cases.append(("the real 08 restatements reconcile",
+                  package_doc_problems() == []))
+    spec_copy = Path(tmp) / "language-08"
+    shutil.copytree(SPEC_LANG, spec_copy)
+    packages_md = spec_copy / "08-packages.md"
+    text = packages_md.read_text()
+    drifted = text.replace("`rev` and `version`", "`rev`, `vendor` and "
+                           "`version`")
+    packages_md.write_text(drifted)
+    problems = package_doc_problems(spec_dir=spec_copy)
+    cases.append(("a drifted dependency-key list in 08 is caught",
+                  drifted != text
+                  and any("08-packages.md: 'The dependency keys are' lists"
+                          in p for p in problems)))
+    dropped = text.replace("The reserved namespaces are",
+                           "Reserved namespaces include")
+    packages_md.write_text(dropped)
+    problems = package_doc_problems(spec_dir=spec_copy)
+    cases.append(("a dropped list statement in 08 is caught",
+                  dropped != text
+                  and any("no longer states 'The reserved namespaces are"
+                          in p for p in problems)))
+
+    # -- a code only a package case emits still counts for coverage
+    from rhoform.codes import REGISTRY
+
+    block = {entry.code for entry in REGISTRY
+             if entry.code.startswith("RHO2") and not entry.reserved}
+    triggerable = block - set(NOT_SOURCE_TRIGGERED)
+    elaborate_only = triggerable - {"RHO2064"}
+    cases.append(("a block-2 code emitted only by a package case covers it",
+                  elaborate_coverage_problems(elaborate_only) != []
+                  and elaborate_coverage_problems(
+                      elaborate_only | {"RHO2064"}) == []))
     return cases
 
 
@@ -1156,8 +1560,11 @@ def main(write=False) -> int:
         write=write,
     )
     problems += formatter_problems
+    package_problems, p_accepts, p_rejects, package_codes = \
+        package_leg_problems(write=write)
+    problems += package_problems
     elaborate_problems, e_accepts, e_rejects = elaborate_leg_problems(
-        write=write)
+        write=write, package_codes=package_codes)
     problems += elaborate_problems
 
     if accepts < MINIMUM_ACCEPT_CASES:
@@ -1194,7 +1601,8 @@ def main(write=False) -> int:
     print(
         f"conformance: PASS: {accepts} accept + {rejects} reject parse "
         f"case(s) byte-exact, {e_accepts} accept + {e_rejects} reject "
-        f"elaboration case(s) byte-exact, {formats} formatter case(s) "
+        f"elaboration case(s) byte-exact, {p_accepts} accept + {p_rejects} "
+        f"reject package case(s) byte-exact, {formats} formatter case(s) "
         "byte-exact and fixed points with every reject case refused, "
         f"{vectors} normal-form vector(s) with all three T3 properties, "
         f"{errors} pinned rejection(s), spec restatements reconciled."
@@ -1710,6 +2118,7 @@ def self_test() -> int:
                                     for p in problems)))
 
         cases += elaborate_self_test_cases(tmp)
+        cases += package_self_test_cases(tmp)
 
     # WIRING: all five floors feed main(). Raise each over the real
     # population in turn — three of the first four were deletable when

@@ -394,6 +394,20 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(params["shown"] + params["suppressed"],
                          params["total"])
 
+    def test_merge_skips_only_what_the_aggregate_already_holds(self):
+        # Two compilations that share an imported file report its defects
+        # alike; the run reports each once. Within one sink nothing is
+        # dropped: merge is not a deduplicator of a compilation's own
+        # findings.
+        first, second, run = Diagnostics(), Diagnostics(), Diagnostics()
+        first.add("RHO1004", {}, primary=_span(0, 1))
+        second.add("RHO1004", {}, primary=_span(0, 1))
+        second.add("RHO1004", {}, primary=_span(2, 3))
+        second.add("RHO1004", {}, primary=_span(2, 3))
+        run.merge(first)
+        run.merge(second)
+        self.assertEqual([d.primary.byte_start for d in run], [0, 2, 2])
+
     def test_the_cap_retains_errors_over_warnings_and_notes(self):
         sink = Diagnostics(cap=2)
         sink.add("RHO4007", {"domain_ids": ["a", "b"]},

@@ -475,8 +475,9 @@ class TotalityTest(unittest.TestCase):
 class Syntax02Test(unittest.TestCase):
     """Every 0.2 parse accept case elaborates without a traceback. Before
     0.2's semantics a15 crashed the elaborator with a QuantityError and
-    a12/a13 elaborated "clean" with their bodies dropped; now only imports
-    are refused (RHO2033, until the package layer resolves them)."""
+    a12/a13 elaborated "clean" with their bodies dropped. Imports have
+    their semantics too: a09's, elaborated alone, name files it was not
+    given (rhoform/tests/test_package.py covers resolution)."""
 
     def test_every_0_2_accept_case_elaborates_without_a_traceback(self):
         from pathlib import Path
@@ -495,28 +496,26 @@ class Syntax02Test(unittest.TestCase):
                 result = elaborate_source(source, path.name)
                 codes = {d["code"] for d in _diagnostics(result)}
                 if path.name == "a09_imports.rhoform":
-                    self.assertEqual(codes, {"RHO2033"})
+                    self.assertEqual(codes, {"RHO2060"})
                     self.assertEqual(len(_diagnostics(result)), 2)
-                else:
-                    self.assertNotIn("RHO2033", codes)
+                    self.assertIsNone(result.design)
         self.assertEqual(seen, 9)
 
-    def test_an_import_is_refused_and_nothing_else_is_reported(self):
-        from rhoform.elaborate import elaborate_source
+    def test_an_imported_component_elaborates_under_its_own_name(self):
+        from rhoform.elaborate import elaborate
+        from rhoform.parser import parse
 
-        source = (P2 + 'import Led from "led.rhoform"\n\n'
-                  "module Top:\n    d = new Led\n    d.a ~ d.b\n")
-        result = elaborate_source(source)
-        diagnostics = _diagnostics(result)
-        self.assertEqual([d["code"] for d in diagnostics], ["RHO2033"])
-        self.assertEqual(diagnostics[0]["params"],
-                         {"construct": "an `import` statement",
-                          "tool": "elaborator"})
-        span = diagnostics[0]["spans"][0]
-        self.assertEqual(
-            source.encode()[span["byte_start"]:span["byte_end"]].decode(),
-            'import Led from "led.rhoform"')
-        self.assertIsNone(result.design)
+        main = parse(P2 + 'import Led from "./parts/led"\n\n'
+                     "module Top:\n    d = new Led\n    d.a ~ d.k\n",
+                     file="top.rhoform")
+        led = parse(P2 + "\ncomponent Led:\n    pin a passive 1\n"
+                    "    pin k passive 2\n", file="parts/led.rhoform")
+        result = elaborate([main, led])
+        self.assertTrue(result.ok, result.diagnostics.render())
+        self.assertEqual(_by_path(result.design)["/d"].definition,
+                         "parts.led.Led")
+        self.assertEqual([f.path for f in result.design.files],
+                         ["parts/led.rhoform", "top.rhoform"])
 
     def test_a_0_2_file_of_0_1_constructs_still_elaborates(self):
         from rhoform.elaborate import elaborate_source
@@ -839,17 +838,6 @@ class CodeTest(unittest.TestCase):
         self.assertEqual(d["params"], {"net": "N",
                                        "attribute": "voltage_domain"})
 
-    def test_rho2033_syntax_0_2_not_yet_supported(self):
-        # Interim: only `import` is still refused (wave 2b resolves it).
-        d, text, result = self.only2('import Led from "led.rhoform"\n\n'
-                                     "module Top:\n    port p passive\n",
-                                     "RHO2033")
-        self.assertEqual(d["params"], {"construct": "an `import` statement",
-                                       "tool": "elaborator"})
-        self.assertEqual(text, 'import Led from "led.rhoform"')
-        self.assertIsNone(d["entity"])
-        self.assertIsNone(result.design)
-
     LED = "component Led:\n    pin a passive 1\n    pin k passive 2\n\n"
     RES = ("component Res(resistance: resistance, package: string = "
            '"0402"):\n    pin a passive 1\n    pin b passive 2\n\n')
@@ -1062,10 +1050,10 @@ class CodeTest(unittest.TestCase):
         self.assertEqual(d["params"], {"file": "design.rhoform"})
         self.assertIsNone(result.design)
 
-    def test_rho2048_unknown_library_definition(self):
+    def test_rho2067_unknown_library_definition(self):
         d, text, result = self.only(
             "module Top:\n    r1 = new rhoform.lib.passive.Resistr\n",
-            "RHO2048")
+            "RHO2067")
         self.assertEqual(d["params"], {"name": "rhoform.lib.passive.Resistr"})
         self.assertEqual(text, "rhoform.lib.passive.Resistr")
         self.assertEqual(d["fixits"][0]["edits"][0]["replacement"],
@@ -1074,12 +1062,16 @@ class CodeTest(unittest.TestCase):
         self.assertIsNone(result.design)
 
     def test_every_block_two_code_has_a_test_here(self):
+        # Here, or for the package layer's codes in test_package.CodesTest.
         from rhoform import codes
+        from rhoform.tests.test_package import CodesTest
 
         block = {c.code for c in codes.REGISTRY if c.code.startswith("RHO2")}
-        tested = {name.split("_")[1].upper() for name in dir(self)
+        tested = {name.split("_")[1].upper()
+                  for name in dir(self) + dir(CodesTest)
                   if name.startswith("test_rho2")}
         self.assertEqual(block, tested)
+        self.assertFalse({code for code, _s, _r in codes.RETIRED} & tested)
 
     def test_a_defect_in_a_reused_module_is_reported_once(self):
         source = ("module Inner:\n    x = new lib.H:\n"

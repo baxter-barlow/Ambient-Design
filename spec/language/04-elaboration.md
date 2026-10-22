@@ -18,19 +18,22 @@ them.
 
 This section covers the v0.1 surface and what syntax 0.2 adds to it:
 `component` definitions, parameter lists, parameter references, `if`,
-`for` and arrays, and the bundled standard library those definitions
-make possible. Every rule stated for v0.1 holds unchanged for a 0.1
-source, which elaborates to the same IR under a toolchain that also
-implements 0.2. Imports land with the package layer; until they do, a
-source with an `import` statement is not elaborated: the reference
-implementation reports one `RHO2033` per `import` statement, reports
-nothing else, and produces no IR. This refusal is interim.
+`for`, arrays, imports, and the bundled standard library those
+definitions make possible. Every rule stated for v0.1 holds unchanged
+for a 0.1 source, which elaborates to the same IR under a toolchain that
+also implements 0.2. Which files a compilation holds — the entry file
+and the files it imports — and how an import's path names a file are the
+package layer's, specified in [08 — Packages and imports](08-packages.md);
+this section takes those files as given, and adds the standard library
+modules they use.
 
 ## Inputs, totality and determinism
 
 Elaboration MUST run only on sources that parse with no error-severity
-diagnostic ([02 — Grammar](02-grammar.md)). A file that does not parse
-is not elaborated: its parse diagnostics are the whole report, because
+diagnostic ([02 — Grammar](02-grammar.md)), and only on a compilation
+the package layer reported no error for ([08](08-packages.md)). A file
+that does not parse is not elaborated: its parse diagnostics are the
+whole report, because
 the tree a parser recovers is the file with its broken lines removed,
 and elaborating it would report consequences of text the author never
 wrote.
@@ -59,10 +62,11 @@ file that holds a `rhoform.toml`, else the entry file's directory. These
 paths name the source map's `files`, feed `source_hash`, derive
 definition names (below) and are the `file` of every diagnostic span, so
 a compilation moved to another directory or machine elaborates to the
-same bytes. A [standard library](#the-standard-library) module is the
-one exception: it is the toolchain's file, not the author's, and is
-recorded by its library path `rhoform/lib/<module>.rhoform` whatever
-the compile root.
+same bytes. Every file an author writes into a compilation lies under
+its compile root ([08](08-packages.md#the-compilation)). A
+[standard library](#the-standard-library) module is the one exception:
+it is the toolchain's file, not the author's, and is recorded by its
+library path `rhoform/lib/<module>.rhoform` whatever the compile root.
 Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
@@ -78,7 +82,8 @@ gives the module path `boards.blinker_555`; `555/main.rhoform` gives
 modules are RHO2001, and a clash involving a `component` is RHO2034.
 
 The **root** is the unique module of the entry file that no module of
-the compilation instantiates. (A `table` that names a module counts as a
+the compilation instantiates; a module of an imported file is never a
+root candidate. (A `table` that names a module counts as a
 use for this purpose; it is an error of its own, see [Tables](#tables).)
 Instantiation here is a fact of the text, not of parameter values: a
 `new` counts wherever it stands, in an `if` branch not taken included.
@@ -103,8 +108,12 @@ declares no parameter list, and otherwise its
 instantiates the root, so a root parameter with no default is an error
 (RHO2037, reported against the parameter with the entity `/`).
 `header.design_name` is the root module's name, and
-`header.language_version` is the entry file's pragma version plus `.0`
-(`0.1` gives `0.1.0`).
+`header.language_version` is the newest pragma version among the
+compilation's authored files plus `.0` (`0.1` gives `0.1.0`); the
+standard library's modules are the toolchain's and do not count, so a
+0.1 design that uses them stays `0.1.0`. Only a 0.2 file can import, so
+that is the entry file's version whenever the compilation has more than
+one authored file.
 
 ## Instances
 
@@ -113,16 +122,21 @@ instantiates the root, so a root parameter with no default is an error
 A `new` (or a `table`) names its definition by a qualified name.
 
 - A **single word** MUST name a module or a `component` defined in the
-  same file; the instance is then a module instance or a component
-  instance of that definition. Any other single word is an unknown
-  definition (RHO2005).
+  same file or imported into it ([08](08-packages.md#names)); the
+  instance is then a module instance or a component instance of that
+  definition, whose IR `definition` is named by the file that defines
+  it. A definition of the file itself is found before an imported one.
+  Any other single word is an unknown definition (RHO2005), except a
+  name whose import failed, which is reported once, at the import.
 - A dotted name under the **reserved prefix** `rhoform.lib.` MUST name a
   component of the [standard library](#the-standard-library):
   `rhoform.lib.<module>.<Component>`, four words, where `<module>` is a
   library module and `<Component>` one of its definitions. The instance
   is then a component instance of that definition, exactly as of a
   `component` defined in the file. Any other name under the prefix — an
-  unknown module or component, too few words or too many — is RHO2048.
+  unknown module or component, too few words or too many — is RHO2067.
+  This holds in every file of the compilation, the entry file and the
+  files it imports alike.
 - **Any other dotted name** is an ad-hoc component, as in v0.1: its
   `definition` is the dotted name verbatim and its ports are exactly its
   inline `pin` statements.
@@ -255,14 +269,24 @@ implementation's tests hold it to:
   written ([Arguments](#arguments)).
 
 A compilation **reads** exactly the library modules named by the
-qualified names of its sources — the third word of every name under the
-reserved prefix, in a branch taken or not — and no others. Each module
+qualified names of its authored sources — the entry file and every file
+of its import closure, each name under the reserved prefix contributing
+its third word, in a branch taken or not — and no others. Each module
 read is a source file of the compilation: the source map lists it as
 `rhoform/lib/<module>.rhoform` with the sha256 of its bytes, so it is
-part of `source_hash`. Adding a module to the library, or changing one a
-design does not name, therefore changes no existing design's hashes.
-Diagnostics that point into a library definition (RHO2035's "defined
-here") span the library file by the same path.
+part of `source_hash`. That path is fixed: it is the same whatever the
+compile root, whether a `rhoform.toml` governs the entry file, and
+wherever the toolchain is installed. Adding a module to the library, or
+changing one a design does not name, therefore changes no existing
+design's hashes. Diagnostics that point into a library definition
+(RHO2035's "defined here") span the library file by the same path.
+Because a library module holds component definitions only, it imports
+nothing: no author's file is ever read on the library's behalf. An
+author's own file whose compile-root-relative path is a library path
+(`rhoform/lib/passive.rhoform` under the compile root) does not stand
+in for the library module: that module is then not read, and names
+under the prefix that need it are RHO2067, since one path cannot name
+two files.
 
 ## Values
 
@@ -590,7 +614,7 @@ holds one reject case for every block-2 code a source can trigger.
   built, so their spans are raw spans of the offending source text, not
   resolutions through a source map.
 - A fix-it suggesting the one close match for an unknown name has
-  applicability `needs-review`. For RHO2048 the words of the name are
+  applicability `needs-review`. For RHO2067 the words of the name are
   compared one at a time — a module name with the library's modules, a
   component name with its module's definitions — because whole names
   share their prefix and would all look close; the fix-it is the whole
@@ -598,9 +622,13 @@ holds one reject case for every block-2 code a source can trigger.
 
 ## The source map
 
-The source map's `files` lists every source file the compilation read,
-each with its compile-root-relative path (a standard library module,
-its library path) and the sha256 of its exact bytes, sorted by path. `header.source_hash` is `sha256:` followed by the
+The source map's `files` lists every source file the compilation read —
+the entry file, every file of its import closure, and the standard
+library modules they use — each with its compile-root-relative path (a
+standard library module, its library path) and the sha256 of its exact
+bytes, sorted by path. A `rhoform.toml` is configuration, not source,
+and is not listed; what it changes about the compilation shows in which
+sources are read. `header.source_hash` is `sha256:` followed by the
 hex sha256 of the `rhoform-canonical-json/1` bytes of the list of
 `[path, sha256]` pairs, sorted by path. It is excluded from
 `design_hash`, so editing a comment moves `source_hash` and leaves

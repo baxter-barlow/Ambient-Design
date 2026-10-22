@@ -557,20 +557,6 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("net", "attribute"),
         rule="T5",
     ),
-    # INTERIM. Syntax 0.2 parses (RHO1016 guards it under a 0.1 pragma).
-    # The elaborator gives every 0.2 construct but `import` its meaning; it
-    # refuses imports with this code until the package layer resolves them
-    # (wave 2b). The formatter formats every 0.2 construct, imports
-    # included, and never emits it. `tool` names the stage that refused.
-    CodeDef(
-        code="RHO2033", slug="syntax-0-2-not-yet-supported",
-        severity="error",
-        message=(
-            "{construct} is syntax 0.2: it parses, but the {tool} does not "
-            "support it yet."
-        ),
-        params=("construct", "tool"),
-    ),
     # ---- syntax 0.2 elaboration: components, parameters, if/for, arrays --
     # RHO2001 keeps its meaning (two modules); a clash involving a
     # component is this code, so neither message lies about the kinds.
@@ -699,9 +685,160 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("file",),
         rule="L1",
     ),
+    # ---- the package layer: manifests and imports (R14b) -----------------
+    # The rules are the package spec's (R14a, "Package identity and registry
+    # rules"); `rule` cites its clause ids with the R14a prefix, because the
+    # spec's L1-L9 and the requirements' L1-L9 are different lists. Every
+    # manifest diagnostic spans the offending key or value in rhoform.toml.
+    CodeDef(
+        code="RHO2048", slug="manifest-not-toml", severity="error",
+        message="rhoform.toml is not valid TOML 1.0.0: {reason}.",
+        params=("reason",),
+        rule="R14a M1",
+    ),
+    CodeDef(
+        code="RHO2049", slug="manifest-unknown-key", severity="error",
+        message=(
+            "`{key}` is not a key a manifest may hold {where}; the manifest's "
+            "schema is closed, so a misspelled key fails instead of being "
+            "ignored."
+        ),
+        params=("key", "where"),
+        rule="R14a M1",
+    ),
+    CodeDef(
+        code="RHO2050", slug="manifest-missing-key", severity="error",
+        message="{table} has no `{key}`, which it requires.",
+        params=("table", "key"),
+        rule="R14a M1/V8",
+    ),
+    CodeDef(
+        code="RHO2051", slug="manifest-invalid-value", severity="error",
+        message="`{key}` must be {expected}; it is {found}.",
+        params=("key", "expected", "found"),
+        rule="R14a M1",
+    ),
+    CodeDef(
+        code="RHO2052", slug="invalid-package-name", severity="error",
+        message="`{name}` is not a package name: {reason}.",
+        params=("name", "reason"),
+        rule="R14a N1-N4",
+    ),
+    CodeDef(
+        code="RHO2053", slug="invalid-package-version", severity="error",
+        message="`{version}` is not a package version: {reason}.",
+        params=("version", "reason"),
+        rule="R14a V1/V2",
+    ),
+    CodeDef(
+        code="RHO2054", slug="invalid-version-range", severity="error",
+        message="`{range}` is not a version range: {reason}.",
+        params=("range", "reason"),
+        rule="R14a L9",
+    ),
+    CodeDef(
+        code="RHO2055", slug="reserved-namespace", severity="error",
+        message=(
+            "`{name}` is in the reserved namespace `{namespace}`; a manifest "
+            "declares a package there only with `reserved-namespace-ack = "
+            "true` in [package]."
+        ),
+        params=("name", "namespace"),
+        rule="R14a R1/R2",
+    ),
+    CodeDef(
+        code="RHO2056", slug="unsupported-dependency", severity="error",
+        message="dependency `{package}` {problem}.",
+        params=("package", "problem"),
+        rule="R14a M2/M3",
+    ),
+    CodeDef(
+        code="RHO2057", slug="invalid-path-dependency", severity="error",
+        message="dependency `{package}` at `{path}` {problem}.",
+        params=("package", "path", "problem"),
+        rule="R14a M2/L7a",
+    ),
+    CodeDef(
+        code="RHO2058", slug="package-excludes-toolchain", severity="error",
+        message=(
+            "package `{package}` requires Rhoform `{range}`, which admits "
+            "none of the language versions this toolchain implements "
+            "({supported}); the package is not compiled."
+        ),
+        params=("package", "range", "supported"),
+        rule="R14a V10",
+    ),
+    CodeDef(
+        code="RHO2059", slug="pragma-outside-package-range", severity="error",
+        message=(
+            "`{file}` declares language version {version}, outside "
+            "`requires-rhoform = \"{range}\"` of package `{package}`; this "
+            "toolchain implements {supported}."
+        ),
+        params=("file", "version", "range", "package", "supported"),
+        rule="R14a V9/V10",
+    ),
+    CodeDef(
+        code="RHO2060", slug="import-not-found", severity="error",
+        message="`{path}` names `{file}`, which does not exist.",
+        params=("path", "file"),
+        rule="R14a X1/X2",
+    ),
+    CodeDef(
+        code="RHO2061", slug="import-escapes-package", severity="error",
+        message=(
+            "`{path}` leaves {boundary}; an import within a package never "
+            "crosses its boundary."
+        ),
+        params=("path", "boundary"),
+        rule="R14a X1",
+    ),
+    CodeDef(
+        code="RHO2062", slug="invalid-import-path", severity="error",
+        message="`{path}` is not an import path: {reason}.",
+        params=("path", "reason"),
+        rule="R14a X1/X2",
+    ),
+    CodeDef(
+        code="RHO2063", slug="undeclared-package-import", severity="error",
+        message=(
+            "`{path}` imports from package `{package}`, but {reason}; a "
+            "package import needs a [deps] entry (no implicit "
+            "dependencies)."
+        ),
+        params=("path", "package", "reason"),
+        rule="R14a X2",
+    ),
+    CodeDef(
+        code="RHO2064", slug="import-cycle", severity="error",
+        message=(
+            "import cycle: {cycle}; a file cannot import a file that "
+            "imports it, directly or through others."
+        ),
+        params=("cycle",),
+        rule="L4",
+    ),
+    CodeDef(
+        code="RHO2065", slug="unknown-imported-name", severity="error",
+        message=(
+            "`{name}` is not a module or component defined in `{file}`; an "
+            "import names definitions of the file it imports from."
+        ),
+        params=("name", "file"),
+        rule="L4/L7",
+    ),
+    CodeDef(
+        code="RHO2066", slug="name-bound-twice", severity="error",
+        message=(
+            "`{name}` is already bound in this file {first}; a definition "
+            "name identifies one definition."
+        ),
+        params=("name", "first"),
+        rule="L4/L7",
+    ),
     # ---- the bundled standard library (E-5) -----------------------------
     CodeDef(
-        code="RHO2048", slug="unknown-library-definition", severity="error",
+        code="RHO2067", slug="unknown-library-definition", severity="error",
         message=(
             "`{name}` names no definition of the bundled standard library; "
             "a name under the reserved prefix `rhoform.lib.` must be "
@@ -821,10 +958,13 @@ REGISTRY: tuple[CodeDef, ...] = (
     ),
 )
 
-# A code, once retired, keeps its number and slug here forever. Empty today,
-# and the structure exists from the first commit so the first retirement is
-# an append rather than an invention. Entries: (code, slug, reason).
-RETIRED: tuple[tuple[str, str, str], ...] = ()
+# A code, once retired, keeps its number and slug here forever, so neither
+# can be reassigned. Entries: (code, slug, reason).
+RETIRED: tuple[tuple[str, str, str], ...] = (
+    ("RHO2033", "syntax-0-2-not-yet-supported",
+     "interim refusal of `import` until the package layer resolved imports "
+     "(R14b / AMB-45); imports have their semantics, so nothing emits it"),
+)
 
 _BY_CODE = {entry.code: entry for entry in REGISTRY}
 

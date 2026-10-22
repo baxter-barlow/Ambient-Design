@@ -1,0 +1,10 @@
+#pragma rhoform-syntax 0.1
+
+module Indicator:
+    port gnd passive
+    port vin power_in
+    d1 = new lib.Led:
+        pin a passive
+        pin k passive
+    vin ~ d1.a
+    d1.k ~ gnd

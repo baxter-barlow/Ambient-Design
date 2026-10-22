@@ -36,9 +36,12 @@ stream and the exit codes above, and its paths are those of
 `file` is a POSIX path relative to its compilation's compile root.
 
 `rhoform check PATH...` compiles each PATH as the entry file of its own
-compilation (a directory stands for every `*.rhoform` file under it, in
-sorted order): parse, file-local checks, elaboration, and validation of
-the IR against `ir/netlist-ir.schema.json`. IR that cannot be validated
+compilation, with the files it imports
+([08 — Packages and imports](08-packages.md#the-command-line); a
+directory stands for its `*.rhoform` files, in sorted order, less those
+another named file imports): the package layer's checks, parse,
+file-local checks, elaboration, and validation of the IR against
+`ir/netlist-ir.schema.json`. IR that cannot be validated
 because the validator is missing exits `2`, and so does IR the schema
 rejects (an internal error). It writes nothing, except that
 `--emit-ir DIR` writes `<stem>.ir.json` and `<stem>.sourcemap.json` for

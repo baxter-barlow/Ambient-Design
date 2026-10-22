@@ -1,0 +1,14 @@
+# An imported file resolves `rhoform.lib.` names exactly as the entry
+# file does; the resistors take their ports from the library.
+#pragma rhoform-syntax 0.2
+
+module Divider:
+    port bottom passive
+    port mid passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor
+    r2 = new rhoform.lib.passive.Resistor
+    top ~ r1.a
+    r1.b ~ mid
+    mid ~ r2.a
+    r2.b ~ bottom
