@@ -20,6 +20,17 @@ Nothing else in this transcript changed; the surrounding output is a verbatim
 capture and is NOT regenerated wholesale, because doing that earlier in this
 audit destroyed corner runs and iteration history that other documents cite.
 
+REGENERATED 2026-10-22 under AMB-128 (EE review). The deck changed: the
+review moved the LM25145's valley current limit to RSENSE mode, which puts a
+20 mOhm shunt (R10) in the low-side conduction path, and netlist.cir now
+carries it as RSNS in Bsw's off-time branch. Every measurement moved, so the
+whole capture between the markers below is a fresh run of the committed deck,
+replacing every byte; the AMENDED note above describes the capture this one
+replaces. One rendering step: ngspice writes a carriage-return progress meter
+(" Reference value : ...", one update per wall-clock interval) to a
+non-terminal stdout, and it is shown here as a terminal leaves it, its final
+state, so the file carries no carriage returns.
+
 Simulator: ** ngspice-46 : Circuit level simulation program
 Command:   ngspice -b netlist.cir
 Engine build: Darwin-arm64
@@ -86,47 +97,47 @@ l1#branch                                    0
 vrmp#branch                                  0
 vr#branch                                    0
 
-
-No. of Data Rows : 1265047
+ Reference value :  2.46370e-03
+No. of Data Rows : 1265049
 
   Measurements for Transient Analysis
 
 vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.58710e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  4.84413e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.09423e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.58802e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.28644e-01
-vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.29754e+00 at=  1.11718e-03
-overshoot_pct       =  4.66129e-02
-t_reenter           =   1.51686e-03
-t_settle_us         =  1.68580e+01
+vout_pp             =  3.65668e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.86818e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.15200e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.58800e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.21141e-01
+vout_pre            =  3.29599e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.29756e+00 at=  1.17518e-03
+overshoot_pct       =  4.75544e-02
+t_reenter           =   1.51701e-03
+t_settle_us         =  1.70080e+01
 
 
-Total analysis time (seconds) = 4.8506
+Total analysis time (seconds) = 6.51363
 
-Total elapsed time (seconds) = 4.881 
+Total elapsed time (seconds) = 6.621 
 
 Total DRAM available = 18432.000 MB.
-DRAM currently available =  156.500 MB.
-Maximum ngspice program size =   96.844 MB.
-Current ngspice program size =   96.844 MB.
+DRAM currently available =  317.656 MB.
+Maximum ngspice program size =   69.109 MB.
+Current ngspice program size =   69.109 MB.
 ----- end verbatim ngspice stdout+stderr -----
 
 === .meas results ===
 vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.58710e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  4.84413e-01 from=  2.40000e-03 to=  2.50000e-03
-pin_avg             =  7.09423e+00 from=  2.00000e-03 to=  2.50000e-03
-pout_avg            =  6.58802e+00 from=  2.00000e-03 to=  2.50000e-03
-eff                 =  9.28644e-01
-vout_pre            =  3.29600e+00 from=  1.30000e-03 to=  1.50000e-03
-vout_max_startup    =  3.29754e+00 at=  1.11718e-03
-overshoot_pct       =  4.66129e-02
-t_reenter           =   1.51686e-03
-t_settle_us         =  1.68580e+01
+vout_pp             =  3.65668e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.86818e-01 from=  2.40000e-03 to=  2.50000e-03
+pin_avg             =  7.15200e+00 from=  2.00000e-03 to=  2.50000e-03
+pout_avg            =  6.58800e+00 from=  2.00000e-03 to=  2.50000e-03
+eff                 =  9.21141e-01
+vout_pre            =  3.29599e+00 from=  1.30000e-03 to=  1.50000e-03
+vout_max_startup    =  3.29756e+00 at=  1.17518e-03
+overshoot_pct       =  4.75544e-02
+t_reenter           =   1.51701e-03
+t_settle_us         =  1.70080e+01
 
 === assertion windows ===
-sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows; 22 transcript measurement(s) match a fresh run; 0 deck passive(s) carry their parts.yaml value; 8 deck parameter(s) trace to the BOM.
+sim-assert: PASS: buck-3v3: 5 assertion(s) inside their windows; 22 transcript measurement(s) match a fresh run; 0 deck passive(s) carry their parts.yaml value; 9 deck parameter(s) trace to the BOM.
 exit=0

@@ -1,10 +1,11 @@
 #pragma rhoform-syntax 0.1
 
 module Buck3v3:
-    # Benchmark (b), component level. PROPOSAL, EE review required (AMB-128).
-    # Values: design.md section 10; pin map: design.md section 11. Explicit
-    # form: every pin is declared inline with its T2 role and footprint
-    # designators, because no component library exists yet.
+    # Benchmark (b), component level. EE-reviewed 2026-10-22 (AMB-128).
+    # Values: design.md section 10; pin map: section 11; review decisions:
+    # section 12. Explicit form: every pin is declared inline with its T2
+    # role and footprint designators, because no component library exists
+    # yet.
     #
     # Refdes map (instance -> refdes; parts.yaml line):
     #   u1 -> U1; q1 -> Q1; q2 -> Q2; l1 -> L1; c3 -> C3; r1 -> R1; r2 -> R2
@@ -13,7 +14,7 @@ module Buck3v3:
     #   Type-III network CN1: r_c1 -> R3, r_c2 -> R4, c_c1 -> C6,
     #     c_c2 -> C7, c_c3 -> C8
     #   r_rt -> R5, r_uv1 -> R6, r_uv2 -> R7, r_ilim -> R8, r_pg -> R9,
-    #   c_ss -> C9, c_bst -> C10, c_vcc -> C11, c_ilim -> C12
+    #   c_ss -> C9, c_bst -> C10, c_vcc -> C11, c_ilim -> C12, r_sns -> R10
     #
     # Power stage.
     c1a = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
@@ -58,7 +59,7 @@ module Buck3v3:
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
-            mpn = "Murata GRM188R71H104KA93D"
+            mpn = "Murata GCM188R71H104KA57D"
             package = "0603"
             voltage_rating = 50V
     l1 = new rhoform.lib.passive.Inductor(inductance = 10uH +/- 20%):
@@ -76,8 +77,8 @@ module Buck3v3:
         pin g input 4
         pin s passive 1 2 3
         part abstract:
-            mpn = "Infineon BSC059N04LS6"
-            package = "PG-TDSON-8 FL"
+            mpn = "Infineon BSC059N04LS6ATMA1"
+            package = "PG-TDSON-8 FL (SuperSO8 5x6)"
             rds_on_max = 5.9mohm
             vds_max = 40V
     q2 = new rhoform.lib.semiconductor.Nmos(vds_max = 40V):
@@ -85,8 +86,8 @@ module Buck3v3:
         pin g input 4
         pin s passive 1 2 3
         part abstract:
-            mpn = "Infineon BSC059N04LS6"
-            package = "PG-TDSON-8 FL"
+            mpn = "Infineon BSC059N04LS6ATMA1"
+            package = "PG-TDSON-8 FL (SuperSO8 5x6)"
             rds_on_max = 5.9mohm
             vds_max = 40V
 
@@ -144,7 +145,7 @@ module Buck3v3:
         part abstract:
             capacitance = 6.8nF +/- 5%
             dielectric = "C0G"
-            mpn = "Murata GRM1555C1H682JA01D"
+            mpn = "Murata GRM1555C1H682JE01D"
             package = "0402"
             voltage_rating = 50V
     c_vcc = new rhoform.lib.passive.Capacitor(capacitance = 2.2uF +/- 10%):
@@ -153,17 +154,17 @@ module Buck3v3:
         part abstract:
             capacitance = 2.2uF +/- 10%
             dielectric = "X7R"
-            mpn = "TDK C1608X7R1E225K080AC"
-            package = "0603"
+            mpn = "Murata GRM21BR71E225KE11L"
+            package = "0805"
             voltage_rating = 25V
-    r_ilim = new rhoform.lib.passive.Resistor(resistance = 66.5ohm +/- 1%):
+    r_ilim = new rhoform.lib.passive.Resistor(resistance = 634ohm +/- 1%):
         pin a passive 1
         pin b passive 2
         part abstract:
-            mpn = "Yageo RC0402FR-0766R5L"
+            mpn = "Yageo RC0402FR-07634RL"
             package = "0402"
             power_rating = 62.5mW
-            resistance = 66.5ohm +/- 1%
+            resistance = 634ohm +/- 1%
     r_pg = new rhoform.lib.passive.Resistor(resistance = 49.9kohm +/- 1%):
         pin a passive 1
         pin b passive 2
@@ -180,6 +181,14 @@ module Buck3v3:
             package = "0402"
             power_rating = 62.5mW
             resistance = 20kohm +/- 1%
+    r_sns = new rhoform.lib.passive.Resistor(resistance = 20mohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Vishay WSLP1206R0200FEA"
+            package = "1206"
+            power_rating = 1W
+            resistance = 20mohm +/- 1%
     r_uv1 = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
         pin a passive 1
         pin b passive 2
@@ -188,14 +197,14 @@ module Buck3v3:
             package = "0402"
             power_rating = 62.5mW
             resistance = 100kohm +/- 1%
-    r_uv2 = new rhoform.lib.passive.Resistor(resistance = 16.5kohm +/- 1%):
+    r_uv2 = new rhoform.lib.passive.Resistor(resistance = 16.9kohm +/- 1%):
         pin a passive 1
         pin b passive 2
         part abstract:
-            mpn = "Yageo RC0402FR-0716K5L"
+            mpn = "Yageo RC0402FR-0716K9L"
             package = "0402"
             power_rating = 62.5mW
-            resistance = 16.5kohm +/- 1%
+            resistance = 16.9kohm +/- 1%
 
     # Feedback divider. R1 ships as a 0.1% part; the constraint states the
     # +/-1% requirement the design.md error stack is computed at.
@@ -223,7 +232,7 @@ module Buck3v3:
         part abstract:
             capacitance = 5.6nF +/- 5%
             dielectric = "C0G"
-            mpn = "Murata GRM1555C1H562JA01D"
+            mpn = "Murata GRM1555C1H562JE01D"
             package = "0402"
             voltage_rating = 50V
     c_c2 = new rhoform.lib.passive.Capacitor(capacitance = 82pF +/- 5%):
@@ -262,8 +271,10 @@ module Buck3v3:
             resistance = 1.13kohm +/- 1%
 
     # Nets. One ground: AGND, PGND and the exposed pad meet on the ground
-    # plane under U1 (datasheet 11.1.5). SW, HB and HO carry no voltage
-    # domain: they float on the switch node and v0.1 has no spelling for that.
+    # plane under U1 (datasheet 11.1.5). PGND reaches it at the ground-side
+    # pad of the r_sns shunt, a Kelvin connection v0.1 cannot spell, so the
+    # one GND net stands for it. SW, HB, HO and ISNS carry no voltage domain:
+    # they float on or near the switch node and v0.1 has no spelling for that.
     net COMP:
         c_c2.a
         r_c1.a
@@ -294,9 +305,9 @@ module Buck3v3:
         c_ilim.b
         c_ss.b
         c_vcc.b
-        q2.s
         r2.b
         r_rt.b
+        r_sns.b
         r_uv2.b
         u1.AGND
         u1.EP
@@ -311,6 +322,10 @@ module Buck3v3:
         c_ilim.a
         r_ilim.a
         u1.ILIM
+    net ISNS:
+        q2.s
+        r_ilim.b
+        r_sns.a
     net LO(voltage_domain = "vcc_7v5"):
         q2.g
         u1.LO
@@ -328,7 +343,6 @@ module Buck3v3:
         l1.a
         q1.s
         q2.d
-        r_ilim.b
         u1.SW
     net VCC(voltage_domain = "vcc_7v5"):
         c_vcc.a

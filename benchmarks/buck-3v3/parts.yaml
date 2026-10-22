@@ -5,19 +5,26 @@
 # distributor fact no offline gate can hold true: the MPNs of the U1 through
 # R2 lines were verified against live distributor stock in the AMB-123 audit
 # (last full pass round 18, 2026-08-19, after a fabricated R1 part number
-# shipped for two rounds).
+# shipped for two rounds). The AMB-128 EE review re-read their lifecycle on
+# 2026-10-22: C3 was "To be discontinued" and is replaced; C1 and C2 are
+# NRND but stocked, so they keep their lines with qualified alternates
+# recorded in their notes; Q1 and Q2 now name the orderable OPN.
 #
 # CONTROLLER SUPPORT PARTS (AMB-128). Round 20 recorded that this BOM had no
 # line for the HB-SW bootstrap capacitor, the RT resistor or the SS
 # capacitor, although the design's own prose relies on all three, and that
-# the compensation network's values were "chosen at layout time". R3-R9 and
-# C6-C12 below close that gap. They are a PROPOSAL pending EE review: values
-# are derived and cited in design.md section 10, pins in section 11, and NONE
-# of their MPNs has been checked against distributor stock -- each only
-# follows the manufacturer's ordering-code pattern for its value and series.
-# The behavioral deck models their EFFECT (the PWL reference ramp, the fixed
-# switching period, the PID compensator), not the parts, and no gate reads
-# these lines: the deck-parameter rules pin only L1, Q1, Q2, C2, R1 and R2.
+# the compensation network's values were "chosen at layout time". R3-R10 and
+# C6-C12 below close that gap. They were EE-reviewed on 2026-10-22 (AMB-128):
+# values are derived and cited in design.md section 10, pins in section 11,
+# and each review decision with its sources in section 12. Every MPN among
+# them was checked against manufacturer data on 2026-10-22, and the ones the
+# review introduced against live Digi-Key stock as well. Two the proposal
+# named (C6, C9) do not exist and a third (C11) could not be found at TDK or
+# Digi-Key; all three are replaced. The behavioral deck models the EFFECT of
+# these parts (the PWL reference ramp, the fixed switching period, the PID
+# compensator), not the parts, with one exception: the R10 current-sense
+# shunt sits in the low-side conduction path, so the deck carries it as
+# RSNS. The deck-parameter rules pin only L1, Q1, Q2, C2, R1, R2 and R10.
 #
 # Refdes: C1 and C2 are qty 2, placed as C1/C4 and C2/C5. The Type-III
 # network that used to be one CN1 line ("0402 x5") is R3, R4, C6, C7 and C8,
@@ -27,29 +34,46 @@ parts:
   - ref: U1
     role: buck_controller
     value: sync buck controller, 6-42 V input, voltage-mode, 0.8 V ref
-    package: VQFN-20 (RGY, 3.5x4.5 mm, wettable flanks)
+    package: VQFN-20 (RGY0020B, 3.5x4.5 mm, wettable flanks)
     mpn: TI LM25145RGYR
-    notes: fsw programmed to 500 kHz (RT, R5); internal 7.5 V gate driver;
-      the Type-III compensation network on COMP (R3, R4, C6-C8) shares the
-      behavioral deck PID's crossover but not its zero placement (design.md
-      sec. 7); soft-start ~0.5 ms via the SS cap (C9, 544 us nominal).
+    notes: >-
+      fsw programmed to 500 kHz nominal by RT (R5): 497 kHz typ and 463-532
+      kHz worst case at 20.0 k (design.md sec. 10.1); internal 7.5 V gate
+      driver; the Type-III compensation network on COMP (R3, R4, C6-C8)
+      shares the behavioral deck PID's crossover but not its zero placement
+      (design.md sec. 7); soft-start ~0.5 ms via the SS cap (C9, 544 us
+      nominal); valley current limit in RSENSE mode on the R10 shunt (R8,
+      C12). TI product page read 2026-10-22: Active, datasheet SNVSAT9
+      rev * (June 2017).
 
   - ref: Q1
     role: high_side_fet
     value: NMOS 40 V, 5.9 mOhm max @ Vgs=10V, Qg 9.4 nC typ (0-10 V)
-    package: PG-TDSON-8 (SuperSO8 5x6)
-    mpn: Infineon BSC059N04LS6
-    notes: specs from Infineon datasheet rev 2.1 (2020-07-22) -- Rds(on) max
+    package: PG-TDSON-8 FL (SuperSO8 5x6)
+    mpn: Infineon BSC059N04LS6ATMA1
+    notes: >-
+      specs from Infineon datasheet rev 2.1 (2020-07-22) -- Rds(on) max
       5.9 mOhm @ 10 V, Qg typ 9.4 nC, Qoss typ 10.2 nC @ 20 V, Id 59 A @ Tc.
-      Vds margin 40 V vs 14 V max input + ringing (2.8x);
-      Id rating >> 2.534 A measured load-step peak.
+      Driven at about 6.8 V (VCC less the BST diode drop), where Rds(on) is
+      about 5.2-5.3 mOhm typ (IFX Diagrams 6/8). Vds margin 40 V vs 14 V max
+      input + ringing (2.8x); Id rating >> 2.530 A measured load-step peak.
+      Orderable OPN, active (Digi-Key 9829538). Pins S 1-3 on one fused
+      source land, G 4, D 5-8 (IFX p. 1 and p. 11 Fig. 2).
 
   - ref: Q2
     role: low_side_fet
     value: NMOS 40 V, 5.9 mOhm max @ Vgs=10V
-    package: PG-TDSON-8 (SuperSO8 5x6)
-    mpn: Infineon BSC059N04LS6
-    notes: synchronous rectifier; body diode conducts only during dead time.
+    package: PG-TDSON-8 FL (SuperSO8 5x6)
+    mpn: Infineon BSC059N04LS6ATMA1
+    notes: >-
+      synchronous rectifier; body diode conducts only during dead time. Its
+      source returns to GND through the R10 current-sense shunt (LM25145
+      RSENSE mode), not directly. At 7.5 V gate drive Rds(on) is 5.07 mOhm
+      typ at 50 A and about 5.0 at 2-3 A (IFX Diagrams 6/8), an estimated
+      6.3-6.4 at most at 25 C (typ x 5.9/4.7; IFX publishes no 7.5 V limit,
+      and the only guaranteed bound is the 8.4 mOhm Vgs = 4.5 V limit).
+      Diagram 9 temperature factors 0.81 at -40 C, 1.51 at 125 C; the deck's
+      6 mOhm equals the typical at about Tj 67 C.
 
   - ref: L1
     role: power_inductor
@@ -58,12 +82,20 @@ parts:
     package: XGL6060 (6.71x6.51x6.1 mm shielded molded)
     mpn: Coilcraft XGL6060-103MEC
     notes: >-
-      specs from Coilcraft Document 1621-2 rev 02/19/26. The deck's highest
-      current is the load-step transient, not the steady-state peak -- Ipk =
-      2.534 A measured (2.256 A steady state) vs 3.6 A Isat (strictest, 10%
-      drop) gives 1.42x margin, 2.17x vs the 20%-drop rating (2.566 A /
-      1.40x at the L-20% corner); soft-saturating composite core. Deck models
-      DCR at the 20.4 mOhm max.
+      specs from Coilcraft Document 1621-2 rev 02/19/26 (confirmed from the
+      PDF footer in AMB-128). The deck's highest current is the load-step
+      transient, not the steady-state peak -- Ipk = 2.530 A measured (2.258 A
+      steady state) vs 3.6 A Isat (strictest, 10% drop) gives 1.42x margin,
+      2.17x vs the 20%-drop rating (2.562 A / 1.41x at the L-20% corner);
+      soft-saturating composite core. Deck models DCR at the 20.4 mOhm max.
+      Under the current limit (R8, R10) the sustained-overload peak is
+      4.90 A, below the 5.5 A 20%-drop rating; the overload- and short-onset
+      peaks are about 6.4 A (14 V) and 7.2 A (short) for one or a few
+      pulses, at about the 7.3 A 30%-drop rating (design.md sec. 10.7).
+      Isat is specified at 25 C; its temperature derating is published only
+      in Coilcraft's online tool. Polarised for EMI: the marked start
+      (short) lead goes on SW (CC 1621-1, "Connect high dv/dt here for
+      lowest EMI"), which is l1.a.
 
   - ref: C1
     role: input_capacitor
@@ -71,13 +103,20 @@ parts:
     package: 1210 (3.2 x 2.5 x 2.0 mm)
     mpn: Murata GRM32DR71E106KA12L
     qty: 2
-    notes: 0.98 A rms worst-case input ripple current (9 V corner at practical
+    notes: >-
+      0.98 A rms worst-case input ripple current (9 V corner at practical
       D' ~= 0.40; the 12 V figure of 0.89 A uses ideal D = 0.275 -- the two
       bases are labelled because a previous note mixed them silently) shared
-      across two parts (~0.49 A each); per-part
-      rms handling to be confirmed against Murata temperature-rise data at
-      500 kHz. Murata lists this part NRND -- in-production alternative
-      GRM31CR71E106KA12L (1206). Refdes C1 and C4.
+      across two parts (~0.49 A each). Murata lists this part NRND (Digi-Key
+      "Not For New Designs", 257,636 in stock on 2026-10-22); it stays the
+      primary because it is stocked. Qualified in-production alternate
+      GRM32ER71E226KE15L (22 uF 25 V X7R 1210): 11.16/8.46/7.35 uF at
+      9/12/14 V by Murata data, at least this part at every input voltage,
+      and a 0.16 C rise at 0.49 A rms, which closes the earlier open
+      question of per-part rms handling; 0 stock, 21-week lead time on
+      2026-10-22. The alternate recorded here before AMB-128,
+      GRM31CR71E106KA12L (1206), is struck: 3.47 uF at 12 V and 2.91 uF at
+      14 V, -65%. Refdes C1 and C4.
 
   - ref: C2
     role: output_capacitor
@@ -85,15 +124,28 @@ parts:
     package: 1210
     mpn: Murata GRM32ER61C226KE20L
     qty: 2
-    notes: ~36 uF effective at 3.3 Vdc bias (deck uses the derated value);
-      net ESR ~2 mOhm. Refdes C2 and C5.
+    notes: >-
+      ~36 uF effective at 3.3 Vdc bias (deck uses the derated value);
+      net ESR ~2 mOhm. Refdes C2 and C5. Murata lists this part NRND
+      (Digi-Key "Not For New Designs", 216,804 in stock on 2026-10-22); it
+      stays the modelled primary because the deck's CEFF and RESR describe
+      it. Qualified alternate GRM32ER71C226KEA8L (22 uF 16 V X7R 1210, 41.4
+      uF typ and 31.7-45.6 uF over tolerance at 3.3 V, 1.04 mOhm per pair):
+      worst-case phase margin with R10 50.1 deg at 1 A, 53.2 deg at 2 A and
+      47.0 deg at no load, within 0.4 deg of this part, and ripple only
+      falls. Active but 0 stock, 17-week lead time on 2026-10-22. Promoting
+      it re-pins CEFF and RESR, so it belongs in its own issue.
 
   - ref: C3
     role: input_bypass
     value: 100 nF, 50 V, X7R
-    package: 0603
-    mpn: Murata GRM188R71H104KA93D
-    notes: high-frequency bypass at U1 VIN pin.
+    package: "0603"
+    mpn: Murata GCM188R71H104KA57D
+    notes: >-
+      high-frequency bypass at U1 VIN pin. AEC-Q200 GCM part, replacing
+      GRM188R71H104KA93D, which Murata lists "To be discontinued" (AMB-128).
+      Digi-Key 1641653 Active, 1,821,403 in stock on 2026-10-22; DC bias
+      -4.7% at 14 V; same 0603 land.
 
   - ref: R1
     role: feedback_divider_top
@@ -126,7 +178,7 @@ parts:
     package: "0402"
     mpn: Yageo RC0402FR-077K5L
     notes: >-
-      proposal, EE review required. CN1 R_C1 (LM25145 Table 3), COMP to C6.
+      CN1 R_C1 (LM25145 Table 3), COMP to C6.
       Kmid = (fc/f0)/kFF = (30k/8.388k)/15 = 0.2384; R_C1 = Kmid x R1 =
       7.44 k -> E96 7.50 k (fc 30.2 kHz by eq. 15, 31.5 kHz numerically).
       The deck's behavioral stand-in for CN1 is the PID KP=2.46, KI=6.47e4,
@@ -140,7 +192,7 @@ parts:
     package: "0402"
     mpn: Yageo RC0402FR-071K13L
     notes: >-
-      proposal, EE review required. CN1 R_C2, VOUT to C8. Places the second
+      CN1 R_C2, VOUT to C8. Places the second
       high-frequency pole at fsw/2 (251.5 kHz with C8 = 560 pF); the ESR zero
       at 2.2 MHz lies above fsw/2, so there is nothing for it to cancel.
 
@@ -148,15 +200,20 @@ parts:
     role: compensation_network
     value: 5.6 nF +/-5%, 50 V, C0G
     package: "0402"
-    mpn: Murata GRM1555C1H562JA01D
+    mpn: Murata GRM1555C1H562JE01D
     notes: >-
-      proposal, EE review required. CN1 C_C1, in series with R3 to FB. First
-      zero 1/(2 pi 7.5k 5.6n) = 3.79 kHz, about half the 8.39 kHz LC
-      resonance: the datasheet premise wz1 = 0.5 w0 (p. 33) gives C_C1 =
-      2/(w0 R_C1) = 5.10 nF -> E12 5.6 nF. Phase margin 59.9 deg nominal and
-      54.9-60.5 deg over load and L/C corners at the same ~31.5 kHz
-      crossover; a double zero at the resonance (2.7 nF) gave 47.6-54.4 deg,
-      below the datasheet's 50-70 deg target.
+      CN1 C_C1, in series with R3 to FB. First zero 1/(2 pi 7.5k 5.6n) =
+      3.79 kHz, about half the 8.39 kHz LC resonance: the datasheet premise
+      wz1 = 0.5 w0 (p. 33) gives C_C1 = 2/(w0 R_C1) = 5.10 nF -> E12 5.6 nF.
+      Phase margin 60.3 deg nominal with the R10 shunt's damping (59.9 deg
+      without it) and 55.4-60.9 deg over load and L/C corners one at a time
+      at the same ~31.5 kHz crossover; worst case over every tolerance
+      extreme with a 100 ns loop delay 50.5 deg at 1 A, 53.6 deg at 2 A and
+      47.4 deg at no load (design.md sec. 10.8). A double zero at the
+      resonance (2.7 nF) gave 47.6-54.4 deg one at a time without R10,
+      below the datasheet's 50-70 deg target. GRM1555C1H562JA01D, the MPN
+      named here before AMB-128, does not exist; the JE01 body is 1.0 x 0.5
+      mm +/-0.15 mm and at most 0.65 mm high, on the same 0402 land.
 
   - ref: C7
     role: compensation_network
@@ -164,7 +221,7 @@ parts:
     package: "0402"
     mpn: Murata GRM1555C1H820JA01D
     notes: >-
-      proposal, EE review required. CN1 C_C2, COMP to FB. High-frequency pole
+      CN1 C_C2, COMP to FB. High-frequency pole
       262.6 kHz (about fsw/2).
 
   - ref: C8
@@ -173,7 +230,7 @@ parts:
     package: "0402"
     mpn: Murata GRM1555C1H561JA01D
     notes: >-
-      proposal, EE review required. CN1 C_C3, in series with R4 across R1.
+      CN1 C_C3, in series with R4 across R1.
       Second zero 1/(2 pi (R1+R4) C8) = 8.79 kHz.
 
   - ref: R5
@@ -182,18 +239,21 @@ parts:
     package: "0402"
     mpn: Yageo RC0402FR-0720KL
     notes: >-
-      proposal, EE review required. U1 RT to GND. R_RT[kOhm] = 1e4/fsw[kHz]
-      = 20.0 k for 500 kHz (LM25145 eq. 3 and Table 1, p. 20).
+      U1 RT to GND. R_RT[kOhm] = 1e4/fsw[kHz] = 20.0 k for 500 kHz (LM25145
+      eq. 3 and Table 1, p. 20). Eq. 3's curvature (400 kHz at 25 k exactly,
+      780 kHz typ against 800 at 12.5 k) puts the typical at about 497 kHz;
+      FSW2 +/-5% (p. 8) and R5 +/-2% including TCR give 463-532 kHz.
 
   - ref: C9
     role: soft_start
     value: 6.8 nF +/-5%, 50 V, C0G
     package: "0402"
-    mpn: Murata GRM1555C1H682JA01D
+    mpn: Murata GRM1555C1H682JE01D
     notes: >-
-      proposal, EE review required. U1 SS/TRK to GND. C_SS[nF] = 12.5 x
-      t_SS[ms] = 6.25 nF for 500 us (eq. 5, p. 21) -> E12 6.8 nF, t_SS = 544
-      us nominal, 431-672 us over I_SS 8.5-12 uA and C +/-5%.
+      U1 SS/TRK to GND. C_SS[nF] = 12.5 x t_SS[ms] = 6.25 nF for 500 us
+      (eq. 5, p. 21) -> E12 6.8 nF, t_SS = 544 us nominal, 426-679 us over
+      I_SS 8.5-12 uA, C +/-5% and V_REF 792-808 mV (eq. 4). The proposal's
+      GRM1555C1H682JA01D does not exist.
 
   - ref: C10
     role: bootstrap_capacitor
@@ -201,19 +261,24 @@ parts:
     package: "0402"
     mpn: Murata GRM155R71E104KE14D
     notes: >-
-      proposal, EE review required. U1 BST to SW (net HB). Datasheet: "0.1-uF
-      or larger" (p. 23); droop about 72 mV per cycle at Qg(7.5 V) about 7 nC.
+      U1 BST to SW (net HB). Datasheet: "0.1-uF or larger" (p. 23). Worst
+      droop 106 mV per cycle: (7.3 nC, the upper bound of IFX Diagram 14 at
+      7.5 V, plus 0.16 nC of I_Q-BST) / 70.3 nF effective, against 3.0 V of
+      headroom to BST-UV.
 
   - ref: C11
     role: vcc_decoupling
     value: 2.2 uF +/-10%, 25 V, X7R
-    package: "0603"
-    mpn: TDK C1608X7R1E225K080AC
+    package: "0805"
+    mpn: Murata GRM21BR71E225KE11L
     notes: >-
-      proposal, EE review required. U1 VCC to GND; datasheet range 1-5 uF
-      (p. 17). Effective capacitance at 7.5 V DC bias must stay >= 1 uF --
-      confirm on the TDK bias curve, else move to 0805. The LM25145 has no
-      VDDA pin; this is the only bias-rail capacitor it needs.
+      U1 VCC to GND; datasheet range 1-5 uF (p. 17). Worst case 2.2 uF x
+      0.718 (DC bias -28.2% at 7.7 V, Murata EC data) x 0.90 (K) x 0.85
+      (X7R) x 0.95 (aging) = 1.15 uF, at least 1 uF; 2.42 uF at 0 V, at most
+      5 uF. Digi-Key 6606096 Active, 775,498 in stock on 2026-10-22.
+      Replaces TDK C1608X7R1E225K080AC (0603), which neither TDK nor
+      Digi-Key lists; the 0603 class fails anyway (0.885 uF worst case). The
+      LM25145 has no VDDA pin; this is the only bias-rail capacitor it needs.
 
   - ref: R6
     role: uvlo_divider_top
@@ -221,30 +286,39 @@ parts:
     package: "0402"
     mpn: Yageo RC0402FR-07100KL
     notes: >-
-      proposal, EE review required. VIN to EN/UVLO. R_UV1 = (Von - Voff)/I_HYS
-      = 1.0 V / 10 uA (eq. 1, p. 18).
+      VIN to EN/UVLO. R_UV1 = (Von - Voff)/I_HYS = 1.0 V / 10 uA (eq. 1,
+      p. 18).
 
   - ref: R7
     role: uvlo_divider_bottom
-    value: 16.5 kOhm, 1%
+    value: 16.9 kOhm, 1%
     package: "0402"
-    mpn: Yageo RC0402FR-0716K5L
+    mpn: Yageo RC0402FR-0716K9L
     notes: >-
-      proposal, EE review required. EN/UVLO to GND. R_UV2 = R_UV1 x 1.2 /
-      (8.5 - 1.2) = 16.44 k (eq. 2) -> 16.5 k: on 8.47 V, off 7.47 V nominal,
-      both below the 9 V minimum input.
+      EN/UVLO to GND. R_UV2 = R_UV1 x 1.2 / (8.5 - 1.2) = 16.44 k (eq. 2)
+      rounds to 16.5 k, but with V_EN 1.164-1.236 V and I_HYS 9-11 uA (p. 8)
+      and both resistors at +/-2% (1% plus 100 ppm/K over 100 K) 16.5 k
+      turns on as late as 9.03 V, above the 9 V minimum input. 16.9 k: on
+      8.30 V nominal (7.78-8.85 V), off 7.30 V nominal (6.70-7.93 V),
+      hysteresis at least 0.88 V. Digi-Key 5280863 Active but only 102 in
+      stock on 2026-10-22; the E96 value is multi-sourced, so record a
+      second source at procurement.
 
   - ref: R8
     role: current_limit_set
-    value: 66.5 Ohm, 1%
+    value: 634 Ohm, 1%
     package: "0402"
-    mpn: Yageo RC0402FR-0766R5L
+    mpn: Yageo RC0402FR-07634RL
     notes: >-
-      proposal, EE review required. U1 ILIM to SW (Q2 drain), RDS(on) mode.
-      R_ILIM = (3.0 A - 0.24 A)/200 uA x 4.8 mOhm (eq. 6, p. 24) = 66.3 ->
-      66.5. With the ILIM comparator offset the worst-case trip spans roughly
-      1.0-4.9 A valley -- an open EE-review question in AMB-128, with the
-      shunt-mode alternative in design.md section 10.7.
+      U1 ILIM to the ISNS node (Q2 source and the top of R10, Kelvin),
+      RSENSE mode: I_RS 100 uA, 90-110 uA over TJ (p. 9). Valley trip
+      (I_RS x R_ILIM - V_ILIM-TH) / R_S = 3.270 A nominal (3.170 A by eq. 6,
+      which omits V_ILIM-TH), 2.545-4.035 A strict worst case (V_ILIM-TH -8
+      to +3.5 mV, R8 +/-2%, R10 +/-1.94%, C12 filter lag) inside the
+      2.30-4.635 A window design.md sec. 10.7 derives. Output current limit
+      3.51 A nominal at 12 V, at least 2.71 A. Was 66.5 Ohm to SW in RDS(on)
+      mode, which no value could make work at both corners. Digi-Key
+      5281063 Active, 273,878 in stock on 2026-10-22.
 
   - ref: C12
     role: current_limit_filter
@@ -252,9 +326,27 @@ parts:
     package: "0402"
     mpn: Murata GRM1555C1H820JA01D
     notes: >-
-      proposal, EE review required. U1 ILIM to GND (PGND). R_ILIM x C_ILIM
-      about 6 ns (p. 24): 6 ns / 66.5 Ohm = 90 pF -> 82 pF (5.5 ns). Sees VIN
-      swings, hence 50 V.
+      U1 ILIM to PGND. RSENSE mode does not require C_ILIM (p. 24); it is
+      kept as a noise and shunt-ESL filter: tau = 634 Ohm x 82 pF = 52 ns
+      attenuates the 0.2-0.8 V, ~10 ns commutation spike across R10's
+      0.5-5 nH about 5x at the pin. It now sees about 0.1 V, not VIN; the
+      50 V C0G part is kept, the same MPN as C7.
+
+  - ref: R10
+    role: current_sense_shunt
+    value: 20 mOhm, 1%, 1 W, +/-75 ppm/C
+    package: "1206"
+    mpn: Vishay WSLP1206R0200FEA
+    notes: >-
+      LM25145 RSENSE-mode low-side shunt (DS Fig. 39), Q2 source to GND. U1
+      PGND and C12 go to its ground-side pad and R8 to its Q2-side pad, by
+      Kelvin traces that carry no power current; each 1 mV of PGND-to-shunt
+      offset moves the trip by 50 mA. 56 mW at 12 V / 2 A, R_S (1 - D')(Io^2 +
+      dI^2/12); 0.30 W in the worst sustained overload (just below the
+      4.035 A trip at 14 V) against 0.45 W derated at 125 C (WSLP p. 3: full
+      rating to 70 C, linear to zero at 170 C). Metal strip, AEC-Q200,
+      Digi-Key 1883281 Active, 343,192 in stock on 2026-10-22. The deck
+      carries it as RSNS, pinned to this value.
 
   - ref: R9
     role: pgood_pullup
@@ -262,6 +354,7 @@ parts:
     package: "0402"
     mpn: Yageo RC0402FR-0749K9L
     notes: >-
-      proposal, EE review required. PGOOD to VOUT; open drain needs a pull-up
-      to <= 13 V, typically 10-100 k (p. 19). Optional: nothing in the
-      benchmark consumes PGOOD.
+      PGOOD to VOUT; open drain needs a pull-up to <= 13 V, typically
+      10-100 k (p. 19). DS Figure 46 pulls up to VCC; VOUT is chosen here
+      for a 3.3 V logic level. It sinks 68 uA with PGOOD low. Optional:
+      nothing in the benchmark consumes PGOOD.

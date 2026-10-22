@@ -576,7 +576,7 @@ REQUIRED_BOM_REFS = {
 REQUIRED_DECK_PARAMS = {
     "blinker-555": (),
     "buck-3v3": ("LVAL", "DCR", "RON_HS", "RON_LS",
-                 "CEFF", "RESR", "RFB1", "RFB2"),
+                 "CEFF", "RESR", "RFB1", "RFB2", "RSNS"),
 }
 
 # benchmark -> deck parameter/instance -> how the BOM pins it. The buck deck's
@@ -601,6 +601,7 @@ DECK_PARAM_RULES = {
         ("RESR",   "C2", "regex",   r"net ESR ~([\d.]+)\s*mOhm", 1e-3),
         ("RFB1",   "R1", "value",   None,                        1),
         ("RFB2",   "R2", "value",   None,                        1),
+        ("RSNS",   "R10", "value",  None,                        1),
     ),
     # The blinker instantiates its passives at component level under the
     # BOM's own refdes -- deck_bom_problems reconciles those directly -- and
@@ -1267,8 +1268,9 @@ def self_test():
     _saved2 = DECK_PARAM_RULES["buck-3v3"]
     try:
         # Two rows deleted, refilled with duplicates: the round-18 attack a
-        # count-based floor waved through.
-        DECK_PARAM_RULES["buck-3v3"] = _saved2[:6] + _saved2[:2]
+        # count-based floor waved through. Sliced from the end so the row
+        # count stays the same however long the table grows.
+        DECK_PARAM_RULES["buck-3v3"] = _saved2[:-2] + _saved2[:2]
         deck_param_problems(ROOT / "benchmarks" / "buck-3v3", _dupes)
     finally:
         DECK_PARAM_RULES["buck-3v3"] = _saved2
