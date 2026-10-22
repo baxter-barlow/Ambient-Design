@@ -1,0 +1,6 @@
+# RHO2020: a part.<name> column needs a part binding in the header.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    table rhoform.lib.passive.Resistor (resistance, part.package):
+        r1  1kohm  "0402"

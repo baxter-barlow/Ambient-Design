@@ -1,0 +1,7 @@
+# RHO2018: a row's cells must match the header's columns.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    table rhoform.lib.passive.Resistor (resistance, power_rating):
+        r1  1kohm  0.25W
+        r2  2kohm

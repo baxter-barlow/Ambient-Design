@@ -1,0 +1,51 @@
+# Hierarchy: a module instantiated twice gives each copy its own instance
+# paths and its own internal nets, module ports join nets across scopes,
+# and arguments to a module instance are recorded as its parameters.
+#pragma rhoform-syntax 0.1
+
+module Divider:
+    port bottom passive
+    port mid passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor(resistance = 10kohm):
+        pin a passive 1
+        pin b passive 2
+    r2 = new rhoform.lib.passive.Resistor(resistance = 4.7kohm):
+        pin a passive 1
+        pin b passive 2
+    top ~ r1.a
+    r1.b ~ mid
+    r2.a ~ mid
+    r2.b ~ bottom
+
+module Stage:
+    port gnd passive
+    port out passive
+    port vin passive
+    div = new Divider(note = "one third")
+    r3 = new rhoform.lib.passive.Resistor(resistance = 1kohm):
+        pin a passive 1
+        pin b passive 2
+    vin ~ div.top
+    div.mid ~ r3.a
+    r3.b ~ out
+    div.bottom ~ gnd
+
+module Top:
+    port gnd power_in
+    port out output
+    port vin power_in
+    a = new Stage(gain = 2)
+    b = new Stage(enabled = true, gain = 3)
+    net GND:
+        a.gnd
+        b.gnd
+        gnd
+    net OUT:
+        a.out
+        b.out
+        out
+    net VIN:
+        a.vin
+        b.vin
+        vin

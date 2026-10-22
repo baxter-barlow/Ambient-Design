@@ -1,0 +1,17 @@
+# Values: a quantity is its nominal's mantissa in the T3 normal-form unit,
+# a tolerance or bracketed interval becomes absolute min and max in that
+# unit, every number is the double nearest the exact decimal, and strings,
+# integers and booleans pass through. Part bindings carry constraints.
+#pragma rhoform-syntax 0.1
+
+module Values:
+    c1 = new rhoform.lib.passive.Capacitor(capacitance = 0.1uF +/- 10%, voltage_rating = 50000mV):
+        part abstract:
+            capacitance = 100nF (90nF to 110nF)
+            dielectric = "X7R"
+    l1 = new rhoform.lib.passive.Inductor(inductance = 2.2uH +/- 0.2uH)
+    r1 = new rhoform.lib.passive.Resistor(resistance = 4700ohm +/- 0.5%)
+    u1 = new rhoform.lib.ic.Mcu(cores = 2, debug = false, name = "main", t_amb = 25degC, vref = 1.2345678901234567890123V):
+        part "mcu.esp32s3/espressif-ESP32-S3@1":
+            flash = 8
+            psram = true

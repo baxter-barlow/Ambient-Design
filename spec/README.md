@@ -50,7 +50,7 @@ either machine-reconciled or absent.
 | [01 — Lexical structure](language/01-lexical-structure.md) | normative, v0.1 |
 | [02 — Grammar, names, and vocabularies](language/02-grammar.md) | normative, v0.1 |
 | [03 — Literals and the SI normal form](language/03-literals.md) | normative, v0.1 (T3; the single source R16 and R21 consume) |
-| [04 — Elaboration](language/04-elaboration.md) | reserved (lands with the elaborator, AMB-44) |
+| [04 — Elaboration](language/04-elaboration.md) | normative, v0.1 (R13 slice 1 and R15; parameters, control flow and imports land with their slices) |
 | [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
 | [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1) |
 | [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.1 (I1, AC6; the canonical form R16's formatter writes) |
@@ -64,6 +64,7 @@ that change, not a note for later.
 
 [conformance/README.md](conformance/README.md) documents the case
 format. The suite is runnable against any implementation that can parse
-Rhoform sources and emit the diagnostic wire format; in this repository,
+Rhoform sources and emit the diagnostic wire format (and, for its
+elaboration cases, the netlist IR); in this repository,
 `tests/conformance/check-conformance.py` runs it against the reference
 implementation on every `make all`.

@@ -1,0 +1,12 @@
+# RHO2028: labels at two depths give one net two ground domains.
+#pragma rhoform-syntax 0.1
+
+module Sensor:
+    port gnd power_in
+    net AGND(ground_domain = "agnd"):
+        gnd
+
+module Top:
+    s = new Sensor
+    net GND(ground_domain = "gnd"):
+        s.gnd

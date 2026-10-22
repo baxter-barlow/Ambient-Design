@@ -1,0 +1,12 @@
+# RHO2002: two modules are instantiated by nothing, so neither is the root.
+#pragma rhoform-syntax 0.1
+
+module Left:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+
+module Right:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive

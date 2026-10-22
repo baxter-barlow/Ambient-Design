@@ -1,0 +1,9 @@
+# RHO2009: a module instance takes its parts from its definition.
+#pragma rhoform-syntax 0.1
+
+module Leaf:
+    port p passive
+
+module Top:
+    x = new Leaf:
+        hardware test_point

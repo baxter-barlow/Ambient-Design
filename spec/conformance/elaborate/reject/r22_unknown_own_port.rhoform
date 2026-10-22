@@ -1,0 +1,9 @@
+# RHO2023: a bare endpoint must be one of the module's own ports.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    vni ~ r1.a

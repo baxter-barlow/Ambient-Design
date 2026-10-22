@@ -88,6 +88,19 @@ or reordering its keys does not move it, while any change to the data does.
 `tests/ir/check-hashes.py` implements the profile and its self-test asserts all
 three invariances.
 
+`source_hash` is `"sha256:"` plus the SHA-256 of this serialization of the list
+of `[path, sha256]` pairs for every source file the compilation read, sorted by
+path, each path POSIX and relative to the compile root
+([spec 04](../spec/language/04-elaboration.md#the-source-map)). The gate verifies
+it for the benchmark goldens; the hand-written examples below predate the rule.
+
+**Values.** A `Quantity`'s `unit` is the T3 normal-form unit of its nominal and
+`value` the nominal's mantissa in it; `tolerance` is the absolute window in the
+same unit, so every respelling of a literal is one IR value. An IR number is the
+double nearest the exact decimal the source wrote (ties to even), and an
+integer beyond 2^53 is a compile error rather than a rounding (spec 04,
+"Values").
+
 
 ## Versioning policy
 
@@ -110,9 +123,10 @@ three invariances.
 
 - Every entity's **primary identity is its hierarchical path** (L7): `/` for the root design,
   then one segment per DSL scope member, e.g. `/indicator/r_lim`, with `[n]` indices for
-  replicated members (`/leds/led[3]`). Instances and assertions carry paths; nets carry stable
-  derived names (explicit DSL label, else synthesized deterministically from the highest-scope
-  driving port). Refdes assignment, schematic symbols, layout footprint links, lockfile entries,
+  replicated members (`/leds/led[3]`). Instances and assertions carry paths; nets carry names: the
+  shallowest DSL label, qualified by its instance path below the root (`indicator/LED`), else
+  the interim derived name `N_` plus the net's least member (`N_r1.b`, `N_.vin`), per spec 04
+  until R27 owns naming. Refdes assignment, schematic symbols, layout footprint links, lockfile entries,
   diagnostics, and the source map all key off these identities — never off array position, never
   off refdes.
 - Hierarchy is *encoded in* paths: the `instances` array is flat, and an instance's parent is the
@@ -130,11 +144,14 @@ three invariances.
 
 ## Source maps (I9)
 
-`source-map.schema.json` defines the sidecar: a file table (repo-relative paths + content
-hashes), spans (byte offsets authoritative, line/col denormalized), and a `nodes` map from IR
-identity → declaration span + instantiation trace, innermost first. Because elaboration expands
-one source line into many instances, replicated entities share a declaration span but carry
-distinct traces.
+`source-map.schema.json` defines the sidecar: a file table (paths relative to the compile root,
+plus content hashes), spans (byte offsets authoritative, line/col denormalized), and a `nodes` map
+from IR identity → declaration span + instantiation trace, innermost first. Because elaboration
+expands one source line into many instances, replicated entities share a declaration span but
+carry distinct traces: two declarations are the same span or disjoint, never partially
+overlapping, and `tests/ir/check-hashes.py` allows the first and rejects the second. (The
+hand-written examples below use repository-relative paths, because their sources were never
+committed.)
 
 **Diagnostic-anchor rule:** every diagnostic emitted by any Rhoform tool — static checks, ngspice
 `.meas` assertion failures, KiCad export divergence — references an IR identity (path or net
@@ -208,8 +225,9 @@ without `jsonschema` the gate prints one FAIL line and exits 2, because an unava
 not a pass. (This paragraph described `ir/validate.sh`, which no longer exists; it promised an
 ajv fallback and a well-formedness mode the gate has never had.)
 
-Two case kinds run. The two examples must **validate**; every file in `examples/negative/` must be
-**rejected**. A negative control that validates fails the run, which is what stops the schema from
+Two case kinds run. The two examples, and every benchmark golden
+(`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), must **validate**; every file in
+`examples/negative/` must be **rejected**. A negative control that validates fails the run, which is what stops the schema from
 quietly losing a constraint it advertises. Each fixture is a minimal complete document carrying
 exactly one defect, described in its own `x_negative_control` member:
 
@@ -255,6 +273,9 @@ under the sentence forbidding raw-byte hashing -- and that digest matched
 neither the recipe's actual output nor the committed hash. It was residue of a
 half-deleted block, which also left the paragraph above starting mid-sentence.
 
-`source_hash`, the source-map file digests, and all byte/line offsets remain shape-valid
-placeholders: no `.rhoform` source files exist yet, so there is nothing to hash or index. The compiler
-is what will make those honest.
+`source_hash`, the source-map file digests, and all byte/line offsets in the examples remain
+shape-valid placeholders: their sources were never committed, so there is nothing to hash or
+index. The examples also predate the unit rule (their resistances are in base `ohm`, where the
+elaborator writes value 100 in `kohm`) and the naming rules, so `blinker.ir.json` is a structural oracle
+for benchmark (a), not byte-exact compiler output. The compiler's own output, with honest hashes
+and offsets, is the benchmark goldens beside each living source in `benchmarks/<id>/`.

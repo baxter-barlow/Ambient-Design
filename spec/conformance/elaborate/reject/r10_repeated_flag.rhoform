@@ -1,0 +1,7 @@
+# RHO2011 (a warning): a flag stated twice; the design still elaborates.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    u1 = new rhoform.lib.ic.Mcu:
+        dnp
+        dnp

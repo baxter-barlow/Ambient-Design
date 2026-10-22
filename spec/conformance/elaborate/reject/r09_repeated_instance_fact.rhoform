@@ -1,0 +1,7 @@
+# RHO2010: an instance has one part.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    u1 = new rhoform.lib.ic.Mcu:
+        part "mcu.a/vendor-A@1"
+        part "mcu.b/vendor-B@1"

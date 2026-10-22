@@ -1,0 +1,11 @@
+# RHO2021: an endpoint names an instance the module does not declare.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    r2 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    r1.b ~ r3.a

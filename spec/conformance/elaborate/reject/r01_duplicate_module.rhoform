@@ -1,0 +1,11 @@
+# RHO2001: two modules of one file share a name.
+#pragma rhoform-syntax 0.1
+
+module Leaf:
+    port p passive
+
+module Leaf:
+    port q passive
+
+module Top:
+    x = new Leaf
