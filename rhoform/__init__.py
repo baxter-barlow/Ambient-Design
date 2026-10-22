@@ -3,10 +3,11 @@
 This package is the tool the roadmap calls `rhoform` — the diagnostics
 framework (R17/A1), the lexer/parser generated from the frozen grammar
 (R12/L5), and the quantity-literal reference implementation that anchors the
-spec's T3 normal form (R54/T3), and the elaborator (R13, with R15's
+spec's T3 normal form (R54/T3), the elaborator (R13, with R15's
 fabrication facts) that flattens a parsed design into IR v0 and its source
-map, serialized and hashed by `rhoform.ir`. Later milestones add the
-formatter (R16) and the CLI (R18) here.
+map, serialized and hashed by `rhoform.ir`, the canonical formatter (R16),
+and the command line (R18, `python3 -m rhoform check|fmt`, in
+`rhoform.cli`).
 
 It deliberately imports nothing from `lang.bakeoff` (the throwaway
 prototypes) and nothing from `lang.grammar` at import time; the parser loads
