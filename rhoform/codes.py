@@ -251,6 +251,286 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("bracket",),
         rule="L5",
     ),
+    # ---- block 2: elaboration (rhoform/elaborate.py, AMB-44/R13) --------
+    # Every error the elaborator can raise on a parse-clean v0.1 file. The
+    # ones guarding IR shape (RHO2013-2017, RHO2030, RHO2032) exist because
+    # emitting the IR anyway would hand a backend a schema-invalid document.
+    CodeDef(
+        code="RHO2001", slug="duplicate-module", severity="error",
+        message=(
+            "module `{name}` is defined twice in this file; a definition "
+            "name must identify one module."
+        ),
+        params=("name",),
+        rule="L7",
+    ),
+    CodeDef(
+        code="RHO2002", slug="ambiguous-root-module", severity="error",
+        message=(
+            "modules {candidates} are each instantiated by nothing, so the "
+            "root is ambiguous; instantiate all but one, or name the root "
+            "explicitly."
+        ),
+        params=("candidates",),
+        rule="L1",
+    ),
+    CodeDef(
+        code="RHO2003", slug="unknown-root-module", severity="error",
+        message=(
+            "the requested root `{name}` is not a module of this file; its "
+            "modules are {candidates}."
+        ),
+        params=("name", "candidates"),
+        rule="L1",
+    ),
+    CodeDef(
+        code="RHO2004", slug="instantiation-cycle", severity="error",
+        message=(
+            "modules {cycle} instantiate one another in a cycle; elaboration "
+            "must terminate, so no module may contain itself."
+        ),
+        params=("cycle",),
+        rule="L1/L3",
+    ),
+    CodeDef(
+        code="RHO2005", slug="unknown-definition", severity="error",
+        message=(
+            "`{name}` names no module visible in this file; a single-word "
+            "definition must be a module defined here (a dotted name is a "
+            "library component)."
+        ),
+        params=("name",),
+        rule="L2",
+    ),
+    CodeDef(
+        code="RHO2006", slug="table-of-modules", severity="error",
+        message=(
+            "`{name}` is a module, and table rows elaborate to components; "
+            "instantiate the module with `new` once per instance instead."
+        ),
+        params=("name",),
+        rule="L6",
+    ),
+    CodeDef(
+        code="RHO2007", slug="duplicate-declaration", severity="error",
+        message="{kind} `{name}` appears twice in {scope}.",
+        params=("kind", "name", "scope"),
+        rule="L7",
+    ),
+    CodeDef(
+        code="RHO2008", slug="assertion-path-collision", severity="error",
+        message=(
+            "assertion `{name}` and an instance of the same name in module "
+            "`{module}` would share one path identity."
+        ),
+        params=("name", "module"),
+        rule="L7",
+    ),
+    CodeDef(
+        code="RHO2009", slug="fact-on-module-instance", severity="error",
+        message=(
+            "`{fact}` cannot appear on `{instance}`, an instance of module "
+            "`{module}`: a module's ports and parts come from its "
+            "definition, and it carries no defaults to deny."
+        ),
+        params=("fact", "instance", "module"),
+        rule="L2/L9",
+    ),
+    CodeDef(
+        code="RHO2010", slug="repeated-instance-fact", severity="error",
+        message=(
+            "`{instance}` states `{fact}` more than once; an instance has "
+            "one {fact}."
+        ),
+        params=("fact", "instance"),
+        rule="L9/D1",
+    ),
+    CodeDef(
+        code="RHO2011", slug="repeated-flag", severity="warning",
+        message="`{instance}` states the flag `{flag}` more than once.",
+        params=("flag", "instance"),
+        rule="L9",
+    ),
+    CodeDef(
+        code="RHO2012", slug="contradictory-flag", severity="error",
+        message="`{instance}` states both `{flag}` and `no {flag}`.",
+        params=("flag", "instance"),
+        rule="L9",
+    ),
+    CodeDef(
+        code="RHO2013", slug="hardware-port-arity", severity="error",
+        message=(
+            "`{instance}` is hardware `{kind}`, which takes {requirement}; "
+            "it declares {found}."
+        ),
+        params=("instance", "kind", "requirement", "found"),
+        rule="L9",
+    ),
+    CodeDef(
+        code="RHO2014", slug="abstract-part-without-constraints",
+        severity="error",
+        message=(
+            "`{instance}` has `part abstract` with no constraints; an "
+            "abstract part is the constraint set it must satisfy."
+        ),
+        params=("instance",),
+        rule="D1",
+    ),
+    CodeDef(
+        code="RHO2015", slug="empty-part-key", severity="error",
+        message=(
+            "`{instance}` pins its part to the empty key; a resolved part "
+            "names a lockfile entry."
+        ),
+        params=("instance",),
+        rule="D1",
+    ),
+    CodeDef(
+        code="RHO2016", slug="interval-without-nominal", severity="error",
+        message=(
+            "`{literal}` for `{name}` is a bare interval with no nominal; a "
+            "parameter or constraint needs a value, e.g. `3.3V (3V to "
+            "3.6V)`."
+        ),
+        params=("literal", "name"),
+        rule="T4/I4",
+    ),
+    CodeDef(
+        code="RHO2017", slug="number-not-representable", severity="error",
+        message=(
+            "`{literal}` cannot be carried by the IR, whose numbers are "
+            "IEEE doubles: an integer must not exceed 2^53 in magnitude and "
+            "a quantity must be finite."
+        ),
+        params=("literal",),
+        rule="I4",
+    ),
+    CodeDef(
+        code="RHO2018", slug="table-row-arity", severity="error",
+        message=(
+            "row `{row}` carries {values} value(s), but the table header "
+            "declares {columns} column(s)."
+        ),
+        params=("row", "values", "columns"),
+        rule="L6",
+    ),
+    CodeDef(
+        code="RHO2019", slug="invalid-table-column", severity="error",
+        message=(
+            "column `{column}` is neither a parameter name nor "
+            "`part.<constraint>`."
+        ),
+        params=("column",),
+        rule="L6",
+    ),
+    CodeDef(
+        code="RHO2020", slug="part-column-without-binding", severity="error",
+        message=(
+            "column `{column}` sets a part constraint, but the table header "
+            "declares no `part` binding to carry it."
+        ),
+        params=("column",),
+        rule="L6/D1",
+    ),
+    CodeDef(
+        code="RHO2021", slug="unknown-instance", severity="error",
+        message="`{instance}` is not an instance of module `{module}`.",
+        params=("instance", "module"),
+        rule="L7",
+    ),
+    CodeDef(
+        code="RHO2022", slug="unknown-port", severity="error",
+        message=(
+            "instance `{instance}` of `{definition}` has no port `{port}`; "
+            "a component's ports are its `pin` statements and a module's "
+            "are its `port` declarations."
+        ),
+        params=("instance", "definition", "port"),
+        rule="T2",
+    ),
+    CodeDef(
+        code="RHO2023", slug="unknown-own-port", severity="error",
+        message=(
+            "`{name}` is not a port of module `{module}`; a bare endpoint "
+            "names one of the module's own ports."
+        ),
+        params=("name", "module"),
+        rule="T2",
+    ),
+    CodeDef(
+        code="RHO2024", slug="nc-port-connected", severity="error",
+        message=(
+            "`{endpoint}` has role `nc`; a declared no-connect cannot join "
+            "a net."
+        ),
+        params=("endpoint",),
+        rule="T2",
+    ),
+    CodeDef(
+        code="RHO2025", slug="repeated-endpoint", severity="warning",
+        message="`{endpoint}` is listed more than once in one statement.",
+        params=("endpoint",),
+        rule="T2",
+    ),
+    CodeDef(
+        code="RHO2026", slug="isolated-endpoint-connected", severity="error",
+        message=(
+            "`{endpoint}` is declared isolated but its net also reaches "
+            "`{other}`; an isolated port is alone on its net."
+        ),
+        params=("endpoint", "other"),
+        rule="L9",
+    ),
+    CodeDef(
+        code="RHO2027", slug="conflicting-net-labels", severity="error",
+        message=(
+            "one net carries labels {labels} at the same depth; a net has "
+            "one name, so connect differently or keep one label."
+        ),
+        params=("labels",),
+        rule="I2",
+    ),
+    CodeDef(
+        code="RHO2028", slug="conflicting-net-domain", severity="error",
+        message=(
+            "net `{net}` is given two {attribute} values, `{first}` and "
+            "`{second}`."
+        ),
+        params=("net", "attribute", "first", "second"),
+        rule="T5",
+    ),
+    CodeDef(
+        code="RHO2029", slug="unknown-assertion-subject", severity="error",
+        message=(
+            "`{subject}` is not a net labelled in module `{module}`; an "
+            "assertion's subject is a net label of its own module."
+        ),
+        params=("subject", "module"),
+        rule="V1",
+    ),
+    CodeDef(
+        code="RHO2030", slug="static-assertion-dynamic-measurement",
+        severity="error",
+        message=(
+            "static assertion `{name}` measures `{measurement}`, which has "
+            "no static evaluation rule; only operating_point, power_avg, "
+            "power_rms and efficiency are static."
+        ),
+        params=("name", "measurement"),
+        rule="V1/V2",
+    ),
+    CodeDef(
+        code="RHO2031", slug="inverted-assertion-bounds", severity="error",
+        message="`within {low} to {high}`: the lower bound exceeds the upper.",
+        params=("low", "high"),
+        rule="V1",
+    ),
+    CodeDef(
+        code="RHO2032", slug="empty-net-domain", severity="error",
+        message="net `{net}` sets `{attribute}` to the empty string.",
+        params=("net", "attribute"),
+        rule="T5",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that
