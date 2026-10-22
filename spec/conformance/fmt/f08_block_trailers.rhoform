@@ -1,0 +1,16 @@
+#pragma rhoform-syntax 0.1
+module M:
+    u = new L:
+        part abstract:
+            a = 1V
+          # reaches the instance body only
+      # reaches no block, so the outermost closed one
+            # reaches the constraints
+    port p passive
+    net N:
+        a
+        # end of N
+    port q passive
+module K:
+    port p passive
+  # end of K

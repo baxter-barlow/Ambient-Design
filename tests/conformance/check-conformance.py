@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gate: the conformance suite holds the implementation to the spec.
 
-Four legs:
+Five legs:
 
   1. PARSE ACCEPT: every spec/conformance/parse/accept case parses with
      zero diagnostics.
@@ -17,17 +17,23 @@ Four legs:
      stable rejection reasons.
   4. DOC RECONCILIATION: every closed list the spec restates (keywords,
      reserved words, the four vocabularies, the unit ladders, the
-     diagnostic block table, the output cap) equals the source of truth
-     it restates. The spec promised "a list in this spec is either
-     machine-reconciled or absent"; this is the reconciliation.
+     diagnostic block table, the output cap, the formatter's statement
+     ranks and instance-body order) equals the source of truth it
+     restates, and 07's collation sample is in natural order. The spec
+     promised "a list in this spec is either machine-reconciled or
+     absent"; this is the reconciliation.
+  5. FORMATTER: every spec/conformance/fmt input formats to its committed
+     .expected.rhoform BYTE FOR BYTE, every expected file formats to
+     itself (canonical output is a fixed point), and the formatter
+     refuses every parse reject case, returning no bytes.
 
 Population floors on cases and vectors keep the suite from shrinking by
 accident, the same posture as the schema gate's negative-control floor.
 
 Exit 0 pass, 1 violation, 2 when the pinned lark or jsonschema is
 missing (an unavailable gate is not a pass). `--write` regenerates the
-reject cases' expected files from the reference implementation; the git
-diff is the review artifact.
+reject and formatter cases' expected files from the reference
+implementation; the git diff is the review artifact.
 
 Usage: check-conformance.py [--self-test | --write]
 """
@@ -51,12 +57,14 @@ MINIMUM_ACCEPT_CASES = 8
 MINIMUM_REJECT_CASES = 16
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
+MINIMUM_FMT_CASES = 16
 
 _WORD = re.compile(r"`([A-Za-z_][A-Za-z0-9_./-]*)`")
 
 
-def _spec_words(text: str, heading: str) -> list[str]:
-    """Backticked words under `heading`, up to the next heading."""
+def _section(text: str, heading: str) -> str | None:
+    """The text under `heading`, up to the next heading of its level or
+    above; None when the heading is absent."""
     lines = text.split("\n")
     start = None
     level = None
@@ -66,13 +74,57 @@ def _spec_words(text: str, heading: str) -> list[str]:
             level = line.split(" ")[0]
             break
     if start is None:
-        return []
+        return None
     body = []
     for line in lines[start:]:
         if line.startswith("#") and line.split(" ")[0] <= level:
             break
         body.append(line)
-    return _WORD.findall("\n".join(body))
+    return "\n".join(body)
+
+
+def _spec_words(text: str, heading: str) -> list[str]:
+    """Backticked words under `heading`, up to the next heading."""
+    return _WORD.findall(_section(text, heading) or "")
+
+
+def _rank_rows(text: str, heading: str) -> list[tuple[int, str]]:
+    """`| <rank> | `<word>` | ...` table rows under `heading`."""
+    return [(int(rank), word) for rank, word in re.findall(
+        r"^\| (\d+) \| `([a-z_]+)` \|", _section(text, heading) or "",
+        re.MULTILINE)]
+
+
+def _read_case(case: Path) -> str:
+    """A case's source text. surrogateescape, exactly like the parser
+    CLI: a case with an invalid byte is a legitimate reject fixture, and a
+    strict read here made that class of case structurally unpinnable
+    (review round 2). But the repository REFUSES tracked bytes that are
+    not valid UTF-8 (the retired-names scanner fails closed on binary, by
+    policy — round 3 caught a committed 0xFF turning `make all` red), so
+    such fixtures — and formatter inputs that need bytes the whitespace
+    policy refuses — are committed as `.rhoform.escaped`: ASCII with
+    Python-style byte escapes, decoded here to the raw bytes a
+    third-party implementation should feed its reader."""
+    if case.name.endswith(".escaped"):
+        escaped = case.read_text(encoding="ascii")
+        raw = (escaped.encode("ascii").decode("unicode_escape")
+               .encode("latin-1"))
+        return raw.decode("utf-8", errors="surrogateescape")
+    return case.read_bytes().decode("utf-8", errors="surrogateescape")
+
+
+def _case_stem(case: Path) -> str:
+    name = case.name
+    if name.endswith(".rhoform.escaped"):
+        return name[:-len(".rhoform.escaped")]
+    return name[:-len(".rhoform")]
+
+
+def _case_sources(directory: Path) -> list[Path]:
+    """Every case source in `directory`, escaped or not, sorted."""
+    return sorted(list(directory.glob("*.rhoform"))
+                  + list(directory.glob("*.rhoform.escaped")))
 
 
 def parse_case_problems(accept_dir, reject_dir, write=False):
@@ -84,33 +136,10 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     validator = jsonschema.validators.validator_for(schema)(schema)
 
-    def read_case(case):
-        # surrogateescape, exactly like the parser CLI: a case with an
-        # invalid byte is a legitimate reject fixture, and a strict read
-        # here made that class of case structurally unpinnable (review
-        # round 2). But the repository REFUSES tracked bytes that are not
-        # valid UTF-8 (the retired-names scanner fails closed on binary,
-        # by policy — round 3 caught a committed 0xFF turning `make all`
-        # red), so such fixtures are committed as `.rhoform.escaped`:
-        # ASCII with Python-style byte escapes, decoded here to the raw
-        # bytes a third-party implementation should feed its reader.
-        if case.name.endswith(".escaped"):
-            escaped = case.read_text(encoding="ascii")
-            raw = (escaped.encode("ascii").decode("unicode_escape")
-                   .encode("latin-1"))
-            return raw.decode("utf-8", errors="surrogateescape")
-        return case.read_bytes().decode("utf-8", errors="surrogateescape")
-
-    def case_stem(case):
-        name = case.name
-        if name.endswith(".rhoform.escaped"):
-            return name[:-len(".rhoform.escaped")]
-        return name[:-len(".rhoform")]
-
     problems = []
     accept_cases = sorted(accept_dir.glob("*.rhoform"))
     for case in accept_cases:
-        result = parse(read_case(case), file=case.name)
+        result = parse(_read_case(case), file=case.name)
         if not result.ok:
             emitted = result.diagnostics.render().splitlines()
             codes = [json.loads(line)["code"] for line in emitted]
@@ -119,19 +148,16 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
                 f"{codes or 'no tree'}"
             )
 
-    reject_cases = sorted(
-        list(reject_dir.glob("*.rhoform"))
-        + list(reject_dir.glob("*.rhoform.escaped"))
-    )
+    reject_cases = _case_sources(reject_dir)
     expected_files = set(reject_dir.glob("*.expected.ndjson"))
     for case in reject_cases:
-        stem = case_stem(case)
+        stem = _case_stem(case)
         expected_path = case.with_name(stem + ".expected.ndjson")
         expected_files.discard(expected_path)
         # The logical case name, escaped or not: the wire `file` field
         # must not leak the encoding an implementation happens to store
         # the fixture in.
-        result = parse(read_case(case), file=stem + ".rhoform")
+        result = parse(_read_case(case), file=stem + ".rhoform")
         stream = result.diagnostics.render()
         if not stream:
             problems.append(
@@ -250,6 +276,91 @@ def vector_problems(vector_path):
                     f"not carry the pinned fragment {fragment!r}"
                 )
     return problems, len(table["vectors"]), len(table["errors"])
+
+
+def _format_case(source: str, name: str):
+    """("ok", canonical text), ("refused", [codes]) or ("broken", why).
+
+    "broken" is the formatter failing its own self-check (F-11): it
+    raises rather than return bytes, and an uncaught raise here would
+    turn a formatter defect into a traceback instead of a report."""
+    from rhoform.fmt import FormatterError, format_source
+
+    try:
+        result = format_source(source, file=name)
+    except FormatterError as exc:
+        return "broken", str(exc).splitlines()[0]
+    if result.text is None:
+        return "refused", [json.loads(line)["code"] for line
+                           in result.diagnostics.render().splitlines()]
+    return "ok", result.text
+
+
+def fmt_case_problems(fmt_dir, reject_dir, write=False):
+    """Leg 5. Returns (problems, case_count)."""
+    from rhoform.fmt import first_difference
+
+    problems = []
+    inputs = [case for case in _case_sources(fmt_dir)
+              if not case.name.endswith(".expected.rhoform")]
+    expected_files = set(fmt_dir.glob("*.expected.rhoform"))
+    for case in inputs:
+        stem = _case_stem(case)
+        expected_path = case.with_name(stem + ".expected.rhoform")
+        expected_files.discard(expected_path)
+        state, output = _format_case(_read_case(case), stem + ".rhoform")
+        if state != "ok":
+            problems.append(
+                f"fmt/{case.name}: the input does not format ({state}: "
+                f"{output}); a formatter case must be a clean source the "
+                "formatter accepts"
+            )
+            continue
+        if write:
+            expected_path.write_text(output, encoding="utf-8")
+            shown = (expected_path.relative_to(ROOT)
+                     if expected_path.is_relative_to(ROOT) else expected_path)
+            print(f"conformance: wrote {shown}")
+            continue
+        if not expected_path.is_file():
+            problems.append(
+                f"fmt/{case.name}: no {expected_path.name}; run --write "
+                "and review the diff"
+            )
+            continue
+        expected = _read_case(expected_path)
+        if output != expected:
+            problems.append(
+                f"fmt/{case.name}: formats to bytes that diverge from "
+                f"{expected_path.name} at character "
+                f"{first_difference(output, expected)} (if the change is "
+                "deliberate, --write and review the diff)"
+            )
+        state, again = _format_case(expected, stem + ".rhoform")
+        if state != "ok" or again != expected:
+            detail = (f"{state}: {again}" if state != "ok" else
+                      f"formatting it changes character "
+                      f"{first_difference(expected, again)}")
+            problems.append(
+                f"fmt/{expected_path.name}: not a fixed point ({detail}); "
+                "canonical output must format to itself"
+            )
+    for orphan in sorted(expected_files):
+        problems.append(
+            f"fmt/{orphan.name}: expected file with no input case; delete "
+            "it or restore its case"
+        )
+    # Refusal (F-11) is pinned on the reject corpus rather than on cases
+    # of its own: a source that does not parse clean gets no bytes.
+    for case in _case_sources(reject_dir):
+        state, _ = _format_case(_read_case(case), _case_stem(case) + ".rhoform")
+        if state != "refused":
+            problems.append(
+                f"reject/{case.name}: the formatter did not refuse it "
+                f"({state}); a source that does not parse clean must get "
+                "its diagnostics and no bytes"
+            )
+    return problems, len(inputs)
 
 
 def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
@@ -427,6 +538,35 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
             f"{fence.group(1)!r}; the source of truth says "
             f"{sot.PRAGMA_TEXT!r}"
         )
+
+    # 07 restates the formatter's two rank tables. Rows are compared as
+    # sets of (rank, word): a deleted table reconciles as every row
+    # missing, so it needs no report of its own.
+    from rhoform import fmt
+
+    formatting_md = (spec_dir / "07-formatting.md").read_text(
+        encoding="utf-8")
+    reconcile("07-formatting.md statement ranks",
+              sorted(_rank_rows(formatting_md, "### Statement ranks (F-1)")),
+              sorted((rank, production) for production, rank
+                     in fmt.STATEMENT_RANKS.items()))
+    reconcile("07-formatting.md instance body order",
+              sorted(_rank_rows(formatting_md,
+                                "### Instance body order (F-5)")),
+              sorted((rank, word) for word, rank in fmt.BODY_RANKS.items()))
+    # The collation is an algorithm, not a list, so 07 pins it with a
+    # sample the implementation's own key must leave in place.
+    sample = re.search(r"```text\n([^\n]*)\n```",
+                       _section(formatting_md, "### Collation (F-2)") or "")
+    sample_words = sample.group(1).split() if sample else []
+    if len(sample_words) < 2:
+        problems.append(
+            "07-formatting.md no longer shows the collation sample (a "
+            "```text fence under '### Collation (F-2)')"
+        )
+    else:
+        reconcile("07-formatting.md collation sample", sample_words,
+                  sorted(sample_words, key=fmt.natural_key))
     return problems
 
 
@@ -483,6 +623,12 @@ def main(write=False) -> int:
         CONFORMANCE / "literals" / "normal-form.json")
     problems += literal_problems
     problems += doc_sync_problems()
+    formatter_problems, formats = fmt_case_problems(
+        CONFORMANCE / "fmt",
+        CONFORMANCE / "parse" / "reject",
+        write=write,
+    )
+    problems += formatter_problems
 
     if accepts < MINIMUM_ACCEPT_CASES:
         problems.append(
@@ -504,6 +650,11 @@ def main(write=False) -> int:
             f"{errors} error vector(s), below the floor of "
             f"{MINIMUM_ERROR_VECTORS}"
         )
+    if formats < MINIMUM_FMT_CASES:
+        problems.append(
+            f"{formats} formatter case(s), below the floor of "
+            f"{MINIMUM_FMT_CASES}"
+        )
 
     if problems:
         for problem in problems:
@@ -512,9 +663,10 @@ def main(write=False) -> int:
         return 1
     print(
         f"conformance: PASS: {accepts} accept + {rejects} reject parse "
-        f"case(s) byte-exact, {vectors} normal-form vector(s) with all "
-        f"three T3 properties, {errors} pinned rejection(s), spec "
-        "restatements reconciled."
+        f"case(s) byte-exact, {formats} formatter case(s) byte-exact and "
+        "fixed points with every reject case refused, "
+        f"{vectors} normal-form vector(s) with all three T3 properties, "
+        f"{errors} pinned rejection(s), spec restatements reconciled."
     )
     return 0
 
@@ -619,6 +771,95 @@ def self_test() -> int:
                       problems == []))
         (reject / "r04_escaped.rhoform.escaped").unlink()
         escaped_expected.unlink()
+
+        # Leg 5, over its own throwaway directory. `reject` still holds
+        # r01_x, a source with an error, which the formatter must refuse.
+        formatter = Path(tmp) / "fmt"
+        formatter.mkdir()
+        canonical = pragma + "\nmodule M:\n    port p passive\n"
+        (formatter / "f01_ok.rhoform").write_text(
+            pragma + "module M:\n  port   p passive")
+        (formatter / "f01_ok.expected.rhoform").write_text(canonical)
+        problems, n_fmt = fmt_case_problems(formatter, reject)
+        cases.append(("a formatter case formatting to its expected bytes "
+                      "passes", problems == [] and n_fmt == 1))
+
+        (formatter / "f01_ok.expected.rhoform").write_text(
+            canonical.replace("port p", "port q"))
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a formatter case whose output diverges is caught",
+                      any("diverge from f01_ok.expected.rhoform at "
+                          "character 47" in p for p in problems)))
+
+        (formatter / "f01_ok.expected.rhoform").write_text(
+            pragma + "module M:\n  port p passive\n")
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("an expected file that is not canonical is caught",
+                      any("f01_ok.expected.rhoform: not a fixed point" in p
+                          for p in problems)))
+        (formatter / "f01_ok.expected.rhoform").write_text(canonical)
+
+        (formatter / "f02_x.rhoform").write_text(canonical)
+        problems, n_fmt = fmt_case_problems(formatter, reject)
+        cases.append(("a formatter case without expected output is caught",
+                      any("no f02_x.expected.rhoform" in p
+                          for p in problems) and n_fmt == 2))
+
+        # Trailing spaces and blank lines at end of file: the bytes the
+        # escaped form exists for.
+        (formatter / "f03_esc.rhoform.escaped").write_text(
+            "#pragma rhoform-syntax 0.1\\nmodule M:  \\n"
+            "  port p passive  # t   \\n\\n\\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            problems, n_fmt = fmt_case_problems(formatter, reject,
+                                                write=True)
+        written = formatter / "f03_esc.expected.rhoform"
+        cases.append(("--write creates formatter expected files, escaped "
+                      "inputs decoded",
+                      problems == [] and n_fmt == 3
+                      and (formatter / "f02_x.expected.rhoform").is_file()
+                      and written.is_file() and written.read_text()
+                      == canonical.replace("passive\n", "passive  # t\n")))
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("written formatter cases round-trip byte-exact",
+                      problems == []))
+
+        (formatter / "f09_orphan.expected.rhoform").write_text(canonical)
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("an orphaned formatter expected file is caught",
+                      any("f09_orphan.expected.rhoform: expected file with "
+                          "no input case" in p for p in problems)))
+        (formatter / "f09_orphan.expected.rhoform").unlink()
+
+        (formatter / "f04_bad.rhoform").write_text(
+            pragma + "module M:\n    port p pasive\n")
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a formatter input that does not parse is caught",
+                      any("f04_bad.rhoform: the input does not format "
+                          "(refused: ['RHO1009'])" in p for p in problems)))
+        (formatter / "f04_bad.rhoform").unlink()
+
+        # A formatter that fails its own self-check raises; the leg must
+        # report that, not die on the traceback.
+        from unittest import mock
+
+        from rhoform import fmt as fmt_module
+
+        with mock.patch.dict(fmt_module._HEADS,
+                             {"port_decl": lambda node: "port"}):
+            problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a formatter failing its self-check is reported",
+                      any("the input does not format (broken:" in p
+                          for p in problems)))
+
+        clean = Path(tmp) / "clean_reject"
+        clean.mkdir()
+        (clean / "r01_clean.rhoform").write_text(canonical)
+        problems, _ = fmt_case_problems(formatter, clean)
+        cases.append(("a formatter that does not refuse a reject case is "
+                      "caught", any("r01_clean.rhoform: the formatter did "
+                                    "not refuse it (ok)" in p
+                                    for p in problems)))
 
         vec = Path(tmp) / "vectors.json"
 
@@ -844,12 +1085,39 @@ def self_test() -> int:
         cases.append(("a deleted pragma fence is caught",
                       any("no longer shows the pragma" in p
                           for p in problems)))
+        shutil.rmtree(spec_copy)
+        shutil.copytree(SPEC_LANG, spec_copy)
 
-    # WIRING: all four floors feed main(). Raise each over the real
-    # population in turn — three of the four were deletable when only the
-    # accept floor had a case.
+        formatting_md = spec_copy / "07-formatting.md"
+        real_formatting = formatting_md.read_text()
+        for old, new, fragment, label in (
+            ("| 3 | `net_decl` |", "| 2 | `net_decl` |",
+             "07-formatting.md statement ranks",
+             "a drifted statement rank is caught"),
+            ("### Statement ranks (F-1)", "### Statement order",
+             "07-formatting.md statement ranks",
+             "a deleted statement-rank table is caught"),
+            ("| 5 | `dnp` |", "| 0 | `dnp` |",
+             "07-formatting.md instance body order",
+             "a drifted instance-body rank is caught"),
+            ("c2 c10", "c10 c2", "07-formatting.md collation sample",
+             "a collation sample out of natural order is caught"),
+            ("```text\nR2", "```\nR2",
+             "no longer shows the collation sample",
+             "a deleted collation sample is caught"),
+        ):
+            formatting_md.write_text(real_formatting.replace(old, new))
+            problems = doc_sync_problems(spec_dir=spec_copy)
+            cases.append((label, real_formatting.count(old) == 1
+                          and any(fragment in p for p in problems)))
+        formatting_md.write_text(real_formatting)
+
+    # WIRING: all five floors feed main(). Raise each over the real
+    # population in turn — three of the first four were deletable when
+    # only the accept floor had a case.
     for floor_name in ("MINIMUM_ACCEPT_CASES", "MINIMUM_REJECT_CASES",
-                       "MINIMUM_VECTORS", "MINIMUM_ERROR_VECTORS"):
+                       "MINIMUM_VECTORS", "MINIMUM_ERROR_VECTORS",
+                       "MINIMUM_FMT_CASES"):
         real_floor = globals()[floor_name]
         globals()[floor_name] = 10_000
         try:

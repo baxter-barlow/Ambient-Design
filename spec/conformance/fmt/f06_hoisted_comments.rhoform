@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.1
+module M:
+    port p passive
+    r = new L(  # after the paren
+        # its own line
+        b = 1,  # after b
+        a = 2)  # trails the header
+    net N(  # about the domain
+        voltage_domain = "5V"
+    ):
+        r.a
+    table T (  # columns
+        x,
+        y):
+        t1 1 2

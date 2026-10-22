@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.1
+
+module Spacing:
+    port p passive
+    r = new lib.R(a = "x", b = 2)
+    u = new L:
+        pin a passive 1 2
+        no board_only
+    w = new lib.R(c = true, d = false)
+    net N(ground_domain = "G", voltage_domain = "5V"):
+        p
+    x ~ in.a ~ b
+    isolated r.b
+    assert f static frequency(OUT) within 1kHz to 2kHz

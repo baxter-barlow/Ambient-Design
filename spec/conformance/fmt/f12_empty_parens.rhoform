@@ -1,0 +1,9 @@
+#pragma rhoform-syntax 0.1
+module Parens:
+    r = new L()
+    u = new L( ):
+        pin a passive
+    net N():
+        r.a
+    table T ():
+        t1

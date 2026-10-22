@@ -6,8 +6,8 @@
 These cases define, executably, what a conforming Rhoform implementation
 does. In this repository `tests/conformance/check-conformance.py` (the
 gate; Apache-2.0 code) runs them against the reference implementation on
-every `make all`; a third-party implementation conforms to the parse and
-literal layers exactly when it reproduces them. The suite is standing —
+every `make all`; a third-party implementation conforms to the parse,
+literal and formatter layers exactly when it reproduces them. The suite is standing —
 each milestone that changes the language adds its cases in the same
 change (parser disambiguation with R12, formatter cases with R16, type
 cases with M2, and so on).
@@ -51,7 +51,8 @@ python3 tests/conformance/check-conformance.py --write
 ```
 
 The diff is the review artifact; an expected file never changes without
-one.
+one. The same command rewrites the formatter cases' expected files
+(below).
 
 ## `literals/normal-form.json` — the T3 vector table
 
@@ -63,9 +64,27 @@ vector that contradicts the properties cannot be committed. `errors`
 rows pin the stable rejection reasons ill-formed literals carry
 (RHO1010's `reason` param).
 
+## `fmt/` — formatter cases
+
+The machine-checked half of
+[07 — Formatting](../language/07-formatting.md). Each input
+`<case>.rhoform` is paired with `<case>.expected.rhoform`, the canonical
+bytes a conforming formatter writes for it. Two checks run per case,
+both byte-exact: the input MUST format to the expected file, and the
+expected file MUST format to itself (canonical output is a fixed
+point). Every input MUST parse clean. Refusal needs no cases of its
+own: the gate also requires the formatter to refuse every
+`parse/reject/` case, returning no bytes.
+
+An input that needs bytes this repository's whitespace policy refuses
+in a tracked file — trailing spaces, blank lines at the end of the
+file — is committed as `<case>.rhoform.escaped` under the same escape
+convention as the reject cases above, and decoded before formatting.
+Its expected file is never escaped: canonical output carries neither.
+
 ## Case naming
 
-`aNN_...` accept cases, `rNN_...` reject cases, numbered in the order
-they were added, never renumbered — a conformance case is cited by name
-in commit messages and issues, and a renamed case orphans every
-citation.
+`aNN_...` accept cases, `rNN_...` reject cases, `fNN_...` formatter
+cases, numbered in the order they were added, never renumbered — a
+conformance case is cited by name in commit messages and issues, and a
+renamed case orphans every citation.

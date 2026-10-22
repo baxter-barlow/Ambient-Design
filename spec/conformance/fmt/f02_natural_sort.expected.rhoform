@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.1
+
+module Sorting:
+    table T (v):
+        Q1   3
+        q9   2
+        q10  1
+    c1 = new L:
+        pin a passive 1 2 10 A1 B10
+    c2 = new L
+    c10 = new L
+    c010 = new L
+    net BUS:
+        r1.a
+        r2.a
+        r10.a
+        r.a

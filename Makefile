@@ -119,7 +119,8 @@ diagnostics:
 
 # The language spec's conformance suite (spec/, AMB-42/AMB-43): accept cases
 # parse clean, reject cases reproduce their committed diagnostic streams
-# byte for byte, the T3 normal-form vectors hold all three properties, and
+# byte for byte, the T3 normal-form vectors hold all three properties,
+# formatter cases format to their committed canonical bytes (R16), and
 # every list the spec restates is reconciled against its source of truth.
 # Needs the lark and jsonschema pins; exits 2 without them.
 conformance:

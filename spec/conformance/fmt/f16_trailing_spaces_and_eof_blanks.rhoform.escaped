@@ -1,0 +1,1 @@
+#pragma rhoform-syntax 0.1\nmodule M:   \n    port p passive  # trailing spaces follow   \n    # own line, trailing spaces   \n    port a passive    \n\n\n

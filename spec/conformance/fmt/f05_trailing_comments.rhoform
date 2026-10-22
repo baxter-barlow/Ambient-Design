@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.1
+module M:    # the module
+    port p passive# no space
+    u = new L(s = "a#b"):  # hash inside a string
+        pin a passive        # pin a
+        dnp # flag
+    net N:   # net
+        u.a  # member
