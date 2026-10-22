@@ -7,7 +7,7 @@ These cases define, executably, what a conforming Rhoform implementation
 does. In this repository `tests/conformance/check-conformance.py` (the
 gate; Apache-2.0 code) runs them against the reference implementation on
 every `make all`; a third-party implementation conforms to the parse,
-literal, elaboration and formatter layers exactly when it reproduces them. The suite is standing —
+literal, elaboration, package and formatter layers exactly when it reproduces them. The suite is standing —
 each milestone that changes the language adds its cases in the same
 change (parser disambiguation with R12, formatter cases with R16, type
 cases with M2, and so on).
@@ -102,14 +102,45 @@ trigger, and the gate fails when an active block-2 code is emitted by
 no case, unless it exempts the code with a stated reason it cannot be
 reached from source text. A case pinning a warning (a repeated flag, a
 repeated endpoint) still elaborates to a design; the stream is what it
-pins. `r33_syntax_0_2_not_yet_supported` pins the interim refusal of
-`import` statements ([04](../language/04-elaboration.md)) and goes
-when that refusal does. Cases from `a09` and `r35` on declare syntax
-0.2 and pin its semantics: component definitions, parameters, `if`,
-`for` and arrays.
+pins. Codes only a package case can trigger count as emitted when a
+`packages/reject/` case emits them. `r33` pinned the interim refusal of
+`import` statements and was retired with its code, `RHO2033`, when
+imports gained their semantics; its number is not reused. Cases from
+`a09` and `r35` on declare syntax 0.2 and pin its semantics: component
+definitions, parameters, `if`, `for` and arrays.
 
 `--write` regenerates the elaboration cases' expected IR and streams
 along with the parse reject cases'; the diff is the review artifact.
+
+## `packages/accept/` and `packages/reject/` — compilations of several files
+
+The machine-checked half of
+[08 — Packages and imports](../language/08-packages.md). Each case is a
+directory, and the directory is its compile root: it holds the case's
+sources, any `rhoform.toml` manifests, and its expectation at its top
+level. The entry file is the case's one `main.rhoform`, wherever it sits
+(a case with a path dependency keeps each package in a directory of its
+own, such as `app/` and `parts/`), and the compilation is that file plus
+its import closure, read through the package layer exactly as the
+reference command line reads it, plus the standard library modules its
+files name. Those are listed in `source_hash` by their fixed path
+`rhoform/lib/<module>.rhoform` whatever the case's layout
+(`packages/accept/a05_standard_library`), so a package case's expected
+IR moves when one of those modules' bytes do.
+
+- `packages/accept/<case>/expected.ir.json`: the case MUST compile with
+  **zero diagnostics** to IR equal to this file byte for byte, valid
+  against `ir/netlist-ir.schema.json` (the schema gate validates every
+  committed expectation too).
+- `packages/reject/<case>/expected.ndjson`: the case's diagnostic stream
+  MUST equal this file byte for byte, each line valid on the wire
+  schema. A manifest diagnostic's span `file` is the manifest's
+  compile-root-relative path (`rhoform.toml`, `app/rhoform.toml`).
+
+There is a reject case for every code of the package layer, and the
+block-2 coverage rule above counts them. Every `.rhoform` file of a
+package case is held to the canonical form, like the elaboration cases.
+`--write` regenerates the expectations; the diff is the review artifact.
 
 ## `fmt/` — formatter cases
 
@@ -134,6 +165,8 @@ Its expected file is never escaped: canonical output carries neither.
 `aNN_...` accept cases, `rNN_...` reject cases, `fNN_...` formatter
 cases, numbered within their directory in the order they were added,
 never renumbered — a conformance case is cited by name in commit
-messages and issues, and a renamed case orphans every citation. Cite an
-elaboration case with its directory (`elaborate/r04_unknown_definition`),
-since the parse cases use the same prefixes.
+messages and issues, and a renamed case orphans every citation. A case
+retired with the behavior it pinned keeps its number unused. Cite an
+elaboration or package case with its directory
+(`elaborate/r04_unknown_definition`, `packages/r18_import_cycle`), since
+the parse cases use the same prefixes.

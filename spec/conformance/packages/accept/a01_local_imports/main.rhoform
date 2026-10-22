@@ -1,0 +1,17 @@
+# X1: paths within the package, relative to the importing file.
+# `./lib/divider` names lib/divider.rhoform; an imported definition
+# is named by its own file (`lib.divider.Divider`).
+#pragma rhoform-syntax 0.2
+
+import Divider from "./lib/divider"
+import Led from "./parts"
+
+module Board:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    div = new Divider
+    vin ~ div.top
+    div.mid ~ d1.a
+    d1.k ~ gnd
+    div.bottom ~ gnd

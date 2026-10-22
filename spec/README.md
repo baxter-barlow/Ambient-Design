@@ -51,10 +51,11 @@ either machine-reconciled or absent.
 | [01 — Lexical structure](language/01-lexical-structure.md) | normative, v0.2 (syntax versions 0.1 and 0.2) |
 | [02 — Grammar, names, and vocabularies](language/02-grammar.md) | normative, v0.2 (syntax versions 0.1 and 0.2) |
 | [03 — Literals and the SI normal form](language/03-literals.md) | normative, v0.1 (T3; the single source R16 and R21 consume) |
-| [04 — Elaboration](language/04-elaboration.md) | normative, v0.2 (syntax versions 0.1 and 0.2; R13 and R15; imports land with the package layer) |
+| [04 — Elaboration](language/04-elaboration.md) | normative, v0.2 (syntax versions 0.1 and 0.2; R13 and R15) |
 | [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
 | [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes) |
 | [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.2 (syntax versions 0.1 and 0.2; I1, AC6; the canonical form R16's formatter writes) |
+| [08 — Packages and imports](language/08-packages.md) | normative, v0.2 (R14b: the manifest, language versions and imports of the R14a package specification; M1 deviations recorded: no lockfile, path dependencies only) |
 
 The milestone plan for growth is the roadmap's: each milestone that
 changes the language lands its spec section and its conformance cases in
@@ -66,6 +67,6 @@ that change, not a note for later.
 [conformance/README.md](conformance/README.md) documents the case
 format. The suite is runnable against any implementation that can parse
 Rhoform sources and emit the diagnostic wire format (and, for its
-elaboration cases, the netlist IR); in this repository,
+elaboration and package cases, the netlist IR); in this repository,
 `tests/conformance/check-conformance.py` runs it against the reference
 implementation on every `make all`.

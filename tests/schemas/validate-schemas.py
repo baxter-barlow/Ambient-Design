@@ -21,8 +21,10 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
   - benchmark goldens, the compiler's committed output for each living
     benchmark source (benchmarks/<id>/<id>.ir.json and
     benchmarks/<id>/<id>.sourcemap.json), are validated as positives of the
-    ir/ root, and so is the IR each elaboration conformance case must
-    produce (spec/conformance/elaborate/accept/<case>.expected.ir.json);
+    ir/ root, and so is the IR each elaboration or package conformance
+    case must produce (spec/conformance/elaborate/accept/<case>
+    .expected.ir.json, spec/conformance/packages/accept/<case>/
+    expected.ir.json);
     any other file with a mapped suffix outside an examples/ directory is
     still a failure;
   - a root that declares schemas but ships no negative controls is a hard
@@ -79,12 +81,15 @@ NEGATIVE_DIR_NAME = "negative"
 # document one gate checks and the other ignores.
 GOLDEN_ROOTS = {"benchmarks": "ir"}
 
-# The elaboration conformance cases' expected IR: compiler output too, one
-# flat directory of <case>.expected.ir.json files. The conformance gate holds
-# each to the elaborator byte for byte; here each is held to the IR schema
-# like any golden, so no mapped suffix sits outside examples/ unvalidated.
+# The conformance cases' expected IR: compiler output too. Elaboration
+# cases are one flat directory of <case>.expected.ir.json files, package
+# cases one directory per case holding expected.ir.json. The conformance
+# gate holds each to the compiler byte for byte; here each is held to the IR
+# schema like any golden, so no mapped suffix sits outside examples/
+# unvalidated. Entries: (directory, schema root, glob).
 CONFORMANCE_GOLDENS = (
-    ("spec/conformance/elaborate/accept", "ir", ".expected.ir.json"),
+    ("spec/conformance/elaborate/accept", "ir", "*.expected.ir.json"),
+    ("spec/conformance/packages/accept", "ir", "*/expected.ir.json"),
 )
 
 
@@ -96,8 +101,8 @@ def golden_paths(root):
             for path in sorted((root / directory).glob(f"*/*{suffix}")):
                 if path.name == path.parent.name + suffix:
                     found.setdefault(schema_root, []).append(path)
-    for directory, schema_root, suffix in CONFORMANCE_GOLDENS:
-        for path in sorted((root / directory).glob(f"*{suffix}")):
+    for directory, schema_root, pattern in CONFORMANCE_GOLDENS:
+        for path in sorted((root / directory).glob(pattern)):
             found.setdefault(schema_root, []).append(path)
     return {name: sorted(paths) for name, paths in found.items()}
 
@@ -525,6 +530,25 @@ def self_test() -> int:
     cases.append(("an invalid conformance expected IR is caught",
                   code == 1
                   and "a01_x.expected.ir.json: at stability" in text))
+
+    # A package case keeps its expected IR inside its own directory.
+    def _package_ir(body):
+        def plant(root):
+            _ir_root(root)
+            case = (root / "spec" / "conformance" / "packages" / "accept"
+                    / "a01_x")
+            case.mkdir(parents=True)
+            (case / "expected.ir.json").write_text(_json.dumps(body))
+        return plant
+    code, text = run_raw(_package_ir(good))
+    cases.append(("a package case's expected IR is validated as a golden",
+                  code == 0
+                  and "packages/accept/a01_x/expected.ir.json: valid "
+                  "against" in text and "1 valid golden(s)" in text))
+    code, text = run_raw(_package_ir({"stability": "stable"}))
+    cases.append(("an invalid package expected IR is caught",
+                  code == 1
+                  and "a01_x/expected.ir.json: at stability" in text))
 
     code, text = run(good, {})
     cases.append(("a root with no negative controls is caught",

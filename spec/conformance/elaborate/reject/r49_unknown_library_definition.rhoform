@@ -1,4 +1,4 @@
-# RHO2048: a name under the reserved prefix rhoform.lib. must be a
+# RHO2067: a name under the reserved prefix rhoform.lib. must be a
 # component of the bundled standard library. A close match, in a module the
 # library has, is offered as a fix-it; a module it lacks offers nothing.
 #pragma rhoform-syntax 0.1

@@ -1,12 +1,17 @@
 """The command line (R18): `python3 -m rhoform check|fmt`.
 
 `check PATH...` compiles each PATH as the entry file of its own
-compilation (a directory stands for every `*.rhoform` under it, in sorted
-order; imports, and with them multi-file compilations, arrive with
-AMB-45): parse, the file-local checks, elaborate, then validate the IR
-against ir/netlist-ir.schema.json. It never writes, except that
-`--emit-ir DIR` writes `<stem>.ir.json` and `<stem>.sourcemap.json` for
-every entry that elaborates, the names the benchmark goldens use.
+compilation: the package layer (rhoform/package.py) reads the entry, the
+files it imports and the rhoform.toml files that govern them, then the
+compilation is parsed, checked, elaborated, and its IR validated against
+ir/netlist-ir.schema.json. A directory stands for its ENTRY files, in
+sorted order: every `*.rhoform` under it except a file that another file
+named on the command line reaches through imports without being reached
+back (a library is checked through the files that import it; a file
+imported only within a cycle is still an entry, so the cycle is
+reported). It never writes, except that `--emit-ir DIR` writes
+`<stem>.ir.json` and `<stem>.sourcemap.json` for every entry that
+elaborates, the names the benchmark goldens use.
 
 `fmt PATH...` rewrites each file to its canonical form, in place and only
 when the bytes change; a file that does not parse is refused and left
@@ -19,8 +24,9 @@ echoes them (exit 0). `--dry-run` never touches TARGET.
 
 THE STREAM (spec 06). stdout carries NDJSON only, from one Diagnostics
 aggregate rendered once, so canonical order and the cap hold across every
-file of the invocation; each file reports into a sink of its own that is
-then extended into the aggregate (C-5). Filter mode is the stated
+file of the invocation; each compilation reports into a sink of its own
+that is then merged into the aggregate (C-5), a defect two compilations
+share (one imported file) once. Filter mode is the stated
 carve-out: on exit 0 its stdout is the canonical source. Exit 0 is clean,
 1 is at least one error, 2 is a tool that could not do its job: a usage
 error, an unreadable or unwritable file, a missing pinned dependency
@@ -37,9 +43,11 @@ reads are the exception: they are the toolchain's own files, listed as
 `rhoform/lib/<module>.rhoform` whatever the compile root.
 
 HERMETIC (I3, C-6). No network module is imported and nothing reads the
-environment or the clock. Reads: the input files, the standard library
+environment or the clock. Reads: the input files and their import
+closures, the rhoform.toml files governing them, the standard library
 modules their qualified names mention (rhoform/lib/, no others), the
-grammar artifacts the parser loads, and the IR schema. Writes: fmt's targets and
+grammar artifacts the parser loads, and the IR schema. Nothing outside a
+compile root is read as an author's source. Writes: fmt's targets and
 --emit-ir's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.
@@ -58,6 +66,7 @@ from pathlib import Path
 from . import elaborate as elaborator
 from . import fmt as formatter
 from . import ir
+from . import package
 from . import parser as rhoparser
 from .diagnostics import Diagnostics, span_from_bytes
 
@@ -125,10 +134,12 @@ def root_relative(entry, root: Path) -> str:
     raise UsageError(f"{entry} is not under the compile root {root}")
 
 
-def expand(given) -> list[Path]:
+def expand(given, swept=None) -> list[Path]:
     """Files in argument order, each directory replaced by its *.rhoform
-    files sorted by path; a file named twice is compiled once."""
-    files, seen = [], set()
+    files sorted by path; a file named twice is compiled once. The keys of
+    files found only by sweeping a directory, never named themselves, are
+    added to `swept`."""
+    files, seen, named, found_in_directories = [], set(), set(), set()
     for text in given:
         path = Path(text)
         if path.is_dir():
@@ -139,23 +150,31 @@ def expand(given) -> list[Path]:
                 raise UsageError(
                     f"{text}: no *{SUFFIX} file under this directory; a "
                     "check over nothing is not a pass")
+            found_in_directories.update(_absolute(p) for p in found)
         else:
             found = [path]
+            named.add(_absolute(path))
         for path in found:
             key = _absolute(path)
             if key not in seen:
                 seen.add(key)
                 files.append(path)
+    if swept is not None:
+        swept.update(found_in_directories - named)
     return files
 
 
-def _plan(given, explicit_root) -> list[tuple[Path, str]]:
-    """(path, compile-root-relative file name) for every input, computed
-    before anything is read so a usage error leaves everything untouched."""
+def _plan(given, explicit_root, swept=None) -> list[tuple[Path, Path, str]]:
+    """(path, compile root, compile-root-relative file name) for every
+    input, computed before anything is read so a usage error leaves
+    everything untouched."""
     if explicit_root is not None and not Path(explicit_root).is_dir():
         raise UsageError(f"--compile-root {explicit_root} is not a directory")
-    return [(path, root_relative(path, compile_root(path, explicit_root)))
-            for path in expand(given)]
+    plan = []
+    for path in expand(given, swept):
+        root = compile_root(path, explicit_root)
+        plan.append((path, root, root_relative(path, root)))
+    return plan
 
 
 def stem(path: Path) -> str:
@@ -216,33 +235,69 @@ def schema_problem(document: dict) -> str | None:
     return f"{error.message} (at /{where})"
 
 
+def _closure(root: Path, file: str) -> set:
+    """Every file the compilation entered at `file` reads, by real path;
+    what it reports is discarded (the real compilation reports it)."""
+    try:
+        compilation = package.load(file, root, Diagnostics())
+    except package.ReadFailure:
+        return set()
+    return {os.path.realpath(root / result.file)
+            for result in compilation.results}
+
+
+def entries(plan, swept) -> list:
+    """The plan without the swept files some other planned file reaches
+    through imports without being reached back: those are compiled as
+    part of their importers. A file named on the command line is always
+    an entry."""
+    if not swept:
+        return plan
+    real = {os.path.realpath(key) for key in swept}
+    reach = {os.path.realpath(path): _closure(root, file)
+             for path, root, file in plan}
+    kept = []
+    for item in plan:
+        key = os.path.realpath(item[0])
+        if key in real and any(
+                other != key and key in reached and other not in reach[key]
+                for other, reached in reach.items()):
+            continue
+        kept.append(item)
+    return kept
+
+
 def run_check(args) -> int:
     run = _Run("check")
-    plan = _plan(args.paths, args.compile_root)
+    swept = set()
+    plan = entries(_plan(args.paths, args.compile_root, swept), swept)
     out = None
     if args.emit_ir is not None:
         out = Path(args.emit_ir)
         if out.exists() and not out.is_dir():
             raise UsageError(f"--emit-ir {out} is not a directory")
         claimed = {}
-        for path, _file in plan:
+        for path, _root, _file in plan:
             other = claimed.setdefault(stem(path), path)
             if other is not path:
                 raise UsageError(
                     f"--emit-ir would write {stem(path)}.ir.json for both "
                     f"{other} and {path}")
-    for path, file in plan:
-        try:
-            data = path.read_bytes()
-        except OSError as exc:
-            run.complain(f"FAIL: cannot read {path}: {exc}")
-            continue
+    for path, root, file in plan:
         sink = Diagnostics()
-        result = rhoparser.parse(data.decode("utf-8", "surrogateescape"),
-                                 file=file, sink=sink)
-        elaboration = elaborator.elaborate([result], root=args.root_module,
-                                           sink=sink)
-        run.report.extend(sink)
+        try:
+            compilation = package.load(file, root, sink)
+        except package.ReadFailure as exc:
+            run.report.merge(sink)
+            run.complain(f"FAIL: {exc}")
+            continue
+        if not compilation.ok:
+            run.report.merge(sink)
+            continue
+        elaboration = elaborator.elaborate(
+            compilation.results, root=args.root_module, sink=sink,
+            imports=compilation.imports)
+        run.report.merge(sink)
         if not elaboration.ok:
             continue
         ir_bytes, map_bytes = ir.emit(elaboration.design)
@@ -312,7 +367,7 @@ def run_fmt(args) -> int:
         return run_filter(Path(args.paths[0]), args.compile_root,
                           args.dry_run)
     run = _Run("fmt")
-    for path, file in _plan(args.paths, args.compile_root):
+    for path, _root, file in _plan(args.paths, args.compile_root):
         try:
             data = path.read_bytes()
         except OSError as exc:
@@ -400,8 +455,9 @@ def _parser() -> argparse.ArgumentParser:
     check = commands.add_parser(
         "check", parents=[common],
         help="parse, check, elaborate and validate; writes nothing",
-        description="Compile each PATH as its own entry file (a directory "
-                    "stands for its *.rhoform files).")
+        description="Compile each PATH as its own entry file, with the "
+                    "files it imports (a directory stands for its *.rhoform "
+                    "files, less those another named file imports).")
     check.add_argument("paths", nargs="+", metavar="PATH")
     check.add_argument("--root-module", metavar="NAME",
                        help="the root module, when the entry file has "

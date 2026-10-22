@@ -427,6 +427,16 @@ class Diagnostics:
     def extend(self, other: "Diagnostics") -> None:
         self._items.extend(other._items)
 
+    def merge(self, other: "Diagnostics") -> None:
+        """Extend with those of `other`'s diagnostics not already here,
+        compared as rendered. Two compilations of one run that share an
+        imported file see its defects alike; the run reports each once.
+        Repeats within `other` are its own business and are kept."""
+        seen = {json.dumps(d.as_dict(), sort_keys=True) for d in self._items}
+        self._items.extend(
+            diagnostic for diagnostic in other._items
+            if json.dumps(diagnostic.as_dict(), sort_keys=True) not in seen)
+
     def __len__(self) -> int:
         return len(self._items)
 

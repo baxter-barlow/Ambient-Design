@@ -50,6 +50,12 @@ NONCANONICAL = P + "module M:\n  port p passive\n"
 BROKEN = P + "\nmodule M:\n    port p passiv\n"
 TWO_ROOTS = (P + "\nmodule A:\n    port p passive\n"
              "\nmodule B:\n    port q passive\n")
+MANIFEST = ('[package]\nname = "acme/app"\nversion = "0.1.0"\n'
+            'requires-rhoform = "^0.1.0"\nlicense = "Apache-2.0"\n')
+P2 = "#pragma rhoform-syntax 0.2\n"
+LIBRARY = P2 + "\ncomponent Led:\n    pin a passive\n    pin k passive\n"
+IMPORTER = (P2 + '\nimport Led from "./lib"\n\nmodule {name}:\n'
+            "    d = new Led\n    d.a ~ d.k\n")
 
 
 def run(*argv, stdin: bytes | None = None):
@@ -174,7 +180,7 @@ class CheckTest(_Tmp):
         self.assertIn("no *.rhoform file", err)
 
     def test_compile_root_is_the_nearest_manifest_ancestor(self):
-        self.write("pkg/rhoform.toml", "")
+        self.write("pkg/rhoform.toml", MANIFEST)
         entry = self.write("pkg/boards/main.rhoform", CLEAN)
         code, _out, _err = run("check", "--emit-ir", self.tmp / "out", entry)
         self.assertEqual(code, 0)
@@ -191,7 +197,7 @@ class CheckTest(_Tmp):
                          "boards/bad.rhoform")
 
     def test_explicit_compile_root_wins_and_must_contain_the_entry(self):
-        self.write("pkg/rhoform.toml", "")
+        self.write("pkg/rhoform.toml", MANIFEST)
         entry = self.write("pkg/boards/bad.rhoform", BROKEN)
         code, out, _err = run("check", "--compile-root", self.tmp, entry)
         self.assertEqual(code, 1)
@@ -272,6 +278,76 @@ class CheckTest(_Tmp):
         self.assertEqual((code, out), (2, ""))
         self.assertIn("m.ir.json", err)
         self.assertFalse((self.tmp / "out").exists())
+
+    def test_an_entry_compiles_with_the_files_it_imports(self):
+        self.write("pkg/rhoform.toml", MANIFEST.replace("^0.1.0", "^0.2.0"))
+        self.write("pkg/lib.rhoform", LIBRARY)
+        entry = self.write("pkg/main.rhoform", IMPORTER.format(name="Main"))
+        code, out, _err = run("check", "--emit-ir", self.tmp / "out", entry)
+        self.assertEqual((code, out), (0, ""))
+        source_map = json.loads(
+            (self.tmp / "out" / "main.sourcemap.json").read_text())
+        self.assertEqual([f["path"] for f in source_map["files"]],
+                         ["lib.rhoform", "main.rhoform"])
+        # The manifest is real now: one that is not TOML stops the check.
+        self.write("pkg/rhoform.toml", "[package\n")
+        code, out, _err = run("check", entry)
+        self.assertEqual([(d["code"], d["spans"][0]["file"])
+                          for d in lines(out)],
+                         [("RHO2048", "rhoform.toml")])
+
+    def test_a_directory_checks_its_entries_not_their_libraries(self):
+        self.write("d/lib.rhoform", LIBRARY.replace("pin k", "pin k pasive"))
+        self.write("d/a.rhoform", IMPORTER.format(name="A"))
+        self.write("d/b.rhoform", IMPORTER.format(name="B"))
+        code, out, _err = run("check", self.tmp / "d")
+        # lib.rhoform is no entry (it defines no module, which would be
+        # RHO2047), and its defect is reported once, not per importer.
+        self.assertEqual(code, 1)
+        self.assertEqual([(d["code"], d["spans"][0]["file"])
+                          for d in lines(out)],
+                         [("RHO1009", "lib.rhoform")])
+        # Named on the command line, a library is an entry like any file.
+        code, out, _err = run("check", self.tmp / "d",
+                              self.tmp / "d" / "lib.rhoform")
+        self.assertEqual(sorted(d["code"] for d in lines(out)),
+                         ["RHO1009"])
+        self.write("d/lib.rhoform", LIBRARY)
+        code, out, _err = run("check", "--emit-ir", self.tmp / "out",
+                              self.tmp / "d")
+        self.assertEqual((code, out), (0, ""))
+        self.assertEqual(sorted(p.name for p in (self.tmp / "out").iterdir()),
+                         ["a.ir.json", "a.sourcemap.json", "b.ir.json",
+                          "b.sourcemap.json"])
+
+    def test_files_that_import_each_other_are_still_checked(self):
+        self.write("c/x.rhoform", P2 + '\nimport Y from "./y"\n\n'
+                   "component X:\n    pin p passive\n")
+        self.write("c/y.rhoform", P2 + '\nimport X from "./x"\n\n'
+                   "component Y:\n    pin p passive\n")
+        code, out, _err = run("check", self.tmp / "c")
+        self.assertEqual(code, 1)
+        # Both are entries, and both compilations meet the one cycle: it
+        # is reported once, whichever file each started from.
+        self.assertEqual([d["code"] for d in lines(out)], ["RHO2064"])
+
+    def test_an_unreadable_import_exits_two(self):
+        self.write("lib.rhoform", LIBRARY)
+        entry = self.write("main.rhoform", IMPORTER.format(name="Main"))
+        from rhoform import package
+
+        real = package._Loader.read
+
+        def read(loader, key):
+            if key == "lib.rhoform":
+                raise package.ReadFailure(loader.root / key,
+                                          OSError("planted"))
+            return real(loader, key)
+
+        with mock.patch.object(package._Loader, "read", read):
+            code, out, err = run("check", entry)
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("cannot read", err)
 
     def test_usage_errors_exit_two(self):
         for argv in ([], ["check"], ["frobnicate", "x"],
@@ -564,6 +640,67 @@ class HermeticTest(_Tmp):
             (self.tmp / "ir" / "divider.sourcemap.json").read_text())
         self.assertEqual([entry["path"] for entry in source_map["files"]],
                          ["divider.rhoform", "rhoform/lib/passive.rhoform"])
+
+    def test_a_package_check_reads_the_library_modules_its_closure_names(self):
+        # The library name sits in an imported file, under a package whose
+        # rhoform.toml is the compile root: that module and no other is
+        # read, and it is listed by its fixed library path (E-8).
+        real = os.path.realpath
+        self.write("rhoform.toml", MANIFEST.replace("^0.1.0", "^0.2.0"))
+        self.write("src/main.rhoform", P2 + '\nimport Divider from '
+                   '"./divider"\n\nmodule Main:\n    d = new Divider\n'
+                   "    d.top ~ d.mid\n")
+        self.write("src/divider.rhoform", P2 + "\nmodule Divider:\n"
+                   "    port top passive\n    port mid passive\n"
+                   "    r1 = new rhoform.lib.passive.Resistor\n"
+                   "    top ~ r1.a\n    mid ~ r1.b\n")
+        opened, _python = self._audited_check(["src/main.rhoform"])
+        library = real(ROOT / "rhoform" / "lib")
+        self.assertEqual(
+            sorted({path for path in opened if self._within(path, library)}),
+            [real(ROOT / "rhoform" / "lib" / "passive.rhoform")])
+        source_map = json.loads(
+            (self.tmp / "ir" / "main.sourcemap.json").read_text())
+        self.assertEqual([entry["path"] for entry in source_map["files"]],
+                         ["rhoform/lib/passive.rhoform",
+                          "src/divider.rhoform", "src/main.rhoform"])
+
+    def test_a_package_check_opens_its_closure_and_manifests_only(self):
+        # The read closure grows by exactly the import closure and the
+        # manifests that govern it (C-6, spec 08): a sibling source, a
+        # file the dependency does not import from, and a manifest outside
+        # the dependency graph are never opened.
+        manifest = MANIFEST.replace("^0.1.0", "^0.2.0")
+        self.write("ws/app/rhoform.toml", manifest + '[deps]\n"acme/parts" '
+                   '= { version = "^1.0.0", path = "../parts" }\n')
+        self.write("ws/app/main.rhoform", P2 + '\nimport Led from '
+                   '"acme/parts/leds"\nimport Spare from "./spare"\n\n'
+                   "module Main:\n    d = new Led\n    s = new Spare\n"
+                   "    d.a ~ d.k\n    isolated s.p\n")
+        self.write("ws/app/spare.rhoform", P2 + "\ncomponent Spare:\n"
+                   "    pin p passive\n")
+        self.write("ws/app/sibling.rhoform", "not read")
+        self.write("ws/parts/rhoform.toml", manifest.replace(
+            "acme/app", "acme/parts").replace('"0.1.0"', '"1.0.0"'))
+        self.write("ws/parts/leds.rhoform", LIBRARY)
+        self.write("ws/parts/other.rhoform", "not read")
+        self.write("ws/elsewhere/rhoform.toml", "not read")
+        done = _subprocess(["check", "--compile-root", "ws",
+                            "ws/app/main.rhoform"], self.tmp, prelude=_AUDIT)
+        self.assertEqual(done.returncode, 0, done.stderr.decode())
+        report = json.loads(next(
+            line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
+            if line.startswith("AUDIT ")))
+        real = os.path.realpath
+        inputs = sorted(
+            os.path.relpath(real(os.path.join(self.tmp, path)),
+                            real(self.tmp / "ws"))
+            for path in report["opened"]
+            if real(os.path.join(self.tmp, path)).startswith(
+                real(self.tmp / "ws") + os.sep))
+        self.assertEqual(inputs, [
+            "app/main.rhoform", "app/rhoform.toml", "app/spare.rhoform",
+            "parts/leds.rhoform", "parts/rhoform.toml"])
 
 
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)

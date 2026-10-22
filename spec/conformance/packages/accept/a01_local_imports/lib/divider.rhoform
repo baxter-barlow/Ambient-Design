@@ -1,0 +1,20 @@
+# A file imports relative to itself: `../parts` is the package
+# root's parts.rhoform.
+#pragma rhoform-syntax 0.2
+
+import Led from "../parts"
+
+component Resistor:
+    pin a passive 1
+    pin b passive 2
+
+module Divider:
+    port bottom passive
+    port mid passive
+    port top passive
+    r1 = new Resistor
+    r2 = new Resistor
+    top ~ r1.a
+    r1.b ~ mid
+    mid ~ r2.a
+    r2.b ~ bottom

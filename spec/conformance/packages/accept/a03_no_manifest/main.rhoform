@@ -1,0 +1,14 @@
+# No rhoform.toml governs these files: the compile root is the
+# package, and its X1 imports resolve as usual. The suffix may be
+# written. The imported file declares 0.1; the design's language
+# version is the newest its files declare.
+#pragma rhoform-syntax 0.2
+
+import Indicator from "./indicator.rhoform"
+
+module Board:
+    port gnd passive
+    port vin power_in
+    ind = new Indicator
+    vin ~ ind.vin
+    ind.gnd ~ gnd

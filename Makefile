@@ -134,7 +134,7 @@ conformance:
 # one with none exits 2, so this cannot pass by checking nothing. Needs the
 # lark pin; the CLI exits 2 without it.
 fmt-check:
-	python3 -m rhoform fmt --check benchmarks/ rhoform/lib/ spec/conformance/elaborate/ spec/conformance/fmt/*.expected.rhoform
+	python3 -m rhoform fmt --check benchmarks/ rhoform/lib/ spec/conformance/elaborate/ spec/conformance/packages/ spec/conformance/fmt/*.expected.rhoform
 
 # Measurement-harness tests (eval/). stdlib unittest only, so this needs no
 # dependency beyond the pinned interpreter; the harness's optional tiktoken

@@ -1,0 +1,13 @@
+# X2: `acme/parts/leds` is module `leds` of the package acme/parts,
+# which app's [deps] reads in place from ../parts. The compile root
+# is the case directory, so both packages lie under it.
+#pragma rhoform-syntax 0.2
+
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

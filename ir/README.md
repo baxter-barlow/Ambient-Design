@@ -227,8 +227,9 @@ not a pass. (This paragraph described `ir/validate.sh`, which no longer exists; 
 ajv fallback and a well-formedness mode the gate has never had.)
 
 Two case kinds run. The two examples, every benchmark golden
-(`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), and every elaboration conformance
-expectation (`spec/conformance/elaborate/accept/<case>.expected.ir.json`) must **validate**; every file in
+(`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), and every elaboration or package conformance
+expectation (`spec/conformance/elaborate/accept/<case>.expected.ir.json`,
+`spec/conformance/packages/accept/<case>/expected.ir.json`) must **validate**; every file in
 `examples/negative/` must be **rejected**. A negative control that validates fails the run, which is what stops the schema from
 quietly losing a constraint it advertises. Each fixture is a minimal complete document carrying
 exactly one defect, described in its own `x_negative_control` member:

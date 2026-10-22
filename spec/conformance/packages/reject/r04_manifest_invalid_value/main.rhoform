@@ -1,0 +1,12 @@
+# `license` is an SPDX expression and the acknowledgement a
+# boolean (R14a section 3.2).
+#pragma rhoform-syntax 0.2
+
+import Led from "./leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

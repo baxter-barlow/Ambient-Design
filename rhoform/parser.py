@@ -197,6 +197,19 @@ def _load_sot():
     return module
 
 
+_SYNTAX_VERSIONS: tuple[str, ...] | None = None
+
+
+def syntax_versions() -> tuple[str, ...]:
+    """The syntax versions this toolchain implements, as the grammar
+    source of truth lists them (`0.1`, `0.2`). Needs no lark: the package
+    layer checks manifests against them before anything is parsed."""
+    global _SYNTAX_VERSIONS
+    if _SYNTAX_VERSIONS is None:
+        _SYNTAX_VERSIONS = tuple(_load_sot().SYNTAX_VERSIONS)
+    return _SYNTAX_VERSIONS
+
+
 def normalize(source: str) -> str:
     """The one normalization the grammar is owed: a final newline token.
 
