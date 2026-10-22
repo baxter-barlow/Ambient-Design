@@ -98,8 +98,11 @@ def natural_key(text: str) -> tuple:
 
     Each run's key leads with its first byte, so a digit run and a text run
     at the same position order exactly as their first bytes would (`.` <
-    digits < letters < `_`), and the second element (0 for digits, 1 for
-    text) is only ever compared between runs of the same type."""
+    digits < upper case < `_` < lower case), and the second element (0 for
+    digits, 1 for text) is only ever compared between runs of the same
+    type. Two text runs compare as whole strings, so a run that is a prefix
+    of the other sorts first: `r1.a` (runs `r`, `1`, `.a`) sorts before
+    `r.a` (one run), where bytewise order would put `r.a` first."""
     runs = []
     for run in _RUNS.findall(text):
         if run[0].isdigit():
@@ -331,31 +334,59 @@ def _name_key(token) -> tuple:
     return natural_key(str(token))
 
 
-# F-5: the instance body's fixed order. Flags rank by the word they set.
-_FLAG_RANK = {"exclude_from_bom": 3, "board_only": 4, "dnp": 5}
+# F-1: a module body's kind ranks, by grammar production. Chains and
+# `isolated` share rank 4 and keep source order. Spec 07 restates this
+# table and the conformance gate reconciles the two.
+STATEMENT_RANKS = {
+    "port_decl": 0,
+    "table_decl": 1,
+    "instance_decl": 2,
+    "net_decl": 3,
+    "isolated_decl": 4,
+    "chain": 4,
+    "assertion": 5,
+}
+
+# F-5: an instance body's fixed order, by the word that opens the line
+# (`no exclude_from_bom` ranks with `exclude_from_bom`). Restated in spec
+# 07 and reconciled the same way.
+BODY_RANKS = {
+    "pin": 0,
+    "part": 1,
+    "hardware": 2,
+    "exclude_from_bom": 3,
+    "board_only": 4,
+    "dnp": 5,
+}
 
 
 def _key_table(node) -> tuple:
     rows = [natural_key(str(r.children[0])) for r in _subtrees(node, "table_row")]
-    return (1, min(rows))
+    return (STATEMENT_RANKS["table_decl"], min(rows))
+
+
+def _ranked(production: str, name=None):
+    rank = STATEMENT_RANKS[production]
+    if name is None:
+        return lambda n: (rank,)
+    return lambda n: (rank, _name_key(name(n)))
 
 
 _KEYS = {
-    # module body (F-1): port 0, table 1, instance 2, net 3,
-    # isolated/chain 4 (source order), assert 5.
-    "port_decl": lambda n: (0, _name_key(n.children[1])),
+    # module body (F-1), ranks from STATEMENT_RANKS
+    "port_decl": _ranked("port_decl", lambda n: n.children[1]),
     "table_decl": _key_table,
-    "instance_decl": lambda n: (2, _name_key(n.children[0])),
-    "net_decl": lambda n: (3, _name_key(n.children[1])),
-    "isolated_decl": lambda n: (4,),
-    "chain": lambda n: (4,),
-    "assertion": lambda n: (5, _name_key(n.children[1])),
-    # instance body (F-5)
-    "pin_decl": lambda n: (0, _name_key(_direct_tokens(n)[1])),
-    "part_decl": lambda n: (1,),
-    "hardware_decl": lambda n: (2,),
-    "flag": lambda n: (_FLAG_RANK[str(n.children[0])],),
-    "negated_flag": lambda n: (_FLAG_RANK[str(n.children[1])],),
+    "instance_decl": _ranked("instance_decl", lambda n: n.children[0]),
+    "net_decl": _ranked("net_decl", lambda n: n.children[1]),
+    "isolated_decl": _ranked("isolated_decl"),
+    "chain": _ranked("chain"),
+    "assertion": _ranked("assertion", lambda n: n.children[1]),
+    # instance body (F-5), ranks from BODY_RANKS
+    "pin_decl": lambda n: (BODY_RANKS["pin"], _name_key(_direct_tokens(n)[1])),
+    "part_decl": lambda n: (BODY_RANKS["part"],),
+    "hardware_decl": lambda n: (BODY_RANKS["hardware"],),
+    "flag": lambda n: (BODY_RANKS[str(n.children[0])],),
+    "negated_flag": lambda n: (BODY_RANKS[str(n.children[1])],),
     # intra-statement lists (F-3)
     "constraint": lambda n: (0, _name_key(n.children[0])),
     "endpoint": lambda n: (0, natural_key(_dotted(n))),

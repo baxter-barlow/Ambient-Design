@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.1
+
+module Q:
+    table lib.R (resistance):
+        r1  1kohm
+        r2  470ohm
+    c = new L(a = 4.7nF, b = 2V +/- 10%, c = 9.5mA (8mA to 10.5mA), d = 1V to 3V, e = -0, f = 7ohm +/- 1ohm, g = 100kohm +/- 1%):
+        part abstract:
+            power_rating = 250mW
+            resistance = 5000Mohm
+    assert d static duty_cycle(OUT) within 0.50 to 0.6
+    assert f static frequency(OUT) within 1kHz to 2kHz
+    assert n static gain(OUT) at least 1.0
+    assert v dynamic operating_point(OUT) at most 5V

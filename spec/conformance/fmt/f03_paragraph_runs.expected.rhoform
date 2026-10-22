@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.1
+
+module Runs:
+    r1 = new L
+    r2 = new L
+
+    port a passive
+    port z passive
+
+    # power section
+    c1 = new L
+    c2 = new L
+
+    # ground
+    # (two comment lines)
+    n1 = new L
+    n2 = new L

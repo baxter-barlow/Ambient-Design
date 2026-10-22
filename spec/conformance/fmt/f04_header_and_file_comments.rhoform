@@ -1,0 +1,16 @@
+
+  # header one
+
+
+# header two
+# header three
+
+#pragma rhoform-syntax 0.1
+module A:
+    port p passive
+# about B
+module B:
+    port p passive
+# end of file
+
+# really the end

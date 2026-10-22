@@ -1,0 +1,10 @@
+#pragma rhoform-syntax 0.1
+module Tables:
+    table rhoform.lib.passive.Resistor part abstract (resistance,part.package):
+        r10 1kohm "0402"
+        r2 1000ohm "0603"
+        r1 10ohm "0402"
+    table T part "key" (b, a):
+        bb 1 2
+        a
+        ccc 33 4 5

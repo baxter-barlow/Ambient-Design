@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.1
+module M:
+  port p passive
+  r = new L(a = 1000mV)

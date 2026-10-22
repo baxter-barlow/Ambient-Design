@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.1
+module Blinker:
+    assert f static frequency(OUT) at least 1Hz
+    vout ~ d1.k
+    isolated tp1.a
+    net VCC:
+        vin
+    r1 = new lib.R
+    table lib.C (capacitance):
+        c1 1uF
+    port vin power_in
+    d1.a ~ r1.b
+    assert d static duty_cycle(OUT) within 0.4 to 0.6
+    port out passive

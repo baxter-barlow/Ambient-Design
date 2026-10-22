@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.1
+
+module Body:
+    u = new L:
+        pin a passive
+        pin b passive
+        part "key"
+        hardware test_point
+        no exclude_from_bom
+        board_only
+        dnp
+    v = new L:
+        part abstract
+        exclude_from_bom
+        no board_only

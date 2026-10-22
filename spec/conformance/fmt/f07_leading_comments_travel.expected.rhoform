@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.1
+
+module M:
+    table T (v):
+        t1  2
+        # leads t2
+        t2  1
+    u = new L:
+        pin a passive
+        # leads pin b, re-indented
+        pin b passive
+        # leads the part
+        part abstract:
+            a = 2V
+            # leads z
+            z = 1V
+        dnp
+    net N:
+        r1.a
+        # leads r2.a
+        r2.a

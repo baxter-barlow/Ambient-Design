@@ -53,6 +53,7 @@ either machine-reconciled or absent.
 | [04 — Elaboration](language/04-elaboration.md) | reserved (lands with the elaborator, AMB-44) |
 | [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
 | [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1) |
+| [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.1 (I1, AC6; the canonical form R16's formatter writes) |
 
 The milestone plan for growth is the roadmap's: each milestone that
 changes the language lands its spec section and its conformance cases in
