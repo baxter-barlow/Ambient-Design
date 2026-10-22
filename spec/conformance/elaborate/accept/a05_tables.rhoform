@@ -5,11 +5,11 @@
 #pragma rhoform-syntax 0.1
 
 module Bank:
-    table rhoform.lib.ic.Regulator part "reg.ldo/ap7361c@1" (vout, part.package):
-        u1  3.3V  "SOT-223"
     table rhoform.lib.passive.Capacitor (capacitance, voltage_rating):
         c1  100nF  16V
         c2  1uF    10V
     table rhoform.lib.passive.Resistor part abstract (resistance, part.package, part.resistance):
         r1  1kohm   "0402"  1kohm +/- 1%
         r2  10kohm  "0603"  10kohm +/- 1%
+    table rhoform.lib.ic.Regulator part "reg.ldo/ap7361c@1" (vout, part.package):
+        u1  3.3V  "SOT-223"

@@ -3,7 +3,7 @@
 module LedIndicator:
     port ctl input
     port gnd power_in
-    d1 = new rhoform.lib.semiconductor.Led(color = "red", forward_voltage = 2.0V +/- 10%):
+    d1 = new rhoform.lib.semiconductor.Led(color = "red", forward_voltage = 2V +/- 10%):
         pin a passive
         pin k passive
         part abstract:
@@ -14,7 +14,7 @@ module LedIndicator:
         pin b passive
         part abstract:
             package = "axial_0207"
-            power_rating = 0.25W
+            power_rating = 250mW
             resistance = 560ohm +/- 1%
     net N_IND_LED(voltage_domain = "vbat_9v"):
         d1.a
@@ -47,7 +47,7 @@ module Blinker555:
             dielectric = "PET_film"
             package = "radial_5mm"
             voltage_rating = 63V
-    indicator = new LedIndicator(color = "red", current = 9.5mA (8.0mA to 10.5mA))
+    indicator = new LedIndicator(color = "red", current = 9.5mA (8mA to 10.5mA))
     j_bat = new rhoform.lib.connector.BatteryConnector9V:
         pin neg power_out 2
         pin pos power_out 1
@@ -61,14 +61,14 @@ module Blinker555:
         pin b passive
         part abstract:
             package = "axial_0207"
-            power_rating = 0.25W
+            power_rating = 250mW
             resistance = 100kohm +/- 1%
     r_b = new rhoform.lib.passive.Resistor(resistance = 680kohm +/- 1%):
         pin a passive
         pin b passive
         part abstract:
             package = "axial_0207"
-            power_rating = 0.25W
+            power_rating = 250mW
             resistance = 680kohm +/- 1%
     timer = new rhoform.lib.timer.Ne555:
         pin ctl passive 5
