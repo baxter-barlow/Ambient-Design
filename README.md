@@ -25,7 +25,7 @@ Everything the project *ships* — the language, the CLI, diagnostics, schema
 
 ## Status
 
-Rhoform is in its foundation phase. The requirements and v1 roadmap are approved; the compiler and runtime are not implemented yet.
+Rhoform is in its foundation phase. The requirements and v1 roadmap are approved. The compiler front end exists: it parses v0.1 sources and elaborates them into the typed netlist IR and its source map. The formatter, the CLI, the electrical checks and the runtime are not implemented yet.
 
 Start with:
 
@@ -48,14 +48,14 @@ Public contributors can start with a GitHub issue. Before implementation begins,
 
 ## Repository layout
 
-- `benchmarks/` — the three v1 reference designs. Each carries a design rationale, a part list, and its assertion set; the two analog benchmarks also carry an ngspice deck (`benchmarks/<name>/netlist.cir`) whose `.meas` assertions gate simulation behavior in CI.
+- `benchmarks/` — the three v1 reference designs. Each carries a design rationale, a part list, and its assertion set; the two analog benchmarks also carry an ngspice deck (`benchmarks/<name>/netlist.cir`) whose `.meas` assertions gate simulation behavior in CI. The blinker and the ESP32-S3 board are also living Rhoform sources (`benchmarks/<name>/<name>.rhoform`), each beside the IR and source map the elaborator makes of it.
 - `corpus/` — the seeded-bug corpus: externally documented, diagnosed electronics design failures that the static checks are measured against.
 - `ir/` — JSON Schemas for the typed netlist IR (`*.schema.json`) with validated examples and expected-invalid controls under `ir/examples/`.
 - `parts/` — the D3 part-data schema: the typed, provenance-carrying contract describing a physical component, with real example records and a linter for the cross-reference invariants JSON Schema cannot express.
 - `lang/` — the §8-Q1 syntax bake-off: two candidate grammars, the Starlark-restricted-Python baseline, and the corpus each expresses identically. Throwaway prototypes, checked against the IR example and the benchmark BOM so their reference designs are not self-certified.
 - `eval/` — the measurement harness: pinned token counting, the AC5 repair-loop trial protocol, exact small-sample statistics, and result capture. Built against gate and model adapters so the syntax bake-off and the later AC5a gate run share one rig.
-- `rhoform/` — the production compiler package: the A1 diagnostics framework and stable-code registry, the error-tolerant parser built on the generated grammar artifact, and the quantity-literal reference implementation behind the spec's T3 normal form. The elaborator, formatter, and CLI land here at later milestones.
-- `spec/` — the normative language specification (CC-BY-4.0) and its conformance suite: parse cases with byte-exact expected diagnostics, and the literal normal-form vector table.
+- `rhoform/` — the production compiler package: the A1 diagnostics framework and stable-code registry, the error-tolerant parser built on the generated grammar artifact, the quantity-literal reference implementation behind the spec's T3 normal form, and the elaborator that flattens a parsed design into IR v0 with its source map and content hashes. The formatter and CLI land here at later milestones.
+- `spec/` — the normative language specification (CC-BY-4.0) and its conformance suite: parse and elaboration cases with byte-exact expected diagnostics or IR, and the literal normal-form vector table.
 - `toolchain/` — `versions.yaml`, the single pinned-toolchain manifest every local run and CI job resolves versions from.
 - `tests/` — repository gates: layout and retired-name invariants (`structure/`), toolchain-pin agreement (`toolchain/`), schema validation (`schemas/`), corpus and classification freezes (`corpus/`), IR canonical hashing (`ir/`), the simulation runner and benchmark reconciliations (`benchmarks/`), the diagnostic-registry gate (`diagnostics/`), the language conformance gate (`conformance/`), the eval-harness record checks (`eval/`), the golden-file harness (`golden/`), and the gate-coverage measurement (`meta/`).
 
