@@ -58,21 +58,28 @@ def goldens(source: Path) -> tuple[Path, Path]:
             source.with_name(stem + ".sourcemap.json"))
 
 
+def emit_argv(source: Path, out: Path) -> list[str]:
+    """The `rhoform check --emit-ir` command line that writes one
+    benchmark's IR and source map into `out`, with the benchmark's own
+    directory as the compile root (E-17). regenerate() runs it into the
+    benchmark directory; test_cli.py runs it into a temporary one and
+    compares, so the goldens and the command line cannot drift apart."""
+    return ["check", "--compile-root", str(source.parent),
+            "--emit-ir", str(out), str(source)]
+
+
 def regenerate() -> None:
-    """Rewrite every committed golden from its source. Run it from the
-    repository root, then review the diff: it is the change the compiler
-    made to each design's IR."""
-    from rhoform import ir
+    """Rewrite every committed golden from its source, through the CLI.
+    Run it from the repository root, then review the diff: it is the change
+    the compiler made to each design's IR."""
+    from rhoform import cli
 
     for source in sources():
-        result, elaboration = build(source)
-        if not elaboration.ok:
-            raise SystemExit(f"{source.relative_to(ROOT)} does not "
-                             "elaborate:\n" + elaboration.diagnostics.render())
-        ir_bytes, map_bytes = ir.emit(elaboration.design)
+        status = cli.main(emit_argv(source, source.parent))
+        if status != 0:
+            raise SystemExit(f"{source.relative_to(ROOT)} did not compile "
+                             f"(exit {status}); its diagnostics are above")
         ir_path, map_path = goldens(source)
-        ir_path.write_bytes(ir_bytes)
-        map_path.write_bytes(map_bytes)
         print(f"wrote {ir_path.relative_to(ROOT)} and "
               f"{map_path.relative_to(ROOT)}")
 

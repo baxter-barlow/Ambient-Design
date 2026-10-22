@@ -45,11 +45,13 @@ byte-identical IR, source map and diagnostic stream.
 ## The compile root
 
 Every path elaboration records is a POSIX path relative to the
-**compile root**: the root given explicitly, else the nearest ancestor
-directory of the entry file that holds a `rhoform.toml`, else the entry
-file's directory. These paths name the source map's `files`, feed
-`source_hash`, and derive definition names (below), so a compilation
-moved to another directory or machine elaborates to the same bytes.
+**compile root**: the root given explicitly (the reference CLI's
+`--compile-root DIR`), else the nearest ancestor directory of the entry
+file that holds a `rhoform.toml`, else the entry file's directory. These
+paths name the source map's `files`, feed `source_hash`, derive
+definition names (below) and are the `file` of every diagnostic span, so
+a compilation moved to another directory or machine elaborates to the
+same bytes.
 Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
@@ -69,9 +71,9 @@ More than one candidate is an error (RHO2002), except while any
 single-word definition of the compilation is unresolved (RHO2005): a
 misspelled `d = new Divder` leaves `Divider` instantiated by nothing, and
 the unresolved name is the defect, so it is reported alone and no root
-is chosen. An implementation MAY let
-the user name the root explicitly; a name that is not a module of the
-entry file is then an error (RHO2003). There is no separate error for
+is chosen. An implementation MAY let the user name the root explicitly
+(the reference CLI's `--root-module NAME`); a name that is not a module
+of the entry file is then an error (RHO2003). There is no separate error for
 zero candidates: in v0.1 a file whose every module is instantiated by
 another necessarily contains an instantiation cycle, which is already
 reported, and no root is chosen while a cycle exists.

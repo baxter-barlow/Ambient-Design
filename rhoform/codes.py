@@ -251,6 +251,18 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("bracket",),
         rule="L5",
     ),
+    # RHO1016 is NOT free: the syntax-0.2 branch (S-2's block-1 code,
+    # syntax-needs-newer-pragma) claimed it before this code landed.
+    CodeDef(
+        code="RHO1017",
+        slug="not-canonical",
+        severity="error",
+        message=(
+            "not in canonical form from this line on; `rhoform fmt` "
+            "rewrites the file to its one canonical spelling (I1)."
+        ),
+        rule="I1",
+    ),
     # ---- block 2: elaboration (rhoform/elaborate.py, AMB-44/R13) --------
     # Every error the elaborator can raise on a parse-clean v0.1 file. The
     # ones guarding IR shape (RHO2013-2017, RHO2030, RHO2032) exist because
