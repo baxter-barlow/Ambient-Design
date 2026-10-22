@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.2
+component Trimmer():
+    pin w passive
+
+module Divider(r_top: resistance = 10kohm, r_bottom: resistance,
+               stages: int = 1, trimmed: bool = false, label: string = "DIV",
+               rail: voltage = 3.0V to 3.6V, tol: resistance = 1kohm +/- 1%):
+    port top passive
+    port bottom passive
+
+module EveryType(s: string, i: int, b: bool, r: resistance, c: capacitance,
+        l: inductance, v: voltage, a: current, p: power, f: frequency,
+        t: time, d: length, k: temperature):
+    port x passive

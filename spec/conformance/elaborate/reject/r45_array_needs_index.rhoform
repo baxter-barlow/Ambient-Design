@@ -1,0 +1,11 @@
+# An array named where one instance is required needs an index.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Panel:
+    port vin power_in
+    leds = new Led[2]
+    vin ~ leds.a

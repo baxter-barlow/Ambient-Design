@@ -1,0 +1,14 @@
+# Arrays, not loops, replicate instances: an instance declaration inside a
+# `for` is refused, and the endpoints naming it stay quiet.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Panel:
+    port vin power_in
+
+    for i in range(2):
+        d = new Led
+        vin ~ d.a

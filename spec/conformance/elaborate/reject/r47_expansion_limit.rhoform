@@ -1,0 +1,18 @@
+# Loop iterations and array members are budgeted over the whole design:
+# 1100 iterations in each of four instances pass the limit of 4096 in the
+# fourth.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Strip:
+    port vin power_in
+    d1 = new Led
+
+    for i in range(1100):
+        vin ~ d1.a
+
+module Panel:
+    strips = new Strip[4]

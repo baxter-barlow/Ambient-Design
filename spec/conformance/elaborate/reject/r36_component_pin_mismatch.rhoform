@@ -1,0 +1,13 @@
+# Pins an instance of a component definition states must restate the
+# definition exactly: here one role differs and one pin is left out.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Panel:
+    port vin power_in
+    d1 = new Led:
+        pin a input 1
+    vin ~ d1.a

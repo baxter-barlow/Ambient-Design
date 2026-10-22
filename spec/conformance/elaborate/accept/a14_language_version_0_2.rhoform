@@ -1,0 +1,11 @@
+# A 0.2 file that uses only 0.1 constructs elaborates by the 0.1 rules;
+# its IR header records the pragma's version, 0.2.0.
+#pragma rhoform-syntax 0.2
+
+module Top:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor(resistance = 1kohm):
+        pin a passive 1
+        pin b passive 2
+    vin ~ r1.a
+    isolated r1.b

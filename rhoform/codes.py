@@ -190,7 +190,8 @@ REGISTRY: tuple[CodeDef, ...] = (
             "checked after parsing (see CLOSED_VOCABULARIES)."
         ),
         params=("vocabulary", "word"),
-        rule="T2/L9/V2/T5",
+        # L3 since syntax 0.2: param_type and loop_iterator.
+        rule="T2/L9/V2/T5/L3",
     ),
     CodeDef(
         code="RHO1010",
@@ -251,8 +252,21 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("bracket",),
         rule="L5",
     ),
-    # RHO1016 is NOT free: the syntax-0.2 branch (S-2's block-1 code,
-    # syntax-needs-newer-pragma) claimed it before this code landed.
+    # One per file, however many constructs: the defect is the header, and
+    # so is the repair (decision S-2). `count` keeps the first construct
+    # from reading as the only one.
+    CodeDef(
+        code="RHO1016",
+        slug="syntax-needs-newer-pragma",
+        severity="error",
+        message=(
+            "{construct} needs syntax {required}, but the pragma declares "
+            "{declared} ({count} construct(s) in this file need "
+            "{required})."
+        ),
+        params=("construct", "required", "declared", "count"),
+        rule="L8",
+    ),
     CodeDef(
         code="RHO1017",
         slug="not-canonical",
@@ -307,9 +321,9 @@ REGISTRY: tuple[CodeDef, ...] = (
     CodeDef(
         code="RHO2005", slug="unknown-definition", severity="error",
         message=(
-            "`{name}` names no module visible in this file; a single-word "
-            "definition must be a module defined here (a dotted name is a "
-            "library component)."
+            "`{name}` names no definition visible in this file; a "
+            "single-word definition must be a module or component defined "
+            "here (a dotted name is a library component)."
         ),
         params=("name",),
         rule="L2",
@@ -542,6 +556,148 @@ REGISTRY: tuple[CodeDef, ...] = (
         message="net `{net}` sets `{attribute}` to the empty string.",
         params=("net", "attribute"),
         rule="T5",
+    ),
+    # INTERIM. Syntax 0.2 parses (RHO1016 guards it under a 0.1 pragma).
+    # The elaborator gives every 0.2 construct but `import` its meaning; it
+    # refuses imports with this code until the package layer resolves them
+    # (wave 2b). The formatter formats every 0.2 construct, imports
+    # included, and never emits it. `tool` names the stage that refused.
+    CodeDef(
+        code="RHO2033", slug="syntax-0-2-not-yet-supported",
+        severity="error",
+        message=(
+            "{construct} is syntax 0.2: it parses, but the {tool} does not "
+            "support it yet."
+        ),
+        params=("construct", "tool"),
+    ),
+    # ---- syntax 0.2 elaboration: components, parameters, if/for, arrays --
+    # RHO2001 keeps its meaning (two modules); a clash involving a
+    # component is this code, so neither message lies about the kinds.
+    CodeDef(
+        code="RHO2034", slug="duplicate-definition", severity="error",
+        message=(
+            "`{name}` is defined twice in this file, first as a {first} and "
+            "then as a {second}; a definition name must identify one "
+            "definition."
+        ),
+        params=("name", "first", "second"),
+        rule="L7",
+    ),
+    CodeDef(
+        code="RHO2035", slug="component-pin-mismatch", severity="error",
+        message=(
+            "pin `{pin}` of `{instance}` disagrees with component "
+            "`{component}`: the instance has {found}, the definition has "
+            "{expected}; pins stated on an instance must restate the "
+            "definition exactly."
+        ),
+        params=("pin", "instance", "component", "found", "expected"),
+        rule="L2/T2",
+    ),
+    CodeDef(
+        code="RHO2036", slug="unknown-parameter", severity="error",
+        message=(
+            "`{name}` is not a parameter of `{definition}`, whose "
+            "parameters are {parameters}."
+        ),
+        params=("name", "definition", "parameters"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2037", slug="missing-argument", severity="error",
+        message=(
+            "`{instance}` gives no value for `{parameter}`, a parameter of "
+            "`{definition}` with no default."
+        ),
+        params=("instance", "parameter", "definition"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2038", slug="value-type-mismatch", severity="error",
+        message="`{value}` is {found}, but {context} takes {expected}.",
+        params=("value", "found", "context", "expected"),
+        rule="L3/T3",
+    ),
+    CodeDef(
+        code="RHO2039", slug="unknown-parameter-reference", severity="error",
+        message=(
+            "`{name}` is not a parameter of `{definition}` or a loop "
+            "variable in scope here."
+        ),
+        params=("name", "definition"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2040", slug="misplaced-statement", severity="error",
+        message="{statement} cannot appear inside {construct}: {reason}.",
+        params=("statement", "construct", "reason"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2041", slug="shadowed-loop-variable", severity="error",
+        message=(
+            "loop variable `{name}` shadows {shadowed} of the same name; "
+            "give the loop variable a name of its own."
+        ),
+        params=("name", "shadowed"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2042", slug="invalid-array-size", severity="error",
+        message=(
+            "array `{array}` would have {size} member(s); an array has at "
+            "least one."
+        ),
+        params=("array", "size"),
+        rule="L3",
+    ),
+    CodeDef(
+        code="RHO2043", slug="index-out-of-range", severity="error",
+        message=(
+            "`{endpoint}` selects member {index} of `{array}`, whose "
+            "members are numbered 0 to {last}."
+        ),
+        params=("endpoint", "index", "array", "last"),
+        rule="L3/L7",
+    ),
+    CodeDef(
+        code="RHO2044", slug="array-needs-index", severity="error",
+        message=(
+            "`{array}` is an array of {size} instances; select one member, "
+            "e.g. `{array}[0]`."
+        ),
+        params=("array", "size"),
+        rule="L3/L7",
+    ),
+    CodeDef(
+        code="RHO2045", slug="index-on-non-array", severity="error",
+        message="`{instance}` is a single instance, not an array; it takes "
+                "no index.",
+        params=("instance",),
+        rule="L3/L7",
+    ),
+    CodeDef(
+        code="RHO2046", slug="expansion-limit", severity="error",
+        message=(
+            "{construct} takes the design past {limit} array members and "
+            "loop iterations, counted over every instance; elaboration is "
+            "capped so that it stays fast."
+        ),
+        params=("construct", "limit"),
+        rule="L3",
+    ),
+    # Under 0.1 every file has a module, and a file whose every module is
+    # instantiated has a cycle (RHO2004). A file of `component`s only has
+    # neither, and elaboration must still say why there is no design.
+    CodeDef(
+        code="RHO2047", slug="no-root-module", severity="error",
+        message=(
+            "`{file}` defines no module, so it has no design to elaborate; "
+            "the root of a design is a module."
+        ),
+        params=("file",),
+        rule="L1",
     ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;

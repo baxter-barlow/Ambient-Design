@@ -1,0 +1,12 @@
+# An argument must name a declared parameter of a definition that has a
+# parameter list.
+#pragma rhoform-syntax 0.2
+
+component Resistor(resistance: resistance):
+    pin a passive 1
+    pin b passive 2
+
+module Panel:
+    port vin power_in
+    r1 = new Resistor(resistance = 1kohm, resistanse = 1kohm)
+    vin ~ r1.a

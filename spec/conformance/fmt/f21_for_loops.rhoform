@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.2
+module Ladder(n: int = 8, first: int = 1):
+    for i in range( 7 ):
+        taps[i].b ~ taps[i + 1].a
+        isolated taps[i].a
+        port t passive
+    taps = new rhoform.lib.passive.Resistor[8](resistance = 1000ohm)
+    port top passive
+    for i in range(first,n):
+        for j in range(2):
+            if j==1:
+                taps[i].b ~ top
+    for i in range(  # the start
+            1,
+            n):  # the header's trailing comment
+        taps[i - 1].b ~ taps[i].a
+    isolated top

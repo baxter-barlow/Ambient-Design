@@ -1,0 +1,14 @@
+# A loop variable may not reuse the name of a parameter or of an
+# enclosing loop variable.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Panel(n: int = 2):
+    port vin power_in
+    leds = new Led[n]
+
+    for n in range(2):
+        vin ~ leds[n].a

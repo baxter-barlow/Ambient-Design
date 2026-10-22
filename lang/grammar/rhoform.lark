@@ -1,4 +1,4 @@
-// Rhoform syntax v0.1 — Lark
+// Rhoform syntax v0.2 — Lark
 //
 // GENERATED FROM lang/grammar/rhoform_syntax.py. Do not edit it: regenerate
 // with `python3 -m grammar.rhoform_syntax --write`. `make grammar` only CHECKS
@@ -6,23 +6,26 @@
 //
 // The grammar is context-free over the layout-tokenized stream L5 fixes, so
 // INDENT, DEDENT and NEWLINE arrive as terminals and no rule below is sensitive
-// to column position. Every file opens with the L8 pragma `#pragma rhoform-syntax 0.1`.
+// to column position. Every file opens with the L8 pragma, naming one of the
+// versions 0.1, 0.2; new files use `#pragma rhoform-syntax 0.2`. One grammar
+// serves every version: 0.2 only adds, and the constructs it adds are refused
+// under a 0.1 pragma after parsing, not by a second grammar.
 //
-// Pin roles, hardware kinds, measurement kinds and net attributes are NOT
-// keywords here: they are plain names checked against a closed list after
-// parsing, because `input` and `output` are pin roles and a design may
-// legitimately name an instance `input`. The four lists are published in the
-// source module as CLOSED_VOCABULARIES.
+// Pin roles, hardware kinds, measurement kinds, net attributes, parameter types
+// and the loop iterator are NOT keywords here: they are plain names checked
+// against a closed list after parsing, because `input` and `output` are pin
+// roles and a design may legitimately name an instance `input`. The lists are
+// published in the source module as CLOSED_VOCABULARIES.
 //
 
-// A file is the L8 pragma and then modules, nothing else at file scope.
-start: _NEWLINE? PRAGMA _NEWLINE module_def+
+// A file is the L8 pragma, then imports (0.2), then definitions: modules, and (0.2) components. Nothing else at file scope. The definitions are an inline choice rather than a `definition` rule so a 0.1 file's tree is exactly what it was under 0.1.
+start: _NEWLINE? PRAGMA _NEWLINE import_stmt* (module_def | component_def)+
 
-// A module groups instances, nets and assertions.
-module_def: /module(?![A-Za-z0-9_])/ FREE_NAME ":" _NEWLINE _INDENT statement+ _DEDENT
+// A module groups instances, nets and assertions. A parameter list is 0.2.
+module_def: /module(?![A-Za-z0-9_])/ FREE_NAME params? ":" _NEWLINE _INDENT statement+ _DEDENT
 
-// Everything a module body can carry.
-statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl
+// Everything a module body can carry. `if` and `for` are 0.2.
+statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl | if_stmt | for_stmt
 
 // This module's own interface port. The role is a pin_role name.
 port_decl: /port(?![A-Za-z0-9_])/ FREE_NAME NAME _NEWLINE
@@ -42,11 +45,11 @@ net_attribute: NAME "=" STRING
 // An unnamed net written as a chain of endpoints.
 chain: chain_head ("~" endpoint)+ _NEWLINE
 
-// The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer.
-chain_head: FREE_NAME ("." NAME)?
+// The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer. An index is 0.2.
+chain_head: FREE_NAME index? ("." NAME)?
 
-// Instantiation. Facts about the instance live in its optional body.
-instance_decl: FREE_NAME "=" /new(?![A-Za-z0-9_])/ qualified_name arguments? (instance_body | _NEWLINE)
+// Instantiation. Facts about the instance live in its optional body. An array size is 0.2.
+instance_decl: FREE_NAME "=" /new(?![A-Za-z0-9_])/ qualified_name array_size? arguments? (instance_body | _NEWLINE)
 
 // The block that carries everything about an instance but its values.
 instance_body: ":" _NEWLINE _INDENT instance_stmt+ _DEDENT
@@ -102,19 +105,52 @@ arguments: "(" (argument ("," argument)*)? ")"
 // One named parameter.
 argument: NAME "=" value
 
-// T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole — hence INTEGER here and NUMBER in `bound`.
-value: QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | /true(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/
+// T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole — hence INTEGER here and NUMBER in `bound`. A bare name is a parameter reference (0.2); what it refers to is the elaborator's question.
+value: QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | /true(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/ | FREE_NAME
 
-// A connectable point: this module's port, or an instance pin.
-endpoint: NAME ("." NAME)?
+// A connectable point: this module's port, or an instance pin. An index selects an array member (0.2).
+endpoint: NAME index? ("." NAME)?
 
 // A dotted definition path, e.g. `rhoform.lib.passive.Resistor`.
 qualified_name: NAME ("." NAME)*
 
+// Names imported from another file. The names are BOUND here, so each is a FREE_NAME; resolving the path is the package layer's job.
+import_stmt: /import(?![A-Za-z0-9_])/ FREE_NAME ("," FREE_NAME)* /from(?![A-Za-z0-9_])/ STRING _NEWLINE
+
+// A component definition: its pins and nothing else. Defaults such as `hardware` or flags are deliberately not definable here.
+component_def: /component(?![A-Za-z0-9_])/ FREE_NAME params? ":" _NEWLINE _INDENT pin_decl+ _DEDENT
+
+// A definition's parameter list. It may be empty, and like an argument list it may wrap, because `(` suspends layout.
+params: "(" (param ("," param)*)? ")"
+
+// One declared parameter: a bound name, a param_type name, and an optional default.
+param: FREE_NAME ":" NAME ("=" value)?
+
+// Statement-level conditional. The first block is the `if` branch and an optional second block the `else` branch; nesting gives conjunction, since there is no `and`.
+if_stmt: /if(?![A-Za-z0-9_])/ condition block (/else(?![A-Za-z0-9_])/ block)?
+
+// A bool parameter, or a parameter compared with a value.
+condition: FREE_NAME (COMPARE value)?
+
+// A bounded loop over compile-time integers. The callable is a loop_iterator name, checked after parsing; `range` is the only one.
+for_stmt: /for(?![A-Za-z0-9_])/ FREE_NAME /in(?![A-Za-z0-9_])/ NAME "(" bound_arg ("," bound_arg)? ")" block
+
+// A loop bound: an integer, or an int parameter.
+bound_arg: INTEGER | FREE_NAME
+
+// The body of an `if`, `else` or `for`. A rule of its own so the two branches of an `if` stay two subtrees.
+block: ":" _NEWLINE _INDENT statement+ _DEDENT
+
+// An array of instances, `name[0]` to `name[N-1]`. `[` does NOT suspend layout: an index never wraps.
+array_size: "[" (INTEGER | FREE_NAME) "]"
+
+// An array member. A loop variable may be offset by a whole number.
+index: "[" (FREE_NAME | INTEGER) (INDEX_OP INTEGER)? "]"
+
 // Terminals, emitted from TERMINALS so this artifact cannot
 // carry a different terminal SET from the EBNF. Priorities come
 // from LARK_TERMINAL_PRIORITY; see it for why each is ranked.
-PRAGMA.2: /\#pragma\ rhoform\-syntax\ 0\.1/
+PRAGMA.2: /\#pragma\ rhoform\-syntax\ (?:0\.1|0\.2)/
 FREE_NAME: /(?!(?:abstract|assert|at|board_only|component|dnp|dynamic|else|exclude_from_bom|false|for|from|hardware|if|import|in|interface|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
 NAME: /[A-Za-z_][A-Za-z0-9_]*/
 QUANTITY.1: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
@@ -123,6 +159,8 @@ QUANTITY_PLAIN: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*/
 NUMBER: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?/
 INTEGER.1: /-?(?:0|[1-9][0-9]*)/
 STRING: /"[ !#-~]*"/
+COMPARE: /==|!=|<=|>=|<|>/
+INDEX_OP: /[+-](?!\/)/
 
 // A comment runs to end of line. A `#pragma` word is excluded so the L8 header is never swallowed as one — but `#pragmatic` is an ordinary comment, which is why the exclusion ends at a word boundary. ASCII only, like every other lexeme.
 COMMENT: /\#(?!pragma(?![A-Za-z0-9_]))[ -~]*/
@@ -134,7 +172,7 @@ _NEWLINE: ( /\n[ ]*/ | COMMENT )+
 %ignore /[ ]+/
 %ignore COMMENT
 
-// Manufactured by the layout pass from the leading spaces of each line, suspended inside brackets so a parameter list may wrap.
+// Manufactured by the layout pass from the leading spaces of each line, suspended inside `(` `)` so a parameter list may wrap. `[` `]` do NOT suspend it: an index or array size never wraps, and an unclosed `[` is one error on its own line rather than a file swallowed into one logical line.
 %declare _INDENT _DEDENT
 
 // The closing half of INDENT, one per level left.

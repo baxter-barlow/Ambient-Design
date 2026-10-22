@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+# Imports follow the pragma and precede every definition. Each imported
+# name is bound here, like a definition's own name.
+import Divider from "lib/divider.rhoform"
+import Led, Resistor from "lib/parts.rhoform"
+
+module Board:
+    port vin power_in
+    div = new Divider
+    d1 = new Led
+    r1 = new Resistor
+    vin ~ r1.a

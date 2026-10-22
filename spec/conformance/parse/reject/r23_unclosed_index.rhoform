@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.2
+module M:
+    caps = new rhoform.lib.passive.Capacitor[4
+    port p passive
+    caps[0.a ~ p

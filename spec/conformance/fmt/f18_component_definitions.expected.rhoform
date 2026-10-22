@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+
+module Top:
+    j1 = new UsbC
+
+component UsbC:
+    pin cc1 bidirectional A5
+    # ground pins
+    pin gnd passive A1 A12 B1 B12
+    pin vbus power_in A4 A9 B4 B9  # bus
+    # trails the component body
+
+component Led:
+    pin a passive 1
+    pin k passive 2

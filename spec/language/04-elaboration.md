@@ -1,6 +1,6 @@
 # 04 — Elaboration
 
-*Rhoform Language Specification · normative, v0.1 · CC-BY-4.0 (see
+*Rhoform Language Specification · normative, v0.2 · CC-BY-4.0 (see
 [spec/README.md](../README.md))*
 
 Elaboration turns the parsed sources of one compilation into one
@@ -16,9 +16,14 @@ schemas cannot: which design a source denotes. The cases under
 implementation to it, and a conforming implementation MUST reproduce
 them.
 
-This section covers the v0.1 surface. Imports, `component` definitions,
-parameter lists, `if`, `for` and arrays land here with the slices that
-implement them.
+This section covers the v0.1 surface and what syntax 0.2 adds to it:
+`component` definitions, parameter lists, parameter references, `if`,
+`for` and arrays. Every rule stated for v0.1 holds unchanged for a 0.1
+source, which elaborates to the same IR under a toolchain that also
+implements 0.2. Imports land with the package layer; until they do, a
+source with an `import` statement is not elaborated: the reference
+implementation reports one `RHO2033` per `import` statement, reports
+nothing else, and produces no IR. This refusal is interim.
 
 ## Inputs, totality and determinism
 
@@ -31,11 +36,12 @@ wrote.
 
 Elaboration is total. On every input that parses it MUST terminate and
 MUST produce either one design or at least one error-severity
-diagnostic; when any error is reported, no IR is produced. v0.1 has no
-recursion, loops or parameter references, so instantiation is the only
-construct that could fail to terminate, and an instantiation cycle is
-an error (see [Instances](#instances)). Warnings do not prevent the
-design.
+diagnostic; when any error is reported, no IR is produced. Two
+constructs could fail to terminate or run without bound: instantiation,
+whose graph MUST be acyclic (see [Instances](#instances)), and
+replication, which is budgeted (see
+[The replication budget](#the-replication-budget)). Warnings do not
+prevent the design.
 
 Elaboration is hermetic and deterministic: it reads the compilation's
 source files and nothing else (no environment, clock, network or host
@@ -56,30 +62,41 @@ Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
 
-A module's IR `definition` is `<module path>.<Name>`, where the module
+A module's or component's IR `definition` is `<module path>.<Name>`,
+where the module
 path is its file's compile-root-relative path without `.rhoform`, with
 `/` turned into `.`, and with each segment made an identifier: every
 character outside `[A-Za-z0-9_]` becomes `_`, and a segment that would
 start with a digit is prefixed with `_`. `boards/blinker-555.rhoform`
 gives the module path `boards.blinker_555`; `555/main.rhoform` gives
-`_555.main`. Two modules of one file MUST NOT share a name (RHO2001).
+`_555.main`. Two definitions of one file MUST NOT share a name: two
+modules are RHO2001, and a clash involving a `component` is RHO2034.
 
 The **root** is the unique module of the entry file that no module of
 the compilation instantiates. (A `table` that names a module counts as a
 use for this purpose; it is an error of its own, see [Tables](#tables).)
-More than one candidate is an error (RHO2002), except while any
-single-word definition of the compilation is unresolved (RHO2005): a
+Instantiation here is a fact of the text, not of parameter values: a
+`new` counts wherever it stands, in an `if` branch not taken included.
+More than one candidate is an error (RHO2002), except when the
+compilation reports an unresolved single-word definition (RHO2005): a
 misspelled `d = new Divder` leaves `Divider` instantiated by nothing, and
 the unresolved name is the defect, so it is reported alone and no root
-is chosen. An implementation MAY let the user name the root explicitly
+is chosen. A misspelling in a branch no instance takes is not reported
+(see [Diagnostics](#diagnostics)), so it does not suppress RHO2002. An implementation MAY let the user name the root explicitly
 (the reference CLI's `--root-module NAME`); a name that is not a module
-of the entry file is then an error (RHO2003). There is no separate error for
-zero candidates: in v0.1 a file whose every module is instantiated by
+of the entry file is then an error (RHO2003). There is no separate error
+for zero candidates: a file whose every module is instantiated by
 another necessarily contains an instantiation cycle, which is already
-reported, and no root is chosen while a cycle exists.
+reported, and no root is chosen while a cycle exists. An entry file that
+defines no module at all — only `component`s — has no design and is
+RHO2047.
 
-The root module elaborates to the instance at path `/`, with an empty
-`parameters`, the root module's ports, and every flag false.
+The root module elaborates to the instance at path `/`, with the root
+module's ports and every flag false. Its `parameters` are empty when it
+declares no parameter list, and otherwise its
+[environment](#parameters) built from defaults alone: nothing
+instantiates the root, so a root parameter with no default is an error
+(RHO2037, reported against the parameter with the entity `/`).
 `header.design_name` is the root module's name, and
 `header.language_version` is the entry file's pragma version plus `.0`
 (`0.1` gives `0.1.0`).
@@ -90,35 +107,63 @@ The root module elaborates to the instance at path `/`, with an empty
 
 A `new` (or a `table`) names its definition by a qualified name.
 
-- A **single word** MUST name a module defined in the same file; the
-  instance is then a module instance. Any other single word is an
-  unknown definition (RHO2005).
-- A **dotted name** is a library component. v0.1 bundles no library and
-  has no imports, so it is an ad-hoc component: its `definition` is the
-  dotted name verbatim and its ports are exactly its inline `pin`
-  statements.
+- A **single word** MUST name a module or a `component` defined in the
+  same file; the instance is then a module instance or a component
+  instance of that definition. Any other single word is an unknown
+  definition (RHO2005).
+- A **dotted name** is a library component. No library is bundled yet
+  and imports are not elaborated, so it is an ad-hoc component: its
+  `definition` is the dotted name verbatim and its ports are exactly its
+  inline `pin` statements.
 
 The instantiation graph MUST be acyclic: a module that contains itself,
 directly or through other modules, is an error (RHO2004), reported once
 per set of mutually instantiating modules, so elaboration terminates and
-every hierarchy is finite.
+every hierarchy is finite. Like the root, the graph is read from the
+text: a `new` in any branch is an edge, whatever the parameters.
+
+### Component definitions
+
+A `component` definition declares a component's pins and nothing else.
+Its pins are its ports: name, role, and designators as `pin_numbers`,
+sorted. Pin names are unique per definition and a designator appears at
+most once per pin (RHO2007).
+
+An instance (or a table row) of a component definition gets its ports
+from the definition. The instance MAY also state `pin` lines; when it
+states any, they MUST restate the definition exactly — the same pin
+names, and for each the same role and the same designators. Each
+disagreeing pin is RHO2035: a pin the instance states differently or
+the definition lacks is reported against the instance's `pin` line, a
+definition pin the instance omits against the instance's definition
+name. Everything else an instance body may state (`part`, `hardware`,
+flags) applies to a component-definition instance as to any component
+instance, and the hardware rules below are checked against the
+definition's pins.
 
 ### Paths
 
 The root's path is `/`. A member named `x` of the instance at path `P`
-has path `P/x` (`/x` when `P` is the root). A module instantiated `n`
+has path `P/x` (`/x` when `P` is the root), and member `i` of an array
+`x` has path `P/x[i]` (see [Arrays](#arrays)). A module instantiated `n`
 times therefore gives each of its members `n` distinct paths. Member
-names — instance names and table-row names — MUST be unique within
-their module (RHO2007), and an assertion MUST NOT share a member's name,
-because the two would share one path (RHO2008).
+names — instance names, array names and table-row names — MUST be
+unique among the statements a module instance evaluates (RHO2007), so
+the two branches of an `if` may each declare the same name; and an
+assertion MUST NOT share a member's name, because the two would share
+one path (RHO2008).
 
 ### Ports
 
 A module instance's ports are its module's `port` declarations, each a
-name and a role. A component instance's ports are its `pin` statements:
-name, role, and the pin's designators as `pin_numbers`, sorted. Port
-names are unique per module, pin names per instance, and a designator
-appears at most once per pin (RHO2007).
+name and a role. A component instance's ports are its definition's pins
+when it instantiates a `component` definition, and otherwise its `pin`
+statements: name, role, and the pin's designators as `pin_numbers`,
+sorted. Port names are unique per module, pin names per instance, and a
+designator appears at most once per pin (RHO2007). A module's ports are
+the `port` declarations of its body's top level: a `port` inside an
+`if` or `for` is RHO2040, since an interface does not depend on
+parameter values.
 
 ### Facts on an instance
 
@@ -141,7 +186,8 @@ it states it: flags stated on a module instance are recorded on that
 instance and inherited, by logical OR, by every instance beneath it.
 
 `no <flag>` on a component instance states that the flag is absent. No
-v0.1 definition supplies flag defaults, so it does not change the IR.
+definition supplies flag defaults (a `component` definition states
+pins only), so it does not change the IR.
 Stating a flag and its negation on one instance is an error (RHO2012);
 stating a flag twice is a warning (RHO2011).
 
@@ -193,9 +239,126 @@ double holds is the nearest double, `3.4`.
 ### Arguments
 
 An instance's arguments (`new D(name = value, ...)`) elaborate to its IR
-`parameters`. Argument names are unique per instance (RHO2007). v0.1
-modules declare no parameters, so the arguments of a module instance
-are recorded verbatim and checked against nothing.
+`parameters`. Argument names are unique per instance (RHO2007). A
+definition with no parameter list — every v0.1 module, a `component`
+written without one, an ad-hoc component — checks its arguments against
+nothing and records them verbatim. A definition with a parameter list
+checks them as [Parameters](#parameters) says.
+
+## Parameters
+
+A `module` or `component` MAY declare a parameter list,
+`(name: type [= default], ...)`. Parameter names are unique per list
+(RHO2007). The type is a `param_type` word ([02 — Grammar](02-grammar.md)):
+`string`, `int`, `bool`, or a quantity dimension. A value has a type: a
+string literal is a `string`, an integer an `int`, `true` and `false`
+a `bool`, a quantity literal its dimension, and a parameter reference
+the type its parameter declares. A bare interval has no nominal and is
+never a parameter value (RHO2016) when its dimension matches the
+declared type, and is RHO2038 when it does not.
+
+A **default** is a literal of the declared type, or a reference to a
+parameter declared EARLIER in the same list, of the same type; it is
+evaluated per instance, after the parameters before it. A wrong type is
+RHO2038; a reference to anything else is RHO2039.
+
+Each instance of a definition with a parameter list has an
+**environment**: every declared parameter bound to its argument, else
+its default, in declaration order. Against that list:
+
+- an argument naming no declared parameter is RHO2036;
+- a parameter with no default that the instance gives no value for is
+  RHO2037, reported against the instance's definition name;
+- an argument whose value has the wrong type is RHO2038 (an `int` is not
+  a quantity, and a `voltage` is not a `resistance`).
+
+The instance's IR `parameters` are its whole environment, defaults
+included: the schema's "fully evaluated parameter environment".
+
+### References
+
+A bare name in a value position is a **parameter reference**. In a
+module body it names a parameter of that module, and evaluates to the
+value the instance being elaborated binds it to; in an `if` condition, a
+`range` bound or an index it may also name a loop variable of an
+enclosing `for`. Anything else is RHO2039. A reference resolves when its
+module instance is elaborated, so two instances of one module with
+different environments elaborate different values from one body.
+
+## Conditionals
+
+`if <condition>:` with an optional `else:` elaborates exactly one of
+its blocks per module instance, chosen by evaluating the condition in
+that instance's environment; with no `else`, a false condition
+elaborates nothing. A block's statements then elaborate as if written in
+place of the `if`, so an instance or a net declared in a branch exists
+only in the instances that take it.
+
+The condition is a reference to a `bool` parameter, or `NAME op value`
+where `op` is one of `==`, `!=`, `<`, `<=`, `>`, `>=`. `NAME` is a
+parameter or loop variable; `value` is a literal or a reference, of
+the same type as `NAME` (RHO2038 otherwise). Comparison is exact:
+
+- `int`s compare as integers, `bool`s and `string`s only with `==` and
+  `!=` (an ordering of them is RHO2038);
+- quantities compare as exact decimals in the base unit of their common
+  dimension, a toleranced quantity by its nominal. A literal compared
+  with MUST be exact: a toleranced or bracketed literal, or a bare
+  interval, has no single value to compare and is RHO2038.
+
+There are no connectives; nested `if`s give conjunction. A `port`
+declaration inside an `if` is RHO2040.
+
+## Loops
+
+`for v in range(N):` and `for v in range(A, B):` elaborate their block
+once per integer `v` from `A` (default 0) up to but excluding `B` (or
+`N`), in increasing order; a range whose end does not exceed its start
+runs zero times. Each bound is an integer literal, or a reference of
+type `int` to a parameter or an enclosing loop variable (RHO2038
+otherwise). The loop variable is an `int` in scope in its block only,
+and it MUST NOT have the name of a parameter of the module or of an
+enclosing loop variable (RHO2041).
+
+A loop body holds connections — net blocks, chains, `isolated` — and
+nested `if`s and `for`s. An instance declaration or table inside a
+`for` is RHO2040 (arrays, not loops, replicate instances), as is an
+assertion (every iteration would declare one path) and a `port`
+declaration. A net block inside a loop declares its label once however
+many times it runs: every iteration joins its endpoints to the one
+labelled net. Two different net blocks declaring one label in one
+module are still RHO2007.
+
+## Arrays
+
+`x = new D[N](...)` declares an array: `N` member instances of `D`,
+named `x[0]` to `x[N-1]`, each with the path `P/x[i]` and with the one
+set of arguments, body facts and declaration span the statement gives.
+`N` is an integer literal or a reference of type `int` to a parameter
+(RHO2038 otherwise), and MUST be at least 1 (RHO2042). The array's name
+is one member name of its module.
+
+An endpoint names an array member with an index: `x[i].port`. An index
+is an integer, a reference of type `int` to a parameter or loop
+variable, or either plus or minus an integer (`x[i + 1]`, `x[i - 1]`).
+Its value MUST select a member, `0 <= i < N` (RHO2043, whose `endpoint`
+spells the evaluated index). An array named without an index where one
+instance is required — `x.port` — is RHO2044; an index on an instance
+that is not an array is RHO2045; and an indexed name with no port is not
+a port of the module (RHO2023).
+
+## The replication budget
+
+Elaboration counts the loop iterations and array members it expands,
+over every module instance of the design: a loop of 8 iterations in a
+module instantiated 4 times counts 32. The total MUST NOT exceed
+**4096**, and a module body whose own expansion would exceed it is an
+error even when nothing instantiates the module. A design over the
+budget draws one RHO2046, against a replicating statement whose
+expansion takes the count past the limit (which one, when several do,
+is the reference implementation's choice, pinned by its reject case),
+and no IR. The budget is what keeps a source that parses from making
+elaboration slow; v0.1 sources replicate nothing and are unaffected.
 
 ## Tables
 
@@ -216,16 +379,23 @@ constraint cells; `part abstract` gives each row an abstract part, and
 a table whose binding is `part abstract` MUST have at least one
 `part.*` column (RHO2014, reported once, against the binding).
 
-A row's ports come from its definition when one is known. v0.1 knows
-none, so table rows have no ports, and an endpoint naming a port of a
-row is an unknown port (RHO2022).
+A row's ports come from its definition when one is known: the pins of a
+`component` definition. A dotted definition is not known yet (no library
+is bundled), so its rows have no ports, and an endpoint naming a port of
+such a row is an unknown port (RHO2022). When `D` is a `component`
+definition with a parameter list, the plain columns are its arguments:
+a column naming no parameter is RHO2036, a parameter with no default and
+no column is RHO2037 (reported once, against the table's definition
+name), a cell of the wrong type is RHO2038, and each row's IR
+`parameters` are its environment.
 
 ## Nets
 
 ### Endpoints
 
 An endpoint `inst.port` names a port of a member of the same module
-(an unknown member is RHO2021; an unknown port, RHO2022). A bare
+(an unknown member is RHO2021; an unknown port, RHO2022), and
+`x[i].port` a port of an array member (see [Arrays](#arrays)). A bare
 endpoint names one of the module's own ports (RHO2023). A port whose
 role is `nc` MUST NOT appear in any connecting statement, `isolated`
 included (RHO2024).
@@ -256,7 +426,8 @@ statement names appears in no connection.
 A net block's name is a **label**. A label declared in the module
 elaborated at path `P` other than the root is qualified by that path,
 always: `LED` declared in the module instance `/indicator` is the label
-`indicator/LED`. A net's name is then its shallowest label, where a
+`indicator/LED`, and `LED` in `/cells[2]` is `cells[2]/LED`. A net's
+name is then its shallowest label, where a
 label's depth is the number of segments of `P` (the root's labels are at
 depth 0). Two different labels at the shallowest depth of one net are
 an error (RHO2027), and a module MUST NOT declare one label twice
@@ -267,8 +438,9 @@ its own net names.
 An unlabelled net is named `N_` followed by its least member, compared
 bytewise, where a member is spelled `<instance path without its leading
 slash>.<port>`: `/r1`'s port `b` is `r1.b`, `/indicator/d1`'s port `a`
-is `indicator/d1.a`, and the root's own port `vin` is `.vin`, giving
-`N_r1.b`, `N_indicator/d1.a` and `N_.vin`. This rule is interim: net
+is `indicator/d1.a`, the root's own port `vin` is `.vin`, and
+`/leds[0]`'s port `a` is `leds[0].a`, giving `N_r1.b`,
+`N_indicator/d1.a`, `N_.vin` and `N_leds[0].a`. This rule is interim: net
 naming belongs to R27 (I2), which MUST adopt it or record the change in
 the rename ledger. Labels contain no `.` and every derived name does,
 so no two nets of a design share a name.
@@ -315,18 +487,43 @@ Elaboration reports in block 2 (`RHO2xxx`, see
 (`rhoform/codes.py`) declares each code, and the conformance suite
 holds one reject case for every block-2 code a source can trigger.
 
-- A defect in a module's body is reported once per module, however many
-  times the module is instantiated. That includes a defect of a
-  flattened net (RHO2026 to RHO2028): the copies of it that each
-  instance of the module makes, alike but for instance paths, are one
-  diagnostic.
+- What needs no parameter value is checked once per definition, over
+  its whole body, branches not taken and loops that run zero times
+  included: the names references resolve to, the types of arguments,
+  defaults, conditions, bounds, sizes and indexes (RHO2036–RHO2039,
+  RHO2041), and where a statement may stand (RHO2040). Every other rule
+  applies to the statements an instance actually elaborates.
+- A module's body is elaborated once per distinct environment the
+  design gives it (a module with no parameter list has one, the empty
+  one), and a module nothing instantiates once under its defaults. A
+  defect found under every environment of its module — every defect of a
+  v0.1 body — is reported once per module, however many times the module
+  is instantiated. A defect found under some environments only depends
+  on the parameter values, and is reported once per instance whose
+  environment shows it, in path order.
+- The same rule holds for a defect of a flattened net (RHO2026 to
+  RHO2028), counted against the module whose body holds the statement
+  the diagnostic points at. Each instance of that module makes its own
+  copy of the defect, alike but for instance paths. When instances
+  under every environment of the module show it, the copies are one
+  diagnostic, carrying an entity only when every copy names the same
+  net. Otherwise each instance that shows it reports its own copy,
+  carrying its own net as the entity (RHO2027, which names no net, the
+  module instance's path); copies that come out the same diagnostic (two
+  instances whose defect lands on one net) are one.
+- A defect a loop body shows identically in several iterations is
+  reported once: such diagnostics name the endpoint as written
+  (`taps[i]`), and only those that depend on the index's value (RHO2043,
+  RHO2026) spell it evaluated.
 - A diagnostic about an IR entity SHOULD carry that entity's identity
   in `entity`: an instance or assertion path when its module is
   elaborated at exactly one path, a net's final name for a defect of a
   flattened net. It carries null when no single entity exists — a
   module elaborated at several paths, a definition, a table header, an
-  endpoint naming nothing, a literal. The reject cases pin the reference
-  implementation's choice for every code.
+  endpoint naming nothing, a literal — except that a defect reported
+  per instance always carries one: the entity it is about within that
+  instance, else the module instance's own path. The reject cases pin
+  the reference implementation's choice for every code.
 - Elaboration diagnostics are reported while the design is being
   built, so their spans are raw spans of the offending source text, not
   resolutions through a source map.
@@ -349,10 +546,12 @@ token: a block statement includes its body, and the trailing line
 break, trailing comment and following comment lines are excluded.
 
 - `/`: the root module's header, `module Name:`.
-- An instance: its `new` statement, or its table row.
+- An instance: its `new` statement, or its table row. The members of an
+  array share their `new` statement.
 - A net: the net block carrying the winning label; an unlabelled net's
   shallowest connecting statement, ties broken by instance path, then
-  file, then byte offset.
+  file, then byte offset. Every iteration of a loop shares the
+  statement's span.
 - An assertion: its `assert` statement.
 
 `instantiation_trace` runs innermost first: the declaration, then the

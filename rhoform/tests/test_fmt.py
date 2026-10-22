@@ -1,14 +1,17 @@
 """The canonical formatter's contract (R16/I1, AC6; decision record F-1..F-12).
 
 Three layers. Golden cases pin the canonical spelling of every construct and
-every comment-attachment rule. The conformance corpus pins refusal (every
-reject case) and acceptance (every accept case formats to a clean fixed
-point). Seeded property tests generate designs and render each one twice
-with independent non-semantic perturbations - indent widths, spacing around
-`=` `~` `,`, wrapped argument lists, blank-line runs, comment columns,
-equivalent quantity spellings, permutations of sortable lists - and require
-both renderings to format to the same bytes, the output to be a fixed point,
-and the normalized AST to survive formatting.
+every comment-attachment rule, for both syntax versions. The conformance
+corpus pins refusal (every reject case) and acceptance (every accept case
+formats to a clean fixed point), and every 0.2 source in it keeps its
+normalized AST and its 0.2 constructs through formatting, while a seeded
+fuzz over mutated 0.2 sources holds the formatter total. Seeded property
+tests generate designs and render each one twice with independent
+non-semantic perturbations - indent widths, spacing around `=` `~` `,`,
+wrapped argument lists, blank-line runs, comment columns, equivalent quantity
+spellings, permutations of sortable lists - and require both renderings to
+format to the same bytes, the output to be a fixed point, and the normalized
+AST to survive formatting.
 
 Every test skips cleanly without lark, as test_parser.py does.
 """
@@ -297,13 +300,353 @@ class RefusalTest(unittest.TestCase):
         self.assertEqual(codes, ["RHO1006"])
 
 
+P2 = "#pragma rhoform-syntax 0.2\n"
+_FMT_CASES = _ROOT / "spec" / "conformance" / "fmt"
+
+# The 0.2 surface, one golden per production: (name, input, canonical).
+GOLDEN_0_2 = [
+    ("imports sorted by path then names, names sorted, one blank line after",
+     P2 + 'import  Resistor,Led   from "lib/parts.rhoform"\n\n'
+     'import B from "lib/a.rhoform"\nimport A from "lib/a.rhoform"\n'
+     'import R10, R2 from "lib/z.rhoform"\nmodule M:\n    port p passive\n',
+     P2 + '\nimport A from "lib/a.rhoform"\nimport B from "lib/a.rhoform"\n'
+     'import Led, Resistor from "lib/parts.rhoform"\n'
+     'import R2, R10 from "lib/z.rhoform"\n\nmodule M:\n    port p passive\n'),
+    ("components keep source order among definitions, pins sorted, () dropped",
+     P2 + "module M:\n    u = new C\ncomponent C ( ):\n  pin k passive 2\n"
+     "  pin a passive B2 1\n",
+     P2 + "\nmodule M:\n    u = new C\n\ncomponent C:\n    pin a passive 1 B2\n"
+     "    pin k passive 2\n"),
+    ("parameters keep author order, spaced, unwrapped, defaults normalized",
+     P2 + "module M(z:int=3,a : resistance = 10000ohm,\n"
+     "         s: string=\"x\", r: resistance = a):\n    port p passive\n",
+     P2 + "\nmodule M(z: int = 3, a: resistance = 10kohm, s: string = \"x\", "
+     "r: resistance = a):\n    port p passive\n"),
+    ("empty () dropped on a module",
+     P2 + "module M():\n    port p passive\n",
+     P2 + "\nmodule M:\n    port p passive\n"),
+    ("if/else spacing, operand normalized, branches sorted by F-1",
+     P2 + "module M(n: int = 1, v: voltage = 1V, on: bool = true):\n"
+     "    if n>2 :\n        a ~ b\n        port q passive\n    else :\n"
+     "        isolated a\n    if v>=3300mV:\n        isolated b\n"
+     "    if on:\n        isolated c\n",
+     P2 + "\nmodule M(n: int = 1, v: voltage = 1V, on: bool = true):\n"
+     "    if n > 2:\n        port q passive\n        a ~ b\n    else:\n"
+     "        isolated a\n    if v >= 3.3V:\n        isolated b\n"
+     "    if on:\n        isolated c\n"),
+    ("if and for share rank 4 with chains and isolated, in source order",
+     P2 + "module M(n: int = 1):\n    isolated z\n    for i in range(n):\n"
+     "        isolated a\n    a ~ b\n    if n > 0:\n        isolated b\n"
+     "    port p passive\n",
+     P2 + "\nmodule M(n: int = 1):\n    port p passive\n    isolated z\n"
+     "    for i in range(n):\n        isolated a\n    a ~ b\n    if n > 0:\n"
+     "        isolated b\n"),
+    ("for spacing, bounds kept, wrapped bounds unwrapped",
+     P2 + "module M(n: int = 1):\n    for i in range( 4 ):\n        isolated a\n"
+     "    for j in range(1 ,\n            n):\n        isolated b\n",
+     P2 + "\nmodule M(n: int = 1):\n    for i in range(4):\n        isolated a\n"
+     "    for j in range(1, n):\n        isolated b\n"),
+    ("arrays and indexes spaced, members natural-sorted on the printed endpoint",
+     P2 + "module M:\n    r = new Q [4] ( a=1 )\n    net N:\n        r[10].a\n"
+     "        r[ 2 ].a\n        r[i+1].a\n        r[i].a\n"
+     "    r[ i - 1 ].b~r[-1]\n",
+     # Natural sort on the printed text, so `r[i + 1].a` precedes
+     # `r[i].a`: a space sorts before `]`.
+     P2 + "\nmodule M:\n    r = new Q[4](a = 1)\n    net N:\n        r[2].a\n"
+     "        r[10].a\n        r[i + 1].a\n        r[i].a\n"
+     "    r[i - 1].b ~ r[-1]\n"),
+]
+
+# Comments around `if`/`else`/`for` blocks (F-10 with the `else:` line as a
+# unit of its own).
+COMMENT_GOLDEN_0_2 = [
+    ("a comment above else leads it; a deeper one trails the if branch",
+     P2 + "module M(on: bool = true):\n    if on:\n        isolated a\n"
+     "          # deeper: trails the if branch\n    # leads else\n"
+     "    else:  # else trailer\n        isolated b\n",
+     P2 + "\nmodule M(on: bool = true):\n    if on:\n        isolated a\n"
+     "        # deeper: trails the if branch\n    # leads else\n"
+     "    else:  # else trailer\n        isolated b\n"),
+    ("trailers of else and for bodies; a run comment inside a branch",
+     P2 + "module M(on: bool = true):\n    if on:  # header\n"
+     "        isolated a\n        # second run\n        isolated b\n"
+     "    else:\n        isolated c\n        # end of else\n"
+     "    for i in range(2):\n        isolated x[i]\n        # end of for\n"
+     "    port p passive\n",
+     P2 + "\nmodule M(on: bool = true):\n    port p passive\n"
+     "    if on:  # header\n        isolated a\n\n        # second run\n"
+     "        isolated b\n    else:\n        isolated c\n        # end of else\n"
+     "    for i in range(2):\n        isolated x[i]\n        # end of for\n"),
+    ("a comment between imports travels with the import below it",
+     P2 + 'import B from "b"\n# about a\nimport A from "a"\n'
+     "module M:\n    port p passive\n",
+     P2 + '\n# about a\nimport A from "a"\nimport B from "b"\n'
+     "\nmodule M:\n    port p passive\n"),
+    ("comments in a component body travel with their pins",
+     P2 + "component C:\n    # about z\n    pin z passive\n    pin a passive  # a\n"
+     "      # end of C\nmodule M:\n    port p passive\n",
+     P2 + "\ncomponent C:\n    pin a passive  # a\n    # about z\n"
+     "    pin z passive\n    # end of C\n\nmodule M:\n    port p passive\n"),
+]
+
+# One source per 0.2 construct, each the construct's only use. Before the
+# interim refusal the formatter DROPPED imports and component definitions
+# (the walk only knew modules, and the self-check compared two documents
+# that both lacked them) and raised FormatterError on the rest; the
+# refusal (RHO2033) is now replaced by real formatting.
+SYNTAX_0_2 = [
+    'import Led from "parts.rhoform"\nmodule M:\n    port p passive\n',
+    "component Led:\n    pin a passive\nmodule M:\n    port p passive\n",
+    "module M(n: int = 2):\n    port p passive\n",
+    "module M:\n    port p passive\n    if fast:\n        isolated p\n",
+    "module M:\n    port p passive\n    for i in range(2):\n"
+    "        isolated p\n",
+    "module M:\n    r = new lib.R[2]\n",
+    "module M:\n    port p passive\n    isolated r[0].a\n",
+    "module M:\n    r = new lib.R(resistance = r_value)\n",
+    "module M(n: int = 2):\n    r = new lib.R[2]\n    for i in range(n):\n"
+    "        if i == 0:\n            isolated r[i].a\n        else:\n"
+    "            isolated r[i].b\n",
+]
+
+
+def _sources_0_2():
+    """Every 0.2 source this suite and the conformance corpus hold."""
+    sources = [("parse/accept/" + p.name, p.read_text(encoding="utf-8"))
+               for p in sorted((_PARSE_CASES / "accept").glob("*.rhoform"))]
+    sources += [("fmt/" + p.name, p.read_text(encoding="utf-8"))
+                for p in sorted(_FMT_CASES.glob("*.rhoform"))]
+    sources += [(name, source) for name, source, _ in
+                GOLDEN_0_2 + COMMENT_GOLDEN_0_2]
+    sources += [(f"SYNTAX_0_2[{n}]", P2 + body)
+                for n, body in enumerate(SYNTAX_0_2)]
+    return [(name, source) for name, source in sources
+            if source.startswith(P2)]
+
+
+def _constructs(source):
+    """Every 0.2 construct, by name, as the parser's version gate finds
+    them (the finder RHO1016 rests on, which shares nothing with the
+    formatter). An empty `()` is not counted: F-7 drops it."""
+    from collections import Counter
+
+    from rhoform.parser import _v0_2_extents, parse
+
+    parsed = parse(source)
+    return Counter(
+        construct for start, end, construct
+        in _v0_2_extents(parsed.data, parsed.shift, parsed.tree)
+        if parsed.data[start:end].translate(None, b" \n") != b"()")
+
+
+@unittest.skipUnless(HAVE_LARK, SKIP)
+class Syntax02Test(unittest.TestCase):
+    """The canonical form of the 0.2 surface: goldens per production and
+    per comment rule, design preservation, and totality."""
+
+    def _check(self, name, source, expected):
+        with self.subTest(name):
+            result = _fmt(source)
+            self.assertTrue(result.ok, result.diagnostics.render())
+            self.assertEqual(result.text, expected)
+            self.assertEqual(_fmt(expected).text, expected)
+
+    def test_every_production(self):
+        for name, source, expected in GOLDEN_0_2:
+            self._check(name, source, expected)
+
+    def test_every_comment_rule_around_blocks(self):
+        for name, source, expected in COMMENT_GOLDEN_0_2:
+            self._check(name, source, expected)
+
+    def test_each_construct_formats_and_survives(self):
+        # Each construct the interim refusal named now formats, and is
+        # still there afterwards: the parser's own construct finder, which
+        # shares nothing with the formatter, counts the same constructs in
+        # the output as in the input.
+        for body in SYNTAX_0_2:
+            source = P2 + body
+            with self.subTest(body):
+                result = _fmt(source)
+                self.assertTrue(result.ok, result.diagnostics.render())
+                self.assertEqual(_constructs(result.text), _constructs(source))
+                self.assertTrue(_constructs(source))
+
+    def test_design_preservation_over_every_0_2_input(self):
+        sources = _sources_0_2()
+        self.assertGreaterEqual(len(sources), 30)
+        for name, source in sources:
+            with self.subTest(name):
+                result = _fmt(source)
+                self.assertTrue(result.ok, result.diagnostics.render())
+                self.assertEqual(_ast(result.text), _ast(source))
+                self.assertEqual(_constructs(result.text), _constructs(source))
+                self.assertEqual(_fmt(result.text).text, result.text)
+                self.assertEqual(result.text.split("\n", 1)[0], P2.rstrip("\n"))
+
+    def test_a_0_1_file_never_gains_0_2_syntax(self):
+        # The pragma line is written as authored and the formatter adds no
+        # construct, so every 0.1 source formats to a 0.1 source.
+        from rhoform.parser import parse
+
+        p1 = P.rstrip("\n")
+        sources = [p.read_text(encoding="utf-8") for p in
+                   sorted((_PARSE_CASES / "accept").glob("*.rhoform"))
+                   + sorted(_FMT_CASES.glob("*.rhoform"))]
+        sources += [source for _, source, _ in GOLDEN + COMMENT_GOLDEN]
+        checked = 0
+        for source in sources:
+            if p1 + "\n" not in source:
+                continue
+            with self.subTest(source[:80]):
+                text = _fmt(source).text
+                self.assertIn("\n" + p1 + "\n", "\n" + text)
+                self.assertNotIn(P2.rstrip("\n"), text)
+                self.assertTrue(parse(text).ok)
+                self.assertFalse(_constructs(text))
+                checked += 1
+        self.assertGreaterEqual(checked, 40)
+
+    def test_a_0_2_file_of_0_1_constructs_formats_and_keeps_its_pragma(self):
+        result = _fmt(P2 + "module M:\n  port p passive\n")
+        self.assertEqual(result.text, P2 + "\nmodule M:\n    port p passive\n")
+
+    def test_output_independent_of_hash_seed(self):
+        import subprocess
+        import sys
+
+        script = (
+            "import hashlib, sys\n"
+            "from pathlib import Path\n"
+            "from rhoform.fmt import format_source\n"
+            "root = Path(sys.argv[1])\n"
+            "paths = sorted((root / 'spec/conformance/parse/accept')"
+            ".glob('*.rhoform')) + sorted((root / 'spec/conformance/fmt')"
+            ".glob('*.rhoform'))\n"
+            "digest = hashlib.sha256()\n"
+            "for path in paths:\n"
+            "    text = format_source(path.read_text(encoding='utf-8')).text\n"
+            "    digest.update(repr(text).encode())\n"
+            "print(digest.hexdigest())\n"
+        )
+        digests = set()
+        for seed in ("0", "1", "4242"):
+            run = subprocess.run(
+                [sys.executable, "-c", script, str(_ROOT)], cwd=_ROOT,
+                env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
+                capture_output=True, text=True, check=False)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            digests.add(run.stdout.strip())
+        self.assertEqual(len(digests), 1)
+
+
+# Mutations for the totality fuzz: each takes (rng, lines) and returns new
+# lines. They break layout, punctuation and keywords on purpose, so most
+# mutants do not parse; the ones that do are the inputs nobody wrote a
+# golden for.
+_FRAGMENTS = ("[", "]", "(", ")", ":", ",", "+ 1", "- 1", "~", "=", " ",
+              "if", "else:", "for i in range(2):", "# c", "[i]", "[0]",
+              "== 1", "> n", "()", "  ", ".a", "import X from \"x\"")
+
+
+def _mutate(rng, lines):
+    lines = list(lines)
+    kind = rng.randrange(8)
+    at = rng.randrange(len(lines))
+    if kind == 0 and len(lines) > 2:
+        del lines[at]
+    elif kind == 1:
+        lines.insert(at, lines[at])
+    elif kind == 2:
+        other = rng.randrange(len(lines))
+        lines[at], lines[other] = lines[other], lines[at]
+    elif kind == 3:
+        stripped = lines[at].lstrip(" ")
+        indent = max(0, len(lines[at]) - len(stripped) + rng.choice((-4, -1, 1, 4)))
+        lines[at] = " " * indent + stripped
+    elif kind == 4:
+        lines.insert(at, " " * rng.randrange(13) + "# m" + str(rng.randrange(9)))
+    elif kind == 5:
+        lines[at] += rng.choice(("  # t", "", "\n"))
+    elif kind == 6:
+        line = lines[at]
+        cut = rng.randrange(len(line) + 1)
+        lines[at] = line[:cut] + rng.choice(_FRAGMENTS) + line[cut:]
+    else:
+        line = lines[at]
+        if line:
+            cut = rng.randrange(len(line))
+            lines[at] = line[:cut] + line[cut + rng.randint(1, 3):]
+    return "\n".join(lines).split("\n")
+
+
+FUZZ_MUTANTS = 900
+
+
+@unittest.skipUnless(HAVE_LARK, SKIP)
+class TotalityFuzzTest(unittest.TestCase):
+    """No input may crash the formatter: a mutant that parses clean formats
+    to a fixed point with its normalized AST preserved, and one that does
+    not is refused with diagnostics. FormatterError counts as a crash
+    here, because on a clean parse it is a formatter defect."""
+
+    def test_mutated_0_2_sources(self):
+        seeds = [source for _, source in _sources_0_2()]
+        rng = random.Random(20261022)
+        clean = 0
+        for number in range(FUZZ_MUTANTS):
+            lines = rng.choice(seeds).split("\n")
+            for _ in range(rng.randint(1, 3)):
+                lines = _mutate(rng, lines)
+            source = "\n".join(lines)
+            with self.subTest(number=number, source=source):
+                result = _fmt(source)
+                if result.text is None:
+                    self.assertTrue(result.diagnostics.has_errors)
+                    continue
+                clean += 1
+                self.assertEqual(_fmt(result.text).text, result.text)
+                self.assertEqual(_ast(result.text), _ast(source))
+        # The fuzz must reach the formatter, not only the parser.
+        self.assertGreaterEqual(clean, 150)
+
+    def test_nesting_as_deep_as_the_parser_accepts(self):
+        """Blocks nest as deep as the parser takes them, so no walk may
+        spend a Python frame per level: 300 levels of `for` and `if`/`else`
+        parse, and used to overflow the normalized-AST walk."""
+        from rhoform.elaborate import elaborate
+        from rhoform.parser import parse
+
+        lines = [P2, "module M(flag: bool = true):", "    port a passive",
+                 "    port b passive"]
+        branches = []
+        indent = "    "
+        for level in range(300):
+            if level % 2:
+                lines.append(indent + "if flag:")
+                branches.append([indent + "else:", indent + "    b ~ a"])
+            else:
+                lines.append(indent + f"for i{level} in range(1):")
+            indent += "    "
+        lines.append(indent + "a ~ b")
+        for branch in reversed(branches):
+            lines += branch
+        source = "\n".join(lines) + "\n"
+        parsed = parse(source)
+        self.assertTrue(parsed.ok, parsed.diagnostics.render())
+        result = _fmt(source)
+        self.assertIsNotNone(result.text, result.diagnostics.render())
+        self.assertEqual(_fmt(result.text).text, result.text)
+        self.assertIsNotNone(elaborate([parse(result.text)]).design)
+
+
 @unittest.skipUnless(HAVE_LARK, SKIP)
 class ConformanceAcceptTest(unittest.TestCase):
     def test_every_accept_case_formats_to_a_clean_fixed_point(self):
         from rhoform.parser import parse
 
         paths = sorted((_PARSE_CASES / "accept").glob("*.rhoform"))
-        self.assertGreaterEqual(len(paths), 8)
+        self.assertGreaterEqual(len(paths), 16)
         for path in paths:
             with self.subTest(path.name):
                 source = path.read_text(encoding="utf-8")
@@ -312,6 +655,67 @@ class ConformanceAcceptTest(unittest.TestCase):
                 self.assertTrue(parse(result.text).ok)
                 self.assertEqual(_fmt(result.text).text, result.text)
                 self.assertEqual(_ast(result.text), _ast(source))
+
+
+def _design_and_codes(source, name):
+    """(design_hash or None, sorted codes) of compiling `source` alone.
+    Codes, not whole diagnostics: messages echo the author's spelling
+    (`3.0V` vs `3V`), which formatting is allowed to change."""
+    from rhoform import ir
+    from rhoform.elaborate import elaborate
+    from rhoform.parser import parse
+
+    parsed = parse(source, file=name)
+    sink = parsed.diagnostics
+    design = None
+    if parsed.ok:
+        elaboration = elaborate([parsed])
+        sink = elaboration.diagnostics
+        if elaboration.design is not None:
+            design = ir.design_hash_of(ir.to_ir(elaboration.design))
+    codes = sorted(json.loads(line)["code"]
+                   for line in sink.render().splitlines())
+    return design, codes
+
+
+@unittest.skipUnless(HAVE_LARK, SKIP)
+class FormattingPreservesTheDesignTest(unittest.TestCase):
+    """The formatter and elaborator were written apart; this is where they
+    meet. Formatting must not change what a source elaborates to, and the
+    sources the elaborator is pinned by are themselves canonical."""
+
+    def _sources(self):
+        conformance = _ROOT / "spec" / "conformance"
+        return sorted(
+            list((conformance / "elaborate").rglob("*.rhoform"))
+            + list((_ROOT / "benchmarks").glob("*/*.rhoform")))
+
+    def test_elaboration_cases_and_benchmarks_are_canonical(self):
+        paths = self._sources()
+        self.assertGreaterEqual(len(paths), 60)
+        for path in paths:
+            with self.subTest(str(path.relative_to(_ROOT))):
+                source = path.read_text(encoding="utf-8")
+                self.assertEqual(_fmt(source).text, source)
+
+    def test_formatting_keeps_the_design_hash_and_the_codes(self):
+        paths = (self._sources()
+                 + sorted((_PARSE_CASES / "accept").glob("*.rhoform"))
+                 + sorted(_FMT_CASES.glob("f*.rhoform")))
+        designs = 0
+        for path in paths:
+            with self.subTest(str(path.relative_to(_ROOT))):
+                source = path.read_text(encoding="utf-8")
+                result = _fmt(source)
+                if result.text is None:
+                    continue
+                before = _design_and_codes(source, path.name)
+                self.assertEqual(_design_and_codes(result.text, path.name),
+                                 before)
+                designs += before[0] is not None
+        # Every elaboration accept case and benchmark must have reached
+        # the hash comparison, not only the code comparison.
+        self.assertGreaterEqual(designs, 15)
 
 
 # --------------------------------------------------------------------------
@@ -828,6 +1232,24 @@ class SelfCheckTest(unittest.TestCase):
     def test_output_that_changes_meaning_is_caught(self):
         message = self._broken(lambda node: f"port {node.children[1]} passive")
         self.assertIn("normalized AST differs", message)
+
+    def test_a_0_2_renderer_that_changes_meaning_is_caught(self):
+        from unittest import mock
+
+        from rhoform import fmt
+
+        for production, renderer, source in (
+            ("import_stmt", lambda node: 'import A from "x"',
+             P2 + 'import B, A from "x"\nmodule M:\n    port p passive\n'),
+            ("for_stmt", lambda node: "for i in range(n)",
+             P2 + "module M(n: int = 2):\n    for i in range(1, n):\n"
+             "        isolated p\n"),
+        ):
+            with self.subTest(production):
+                with mock.patch.dict(fmt._HEADS, {production: renderer}):
+                    with self.assertRaises(fmt.FormatterError) as caught:
+                        fmt.format_source(source)
+                self.assertIn("normalized AST differs", str(caught.exception))
 
     def test_output_that_drops_a_comment_is_caught(self):
         from unittest import mock

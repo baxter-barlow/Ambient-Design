@@ -17,9 +17,9 @@ Why this notice is here
     Requirement L2 reads: "Adopt atopile's MIT-licensed surface with public
     attribution." Rhoform adopts the shape of atopile's surface syntax and
     owes atopile public attribution for it:
-      - the definition nouns `module`, `component` and `interface` (the
-        last two are reserved words whose definitions arrive in later
-        syntax versions);
+      - the definition nouns `module`, `component` and `interface`
+        (syntax 0.2 defines `component`; `interface` remains a reserved
+        word whose definition arrives in a later syntax version);
       - the `new` keyword;
       - the `~` connection operator.
     The attribution itself is the "Attribution" section of LICENSES.md; this

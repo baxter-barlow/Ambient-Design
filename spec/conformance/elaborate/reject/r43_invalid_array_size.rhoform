@@ -1,0 +1,16 @@
+# An array has at least one member; the size here comes from an argument.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Bank(n: int = 2):
+    port vin power_in
+    leds = new Led[n]
+    vin ~ leds[0].a
+
+module Panel:
+    port vin power_in
+    bank = new Bank(n = 0)
+    vin ~ bank.vin

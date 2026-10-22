@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+module Filter(r_value: resistance = 10kohm, pkg: string = "0402", limit: resistance = r_value):
+    table rhoform.lib.passive.Resistor part abstract (resistance, part.package):
+        rb limit "0603"
+        ra r_value pkg
+        rc 1000ohm pkg
+    r1 = new rhoform.lib.passive.Resistor(resistance=r_value, power_rating = 0.25W):
+        part abstract:
+            voltage_rating = 50000mV
+            package = pkg
+    if r_value>limit:
+        isolated r1.b

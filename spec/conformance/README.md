@@ -20,6 +20,12 @@ keywords usable in non-binding name positions, the chain-endpoint
 asymmetry's accepted half, comments before the pragma, a file without a
 final newline.
 
+Cases `a01`–`a08` declare syntax 0.1 and stay that way: 0.2 only adds,
+so they must keep parsing clean under an implementation of both
+versions (the reference implementation's tests also pin their parse
+trees as unchanged). Cases from `a09` on declare 0.2, one per family of
+constructs 0.2 added.
+
 ## `parse/reject/` — sources with defects, and the exact report
 
 Each `<case>.rhoform` is paired with `<case>.expected.ndjson`: the
@@ -94,7 +100,11 @@ trigger, and the gate fails when an active block-2 code is emitted by
 no case, unless it exempts the code with a stated reason it cannot be
 reached from source text. A case pinning a warning (a repeated flag, a
 repeated endpoint) still elaborates to a design; the stream is what it
-pins.
+pins. `r33_syntax_0_2_not_yet_supported` pins the interim refusal of
+`import` statements ([04](../language/04-elaboration.md)) and goes
+when that refusal does. Cases from `a09` and `r35` on declare syntax
+0.2 and pin its semantics: component definitions, parameters, `if`,
+`for` and arrays.
 
 `--write` regenerates the elaboration cases' expected IR and streams
 along with the parse reject cases'; the diff is the review artifact.

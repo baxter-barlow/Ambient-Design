@@ -1,0 +1,28 @@
+#pragma rhoform-syntax 0.2
+
+module M(fast: bool = false, n: int = 2):
+    port p passive
+
+    # the fast path
+    if fast:  # header
+        # leads the branch's first run
+        port q passive
+        b ~ c
+
+        a ~ b
+        # trails the if branch
+    # leads the else
+    else:  # else header
+        isolated a
+        # trails the else branch
+    for i in range(n):  # loop
+        x[i] ~ y[i]
+        # trails the loop body
+    if n > 1:
+        if n > 2:
+            isolated a
+            # trails the inner if branch
+        # reaches no block, so the outermost closed one
+
+    # leads the last statement
+    isolated b

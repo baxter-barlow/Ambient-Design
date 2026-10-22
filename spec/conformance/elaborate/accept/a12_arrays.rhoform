@@ -1,0 +1,36 @@
+# Arrays: `new D[N]` declares members `x[0]` to `x[N-1]`, each a full
+# instance with its own path, and an index selects one. A label inside an
+# array member is qualified by the member's path, and a derived net name
+# spells the index where the path has it.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+component Resistor(resistance: resistance):
+    pin a passive 1
+    pin b passive 2
+
+module Cell(r: resistance = 1kohm):
+    port inp passive
+    port out passive
+    d = new Led
+    r1 = new Resistor(resistance = r)
+    net OUT:
+        d.k
+        out
+    inp ~ r1.a
+    r1.b ~ d.a
+
+module Top(n: int = 3):
+    port gnd passive
+    port vin power_in
+    cells = new Cell[2](r = 2.2kohm)
+    leds = new Led[n]
+    vin ~ cells[0].inp
+    cells[0].out ~ cells[1].inp
+    cells[1].out ~ leds[0].a
+    leds[0].k ~ leds[1].a
+    leds[1].k ~ leds[2].a
+    leds[2].k ~ gnd

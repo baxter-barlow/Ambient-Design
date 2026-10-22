@@ -1,0 +1,16 @@
+#pragma rhoform-syntax 0.2
+module Bank(n: int = 4):
+    pull = new rhoform.lib.passive.Resistor [2] ( resistance=10000ohm ) :
+        part abstract:
+            package = "0402"
+    leds = new Led[ 3 ]
+    caps = new rhoform.lib.passive.Capacitor[n]()
+    net VIN:
+        caps[10].a
+        vin
+        caps[ 2 ].a
+        caps[i+1].a
+        caps[i-1].a
+    caps[ i - 1 ].b~gnd~caps[3].b
+    isolated leds[ -1 ].k
+    leds[0]~leds[1].k

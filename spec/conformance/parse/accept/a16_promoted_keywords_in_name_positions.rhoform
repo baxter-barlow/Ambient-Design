@@ -1,0 +1,29 @@
+#pragma rhoform-syntax 0.2
+component Switch:
+    pin in passive 1
+    pin from passive 2
+    pin if passive 3
+    pin else passive 4
+    pin for passive 5
+    pin import passive 6
+    pin component passive 7
+
+module Router:
+    port a passive
+    sw = new Switch
+    pair = new Switch[2]
+    r1 = new rhoform.lib.passive.Resistor(in = 1, for = "x"):
+        pin if passive
+        part abstract:
+            import = "0402"
+            from = 2
+    a ~ sw.in ~ r1.if
+    net N:
+        sw.from
+        pair[0].else
+    isolated sw.component
+    pair[0].for ~ pair[1].import
+    table rhoform.lib.passive.Resistor (in, part.else):
+        ra 1 "x"
+        rb 2 "y"
+        rc 3 "z"

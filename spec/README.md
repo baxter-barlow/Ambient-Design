@@ -1,8 +1,9 @@
 # The Rhoform Language Specification
 
-**Status: skeleton, v0.1 syntax.** This is the normative specification of
-the Rhoform language (requirement E2), grown at every milestone alongside
-the reference implementation. It is a release artifact: the docs site
+**Status: skeleton, syntax 0.2 (a strict superset of 0.1).** This is
+the normative specification of the Rhoform language (requirement E2),
+grown at every milestone alongside the reference implementation. It is
+a release artifact: the docs site
 (R56) renders it, `llms-full.txt` (R36) derives from it, and the
 conformance suite under [conformance/](conformance/) holds the reference
 implementation to it.
@@ -47,13 +48,13 @@ either machine-reconciled or absent.
 
 | Section | Status |
 |---|---|
-| [01 — Lexical structure](language/01-lexical-structure.md) | normative, v0.1 |
-| [02 — Grammar, names, and vocabularies](language/02-grammar.md) | normative, v0.1 |
+| [01 — Lexical structure](language/01-lexical-structure.md) | normative, v0.2 (syntax versions 0.1 and 0.2) |
+| [02 — Grammar, names, and vocabularies](language/02-grammar.md) | normative, v0.2 (syntax versions 0.1 and 0.2) |
 | [03 — Literals and the SI normal form](language/03-literals.md) | normative, v0.1 (T3; the single source R16 and R21 consume) |
-| [04 — Elaboration](language/04-elaboration.md) | normative, v0.1 (R13 slice 1 and R15; parameters, control flow and imports land with their slices) |
+| [04 — Elaboration](language/04-elaboration.md) | normative, v0.2 (syntax versions 0.1 and 0.2; R13 and R15; imports land with the package layer) |
 | [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
 | [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes) |
-| [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.1 (I1, AC6; the canonical form R16's formatter writes) |
+| [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.2 (syntax versions 0.1 and 0.2; I1, AC6; the canonical form R16's formatter writes) |
 
 The milestone plan for growth is the roadmap's: each milestone that
 changes the language lands its spec section and its conformance cases in

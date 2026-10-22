@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.1
+module Bank:
+    port vin power_in
+    caps = new rhoform.lib.passive.Capacitor[4](capacitance = 100nF)
+    for i in range(4):
+        caps[i].a ~ vin

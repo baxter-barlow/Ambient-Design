@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+component UsbC:
+    pin vbus power_in A4 B4 A9 B9
+    pin gnd passive A1 B1 A12 B12
+    pin cc1 bidirectional A5
+
+module Indicator:
+    port vbus power_in
+    j1 = new UsbC
+    d1 = new Led
+    vbus ~ j1.vbus ~ d1.a

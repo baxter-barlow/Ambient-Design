@@ -1,0 +1,11 @@
+# Only an array takes an index.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Panel:
+    port vin power_in
+    d1 = new Led
+    vin ~ d1[0].a

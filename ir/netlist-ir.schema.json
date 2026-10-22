@@ -376,8 +376,8 @@
         "name": {
           "type": "string",
           "minLength": 1,
-          "pattern": "^[A-Za-z_][A-Za-z0-9_./]*(\\[[0-9]+\\])?$",
-          "description": "Stable derived net name and identity. Derived deterministically: an explicit DSL net label wins; otherwise the name is synthesized from the highest-scope driving port's path. Identical source yields identical names; net renames follow the rename ledger like instance paths (requirement I2)."
+          "pattern": "^[A-Za-z_][A-Za-z0-9_./]*(\\[[0-9]+\\][A-Za-z0-9_./]*)*$",
+          "description": "Stable derived net name and identity. Derived deterministically: an explicit DSL net label wins; otherwise the name is synthesized from the highest-scope driving port's path. A name built from an instance path keeps that path's elaboration indices wherever they occur (e.g. \"cells[2]/OUT\", \"N_leds[0].a\"). Identical source yields identical names; net renames follow the rename ledger like instance paths (requirement I2)."
         },
         "ground_domain": {
           "type": "string",

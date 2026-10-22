@@ -1,0 +1,27 @@
+#pragma rhoform-syntax 0.2
+module Supply(fast: bool = false, n: int = 2, rail: voltage = 3.3V,
+              grade: string = "industrial"):
+    port out power_out
+    port gnd passive
+    r1 = new rhoform.lib.passive.Resistor(resistance = 10kohm)
+    if fast:
+        r1.a ~ out
+    else:
+        isolated r1.a
+    if n == 2:
+        if rail >= 3V:
+            net VOUT:
+                out
+                r1.b
+        else:
+            r1.b ~ gnd
+    if grade != "commercial":
+        isolated r1.b
+    if n < 3:
+        r1.b ~ out
+    if n <= 3:
+        r1.b ~ out
+    if n > 0:
+        r1.b ~ out
+    if fast == true:
+        r1.a ~ gnd

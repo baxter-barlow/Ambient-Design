@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+import A from "lib/a.rhoform"
+import B from "lib/a.rhoform"
+import Divider from "lib/divider.rhoform"
+# about the parts import
+import Capacitor, Led, Resistor from "lib/parts.rhoform"  # three parts
+import Regulator2, Regulator10 from "lib/power.rhoform"
+
+# leads the module, not an import
+module Board:
+    port vin power_in

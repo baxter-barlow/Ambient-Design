@@ -7,9 +7,9 @@ Lark's LALR parser with the contextual lexer and an INDENT/DEDENT postlex,
 the same construction `lang/grammar/conformance.py` proved out. The closed
 vocabularies are read from the same source-of-truth module (they are
 published there as CLOSED_VOCABULARIES precisely so tools can consume
-them), and the L8 pragma text is recovered from the artifact's own PRAGMA
-terminal. If the grammar changes, this parser changes with it, because it
-carries nothing that could fall behind.
+them), and which L8 pragma versions are legal is decided by running the
+artifact's own PRAGMA terminal. If the grammar changes, this parser changes
+with it, because it carries nothing that could fall behind.
 
 ERROR TOLERANCE, BY RESTART. A parse never stops at the first defect (P2:
 one problem per repair round is the convergence failure the language exists
@@ -54,8 +54,13 @@ the author did not legally write would blame lines for bytes; (2) the
 pragma pre-check; (3) the restart parse;
 (4) post-parse file-local checks the prototype also made at parse level:
 closed-vocabulary words (RHO1009) and quantity-literal semantics (RHO1010,
-via rhoform.quantities). The table-row arity check is deliberately NOT
-here — the grammar's own docstring assigns it to the checker.
+via rhoform.quantities); (5) the syntax-version gate: one grammar parses
+0.1 and 0.2, and a 0.2 construct under a 0.1 pragma is ONE RHO1016 per
+file whose fix-it rewrites the pragma. The table-row arity check is
+deliberately NOT here — the grammar's own docstring assigns it to the
+checker — and neither is anything about what the 0.2 constructs MEAN
+(parameter references resolving, range bounds, instances inside `for`):
+that is the elaborator's.
 
 Every diagnostic goes through rhoform.diagnostics; there is no second
 reporting path.
@@ -75,11 +80,14 @@ _SOT_PATH = _ROOT / "lang" / "grammar" / "rhoform_syntax.py"
 
 # The Indenter configuration, matching lang/grammar/conformance.py (a test
 # in lang/tests anchors the two while both exist). Implicit line joining
-# inside brackets is what lets a parameter list wrap.
+# inside `(` is what lets a parameter list wrap. `[` is deliberately NOT a
+# paren type (decision S-5): an index never wraps, and an unclosed `[` must be
+# one error on its own line, not a file joined into one logical line. That
+# keeps every bracket-recovery path below `(`-only.
 _INDENTER = dict(
     NL_type="_NEWLINE",
-    OPEN_PAREN_types=["LPAR", "LSQB"],
-    CLOSE_PAREN_types=["RPAR", "RSQB"],
+    OPEN_PAREN_types=["LPAR"],
+    CLOSE_PAREN_types=["RPAR"],
     INDENT_type="_INDENT",
     DEDENT_type="_DEDENT",
     tab_len=4,
@@ -101,7 +109,32 @@ _VOCAB_SITES = {
     "hardware_decl": ("hardware_kind", 0),
     "net_attribute": ("net_attribute", 0),
     "assertion": ("measurement_kind", 1),
+    # Syntax 0.2. A declared parameter's type, and a `for` header's callable,
+    # whose only legal spelling is `range`. The second is a one-word closed
+    # vocabulary rather than a new code: it is the same defect as every
+    # other site here (a word outside a fixed list in a NAME position that
+    # must stay a NAME, because `range` was never reserved), so it gets the
+    # same code, the same params and the same did-you-mean fix-it, and the
+    # list is published in CLOSED_VOCABULARIES for constrained decoders.
+    "param": ("param_type", 0),
+    "for_stmt": ("loop_iterator", 0),
 }
+
+# Syntax 0.2 constructs, as the tree shows them, with the words the
+# needs-newer-pragma diagnostic names them by. A `value` whose child is a
+# FREE_NAME (a parameter reference) is the one construct with no rule of its
+# own; _v0_2_extents recognizes it directly.
+_V0_2_CONSTRUCTS = {
+    "import_stmt": "an `import` statement",
+    "component_def": "a `component` definition",
+    "params": "a parameter list",
+    "if_stmt": "an `if` statement",
+    "for_stmt": "a `for` loop",
+    "array_size": "an array size",
+    "index": "an index",
+}
+_PARAMETER_REFERENCE = "a parameter reference"
+_V0_2 = "0.2"
 
 _QUANTITY_TOKEN_TYPES = frozenset(
     {"QUANTITY", "QUANTITY_INTERVAL", "QUANTITY_PLAIN"}
@@ -121,6 +154,11 @@ _TERMINAL_PROSE = {
     "NUMBER": "a number",
     "INTEGER": "an integer",
     "STRING": "a string",
+    "COMPARE": "a comparison operator",
+    # Prose, not a backticked spelling: _describe_token takes a
+    # backtick-initial description for the token itself, which made a
+    # stray `-` read "unexpected `+` or `-`".
+    "INDEX_OP": "an index offset operator",
     "PRAGMA": "the syntax-version pragma",
     "_NEWLINE": "end of line",
     "_INDENT": "indentation",
@@ -171,7 +209,10 @@ def normalize(source: str) -> str:
 @dataclass
 class _Loaded:
     parser: object
-    pragma_text: str
+    pragma_text: str      # the CURRENT header: what a new file and a fix-it use
+    pragma_re: object     # the artifact's own PRAGMA terminal, compiled
+    pragma_prefix: str    # the header minus its version
+    current_version: str
     keyword_of: dict
     vocabularies: dict
     quantity_re: object  # the SoT's full five-form literal pattern
@@ -203,29 +244,40 @@ def _load() -> _Loaded:
         propagate_positions=True,
     )
 
-    pragma_text = None
+    pragma_pattern = None
     keyword_of = {}
     for terminal in parser.terminals:
         pattern = terminal.pattern
         value = getattr(pattern, "value", "")
         if terminal.name == "PRAGMA":
-            # The artifact stores re.escape(PRAGMA_TEXT); unescaping
-            # recovers the exact header without a second copy of the text.
-            pragma_text = re.sub(r"\\(.)", r"\1", value)
+            # The header check below runs the artifact's OWN terminal, so
+            # which versions are legal is decided by the generated grammar
+            # and nowhere else — this parser holds no second copy.
+            pragma_pattern = value
         elif pattern.type == "re":
             match = _KEYWORD_PATTERN.match(value)
             if match:
                 keyword_of[terminal.name] = match.group(1)
 
     sot = _load_sot()
-    if pragma_text != sot.PRAGMA_TEXT:  # pragma: no cover - artifact drift
-        raise RuntimeError(
-            "the PRAGMA terminal in rhoform.lark does not unescape to the "
-            "source of truth's PRAGMA_TEXT; regenerate the artifacts"
+    pragma_re = re.compile(pragma_pattern or "(?!)")
+    # Drift guard, both directions: every version the source of truth
+    # lists must be a header the artifact accepts, and the artifact may
+    # accept nothing the source of truth does not render.
+    if (pragma_pattern != sot.TERMINALS["PRAGMA"]
+            or not all(pragma_re.fullmatch(text)
+                       for text in sot.PRAGMA_TEXTS)
+            or not pragma_re.fullmatch(sot.PRAGMA_TEXT)):
+        raise RuntimeError(  # pragma: no cover - artifact drift
+            "the PRAGMA terminal in rhoform.lark does not match the source "
+            "of truth's pragma versions; regenerate the artifacts"
         )
     _CACHE = _Loaded(
         parser=parser,
-        pragma_text=pragma_text,
+        pragma_text=sot.PRAGMA_TEXT,
+        pragma_re=pragma_re,
+        pragma_prefix=sot.PRAGMA_PREFIX,
+        current_version=sot.SYNTAX_VERSION,
         keyword_of=keyword_of,
         vocabularies=dict(sot.CLOSED_VOCABULARIES),
         quantity_re=re.compile(sot.LEXER_QUANTITY),
@@ -268,9 +320,10 @@ class ParseResult:
         `_NEWLINE` token, which swallows the next line's indentation, a
         trailing `# comment` and any comment-only lines after it, so it
         is not used. The extent is instead taken from what the tree
-        keeps: every named token, plus the two bracketed subtrees
-        (`arguments`, `net_attributes`) whose meta is exact and is the
-        only record of their parentheses. Tree positions are character
+        keeps: every named token, plus the bracketed subtrees
+        (`arguments`, `net_attributes`, and syntax 0.2's `params`,
+        `array_size` and `index`) whose meta is exact and is the only
+        record of their brackets. Tree positions are character
         offsets, which equal byte offsets because a non-ASCII byte stops
         the parse before a tree exists.
         """
@@ -280,7 +333,8 @@ class ParseResult:
         return span_from_bytes(self.file, self.data, start, end)
 
 
-_BRACKETED = frozenset({"arguments", "net_attributes"})
+_BRACKETED = frozenset(
+    {"arguments", "net_attributes", "params", "array_size", "index"})
 
 
 def _extent(node) -> tuple[int, int]:
@@ -402,18 +456,32 @@ def _prescan(file: str, data: bytes, sink: Diagnostics) -> bool:
     return clean
 
 
+@dataclass
+class _Header:
+    """The author's own, legal pragma line: its version and where the
+    version sits in the author's bytes (for the needs-newer-pragma fix-it,
+    which rewrites exactly those bytes)."""
+
+    version: str
+    version_start: int
+    version_end: int
+
+
 def _pragma_precheck(file: str, source: str, data: bytes, loaded: _Loaded,
-                     sink: Diagnostics) -> tuple[str, int]:
-    """Check the L8 header; return (text to parse, offset shift).
+                     sink: Diagnostics) -> tuple[str, int, "_Header | None"]:
+    """Check the L8 header; return (text to parse, offset shift, header).
 
     The first content line — not blank, not a comment (a `#` line whose
     word is not `pragma`; `#pragmatic` is a comment, per the frozen
-    boundary) — must be exactly the pragma. When it is, the source parses
-    as-is and the shift is 0. When it is not, ONE RHO1005 is emitted with
-    a machine-applicable fix-it, and the parse input becomes the correct
-    header plus the source (with a wrong header line blanked), so the body
-    is still checked; the returned shift translates every parse-input
-    offset back onto the author's bytes.
+    boundary) — must be exactly a pragma the artifact's PRAGMA terminal
+    accepts: one per implemented syntax version. When it is, the source
+    parses as-is, the shift is 0, and the header names the version. When it
+    is not, ONE RHO1005 is emitted with a machine-applicable fix-it that
+    writes the CURRENT version, and the parse input becomes that header plus
+    the source (with a wrong header line blanked), so the body is still
+    checked — as the current version, since that is what the fix-it makes
+    it; the returned shift translates every parse-input offset back onto
+    the author's bytes, and the header is None.
     """
     expected = loaded.pragma_text
     offset = 0
@@ -428,8 +496,14 @@ def _pragma_precheck(file: str, source: str, data: bytes, loaded: _Loaded,
     else:
         line = None
 
-    if line is not None and line.strip() == expected:
-        return source, 0
+    if line is not None and loaded.pragma_re.fullmatch(line.strip()):
+        # Prescan has passed, so the text is ASCII and a character offset
+        # is a byte offset.
+        start = offset + (len(line) - len(line.lstrip(" ")))
+        version = line.strip()[len(loaded.pragma_prefix):]
+        version_start = start + len(loaded.pragma_prefix)
+        return source, 0, _Header(version, version_start,
+                                  version_start + len(version))
 
     if line is not None and line.strip().startswith("#pragma"):
         start = offset + (len(line) - len(line.lstrip(" ")))
@@ -447,7 +521,7 @@ def _pragma_precheck(file: str, source: str, data: bytes, loaded: _Loaded,
         )
         blanked = source[:offset] + " " * len(line) \
             + source[offset + len(line):]
-        return expected + "\n" + blanked, len(expected) + 1
+        return expected + "\n" + blanked, len(expected) + 1, None
 
     insert_at = min(offset, len(data))
     span = span_from_bytes(file, data, insert_at, insert_at)
@@ -466,7 +540,7 @@ def _pragma_precheck(file: str, source: str, data: bytes, loaded: _Loaded,
             (Edit(span, expected + "\n"),),
         ),),
     )
-    return expected + "\n" + source, len(expected) + 1
+    return expected + "\n" + source, len(expected) + 1, None
 
 
 def _line_bounds(text: str, offset: int) -> tuple[int, int]:
@@ -982,15 +1056,13 @@ def _first_unclosed_bracket(text: str):
     to end of line, and a closer with no opener is someone else's error
     (the depth floors at zero, matching the prototype lexer).
 
-    `(` only. The frozen v0.1 grammar declares no LSQB/RSQB terminal, so
-    `[` is simply an illegal character — the Indenter never sees one and
-    layout is never suspended by it. Scanning `[` here relabelled that
-    illegal character as an unclosed bracket and made RHO1015 assert a
-    mechanism that cannot run, while its mirror `]` was already reported
-    correctly as RHO1011 (review round 6). `_INDENTER` still lists
-    LSQB/RSQB because it is anchored byte-for-byte to the frozen
-    lang/grammar/ source of truth; those entries are inert, because the
-    token types they name never occur."""
+    `(` only. Since syntax 0.2 `[` and `]` are tokens (array sizes and
+    indexes), but they do NOT suspend layout — `_INDENTER` names only
+    LPAR/RPAR as paren types, by decision S-5 — so an unclosed `[` joins
+    nothing and is an ordinary unexpected-token error on its own line.
+    Scanning `[` here would make RHO1015 assert a mechanism that cannot
+    run (review round 6 found exactly that when `[` was an illegal
+    character)."""
     stack: list[tuple[int, str]] = []
     reach: dict[int, int] = {}
     position = 0
@@ -1119,11 +1191,13 @@ def parse(source: str, file: str = "design.rhoform",
     if not _prescan(file, data, sink):
         return ParseResult(tree=None, diagnostics=sink, file=file, data=data)
 
-    parse_text, shift = _pragma_precheck(file, source, data, loaded, sink)
+    parse_text, shift, header = _pragma_precheck(file, source, data, loaded,
+                                                 sink)
     tree = _restart_parse(file, data, parse_text, shift, loaded, sink)
 
     if tree is not None:
         _postparse(file, data, shift, tree, loaded, sink)
+        _version_gate(file, data, shift, tree, loaded, sink, header)
     return ParseResult(tree=tree, diagnostics=sink, file=file, data=data,
                        shift=shift)
 
@@ -1167,6 +1241,104 @@ def _postparse(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
                 {"literal": str(token), "reason": exc.reason},
                 primary=_token_span(file, data, shift, token),
             )
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
+def _comment_start(line: str):
+    """Index of the `#` that opens a trailing comment on `line`, or None.
+    Strings are single-line and cannot contain `"`, so a toggle suffices."""
+    in_string = False
+    for index, char in enumerate(line):
+        if char == '"':
+            in_string = not in_string
+        elif char == "#" and not in_string:
+            return index
+    return None
+
+
+def _content_end(data: bytes, start: int, end: int) -> int:
+    """The end of the author's content in [start, end): trailing blank
+    lines, indentation, comment-only lines and a trailing comment removed,
+    since a layout token's borrowed position may have reached across all
+    of them."""
+    text = data[start:end].decode("utf-8", "surrogateescape")
+    while True:
+        text = text.rstrip(" \n")
+        line_start = text.rfind("\n") + 1
+        cut = _comment_start(text[line_start:])
+        if cut is None:
+            return start + len(text)
+        text = text[:line_start + cut]
+
+
+def _v0_2_extents(data: bytes, shift: int,
+                  tree) -> list[tuple[int, int, str]]:
+    """(start, end, construct) for each syntax 0.2 construct in `tree`, as
+    author byte offsets, ordered by start, then longest first."""
+    found = []
+    work = [tree]
+    while work:
+        node = work.pop()
+        construct = _V0_2_CONSTRUCTS.get(node.data)
+        if construct is None and node.data == "value" and any(
+                getattr(child, "type", None) == "FREE_NAME"
+                for child in node.children):
+            construct = _PARAMETER_REFERENCE
+        if construct is not None and not node.meta.empty:
+            # The node's meta counts the anonymous `(` `)` `[` `]` its
+            # tokens do not (an empty parameter list has NO tokens in the
+            # tree), but also a trailing DEDENT or NEWLINE, whose position
+            # is borrowed from the newline run after the construct — so its
+            # end is walked back over that run before it names any author
+            # bytes.
+            start = max(0, node.meta.start_pos - shift)
+            end = _content_end(data, start,
+                               max(start, node.meta.end_pos - shift))
+            found.append((start, end, construct))
+        work.extend(child for child in node.children
+                    if hasattr(child, "data"))
+    found.sort(key=lambda item: (item[0], -item[1], item[2]))
+    return found
+
+
+def _version_gate(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
+                  sink: Diagnostics, header: "_Header | None") -> None:
+    """A 0.2 construct under a 0.1 pragma: ONE diagnostic per file.
+
+    One grammar parses every version (decision S-2), so this is where 0.1
+    stays 0.1. One diagnostic, not one per construct, because there is one
+    defect — the header — and one repair: its fix-it rewrites the version,
+    which is machine-applicable because 0.2 only adds, so no 0.1 file means
+    anything different under it. The primary span is the FIRST offending
+    construct, so the author sees why; `count` says how many more there
+    are, so nobody mistakes the first for the only one. A file with no
+    legal header (`header` None) was already given RHO1005 and is parsed as
+    the current version, so it draws nothing here.
+    """
+    if header is None or _version_key(header.version) >= _version_key(_V0_2):
+        return
+    found = _v0_2_extents(data, shift, tree)
+    if not found:
+        return
+    start, end, construct = found[0]
+    primary = span_from_bytes(file, data, start, end)
+    version_span = span_from_bytes(file, data, header.version_start,
+                                   header.version_end)
+    sink.add(
+        "RHO1016",
+        {"construct": construct, "required": _V0_2,
+         "declared": header.version, "count": len(found)},
+        primary=primary,
+        fixits=(FixIt(
+            f"declare syntax {_V0_2}: `{loaded.pragma_prefix}{_V0_2}` "
+            f"(it only adds to {header.version})",
+            "machine-applicable",
+            (Edit(version_span, _V0_2),),
+        ),),
+    )
 
 
 def _closest_fixit(word: str, allowed: tuple, span: Span) -> tuple:

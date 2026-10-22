@@ -16,10 +16,11 @@ Six legs:
      properties cannot sit in the table quietly. Error rows pin the
      stable rejection reasons.
   4. DOC RECONCILIATION: every closed list the spec restates (keywords,
-     reserved words, the four vocabularies, the unit ladders, the
-     diagnostic block table, the output cap, the formatter's statement
-     ranks and instance-body order) equals the source of truth it
-     restates, and 07's collation sample is in natural order. The spec
+     the keywords syntax 0.2 added, reserved words, every closed
+     vocabulary, the punctuation tokens, the pragma versions, the unit
+     ladders, the diagnostic block table, the output cap, the formatter's
+     statement ranks and instance-body order) equals the source of truth
+     it restates, and 07's collation sample is in natural order. The spec
      promised "a list in this spec is either machine-reconciled or
      absent"; this is the reconciliation.
   5. FORMATTER: every spec/conformance/fmt input formats to its committed
@@ -47,8 +48,10 @@ the git diff is the review artifact.
 Usage: check-conformance.py [--self-test | --write]
 """
 
+import itertools
 import json
 import re
+import string
 import sys
 from pathlib import Path
 
@@ -61,20 +64,22 @@ SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
 
 # Today's populations. Cases may be added freely; a DROP below the floor
 # is the suite shrinking out from under the spec, and must be a decision
-# recorded here.
-MINIMUM_ACCEPT_CASES = 8
-MINIMUM_REJECT_CASES = 16
+# recorded here. Syntax 0.2 added a09-a16 and r17-r23, and its canonical
+# form f17-f24.
+MINIMUM_ACCEPT_CASES = 16
+MINIMUM_REJECT_CASES = 23
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
-MINIMUM_FMT_CASES = 16
+MINIMUM_FMT_CASES = 24
 
 # Elaboration cases (leg 5). The reject floor is one case per block-2 code
-# a v0.1 source can trigger; the coverage check below is what keeps that
-# true as codes are added, the floor is what keeps cases from vanishing.
+# a source can trigger; the coverage check below is what keeps that true
+# as codes are added, the floor is what keeps cases from vanishing. Syntax
+# 0.2's semantics added a09-a14 and r35-r48; a08 came with AMB-132.
 ELABORATE = CONFORMANCE / "elaborate"
 IR_SCHEMA_PATH = ROOT / "ir" / "netlist-ir.schema.json"
-MINIMUM_ELABORATE_ACCEPT_CASES = 8
-MINIMUM_ELABORATE_REJECT_CASES = 31
+MINIMUM_ELABORATE_ACCEPT_CASES = 14
+MINIMUM_ELABORATE_REJECT_CASES = 46
 
 # Block-2 codes no source text can trigger, each with its reason. Every
 # other active block-2 code must be emitted by at least one reject case,
@@ -86,6 +91,8 @@ NOT_SOURCE_TRIGGERED = {
 }
 
 _WORD = re.compile(r"`([A-Za-z_][A-Za-z0-9_./-]*)`")
+# A backticked run of punctuation, for the token list 01 restates.
+_PUNCTUATION = re.compile(r"`([^`\sA-Za-z0-9_]+)`")
 
 
 def _section(text: str, heading: str) -> str | None:
@@ -109,9 +116,9 @@ def _section(text: str, heading: str) -> str | None:
     return "\n".join(body)
 
 
-def _spec_words(text: str, heading: str) -> list[str]:
+def _spec_words(text: str, heading: str, pattern=_WORD) -> list[str]:
     """Backticked words under `heading`, up to the next heading."""
-    return _WORD.findall(_section(text, heading) or "")
+    return pattern.findall(_section(text, heading) or "")
 
 
 def _rank_rows(text: str, heading: str) -> list[tuple[int, str]]:
@@ -151,6 +158,48 @@ def _case_sources(directory: Path) -> list[Path]:
     """Every case source in `directory`, escaped or not, sorted."""
     return sorted(list(directory.glob("*.rhoform"))
                   + list(directory.glob("*.rhoform.escaped")))
+
+
+def _grammar_punctuation(sot) -> set[str]:
+    """Every punctuation token the grammar can lex, read off the source of
+    truth rather than listed here: the non-word literals its rules spell,
+    plus every short run of punctuation a named terminal matches whole.
+    The second half is what catches an operator terminal (COMPARE,
+    INDEX_OP) — and any future one — without this gate naming it; no
+    other terminal matches a run with no letter, digit, underscore, quote
+    or `#`."""
+    found = set()
+
+    def walk(node):
+        if isinstance(node, sot.Lit) and not node.text.isidentifier():
+            found.add(node.text)
+        for child in (getattr(node, "items", ()) or getattr(node, "options", ())
+                      or ()):
+            walk(child)
+        inner = getattr(node, "item", None)
+        if inner is not None:
+            walk(inner)
+
+    for _, _, node in sot.RULES:
+        walk(node)
+    marks = [mark for mark in string.punctuation if mark not in '"#_']
+    runs = ["".join(run) for length in (1, 2, 3)
+            for run in itertools.product(marks, repeat=length)]
+    for pattern in sot.TERMINALS.values():
+        terminal = re.compile(pattern)
+        found.update(run for run in runs if terminal.fullmatch(run))
+    return found
+
+
+def _load_sot():
+    """The grammar source of truth, imported by path (never copied)."""
+    import importlib.util
+
+    sot_path = ROOT / "lang" / "grammar" / "rhoform_syntax.py"
+    spec = importlib.util.spec_from_file_location("_sot_doc", sot_path)
+    sot = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sot)
+    return sot
 
 
 def parse_case_problems(accept_dir, reject_dir, write=False):
@@ -394,12 +443,7 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
                       applicability=None):
     """Leg 4: every restated list equals its source of truth."""
     if sot is None:
-        import importlib.util
-
-        sot_path = ROOT / "lang" / "grammar" / "rhoform_syntax.py"
-        spec = importlib.util.spec_from_file_location("_sot_doc", sot_path)
-        sot = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sot)
+        sot = _load_sot()
     if units is None:
         from rhoform.quantities import UNITS as units
     if blocks is None:
@@ -434,9 +478,15 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
                 f"source of truth ({'; '.join(detail)})"
             )
 
+    # The keyword heading lost its "(v0.1)" when syntax 0.2 added seven
+    # words: the list is every keyword of the one grammar, whichever
+    # version introduced it, and the 0.2 subset is reconciled on its own.
     reconcile("02-grammar.md keywords",
-              _spec_words(grammar_md, "### Keywords (v0.1)"),
+              _spec_words(grammar_md, "### Keywords"),
               sorted(sot.KEYWORDS))
+    reconcile("02-grammar.md keywords added in 0.2",
+              _spec_words(grammar_md, "### Keywords added in 0.2"),
+              sorted(sot.PROMOTED_IN_0_2))
     reconcile("02-grammar.md reserved words",
               _spec_words(grammar_md, "### Reserved for v1"),
               sorted(sot.RESERVED_FUTURE))
@@ -445,11 +495,22 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
         "hardware_kind": "### hardware_kind (L9)",
         "net_attribute": "### net_attribute (T5)",
         "measurement_kind": "### measurement_kind (V2)",
+        "param_type": "### param_type (L3)",
+        "loop_iterator": "### loop_iterator (L3)",
     }
     for vocabulary, words in sorted(sot.CLOSED_VOCABULARIES.items()):
+        # A vocabulary this table does not know yet is looked for under a
+        # bare heading and, absent, reported as unrestated. Indexing the
+        # table crashed the whole gate with a KeyError the day syntax 0.2
+        # added two vocabularies — a traceback where a report belonged.
+        heading = heading_of.get(vocabulary, f"### {vocabulary}")
         reconcile(f"02-grammar.md {vocabulary}",
-                  _spec_words(grammar_md, heading_of[vocabulary]),
+                  _spec_words(grammar_md, heading),
                   sorted(words))
+    reconcile("01-lexical-structure.md punctuation tokens",
+              sorted(_spec_words(lexical_md, "### Punctuation tokens",
+                                 _PUNCTUATION)),
+              sorted(_grammar_punctuation(sot)))
 
     ladders = {}
     for symbol, (dimension, multiplier) in units.items():
@@ -532,37 +593,48 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
                 f"framework's vocabulary {truth}"
             )
 
-    # The counts 02 states in prose, and the pragma 01 restates in its
-    # fence: both pinned, same review finding.
-    for pattern, want, where in (
-        (r"The (\d+) words the grammar spells as literals",
-         len(sot.KEYWORDS), "keyword count"),
-        (r"The (\d+) words no v0\.1 rule uses",
-         len(sot.RESERVED_FUTURE), "reserved-word count"),
+    # The facts 02 and 01 state in prose — two counts, the version set an
+    # implementation implements, and which version is current — and the
+    # pragmas 01 restates in its fence: all pinned, same review finding.
+    # Compared as whitespace-normalized text, since prose wraps.
+    for doc, text, pattern, want, where in (
+        ("02-grammar.md", grammar_md,
+         r"The (\d+) words the grammar spells as literals",
+         str(len(sot.KEYWORDS)), "keyword count"),
+        ("02-grammar.md", grammar_md,
+         r"The (\d+) words? reserved and not yet used",
+         str(len(sot.RESERVED_FUTURE)), "reserved-word count"),
+        ("01-lexical-structure.md", lexical_md,
+         r"implements the version set\s+\{([^}]*)\}",
+         ", ".join(sot.SYNTAX_VERSIONS), "implemented version set"),
+        ("01-lexical-structure.md", lexical_md,
+         r"Syntax (\d+\.\d+) is the\s+current\s+version",
+         sot.SYNTAX_VERSION, "current version"),
     ):
-        match = re.search(pattern, grammar_md)
+        match = re.search(pattern, text)
         if match is None:
             problems.append(
-                f"02-grammar.md no longer states the {where} in the "
-                "expected form"
+                f"{doc} no longer states the {where} in the expected form"
             )
-        elif int(match.group(1)) != want:
+        elif " ".join(match.group(1).split()) != want:
             problems.append(
-                f"02-grammar.md states {match.group(1)} for the {where}; "
-                f"the grammar source of truth has {want}"
+                f"{doc} states {match.group(1)!r} for the {where}; the "
+                f"grammar source of truth has {want!r}"
             )
 
-    fence = re.search(r"```text\n(#pragma[^\n]*)\n```", lexical_md)
+    # One line per implemented version since syntax 0.2: the fence is the
+    # set of headers a reader MUST accept, not only the current one.
+    fence = re.search(r"```text\n((?:#pragma[^\n]*\n)+)```", lexical_md)
     if fence is None:
         problems.append(
             "01-lexical-structure.md no longer shows the pragma in its "
             "fenced block"
         )
-    elif fence.group(1) != sot.PRAGMA_TEXT:
+    elif fence.group(1).splitlines() != list(sot.PRAGMA_TEXTS):
         problems.append(
             f"01-lexical-structure.md shows the pragma as "
-            f"{fence.group(1)!r}; the source of truth says "
-            f"{sot.PRAGMA_TEXT!r}"
+            f"{fence.group(1).splitlines()!r}; the source of truth says "
+            f"{list(sot.PRAGMA_TEXTS)!r}"
         )
 
     # 07 restates the formatter's two rank tables. Rows are compared as
@@ -1502,7 +1574,7 @@ def self_test() -> int:
 
         grammar_md = spec_copy / "02-grammar.md"
         grammar_md.write_text(grammar_md.read_text().replace(
-            "The 24 words the grammar spells", "The 23 words the grammar spells"))
+            "The 31 words the grammar spells", "The 30 words the grammar spells"))
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a drifted keyword count is caught",
                       any("keyword count" in p for p in problems)))
@@ -1510,8 +1582,10 @@ def self_test() -> int:
         shutil.copytree(SPEC_LANG, spec_copy)
 
         lexical_md = spec_copy / "01-lexical-structure.md"
+        # Since 0.2 the fence lists every implemented version: dropping
+        # one is the drift, since a reader MUST still accept it.
         lexical_md.write_text(lexical_md.read_text().replace(
-            "#pragma rhoform-syntax 0.1", "#pragma rhoform-syntax 0.2"))
+            "```text\n#pragma rhoform-syntax 0.1\n", "```text\n"))
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a drifted pragma restatement is caught",
                       any("shows the pragma as" in p for p in problems)))
@@ -1530,7 +1604,7 @@ def self_test() -> int:
 
         grammar_md = spec_copy / "02-grammar.md"
         grammar_md.write_text(grammar_md.read_text().replace(
-            "The 24 words the grammar spells as literals",
+            "The 31 words the grammar spells as literals",
             "the grammar's literal words"))
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a deleted keyword-count sentence is caught",
@@ -1570,6 +1644,70 @@ def self_test() -> int:
             cases.append((label, real_formatting.count(old) == 1
                           and any(fragment in p for p in problems)))
         formatting_md.write_text(real_formatting)
+
+        # Syntax 0.2's restatements. Each mutation runs on a fresh copy and
+        # must actually apply: a replacement that matched nothing would
+        # leave the spec intact and report nothing, failing the case for
+        # the wrong reason, so a miss is reported as its own failure.
+        import types
+
+        def drifted(doc, old, new, sot=None):
+            shutil.rmtree(spec_copy)
+            shutil.copytree(SPEC_LANG, spec_copy)
+            target = spec_copy / doc
+            text = target.read_text()
+            if old not in text:
+                return [f"self-test mutation {old!r} matched nothing"]
+            target.write_text(text.replace(old, new))
+            return doc_sync_problems(spec_dir=spec_copy, sot=sot)
+
+        for doc, old, new, fragment, label in (
+            ("02-grammar.md", "`from` `if` `import` `in`\n",
+             "`from` `if` `import`\n",
+             "keywords added in 0.2", "a drifted 0.2 keyword list"),
+            ("02-grammar.md", "`inductance` `int`", "`inductance`",
+             "02-grammar.md param_type", "a drifted param_type list"),
+            ("02-grammar.md", "\n`range`\n", "\n`rnage`\n",
+             "02-grammar.md loop_iterator", "a drifted loop_iterator list"),
+            ("02-grammar.md", "The 1 word reserved", "The 8 words reserved",
+             "reserved-word count", "a drifted reserved-word count"),
+            ("01-lexical-structure.md", "`~` `[` `]` ", "`~` ",
+             "punctuation tokens", "a drifted punctuation list"),
+            ("01-lexical-structure.md", "{0.1, 0.2}", "{0.2}",
+             "implemented version set", "a drifted version set"),
+            ("01-lexical-structure.md", "Syntax 0.2 is the",
+             "Syntax 0.1 is the", "'0.1' for the current version",
+             "a drifted current version"),
+            ("01-lexical-structure.md", "is the\ncurrent version",
+             "was the\nlatest version",
+             "no longer states the current version",
+             "a deleted current-version sentence"),
+        ):
+            problems = drifted(doc, old, new)
+            cases.append((f"{label} is caught",
+                          any(fragment in p for p in problems)))
+
+        # Two kinds of growth in the source of truth the spec has not
+        # caught up with. A new vocabulary must be REPORTED as unrestated,
+        # where it used to crash the gate with a KeyError; a new operator
+        # terminal must reach the punctuation reconciliation, which reads
+        # the terminals rather than naming COMPARE and INDEX_OP.
+        real_sot = _load_sot()
+        grown = types.SimpleNamespace(**vars(real_sot))
+        grown.CLOSED_VOCABULARIES = {**real_sot.CLOSED_VOCABULARIES,
+                                     "widget_kind": ("knob",)}
+        problems = drifted("02-grammar.md", "", "", sot=grown)
+        cases.append(("a vocabulary the spec does not restate is reported, "
+                      "not a crash",
+                      any("widget_kind" in p and "missing ['knob']" in p
+                          for p in problems)))
+        grown = types.SimpleNamespace(**vars(real_sot))
+        grown.TERMINALS = {**real_sot.TERMINALS, "ARROW": r"->"}
+        problems = drifted("02-grammar.md", "", "", sot=grown)
+        cases.append(("an operator terminal the spec does not list is "
+                      "caught", any("punctuation tokens" in p
+                                    and "missing ['->']" in p
+                                    for p in problems)))
 
         cases += elaborate_self_test_cases(tmp)
 
