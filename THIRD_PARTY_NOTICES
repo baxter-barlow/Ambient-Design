@@ -15,11 +15,18 @@ atopile
 Why this notice is here
 
     Requirement L2 reads: "Adopt atopile's MIT-licensed surface with public
-    attribution." Rhoform adopts constructs of atopile's surface syntax --
-    principally the `module` and `new` keywords and the `~` connection
-    operator -- and owes atopile public attribution for them. The attribution
-    itself is the "Attribution" section of LICENSES.md; this entry carries the
-    licence text that section refers to.
+    attribution." Rhoform adopts the shape of atopile's surface syntax and
+    owes atopile public attribution for it:
+      - the definition nouns `module`, `component` and `interface` (the
+        last two are reserved words whose definitions arrive in later
+        syntax versions);
+      - the `new` keyword;
+      - the `~` connection operator.
+    The attribution itself is the "Attribution" section of LICENSES.md; this
+    entry carries the licence text that section refers to. References to
+    atopile and to its `.ato` file format in this repository are nominative
+    only: they identify atopile's work and imply no affiliation with or
+    endorsement by its authors.
 
 What is and is not copied
 

@@ -885,32 +885,70 @@ class Attribution(unittest.TestCase):
     constructs the grammar no longer had -- or the grammar could keep them
     while someone reworded the sentence away -- with everything green."""
 
-    SENTENCE = re.compile(
-        r"principally the `([a-z_]+)` and `([a-z_]+)` keywords and the "
-        r"`(.)` connection operator")
+    SECTION = re.compile(r"^## Attribution\n(.*?)(?=^## |\Z)", re.S | re.M)
+    BULLET = re.compile(r"^- (.+?)(?=^- |^\S|\Z)", re.S | re.M)
+
+    @classmethod
+    def attributed(cls, text):
+        """The words and operators the Attribution section's bullet list
+        credits to atopile: backticked tokens in a bullet that names a
+        `connection operator` are operators, every other bullet's are words."""
+        section = cls.SECTION.search(text)
+        words: set[str] = set()
+        operators: set[str] = set()
+        if section is None:
+            return words, operators
+        for bullet in cls.BULLET.findall(section.group(1)):
+            tokens = set(re.findall(r"`([^`]+)`", bullet))
+            if "connection operator" in bullet:
+                operators |= tokens
+            else:
+                words |= tokens
+        return words, operators
 
     def test_licenses_md_names_constructs_the_grammar_actually_has(self):
         text = (LANG.parent / "LICENSES.md").read_text(encoding="utf-8")
-        found = self.SENTENCE.search(text)
-        self.assertIsNotNone(
-            found,
-            "LICENSES.md no longer states the atopile attribution in the form "
-            "this test reads. Requirement L2 says 'Adopt atopile's MIT-licensed "
-            "surface with public attribution'; name the adopted constructs.")
-        keyword_a, keyword_b, operator = found.groups()
+        words, operators = self.attributed(text)
+        # The attribution cannot be reworded away: requirement L2 says
+        # "Adopt atopile's MIT-licensed surface with public attribution", and
+        # these three are the constructs v0.1 actually shares with atopile.
+        self.assertLessEqual(
+            {"module", "new"}, words,
+            "LICENSES.md's Attribution list no longer names the `module` and "
+            "`new` keywords the grammar adopted from atopile")
+        self.assertIn(
+            "~", operators,
+            "LICENSES.md's Attribution list no longer names the `~` "
+            "connection operator the grammar adopted from atopile")
         literals: set[str] = set()
         for _, _, node in RULES:
             literals |= _every_literal(node)
-        for keyword in (keyword_a, keyword_b):
-            with self.subTest(keyword=keyword):
+        for word in sorted(words):
+            with self.subTest(word=word):
                 self.assertIn(
-                    keyword, KEYWORDS,
-                    f"LICENSES.md attributes the `{keyword}` keyword to "
-                    "atopile but the frozen grammar does not reserve it")
-        self.assertIn(
-            operator, literals,
-            f"LICENSES.md attributes the `{operator}` connection operator to "
-            "atopile but no production in the frozen grammar uses it")
+                    word, set(KEYWORDS) | set(RESERVED_FUTURE),
+                    f"LICENSES.md attributes `{word}` to atopile but the "
+                    "frozen grammar neither uses nor reserves it")
+        for operator in sorted(operators):
+            with self.subTest(operator=operator):
+                self.assertIn(
+                    operator, literals,
+                    f"LICENSES.md attributes the `{operator}` connection "
+                    "operator to atopile but no production in the frozen "
+                    "grammar uses it")
+
+    def test_the_attribution_reader_fails_closed(self):
+        """A reworded section that drops a construct, or credits one the
+        grammar lacks, must not read as clean -- the reason this test exists."""
+        good = ("## Attribution\n\nIntro.\n\n- the nouns `module` and "
+                "`interface`;\n- the `new` keyword;\n- the `~` connection "
+                "operator.\n\nMore prose with `ato` in it.\n\n## Next\n")
+        self.assertEqual(self.attributed(good),
+                         ({"module", "interface", "new"}, {"~"}))
+        self.assertEqual(self.attributed("no section here"), (set(), set()))
+        words, _ = self.attributed(good.replace("`new`", "`signal`"))
+        self.assertNotIn("new", words)
+        self.assertNotIn("signal", set(KEYWORDS) | set(RESERVED_FUTURE))
 
     def test_notice_points_at_the_attribution(self):
         """NOTICE's atopile entry defers to LICENSES.md; the pointer must
