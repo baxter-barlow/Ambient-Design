@@ -1,0 +1,363 @@
+#pragma rhoform-syntax 0.1
+
+module Buck3v3:
+    # Benchmark (b), component level. PROPOSAL, EE review required (AMB-128).
+    # Values: design.md section 10; pin map: design.md section 11. Explicit
+    # form: every pin is declared inline with its T2 role and footprint
+    # designators, because no component library exists yet.
+    #
+    # Refdes map (instance -> refdes; parts.yaml line):
+    #   u1 -> U1; q1 -> Q1; q2 -> Q2; l1 -> L1; c3 -> C3; r1 -> R1; r2 -> R2
+    #   c1a -> C1, c1b -> C4 (parts.yaml C1, qty 2)
+    #   c2a -> C2, c2b -> C5 (parts.yaml C2, qty 2)
+    #   Type-III network CN1: r_c1 -> R3, r_c2 -> R4, c_c1 -> C6,
+    #     c_c2 -> C7, c_c3 -> C8
+    #   r_rt -> R5, r_uv1 -> R6, r_uv2 -> R7, r_ilim -> R8, r_pg -> R9,
+    #   c_ss -> C9, c_bst -> C10, c_vcc -> C11, c_ilim -> C12
+    #
+    # Power stage.
+    c1a = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 10uF +/- 10%
+            dielectric = "X7R"
+            mpn = "Murata GRM32DR71E106KA12L"
+            package = "1210"
+            voltage_rating = 25V
+    c1b = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 10uF +/- 10%
+            dielectric = "X7R"
+            mpn = "Murata GRM32DR71E106KA12L"
+            package = "1210"
+            voltage_rating = 25V
+    c2a = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 22uF +/- 10%
+            dielectric = "X5R"
+            mpn = "Murata GRM32ER61C226KE20L"
+            package = "1210"
+            voltage_rating = 16V
+    c2b = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 22uF +/- 10%
+            dielectric = "X5R"
+            mpn = "Murata GRM32ER61C226KE20L"
+            package = "1210"
+            voltage_rating = 16V
+    c3 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 100nF +/- 10%
+            dielectric = "X7R"
+            mpn = "Murata GRM188R71H104KA93D"
+            package = "0603"
+            voltage_rating = 50V
+    l1 = new rhoform.lib.passive.Inductor(inductance = 10uH +/- 20%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            dcr_max = 20.4mohm
+            inductance = 10uH +/- 20%
+            mpn = "Coilcraft XGL6060-103MEC"
+            package = "XGL6060"
+            rms_current = 7.3A
+            saturation_current = 3.6A
+    q1 = new rhoform.lib.semiconductor.Nmos(vds_max = 40V):
+        pin d passive 5 6 7 8
+        pin g input 4
+        pin s passive 1 2 3
+        part abstract:
+            mpn = "Infineon BSC059N04LS6"
+            package = "PG-TDSON-8 FL"
+            rds_on_max = 5.9mohm
+            vds_max = 40V
+    q2 = new rhoform.lib.semiconductor.Nmos(vds_max = 40V):
+        pin d passive 5 6 7 8
+        pin g input 4
+        pin s passive 1 2 3
+        part abstract:
+            mpn = "Infineon BSC059N04LS6"
+            package = "PG-TDSON-8 FL"
+            rds_on_max = 5.9mohm
+            vds_max = 40V
+
+    # Controller. Pin names are the datasheet's with "/" written "_";
+    # pad 21 is the exposed pad, internally tied to pin 15 (EP).
+    u1 = new rhoform.lib.regulator.Lm25145(switching_frequency = 500kHz):
+        pin AGND power_in 6
+        pin BST power_out 17
+        pin COMP output 4
+        pin EN_UVLO input 1
+        pin EP passive 15 21
+        pin FB input 5
+        pin HO output 18
+        pin ILIM input 11
+        pin LO output 13
+        pin NC9 nc 9
+        pin NC16 nc 16
+        pin PGND power_in 12
+        pin PGOOD open_drain 10
+        pin RT input 2
+        pin SS_TRK input 3
+        pin SW passive 19
+        pin SYNCIN input 8
+        pin SYNCOUT output 7
+        pin VCC power_out 14
+        pin VIN power_in 20
+        part abstract:
+            function = "sync_buck_controller"
+            mpn = "TI LM25145RGYR"
+            package = "VQFN-20 RGY0020B"
+            reference_voltage = 800mV +/- 1%
+
+    # Controller support parts (AMB-128).
+    c_bst = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 100nF +/- 10%
+            dielectric = "X7R"
+            mpn = "Murata GRM155R71E104KE14D"
+            package = "0402"
+            voltage_rating = 25V
+    c_ilim = new rhoform.lib.passive.Capacitor(capacitance = 82pF +/- 5%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 82pF +/- 5%
+            dielectric = "C0G"
+            mpn = "Murata GRM1555C1H820JA01D"
+            package = "0402"
+            voltage_rating = 50V
+    c_ss = new rhoform.lib.passive.Capacitor(capacitance = 6.8nF +/- 5%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 6.8nF +/- 5%
+            dielectric = "C0G"
+            mpn = "Murata GRM1555C1H682JA01D"
+            package = "0402"
+            voltage_rating = 50V
+    c_vcc = new rhoform.lib.passive.Capacitor(capacitance = 2.2uF +/- 10%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 2.2uF +/- 10%
+            dielectric = "X7R"
+            mpn = "TDK C1608X7R1E225K080AC"
+            package = "0603"
+            voltage_rating = 25V
+    r_ilim = new rhoform.lib.passive.Resistor(resistance = 66.5ohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-0766R5L"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 66.5ohm +/- 1%
+    r_pg = new rhoform.lib.passive.Resistor(resistance = 49.9kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-0749K9L"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 49.9kohm +/- 1%
+    r_rt = new rhoform.lib.passive.Resistor(resistance = 20kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-0720KL"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 20kohm +/- 1%
+    r_uv1 = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-07100KL"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 100kohm +/- 1%
+    r_uv2 = new rhoform.lib.passive.Resistor(resistance = 16.5kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-0716K5L"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 16.5kohm +/- 1%
+
+    # Feedback divider. R1 ships as a 0.1% part; the constraint states the
+    # +/-1% requirement the design.md error stack is computed at.
+    r1 = new rhoform.lib.passive.Resistor(resistance = 31.2kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Vishay TNPW040231K2BEED"
+            package = "0402"
+            resistance = 31.2kohm +/- 1%
+    r2 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-0710KL"
+            package = "0402"
+            resistance = 10kohm +/- 1%
+
+    # CN1, Type-III compensation (datasheet Table 3 topology): r_c1 + c_c1
+    # and c_c2 from COMP to FB; r_c2 + c_c3 from VOUT to FB. First zero at
+    # half the LC resonance, second at it (the datasheet's placement).
+    c_c1 = new rhoform.lib.passive.Capacitor(capacitance = 5.6nF +/- 5%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 5.6nF +/- 5%
+            dielectric = "C0G"
+            mpn = "Murata GRM1555C1H562JA01D"
+            package = "0402"
+            voltage_rating = 50V
+    c_c2 = new rhoform.lib.passive.Capacitor(capacitance = 82pF +/- 5%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 82pF +/- 5%
+            dielectric = "C0G"
+            mpn = "Murata GRM1555C1H820JA01D"
+            package = "0402"
+            voltage_rating = 50V
+    c_c3 = new rhoform.lib.passive.Capacitor(capacitance = 560pF +/- 5%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            capacitance = 560pF +/- 5%
+            dielectric = "C0G"
+            mpn = "Murata GRM1555C1H561JA01D"
+            package = "0402"
+            voltage_rating = 50V
+    r_c1 = new rhoform.lib.passive.Resistor(resistance = 7.5kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-077K5L"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 7.5kohm +/- 1%
+    r_c2 = new rhoform.lib.passive.Resistor(resistance = 1.13kohm +/- 1%):
+        pin a passive 1
+        pin b passive 2
+        part abstract:
+            mpn = "Yageo RC0402FR-071K13L"
+            package = "0402"
+            power_rating = 62.5mW
+            resistance = 1.13kohm +/- 1%
+
+    # Nets. One ground: AGND, PGND and the exposed pad meet on the ground
+    # plane under U1 (datasheet 11.1.5). SW, HB and HO carry no voltage
+    # domain: they float on the switch node and v0.1 has no spelling for that.
+    net COMP:
+        c_c2.a
+        r_c1.a
+        u1.COMP
+    net COMP_RC:
+        c_c1.a
+        r_c1.b
+    net EN:
+        r_uv1.b
+        r_uv2.a
+        u1.EN_UVLO
+    net FB:
+        c_c1.b
+        c_c2.b
+        c_c3.b
+        r1.b
+        r2.a
+        u1.FB
+    net FB_RC:
+        c_c3.a
+        r_c2.b
+    net GND(ground_domain = "gnd"):
+        c1a.b
+        c1b.b
+        c2a.b
+        c2b.b
+        c3.b
+        c_ilim.b
+        c_ss.b
+        c_vcc.b
+        q2.s
+        r2.b
+        r_rt.b
+        r_uv2.b
+        u1.AGND
+        u1.EP
+        u1.PGND
+    net HB:
+        c_bst.a
+        u1.BST
+    net HO:
+        q1.g
+        u1.HO
+    net ILIM:
+        c_ilim.a
+        r_ilim.a
+        u1.ILIM
+    net LO(voltage_domain = "vcc_7v5"):
+        q2.g
+        u1.LO
+    net PGOOD(voltage_domain = "vout_3v3"):
+        r_pg.b
+        u1.PGOOD
+    net RT:
+        r_rt.a
+        u1.RT
+    net SS:
+        c_ss.a
+        u1.SS_TRK
+    net SW:
+        c_bst.b
+        l1.a
+        q1.s
+        q2.d
+        r_ilim.b
+        u1.SW
+    net VCC(voltage_domain = "vcc_7v5"):
+        c_vcc.a
+        u1.SYNCIN
+        u1.VCC
+    net VIN(voltage_domain = "vin_12v"):
+        c1a.a
+        c1b.a
+        c3.a
+        q1.d
+        r_uv1.a
+        u1.VIN
+    net VOUT(voltage_domain = "vout_3v3"):
+        c2a.a
+        c2b.a
+        l1.b
+        r1.a
+        r_c2.a
+        r_pg.a
+
+    # SYNCOUT drives nothing; declared rather than left to look forgotten.
+    # NC9 and NC16 are role nc and appear in no net.
+    isolated u1.SYNCOUT
+
+    # The five gating assertions of assertions.yaml. Percent bounds are
+    # fractions; windows, fixtures and the informational_at_rung_0 flags
+    # have no v0.1 spelling.
+    assert efficiency dynamic efficiency(VOUT) at least 0.85
+    assert load_step_settling dynamic settling_time(VOUT) at most 500us
+    assert startup_overshoot dynamic overshoot(VOUT) at most 0.05
+    assert vout_mean dynamic operating_point(VOUT) within 3.201V to 3.399V
+    assert vout_ripple_pp dynamic ripple(VOUT) at most 50mV

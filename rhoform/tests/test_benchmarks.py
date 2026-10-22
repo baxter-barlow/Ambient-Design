@@ -28,7 +28,7 @@ BENCHMARKS = ROOT / "benchmarks"
 # The benchmarks that must have a living source. Discovery below finds
 # whatever is on disk; this list makes a deleted source a failure rather
 # than one fewer thing checked.
-REQUIRED = ("blinker-555", "esp32s3-devboard")
+REQUIRED = ("blinker-555", "buck-3v3", "esp32s3-devboard")
 
 REGENERATE = ("python3 -c 'from rhoform.tests.test_benchmarks import "
               "regenerate; regenerate()'")
