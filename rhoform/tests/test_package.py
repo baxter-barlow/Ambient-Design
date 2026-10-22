@@ -798,6 +798,77 @@ class CodesTest(_Tree):
         self.assertEqual([d["code"] for d in found], ["RHO2068"])
         self.assertEqual(compilation.results, [])
 
+    DIVIDER = (P2 + "\nmodule Divider:\n    port top passive\n"
+               "    r1 = new rhoform.lib.passive.Resistor\n"
+               "    top ~ r1.a\n    isolated r1.b\n")
+
+    def test_rho2069_module_path_collision(self):
+        # a_b/x.rhoform and a-b/x.rhoform both have the module path a_b.x,
+        # so two different Dividers would both be `a_b.x.Divider` in the
+        # IR. The second file read is refused at the import that brings it
+        # in, and is not read.
+        other = self.DIVIDER.replace("isolated r1.b", "r1.b ~ top")
+        probe = (P2 + 'import Divider from "./a-b/x"\n\nmodule Probe:\n'
+                 "    port top passive\n    d = new Divider\n"
+                 "    top ~ d.top\n")
+        main = (P2 + 'import Divider from "./a_b/x"\n'
+                'import Probe from "./probe"\n\nmodule Panel:\n'
+                "    port top passive\n    d = new Divider\n"
+                "    p = new Probe\n    top ~ d.top\n    top ~ p.top\n")
+        files = {"main.rhoform": main, "probe.rhoform": probe,
+                 "a_b/x.rhoform": self.DIVIDER, "a-b/x.rhoform": other}
+        d, _text = self.only(files, "RHO2069")
+        self.assertEqual(d["params"], {"file": "a-b/x.rhoform",
+                                       "module": "a_b.x",
+                                       "first": "a_b/x.rhoform"})
+        self.assertEqual(d["spans"][0]["file"], "probe.rhoform")
+        span = d["spans"][0]
+        self.assertEqual(probe.encode()[span["byte_start"]:span["byte_end"]],
+                         b'"./a-b/x"')
+        _f, compilation, _e = self.compile(files)
+        self.assertNotIn("a-b/x.rhoform",
+                         [r.file for r in compilation.results])
+        self.assertFalse(compilation.ok)
+
+    def test_a_module_path_collision_among_files_in_hand(self):
+        # elaborate() over parse results it is given resolves their imports
+        # itself (package.link); the same files draw the same refusal.
+        from rhoform.elaborate import elaborate
+        from rhoform.parser import parse
+
+        main = (P2 + 'import Divider from "./a_b/x"\n'
+                'import Other from "./a-b/x"\n\nmodule Panel:\n'
+                "    port top passive\n    d = new Divider\n"
+                "    o = new Other\n    top ~ d.top\n    top ~ o.top\n")
+        other = self.DIVIDER.replace("module Divider", "module Other")
+        results = [parse(main, file="main.rhoform"),
+                   parse(self.DIVIDER, file="a_b/x.rhoform"),
+                   parse(other, file="a-b/x.rhoform")]
+        elaboration = elaborate(results)
+        found = [json.loads(line)
+                 for line in elaboration.diagnostics.render().splitlines()]
+        self.assertEqual([(d["code"], d["params"]["file"]) for d in found],
+                         [("RHO2069", "a-b/x.rhoform")])
+        self.assertIsNone(elaboration.design)
+
+    def test_one_file_imported_twice_is_no_module_path_collision(self):
+        # The rule is about two FILES: one file named by two spellings of
+        # its import path has one module path, and is read once.
+        probe = (P2 + 'import Divider from "./a_b/x.rhoform"\n\n'
+                 "module Probe:\n    port top passive\n"
+                 "    d = new Divider\n    top ~ d.top\n")
+        main = (P2 + 'import Divider from "./a_b/x"\n'
+                'import Probe from "./probe"\n\nmodule Panel:\n'
+                "    port top passive\n    d = new Divider\n"
+                "    p = new Probe\n    top ~ d.top\n    top ~ p.top\n")
+        found, compilation, elaboration = self.compile(
+            {"main.rhoform": main, "probe.rhoform": probe,
+             "a_b/x.rhoform": self.DIVIDER})
+        self.assertEqual(found, [])
+        self.assertEqual(sorted(r.file for r in compilation.results),
+                         ["a_b/x.rhoform", "main.rhoform", "probe.rhoform"])
+        self.assertIsNotNone(elaboration.design)
+
     def test_rho2049_manifest_unknown_key(self):
         d, text = self.only({"rhoform.toml": MANIFEST + 'autor = "x"\n',
                              "main.rhoform": TOP}, "RHO2049")

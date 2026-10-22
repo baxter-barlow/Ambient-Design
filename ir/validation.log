@@ -1,4 +1,4 @@
-Rhoform IR v0 — validation evidence.
+Rhoform IR v0 and v1 — validation evidence.
 
 REGENERATED 2026-08-17T06:43:24Z under AMB-123 (M0 completion audit). Until then this file
 was untracked: `.gitignore`'s `*.log` swallowed it while tracked documents
@@ -39,7 +39,9 @@ exit=0
 
 Command: python3 tests/schemas/validate-schemas.py  (ir/ rows, and the benchmark goldens routed to ir/)
 schemas: ir/netlist-ir.schema.json: well-formed.
+schemas: ir/netlist-ir.v1.schema.json: well-formed.
 schemas: ir/source-map.schema.json: well-formed.
+schemas: ir/source-map.v1.schema.json: well-formed.
 schemas: ir/examples/blinker.ir.json: valid against netlist-ir.schema.json.
 schemas: ir/examples/blinker.sourcemap.json: valid against source-map.schema.json.
 schemas: ir/examples/negative/n01_mounting_hole_with_port.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/ports.
@@ -51,12 +53,12 @@ schemas: ir/examples/negative/n06_bad_path.ir.json: invalid as expected, at the 
 schemas: ir/examples/negative/n07_static_tier_dynamic_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
-schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.schema.json.
-schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.schema.json.
-schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.schema.json.
-schemas: benchmarks/buck-3v3/buck-3v3.sourcemap.json: valid against source-map.schema.json.
-schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.schema.json.
-schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.schema.json.
+schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.v1.schema.json.
+schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.v1.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.v1.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.sourcemap.json: valid against source-map.v1.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.v1.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.v1.schema.json.
 exit=0
 
 === design_hash refrozen, 2026-08-18 (AMB-123 round 14) ===
@@ -132,3 +134,25 @@ resolves a path under rhoform/lib/ against the repository root instead of
 the benchmark directory, and checks their bytes there. One self-test case
 pins that (72 checks, up from 71): a planted library module whose bytes
 moved under its recorded sha256 is caught in the toolchain's tree.
+
+=== IR version 1, 2026-10-22 ===
+The syntax 0.2 line had widened Net.name's pattern in
+netlist-ir.schema.json in place, so that a net named from an array
+member's path (cells[2]/OUT, N_leds[0].a) would validate, and had
+edited the source-map schema's files[].path description the same way
+for the standard library. Schema files are immutable per version
+(README, "Versioning policy"), so both edits moved into new files,
+netlist-ir.v1.schema.json and source-map.v1.schema.json, and the
+version 0 files were restored byte for byte. The compiler now writes
+ir_version 1 and sourcemap_version 1.
+
+The schemas gate routes each document by the version it declares: the
+rows above show the examples and negative controls against the version
+0 schemas and the goldens against version 1 (conformance expectations,
+not transcribed here, are version 1 too), and a document declaring no
+version or an unknown one fails. Every benchmark golden and conformance
+expectation was regenerated through the compiler; each differs from its
+predecessor only in its version fields and design_hash, which moved
+because ir_version is hashed. Neither ir-hashes summary line changed:
+the examples are still version 0 and the gate's checks do not depend on
+the version.

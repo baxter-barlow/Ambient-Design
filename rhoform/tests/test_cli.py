@@ -624,7 +624,7 @@ class HermeticTest(_Tmp):
             sorted(real(ROOT / "rhoform" / "lib" / f"{module}.rhoform")
                    for module in named))
         allowed = [real(ROOT / "rhoform"), real(ROOT / "lang" / "grammar"),
-                   real(ROOT / "ir" / "netlist-ir.schema.json"),
+                   real(ROOT / "ir" / "netlist-ir.v1.schema.json"),
                    real(self.tmp / "ir")]
         allowed += [real(self.tmp / s.name) for s in sources]
         allowed += python

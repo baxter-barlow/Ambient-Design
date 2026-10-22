@@ -8,7 +8,7 @@ the package layer (R14b, `rhoform.package`) that reads `rhoform.toml`
 manifests and an entry file's import closure, the bundled standard
 library of components (`rhoform/lib/`, names under `rhoform.lib.`), the
 elaborator (R13, with R15's fabrication facts) that flattens a parsed
-design into IR v0 and its source map, serialized and hashed by
+design into IR v1 and its source map, serialized and hashed by
 `rhoform.ir` (all of syntax 0.2), the
 canonical formatter (R16) for both syntax versions, and the
 command line (R18, `python3 -m rhoform check|fmt`, in `rhoform.cli`).

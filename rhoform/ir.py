@@ -1,4 +1,4 @@
-"""IR v0 emission: an ElaboratedDesign to the netlist IR and its source map.
+"""IR v1 emission: an ElaboratedDesign to the netlist IR and its source map.
 
 This module owns three things the elaborator deliberately does not:
 
@@ -31,8 +31,11 @@ import json
 from .elaborate import Quantity
 
 CANONICAL_PROFILE = "rhoform-canonical-json/1"
-IR_VERSION = 0
-SOURCEMAP_VERSION = 0
+# Version 1 (ir/netlist-ir.v1.schema.json, ir/source-map.v1.schema.json):
+# net names carry an elaboration index after any segment, which the
+# version 0 schema refuses (ir/README.md, "Versioning policy").
+IR_VERSION = 1
+SOURCEMAP_VERSION = 1
 GENERATOR = {"name": "rhoformc", "version": "0.1.0-dev"}
 NON_DESIGN_HEADER_FIELDS = ("design_hash", "generator", "source_hash")
 
@@ -195,7 +198,7 @@ def _assertion(assertion) -> dict:
 
 
 def to_ir(design) -> dict:
-    """The IR v0 document, hashes filled in."""
+    """The IR v1 document, hashes filled in."""
     document = {
         "header": {
             "ir_version": IR_VERSION,

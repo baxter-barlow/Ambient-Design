@@ -669,11 +669,14 @@ def self_test() -> int:
         any("bytewise-ascending path order" in p
             for p in _unsorted_map_probe()),
     ))
+    # Every IR version's schema: the hand-written examples are version 0
+    # and the compiler writes version 1, and this gate sorts both.
+    _ir_schemas = sorted((ROOT / "ir").glob("netlist-ir*.schema.json"))
     checks.append((
         "the field the rule reads is the field the schema declares",
-        "pin_numbers" in json.loads(
-            (ROOT / "ir" / "netlist-ir.schema.json").read_text(encoding="utf-8")
-        )["$defs"]["Port"]["properties"],
+        len(_ir_schemas) >= 2 and all(
+            "pin_numbers" in json.loads(path.read_text(encoding="utf-8"))
+            ["$defs"]["Port"]["properties"] for path in _ir_schemas),
     ))
     checks.append((
         "the committed IR satisfies every sort rule the schema states",

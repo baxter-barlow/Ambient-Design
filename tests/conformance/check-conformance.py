@@ -30,7 +30,7 @@ Seven legs:
   6. ELABORATION CASES (spec/language/04-elaboration.md): every
      elaborate/accept case elaborates with zero diagnostics to IR equal to
      its .expected.ir.json BYTE FOR BYTE, and that IR validates against
-     ir/netlist-ir.schema.json; every elaborate/reject case parses clean
+     ir/netlist-ir.v1.schema.json, the version the compiler writes; every elaborate/reject case parses clean
      and its elaboration diagnostic stream equals its .expected.ndjson
      byte for byte, each line valid on the wire schema. Every block-2 code
      a source can trigger must be emitted by some reject case (of this leg
@@ -85,7 +85,10 @@ MINIMUM_FMT_CASES = 25
 # as codes are added, the floor is what keeps cases from vanishing. Syntax
 # 0.2's semantics added a09-a14 and r35-r48; a08 came with AMB-132.
 ELABORATE = CONFORMANCE / "elaborate"
-IR_SCHEMA_PATH = ROOT / "ir" / "netlist-ir.schema.json"
+# The schema of the IR version the compiler writes (ir/README.md,
+# "Versioning policy"); version 0's stays for the hand-written examples.
+IR_SCHEMA_NAME = "netlist-ir.v1.schema.json"
+IR_SCHEMA_PATH = ROOT / "ir" / IR_SCHEMA_NAME
 # r33 went with RHO2033, the interim refusal of imports, when the package
 # layer gave imports their semantics: 46 -> 45. The standard library added
 # a15-a16 and r49-r51.
@@ -93,10 +96,10 @@ MINIMUM_ELABORATE_ACCEPT_CASES = 16
 MINIMUM_ELABORATE_REJECT_CASES = 48
 
 # Package cases (leg 7): one directory per case, added with R14b; a05
-# came with the standard library.
+# came with the standard library, r22 with RHO2069.
 PACKAGES = CONFORMANCE / "packages"
 MINIMUM_PACKAGE_ACCEPT_CASES = 5
-MINIMUM_PACKAGE_REJECT_CASES = 21
+MINIMUM_PACKAGE_REJECT_CASES = 22
 PACKAGE_ENTRY = "main.rhoform"
 
 # Block-2 codes no source text can trigger, each with its reason. Every
@@ -749,7 +752,7 @@ def elaborate_case_problems(accept_dir, reject_dir, write=False):
         for error in ir_schema.iter_errors(json.loads(ir_bytes)):
             problems.append(
                 f"elaborate/accept/{case.name}: the IR violates "
-                f"ir/netlist-ir.schema.json at "
+                f"ir/{IR_SCHEMA_NAME} at "
                 f"/{'/'.join(map(str, error.absolute_path))}: {error.message}"
             )
         if write:
@@ -1016,8 +1019,8 @@ def elaborate_self_test_cases(tmp):
         problems, _, _, _ = run()
     finally:
         IR_SCHEMA_PATH = real_ir_schema
-    cases.append(("IR violating ir/netlist-ir.schema.json is reported",
-                  any("violates ir/netlist-ir.schema.json" in p
+    cases.append(("IR violating the IR schema is reported",
+                  any(f"violates ir/{IR_SCHEMA_NAME}" in p
                       for p in problems)))
 
     # -- reject
@@ -1214,7 +1217,7 @@ def package_case_problems(accept_dir, reject_dir, write=False):
         ir_bytes = emit(design)[0]
         for error in ir_schema.iter_errors(json.loads(ir_bytes)):
             problems.append(
-                f"{where}: the IR violates ir/netlist-ir.schema.json at "
+                f"{where}: the IR violates ir/{IR_SCHEMA_NAME} at "
                 f"/{'/'.join(map(str, error.absolute_path))}: "
                 f"{error.message}")
         if write:

@@ -76,9 +76,9 @@ The machine-checked half of
 [04 — Elaboration](../language/04-elaboration.md). Each
 `<case>.rhoform` MUST parse and elaborate with **zero diagnostics**, and
 the IR it elaborates to MUST equal `<case>.expected.ir.json` byte for
-byte: the IR v0 document in `rhoform-canonical-json/1`, hashes
+byte: the IR version 1 document in `rhoform-canonical-json/1`, hashes
 included. The gate also validates that IR against
-`ir/netlist-ir.schema.json`, as does the schema gate
+`ir/netlist-ir.v1.schema.json`, as does the schema gate
 (`tests/schemas/validate-schemas.py`) for every committed expectation,
 so the suite cannot commit an expectation the IR schema forbids. Each case is compiled alone with its own
 directory as the compile root, so its one source file is
@@ -130,7 +130,7 @@ IR moves when one of those modules' bytes do.
 
 - `packages/accept/<case>/expected.ir.json`: the case MUST compile with
   **zero diagnostics** to IR equal to this file byte for byte, valid
-  against `ir/netlist-ir.schema.json` (the schema gate validates every
+  against `ir/netlist-ir.v1.schema.json` (the schema gate validates every
   committed expectation too).
 - `packages/reject/<case>/expected.ndjson`: the case's diagnostic stream
   MUST equal this file byte for byte, each line valid on the wire

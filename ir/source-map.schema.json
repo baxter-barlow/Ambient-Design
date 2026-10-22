@@ -53,7 +53,7 @@
         "path": {
           "type": "string",
           "minLength": 1,
-          "description": "POSIX path of the DSL source file, relative to the compile root: an explicit root, else the nearest ancestor directory holding rhoform.toml, else the entry file's directory (spec/language/04-elaboration.md). A bundled standard library module is instead its library path, rhoform/lib/<module>.rhoform. Never absolute, never host-specific (determinism contract)."
+          "description": "POSIX path of the DSL source file, relative to the compile root: an explicit root, else the nearest ancestor directory holding rhoform.toml, else the entry file's directory (spec/language/04-elaboration.md). Never absolute, never host-specific (determinism contract)."
         },
         "sha256": {
           "type": "string",

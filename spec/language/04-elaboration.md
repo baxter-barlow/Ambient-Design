@@ -6,11 +6,14 @@
 Elaboration turns the parsed sources of one compilation into one
 design: a flat list of instances named by hierarchical paths, the nets
 that join their ports, and the assertions that check them. Its output is
-the netlist IR v0 and its source map, whose shapes are normative by
-reference — [`ir/netlist-ir.schema.json`](../../ir/netlist-ir.schema.json)
-and [`ir/source-map.schema.json`](../../ir/source-map.schema.json) — and
+the netlist IR and its source map at `ir_version` 1 (`sourcemap_version`
+1), whose shapes are normative by reference —
+[`ir/netlist-ir.v1.schema.json`](../../ir/netlist-ir.v1.schema.json)
+and [`ir/source-map.v1.schema.json`](../../ir/source-map.v1.schema.json) — and
 whose serialization and hashes are defined in
-[`ir/README.md`](../../ir/README.md). This section states what the
+[`ir/README.md`](../../ir/README.md). Version 1 is version 0 with net
+names that carry an array index mid-name ([Names](#names)), which version
+0's schema refuses; an implementation MUST write version 1. This section states what the
 schemas cannot: which design a source denotes. The cases under
 [`conformance/elaborate/`](../conformance/README.md) hold the reference
 implementation to it, and a conforming implementation MUST reproduce
@@ -20,12 +23,35 @@ This section covers the v0.1 surface and what syntax 0.2 adds to it:
 `component` definitions, parameter lists, parameter references, `if`,
 `for`, arrays, imports, and the bundled standard library those
 definitions make possible. Every rule stated for v0.1 holds unchanged
-for a 0.1 source, which elaborates to the same IR under a toolchain that
-also implements 0.2. Which files a compilation holds — the entry file
-and the files it imports — and how an import's path names a file are the
-package layer's, specified in [08 — Packages and imports](08-packages.md);
-this section takes those files as given, and adds the standard library
-modules they use.
+for a 0.1 source, with one deliberate exception: the standard library's
+reserved prefix. Under a toolchain that also implements 0.2, a dotted
+name beginning `rhoform.lib.` names a component of the bundled library
+in a 0.1 source as in a 0.2 one (decision E-5, and [Module or
+component](#module-or-component)), where v0.1 read every dotted name as
+an ad-hoc component whose ports are its inline `pin` statements. A 0.1
+source that writes such a name can therefore mean something else than it
+did: a name the library does not define is RHO2067, not an ad-hoc
+component; an instance of a library component takes its ports from the
+definition, so inline `pin` lines MUST restate it exactly (RHO2035) and
+an instance with none still has the definition's pins; the library
+modules read join the source map and `source_hash`; and a 0.1 file whose
+own module path falls under the prefix is not compiled (RHO2068, [The
+standard library](#the-standard-library)). That departs from the
+strict-superset wording of decision S-1, which promised every valid 0.1
+file the same meaning, and it does so on purpose: a reserved prefix that
+named the library in one file and an ad-hoc part in another would
+reserve nothing. Raising a pragma from 0.1 to 0.2 still changes nothing,
+since the prefix means the library under both, and a 0.1 source that
+writes no `rhoform.lib.` name, at a path outside the prefix, elaborates
+to the same design as under v0.1 (written as IR version 1, which for
+such a design differs from version 0 only in `ir_version` and the
+`design_hash` that covers it).
+
+Which files a compilation holds — the entry file and the files it
+imports — and how an import's path names a file are the package layer's,
+specified in [08 — Packages and imports](08-packages.md); this section
+takes those files as given, and adds the standard library modules they
+use.
 
 ## Inputs, totality and determinism
 
@@ -80,6 +106,13 @@ start with a digit is prefixed with `_`. `boards/blinker-555.rhoform`
 gives the module path `boards.blinker_555`; `555/main.rhoform` gives
 `_555.main`. Two definitions of one file MUST NOT share a name: two
 modules are RHO2001, and a clash involving a `component` is RHO2034.
+The rule maps several paths to one module path — `a-b/x.rhoform` and
+`a_b/x.rhoform` are both `a_b.x` — so two files of one compilation MUST
+NOT share one: a `Divider` in each would be two definitions named
+`a_b.x.Divider`. The package layer refuses the second of the two files
+read, at the import that brings it in (RHO2069,
+[08](08-packages.md#imports)), so within a compilation one definition
+name names one definition.
 
 The **root** is the unique module of the entry file that no module of
 the compilation instantiates; a module of an imported file is never a
@@ -451,11 +484,14 @@ over every module instance of the design: a loop of 8 iterations in a
 module instantiated 4 times counts 32. The total MUST NOT exceed
 **4096**, and a module body whose own expansion would exceed it is an
 error even when nothing instantiates the module. A design over the
-budget draws one RHO2046, against a replicating statement whose
-expansion takes the count past the limit (which one, when several do,
-is the reference implementation's choice, pinned by its reject case),
-and no IR. The budget is what keeps a source that parses from making
-elaboration slow; v0.1 sources replicate nothing and are unaffected.
+budget draws one RHO2046, with no entity — one for the design, not one
+per instance of a module whose body crosses the limit, as the
+per-instance rule of [Diagnostics](#diagnostics) would give — against a
+replicating statement whose expansion takes the count past the limit
+(which one, when several do, is the reference implementation's choice,
+pinned by its reject case), and no IR. The budget is what keeps a
+source that parses from making elaboration slow; v0.1 sources replicate
+nothing and are unaffected.
 
 ## Tables
 
@@ -593,7 +629,12 @@ holds one reject case for every block-2 code a source can trigger.
   applies to the statements an instance actually elaborates.
 - A module's body is elaborated once per distinct environment the
   design gives it (a module with no parameter list has one, the empty
-  one), and a module nothing instantiates once under its defaults. A
+  one), and a module the design builds no instance of once under its
+  defaults. That includes a module whose only `new` stands in a branch
+  no instance takes, so a default that is invalid on its own (an array
+  size of 0, say) is reported even when every `new` of the module passes
+  a valid value; give such a parameter a valid default. This is a known
+  limitation of the current rule, not a promise. A
   defect found under every environment of its module — every defect of a
   v0.1 body — is reported once per module, however many times the module
   is instantiated. A defect found under some environments only depends

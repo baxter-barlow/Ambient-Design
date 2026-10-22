@@ -4,7 +4,7 @@
 compilation: the package layer (rhoform/package.py) reads the entry, the
 files it imports and the rhoform.toml files that govern them, then the
 compilation is parsed, checked, elaborated, and its IR validated against
-ir/netlist-ir.schema.json. A directory stands for its ENTRY files, in
+ir/netlist-ir.v1.schema.json, the schema of the version it writes. A directory stands for its ENTRY files, in
 sorted order: every `*.rhoform` under it except a file that another file
 named on the command line reaches through imports without being reached
 back (a library is checked through the files that import it; a file
@@ -75,7 +75,7 @@ from .diagnostics import Diagnostics, span_from_bytes
 MANIFEST = "rhoform.toml"
 SUFFIX = ".rhoform"
 IR_SCHEMA = (Path(__file__).resolve().parents[1] / "ir"
-             / "netlist-ir.schema.json")
+             / "netlist-ir.v1.schema.json")
 
 EXIT_CLEAN = 0
 EXIT_ERRORS = 1
@@ -322,13 +322,13 @@ def run_check(args) -> int:
             run.complain(
                 f"UNAVAILABLE: jsonschema is not installed, so the IR of "
                 f"{path} could not be validated against "
-                "ir/netlist-ir.schema.json. Install the pin from "
+                "ir/netlist-ir.v1.schema.json. Install the pin from "
                 "toolchain/versions.yaml: python3 -m pip install "
                 "jsonschema==4.26.0")
             continue
         if problem is not None:
             run.complain(f"INTERNAL: the IR elaborated from {path} does not "
-                         f"validate against ir/netlist-ir.schema.json: "
+                         f"validate against ir/netlist-ir.v1.schema.json: "
                          f"{problem}")
             continue
         if out is not None:

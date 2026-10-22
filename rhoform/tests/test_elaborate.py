@@ -1087,6 +1087,22 @@ class CodeTest(unittest.TestCase):
             "RHO2046")
         self.assertEqual(text, "for k in range(20)")
 
+    def test_rho2046_is_one_diagnostic_when_instances_share_the_body(self):
+        # big1 and big2 give Bank one environment, so the body that passes
+        # the budget is evaluated once; its RHO2046 was held with that
+        # environment's findings and, since small's environment does not
+        # show it, published once per instance path. The design draws one.
+        d, text, result = self.only2(
+            "module Bank(n: int = 8):\n    port p passive\n"
+            "    rs = new rhoform.lib.passive.Resistor[n]\n"
+            "    for i in range(n):\n        rs[i].a ~ p\n\n"
+            "module Top:\n    big1 = new Bank(n = 5000)\n"
+            "    big2 = new Bank(n = 5000)\n    small = new Bank\n",
+            "RHO2046")
+        self.assertEqual(text, "for i in range(n)")
+        self.assertIsNone(d["entity"])
+        self.assertIsNone(result.design)
+
     def test_rho2047_no_root_module(self):
         d, text, result = self.only2(self.LED, "RHO2047")
         self.assertEqual(d["params"], {"file": "design.rhoform"})
@@ -1306,6 +1322,30 @@ module Top:
     two = new Opt(grade = "b")
 """
 
+    def test_a_spare_modules_child_still_has_its_body_checked(self):
+        """Fixture is reached only through Jig, which the chosen root never
+        instantiates. Fixture's own defect must still be reported: an
+        attempt to skip defaults runs for modules only untaken code names
+        hid exactly this, and a valid 0.1 file passed with a pinned
+        mounting hole in it (AMB-144)."""
+        from rhoform.elaborate import elaborate_source
+
+        source = PRAGMA + """
+module Fixture:
+    h1 = new hw.Hole:
+        hardware mounting_hole
+        pin x passive
+
+module Jig:
+    f = new Fixture
+
+module Board:
+    port p passive
+"""
+        self.assertIn("RHO2013", _codes(elaborate_source(source,
+                                                         root="Board")))
+        self.assertIn("RHO2013", _codes(elaborate_source(source)))
+
     def test_each_instance_elaborates_its_own_branch(self):
         result = _elaborate2(self.SOURCE)
         self.assertTrue(result.ok, result.diagnostics.render())
@@ -1429,7 +1469,7 @@ module Top(n: int = 3):
 
         schema = json.loads(
             (Path(__file__).resolve().parents[2] / "ir"
-             / "netlist-ir.schema.json").read_text(encoding="utf-8"))
+             / "netlist-ir.v1.schema.json").read_text(encoding="utf-8"))
         document = json.loads(emit(self.result.design)[0])
         jsonschema.validate(document, schema)
 

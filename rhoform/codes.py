@@ -859,6 +859,17 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("file", "module"),
         rule="L2",
     ),
+    CodeDef(
+        code="RHO2069", slug="module-path-collision", severity="error",
+        message=(
+            "`{file}` has the module path `{module}`, which `{first}` "
+            "already has in this compilation; definitions are named by "
+            "their file's module path, so the two files' definitions would "
+            "share IR names, and `{file}` is not compiled."
+        ),
+        params=("file", "module", "first"),
+        rule="L7",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that

@@ -125,7 +125,11 @@ which is the breaking change E1 forbids.
 ## Syntax 0.2 additions
 
 Syntax 0.2 adds the constructs below and nothing else; every 0.1
-construct keeps its shape and its parse tree. This section describes
+construct keeps its shape and its parse tree. Its meaning is kept too,
+with one deliberate exception that is no construct: a dotted name under
+the standard library's reserved prefix `rhoform.lib.` names a library
+component in a 0.1 file as well, which [04 — Elaboration](04-elaboration.md)
+records as a departure from decision S-1's strict-superset wording. This section describes
 their shape. The productions themselves are the EBNF's, and what the
 constructs MEAN — which names are in scope, how parameters, defaults
 and arguments bind, how conditions evaluate, how loops and arrays

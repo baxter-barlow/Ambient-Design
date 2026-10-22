@@ -97,7 +97,14 @@ a pragma writes the current version.
 0.2 is a strict superset of 0.1. Every valid 0.1 file is a valid 0.2
 file with the same parse tree and the same meaning, so raising a file's
 pragma from 0.1 to 0.2 never changes what it says. That is what makes
-the change additive, and why E1 requires no migrator for it. What 0.2
+the change additive, and why E1 requires no migrator for it. One change
+of meaning is deliberate and is not a syntax change: a toolchain that
+implements this version set resolves the standard library's reserved
+prefix `rhoform.lib.` against its bundled library in a 0.1 file too, so
+a 0.1 file that names something under the prefix can mean something
+different from what a toolchain without the library made of it, or be
+refused ([04 — Elaboration](04-elaboration.md) records the departure
+from S-1). The pragma still changes nothing there. What 0.2
 adds is listed in
 [02 — Grammar](02-grammar.md#syntax-02-additions); every word it
 promoted to a keyword was reserved in 0.1, so no 0.1 file could bind
