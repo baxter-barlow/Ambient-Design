@@ -63,3 +63,74 @@ atopile's MIT licence text is reproduced verbatim in
 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), taken from a pinned atopile commit
 and recorded with its source URL, git blob id and SHA-256 so the copy can be
 checked against upstream.
+
+## License-stability covenant
+
+Requirement E2 defends Rhoform against incompatible third-party forks with the
+trademark and the conformance suite, and against the project itself closing up
+with structure. Contributions come in under the DCO with no CLA, so the
+project never holds the copyright in other people's work and cannot relicense
+it on its own. This covenant extends the same protection to the project's own
+work, in writing and in advance.
+
+**Who makes it.** Baxter Barlow, the copyright holder of record named above.
+Every later holder of Rhoform copyrights or of the RHOFORM mark takes them
+subject to this covenant, and any transfer will be made on that condition.
+
+**When it binds.** It takes effect on the date of the first tagged release of
+this repository. Until then it is a published statement of intent: the text
+may still be revised, including after legal review, and every revision is
+visible in this file's history. From that release on, commitment 7 governs
+how it can change.
+
+**What it covers.** The components requirement E3 keeps open forever: the
+specification, compiler, formatter, renderer, exporters, documentation, agent
+skills, seed component library and core macromodels. By function this
+includes the command-line tool, the conformance suite, and the schemas these
+components read and write (netlist IR, source map, part data, diagnostics).
+
+**Commitments.**
+
+1. **The licences stay.** Code stays Apache-2.0. The specification and
+   documentation stay CC-BY-4.0. The seed library and core macromodels stay
+   Apache-2.0 or CC0. Every future release of a covered component ships under
+   these licences or more permissive ones, never under source-available,
+   delayed-open, field-of-use, non-compete or non-commercial terms. Releases
+   already made are irrevocably licensed by the licences they shipped under;
+   this commitment is about future ones.
+2. **DCO only.** Contributions are accepted under the Developer Certificate of
+   Origin, and contributors keep their copyright. The project will not
+   introduce a contributor licence agreement, a copyright assignment, or any
+   licence-back clause that would let it relicense contributions.
+3. **No hollowing out.** A feature of a covered component is never removed so
+   that it can be offered again under a proprietary licence or only through a
+   hosted service. Features are removed for technical reasons, and each
+   removal is announced publicly with its reason.
+4. **The toolchain stands alone.** Compiling, checking, formatting and
+   exporting never require a hosted service, an account, or a network
+   connection. The part-data contract stays public, and any third party can
+   implement it.
+5. **The trademark is not a licence back door.** The project will not enforce
+   the RHOFORM mark against anyone before it has published a trademark
+   policy. That policy will permit nominative use and the redistribution of
+   unmodified releases. It will decide what may call itself Rhoform by
+   conformance (requirement E2), not by copyright licensing.
+6. **A neutral home.** Before the first release that makes a stability
+   promise for the netlist IR or the part-data schema, the project will
+   publish a concrete plan for moving stewardship of the RHOFORM mark,
+   editorial control of the specification, and the conformance suite to an
+   independent non-profit home. The plan will name the home and the timeline.
+7. **The covenant only widens.** Once in effect, it may be amended only to
+   extend the freedoms it grants. An amendment is published in this file and
+   in the release notes at least 90 days before it takes effect. Each release
+   is governed by the covenant text in force when that release ships.
+
+**What it does not cover.**
+
+- the hosted part-data service: its scaled corpus, freshness tiers, and bulk
+  and export products (commitment 4 still governs how the open toolchain
+  relates to it);
+- team services;
+- the RHOFORM mark itself, beyond commitments 5 and 6;
+- third-party material in this repository, which keeps its own terms (see
+  [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).
