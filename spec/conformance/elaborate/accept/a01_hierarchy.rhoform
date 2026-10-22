@@ -7,12 +7,8 @@ module Divider:
     port bottom passive
     port mid passive
     port top passive
-    r1 = new rhoform.lib.passive.Resistor(resistance = 10kohm):
-        pin a passive 1
-        pin b passive 2
-    r2 = new rhoform.lib.passive.Resistor(resistance = 4.7kohm):
-        pin a passive 1
-        pin b passive 2
+    r1 = new rhoform.lib.passive.Resistor(resistance = 10kohm)
+    r2 = new rhoform.lib.passive.Resistor(resistance = 4.7kohm)
     top ~ r1.a
     r1.b ~ mid
     r2.a ~ mid
@@ -23,9 +19,7 @@ module Stage:
     port out passive
     port vin passive
     div = new Divider(note = "one third")
-    r3 = new rhoform.lib.passive.Resistor(resistance = 1kohm):
-        pin a passive 1
-        pin b passive 2
+    r3 = new rhoform.lib.passive.Resistor(resistance = 1kohm)
     vin ~ div.top
     div.mid ~ r3.a
     r3.b ~ out

@@ -18,7 +18,8 @@ them.
 
 This section covers the v0.1 surface and what syntax 0.2 adds to it:
 `component` definitions, parameter lists, parameter references, `if`,
-`for` and arrays. Every rule stated for v0.1 holds unchanged for a 0.1
+`for` and arrays, and the bundled standard library those definitions
+make possible. Every rule stated for v0.1 holds unchanged for a 0.1
 source, which elaborates to the same IR under a toolchain that also
 implements 0.2. Imports land with the package layer; until they do, a
 source with an `import` statement is not elaborated: the reference
@@ -44,8 +45,9 @@ replication, which is budgeted (see
 prevent the design.
 
 Elaboration is hermetic and deterministic: it reads the compilation's
-source files and nothing else (no environment, clock, network or host
-path), and the same sources compiled by the same toolchain MUST yield
+source files — the author's, and the standard library modules they
+name — and nothing else (no environment, clock, network or host path),
+and the same sources compiled by the same toolchain MUST yield
 byte-identical IR, source map and diagnostic stream.
 
 ## The compile root
@@ -57,7 +59,10 @@ file that holds a `rhoform.toml`, else the entry file's directory. These
 paths name the source map's `files`, feed `source_hash`, derive
 definition names (below) and are the `file` of every diagnostic span, so
 a compilation moved to another directory or machine elaborates to the
-same bytes.
+same bytes. A [standard library](#the-standard-library) module is the
+one exception: it is the toolchain's file, not the author's, and is
+recorded by its library path `rhoform/lib/<module>.rhoform` whatever
+the compile root.
 Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
@@ -111,8 +116,14 @@ A `new` (or a `table`) names its definition by a qualified name.
   same file; the instance is then a module instance or a component
   instance of that definition. Any other single word is an unknown
   definition (RHO2005).
-- A **dotted name** is a library component. No library is bundled yet
-  and imports are not elaborated, so it is an ad-hoc component: its
+- A dotted name under the **reserved prefix** `rhoform.lib.` MUST name a
+  component of the [standard library](#the-standard-library):
+  `rhoform.lib.<module>.<Component>`, four words, where `<module>` is a
+  library module and `<Component>` one of its definitions. The instance
+  is then a component instance of that definition, exactly as of a
+  `component` defined in the file. Any other name under the prefix — an
+  unknown module or component, too few words or too many — is RHO2048.
+- **Any other dotted name** is an ad-hoc component, as in v0.1: its
   `definition` is the dotted name verbatim and its ports are exactly its
   inline `pin` statements.
 
@@ -129,8 +140,9 @@ Its pins are its ports: name, role, and designators as `pin_numbers`,
 sorted. Pin names are unique per definition and a designator appears at
 most once per pin (RHO2007).
 
-An instance (or a table row) of a component definition gets its ports
-from the definition. The instance MAY also state `pin` lines; when it
+An instance (or a table row) of a component definition — one of the
+file's own or one of the standard library's — gets its ports from the
+definition. The instance MAY also state `pin` lines; when it
 states any, they MUST restate the definition exactly — the same pin
 names, and for each the same role and the same designators. Each
 disagreeing pin is RHO2035: a pin the instance states differently or
@@ -202,6 +214,55 @@ pin, of role `passive`; it is a component on a real net (L9b).
 
 A violation of either rule is RHO2013, reported against the `hardware`
 statement.
+
+## The standard library
+
+The toolchain bundles a standard library of components. A conforming
+implementation MUST resolve the reserved prefix `rhoform.lib.` against
+its own bundled library and nothing else (see
+[Module or component](#module-or-component)); no source, manifest or
+search path can add to it or replace it.
+
+The library is a set of **modules**, each a syntax 0.2 file at
+`rhoform/lib/<module>.rhoform` in the toolchain, holding `component`
+definitions and nothing else, in the canonical form
+([07 — Formatting](07-formatting.md)). By the naming rule of
+[Definitions and the root](#definitions-and-the-root), applied to that
+path, the definition `Resistor` of module `passive` is
+`rhoform.lib.passive.Resistor`: the name a source writes is the IR
+`definition`. A module name matches exactly as written, letter case
+included, on every host.
+
+The library's definitions follow three rules, which the reference
+implementation's tests hold it to:
+
+- A **generic** component — a passive, a discrete semiconductor, a
+  switch, a generic connector, a mechanical part — declares its pins
+  WITHOUT designators. Which pad a resistor's `a` lands on is its
+  footprint's, and part data supplies it; a source cannot supply it
+  either, since pins an instance restates must equal the definition's.
+  A component named for one part (`timer.Ne555`, `regulator.Lm25145`)
+  declares that part's pads as designators.
+- A **hardware kind's** definition has the kind's arity
+  ([Hardware](#hardware)): the definitions of pinless kinds
+  (`mech.MountingHole`, `mech.Fiducial`, `mech.Logo`) have no pins, and
+  those of single-pin kinds (`mech.TestPoint`,
+  `mech.GroundedMountingHole`) exactly one `passive` pin. A definition
+  states no `hardware` kind or flag, so an instance still does.
+- A definition declares a **parameter list** only where it checks
+  something every use agrees on (`passive.Inductor(inductance:
+  inductance)`); without one, an instance's arguments are recorded as
+  written ([Arguments](#arguments)).
+
+A compilation **reads** exactly the library modules named by the
+qualified names of its sources — the third word of every name under the
+reserved prefix, in a branch taken or not — and no others. Each module
+read is a source file of the compilation: the source map lists it as
+`rhoform/lib/<module>.rhoform` with the sha256 of its bytes, so it is
+part of `source_hash`. Adding a module to the library, or changing one a
+design does not name, therefore changes no existing design's hashes.
+Diagnostics that point into a library definition (RHO2035's "defined
+here") span the library file by the same path.
 
 ## Values
 
@@ -380,9 +441,10 @@ a table whose binding is `part abstract` MUST have at least one
 `part.*` column (RHO2014, reported once, against the binding).
 
 A row's ports come from its definition when one is known: the pins of a
-`component` definition. A dotted definition is not known yet (no library
-is bundled), so its rows have no ports, and an endpoint naming a port of
-such a row is an unknown port (RHO2022). When `D` is a `component`
+`component` definition, the file's own or the standard library's, so
+`row.pin` is an endpoint like any instance's. A row of an ad-hoc
+component (a dotted name outside the reserved prefix) has no ports, and
+an endpoint naming a port of such a row is an unknown port (RHO2022). When `D` is a `component`
 definition with a parameter list, the plain columns are its arguments:
 a column naming no parameter is RHO2036, a parameter with no default and
 no column is RHO2037 (reported once, against the table's definition
@@ -528,13 +590,17 @@ holds one reject case for every block-2 code a source can trigger.
   built, so their spans are raw spans of the offending source text, not
   resolutions through a source map.
 - A fix-it suggesting the one close match for an unknown name has
-  applicability `needs-review`.
+  applicability `needs-review`. For RHO2048 the words of the name are
+  compared one at a time — a module name with the library's modules, a
+  component name with its module's definitions — because whole names
+  share their prefix and would all look close; the fix-it is the whole
+  corrected name, offered only when exactly one word was wrong.
 
 ## The source map
 
 The source map's `files` lists every source file the compilation read,
-each with its compile-root-relative path and the sha256 of its exact
-bytes, sorted by path. `header.source_hash` is `sha256:` followed by the
+each with its compile-root-relative path (a standard library module,
+its library path) and the sha256 of its exact bytes, sorted by path. `header.source_hash` is `sha256:` followed by the
 hex sha256 of the `rhoform-canonical-json/1` bytes of the list of
 `[path, sha256]` pairs, sorted by path. It is excluded from
 `design_hash`, so editing a comment moves `source_hash` and leaves

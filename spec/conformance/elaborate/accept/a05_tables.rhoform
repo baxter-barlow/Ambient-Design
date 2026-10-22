@@ -1,7 +1,8 @@
 # Tables: each row is a component instance named by its first cell; plain
 # columns become its parameters, part.<name> columns its part constraints,
-# and the header's binding its part binding. Rows declare no pins, so with
-# no library definition they have no ports.
+# and the header's binding its part binding. Rows declare no pins: a row of
+# a standard library component gets the definition's ports, and a row of
+# an ad-hoc component has none.
 #pragma rhoform-syntax 0.1
 
 module Bank:
@@ -11,5 +12,5 @@ module Bank:
     table rhoform.lib.passive.Resistor part abstract (resistance, part.package, part.resistance):
         r1  1kohm   "0402"  1kohm +/- 1%
         r2  10kohm  "0603"  10kohm +/- 1%
-    table rhoform.lib.ic.Regulator part "reg.ldo/ap7361c@1" (vout, part.package):
+    table acme.ic.Regulator part "reg.ldo/ap7361c@1" (vout, part.package):
         u1  3.3V  "SOT-223"

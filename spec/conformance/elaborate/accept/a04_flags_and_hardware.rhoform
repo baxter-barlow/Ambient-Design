@@ -5,7 +5,7 @@
 
 module DebugHeader:
     port io bidirectional
-    j1 = new rhoform.lib.connector.Header1x2:
+    j1 = new acme.connector.Header1x2:
         pin p1 bidirectional 1
         pin p2 passive 2
         no exclude_from_bom

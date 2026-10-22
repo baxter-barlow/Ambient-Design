@@ -167,7 +167,10 @@ order. A component definition is `component`, its name, an optional
 parameter list, a colon, and a block of `pin` statements and nothing
 else: no `part`, `hardware` or flag statements, because a definition
 carries no defaults for those in 0.2. A `pin` statement has the shape it
-has in an instance body.
+has in an instance body. A component with no pins — a mounting hole, a
+fiducial, artwork — has no block either: its definition is the header
+alone, with no colon (`component Fiducial`), as a `part "key"` binding
+with no constraints is.
 
 ### Parameter lists
 

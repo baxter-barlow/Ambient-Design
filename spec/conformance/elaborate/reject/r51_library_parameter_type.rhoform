@@ -1,0 +1,6 @@
+# RHO2038 against the standard library: a library definition's parameter
+# list types the arguments of its every instance, in a 0.1 source too.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    l1 = new rhoform.lib.passive.Inductor(inductance = 10uF)

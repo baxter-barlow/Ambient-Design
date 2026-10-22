@@ -7,7 +7,7 @@
 module Sensor:
     port out output
     port vdd power_in
-    u1 = new rhoform.lib.sensor.Thermistor:
+    u1 = new acme.sensor.Thermistor:
         pin a passive 1
         pin b passive 2
         pin c passive 3

@@ -1,0 +1,20 @@
+# A table over standard library components: each row gets its
+# definition's ports, so a row's pins are endpoints like any instance's,
+# and a definition's parameter list types the table's plain columns.
+#pragma rhoform-syntax 0.1
+
+module Filter:
+    port out passive
+    port ret passive
+    port src passive
+    table rhoform.lib.passive.Capacitor (capacitance):
+        c1  100nF
+    table rhoform.lib.passive.Inductor part abstract (inductance, part.package):
+        l1  10uH  "0805"
+    table rhoform.lib.passive.Resistor (resistance):
+        r1  10ohm
+    src ~ r1.a
+    r1.b ~ l1.a
+    l1.b ~ out
+    out ~ c1.a
+    c1.b ~ ret

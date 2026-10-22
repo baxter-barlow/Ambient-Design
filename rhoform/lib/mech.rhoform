@@ -1,0 +1,23 @@
+# The standard library: mechanical and board-only parts. A definition
+# carries no `hardware` kind or flag defaults (spec 04), so an instance
+# still states `hardware mounting_hole` and the like; these definitions
+# give the kinds their pins: none for a pinless kind, exactly one passive
+# pin for a kind that sits on a net.
+#pragma rhoform-syntax 0.2
+
+# An optical alignment mark for assembly.
+component Fiducial
+
+# A plated mounting hole joined to a net, usually chassis ground.
+component GroundedMountingHole(diameter: length):
+    pin p passive
+
+# Board artwork: a logo or mark in copper or silkscreen.
+component Logo
+
+# A mounting hole joined to nothing.
+component MountingHole(diameter: length)
+
+# A probe point: one pad on a real net.
+component TestPoint:
+    pin p passive

@@ -41,7 +41,11 @@ benchmark directory as the compile root. For those the rules above tighten:
 golden whose source is gone describes nothing anyone can rebuild), and
 `source_hash` IS verified, because the elaborator pins its serialization: the
 canonical bytes of the sorted [path, sha256] list. ir/examples keeps the
-looser rules, since its sources were never committed.
+looser rules, since its sources were never committed. One exception to
+"resolves against that directory": a path under `rhoform/lib/` is a module
+of the bundled standard library, which the elaborator lists by exactly that
+path (spec 04, E-8) and which lives in the toolchain, so it resolves against
+the repository root.
 
 Declarations may share a span exactly -- a module instantiated twice gives
 each copy of its members the same statement -- but two different spans that
@@ -65,6 +69,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 IR_EXAMPLES = ROOT / "ir" / "examples"
+# A source-map path naming a module of the bundled standard library.
+LIBRARY_PATH_PREFIX = "rhoform/lib/"
 
 # rhoform-canonical-json/1 — the serialization profile the hash is taken over.
 #
@@ -351,7 +357,8 @@ def documents_to_check(root: Path = ROOT) -> list[tuple[Path, Path | None]]:
 
 
 def check_document(ir_path: Path, problems: list[str], notes: list[str],
-                   compile_root: Path | None = None) -> None:
+                   compile_root: Path | None = None,
+                   library_root: Path = ROOT) -> None:
     text = ir_path.read_text(encoding="utf-8")
     # `relative_to` only for display, and it must not raise: the self-test
     # drives this function over a planted document in a temp directory, which
@@ -517,6 +524,9 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str],
         # compiled with its own directory as the compile root, so its paths
         # resolve there.
         base = ROOT if compile_root is None else compile_root
+        if compile_root is not None and str(entry["path"]).startswith(
+                LIBRARY_PATH_PREFIX):
+            base = library_root  # the toolchain's standard library
         source_path = (base / entry["path"]).resolve()
         if not source_path.exists():
             if compile_root is not None:
@@ -997,11 +1007,19 @@ def self_test() -> int:
                        "lib/indicator.rhoform": b"module B:\n"}
             for name, data in sources.items():
                 (bench / name).write_bytes(data)
+            # A standard library module the golden read: it lives in the
+            # toolchain (here a planted one), not in the compile root.
+            toolchain = Path(tmp) / "toolchain"
+            library = {"rhoform/lib/passive.rhoform": b"component R\n"}
+            for name, data in library.items():
+                (toolchain / name).parent.mkdir(parents=True, exist_ok=True)
+                (toolchain / name).write_bytes(data)
             side = json.loads((IR_EXAMPLES / "blinker.sourcemap.json").read_text(
                 encoding="utf-8"))
             side["files"] = [{"path": name,
                               "sha256": hashlib.sha256(data).hexdigest()}
-                             for name, data in sorted(sources.items())]
+                             for name, data in sorted({**sources,
+                                                       **library}.items())]
             body = json.loads(text)
             body["header"]["source_hash"] = source_hash_of(side["files"])
             mutate(bench, body, side)
@@ -1012,7 +1030,7 @@ def self_test() -> int:
                                                         encoding="utf-8")
             found, unverified = [], []
             check_document(bench / "bench.ir.json", found, unverified,
-                           compile_root=bench)
+                           compile_root=bench, library_root=toolchain)
             return found, unverified
 
         clean, unverified = _golden_probe()
@@ -1025,6 +1043,10 @@ def self_test() -> int:
         def _source_edited(bench, body, side):
             (bench / "blinker.rhoform").write_bytes(b"module C:\n")
 
+        def _library_edited(bench, body, side):
+            library_file = Path(tmp) / "toolchain/rhoform/lib/passive.rhoform"
+            library_file.write_bytes(b"component S\n")
+
         def _source_hash_stale(bench, body, side):
             body["header"]["source_hash"] = "sha256:" + "0" * 64
 
@@ -1034,6 +1056,10 @@ def self_test() -> int:
         checks.append(("a source whose bytes moved under its sha256 is caught",
                        any("hashes to" in p
                            for p in _golden_probe(_source_edited)[0])))
+        checks.append(("a library module the golden read is checked in the "
+                       "toolchain, and its moved bytes are caught",
+                       any("rhoform/lib/passive.rhoform hashes to" in p
+                           for p in _golden_probe(_library_edited)[0])))
         checks.append(("a golden source_hash that does not hash the file "
                        "table is caught",
                        any("file table hashes to" in p

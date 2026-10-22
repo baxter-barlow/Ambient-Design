@@ -7,7 +7,7 @@
 
 module Rounding:
     port out power_out
-    reg = new rhoform.lib.ic.Regulator:
+    reg = new acme.ic.Regulator:
         pin out power_out
     net VOUT:
         out

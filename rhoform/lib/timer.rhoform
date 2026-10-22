@@ -1,0 +1,13 @@
+# The standard library: timers.
+#pragma rhoform-syntax 0.2
+
+# The NE555 single timer, with the pinout every 8-pin package shares.
+component Ne555:
+    pin ctl passive 5
+    pin dis open_collector 7
+    pin gnd power_in 1
+    pin out output 3
+    pin rst input 4
+    pin thr input 6
+    pin trig input 2
+    pin vcc power_in 8

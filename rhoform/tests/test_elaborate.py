@@ -98,16 +98,18 @@ class NamingTest(unittest.TestCase):
         self.assertEqual(result.design.design_name, "B")
 
     def test_single_word_is_a_module_dotted_is_a_component(self):
+        # A dotted name outside the reserved prefix `rhoform.lib.` is an
+        # ad-hoc component: its ports are its inline pins, verbatim.
         source = ("module Leaf:\n    port p passive\n"
                   "module Top:\n    m = new Leaf\n"
-                  "    c = new rhoform.lib.passive.Resistor:\n"
+                  "    c = new acme.passive.Resistor:\n"
                   "        pin a passive 1\n        pin b passive 2\n")
         design = _elaborate(source).design
         instances = _by_path(design)
         self.assertEqual(instances["/m"].kind, "module")
         self.assertEqual(instances["/c"].kind, "component")
         self.assertEqual(instances["/c"].definition,
-                         "rhoform.lib.passive.Resistor")
+                         "acme.passive.Resistor")
         self.assertEqual(
             [(p.name, p.role, p.pin_numbers) for p in instances["/c"].ports],
             [("a", "passive", ("1",)), ("b", "passive", ("2",))])
@@ -497,7 +499,7 @@ class Syntax02Test(unittest.TestCase):
                     self.assertEqual(len(_diagnostics(result)), 2)
                 else:
                     self.assertNotIn("RHO2033", codes)
-        self.assertEqual(seen, 8)
+        self.assertEqual(seen, 9)
 
     def test_an_import_is_refused_and_nothing_else_is_reported(self):
         from rhoform.elaborate import elaborate_source
@@ -1058,6 +1060,17 @@ class CodeTest(unittest.TestCase):
     def test_rho2047_no_root_module(self):
         d, text, result = self.only2(self.LED, "RHO2047")
         self.assertEqual(d["params"], {"file": "design.rhoform"})
+        self.assertIsNone(result.design)
+
+    def test_rho2048_unknown_library_definition(self):
+        d, text, result = self.only(
+            "module Top:\n    r1 = new rhoform.lib.passive.Resistr\n",
+            "RHO2048")
+        self.assertEqual(d["params"], {"name": "rhoform.lib.passive.Resistr"})
+        self.assertEqual(text, "rhoform.lib.passive.Resistr")
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"],
+                         "rhoform.lib.passive.Resistor")
+        self.assertEqual(d["fixits"][0]["applicability"], "needs-review")
         self.assertIsNone(result.design)
 
     def test_every_block_two_code_has_a_test_here(self):

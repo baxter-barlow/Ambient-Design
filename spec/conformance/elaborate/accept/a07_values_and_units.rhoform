@@ -12,7 +12,7 @@ module Values:
             dielectric = "X7R"
     l1 = new rhoform.lib.passive.Inductor(inductance = 2.2uH +/- 200nH)
     r1 = new rhoform.lib.passive.Resistor(resistance = 4.7kohm +/- 0.5%)
-    u1 = new rhoform.lib.ic.Mcu(cores = 2, debug = false, name = "main", t_amb = 25degC, vref = 1.2345678901234567890123V):
+    u1 = new acme.ic.Mcu(cores = 2, debug = false, name = "main", t_amb = 25degC, vref = 1.2345678901234567890123V):
         part "mcu.esp32s3/espressif-ESP32-S3@1":
             flash = 8
             psram = true

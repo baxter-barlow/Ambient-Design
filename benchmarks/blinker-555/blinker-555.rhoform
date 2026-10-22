@@ -4,14 +4,10 @@ module LedIndicator:
     port ctl input
     port gnd power_in
     d1 = new rhoform.lib.semiconductor.Led(color = "red", forward_voltage = 2V +/- 10%):
-        pin a passive
-        pin k passive
         part abstract:
             color = "red"
             package = "radial_5mm"
     r_lim = new rhoform.lib.passive.Resistor(resistance = 560ohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             package = "axial_0207"
             power_rating = 250mW
@@ -24,24 +20,18 @@ module LedIndicator:
 
 module Blinker555:
     c_byp = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
             package = "0805"
             voltage_rating = 50V
     c_ctl = new rhoform.lib.passive.Capacitor(capacitance = 10nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 10nF +/- 10%
             dielectric = "X7R"
             package = "0805"
             voltage_rating = 50V
     c_t = new rhoform.lib.passive.Capacitor(capacitance = 1uF +/- 5%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 1uF +/- 5%
             dielectric = "PET_film"
@@ -49,41 +39,26 @@ module Blinker555:
             voltage_rating = 63V
     indicator = new LedIndicator(color = "red", current = 9.5mA (8mA to 10.5mA))
     j_bat = new rhoform.lib.connector.BatteryConnector9V:
-        pin neg power_out 2
-        pin pos power_out 1
         part "conn.battery_9v/keystone-232@1"
     mh1 = new rhoform.lib.mech.MountingHole(diameter = 3.2mm):
         hardware mounting_hole
         exclude_from_bom
         board_only
     r_a = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             package = "axial_0207"
             power_rating = 250mW
             resistance = 100kohm +/- 1%
     r_b = new rhoform.lib.passive.Resistor(resistance = 680kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             package = "axial_0207"
             power_rating = 250mW
             resistance = 680kohm +/- 1%
     timer = new rhoform.lib.timer.Ne555:
-        pin ctl passive 5
-        pin dis open_collector 7
-        pin gnd power_in 1
-        pin out output 3
-        pin rst input 4
-        pin thr input 6
-        pin trig input 2
-        pin vcc power_in 8
         part "timer.555/ti-NE555P@2":
             function = "timer_555"
             supply_max = 16V
     tp_out = new rhoform.lib.mech.TestPoint:
-        pin p passive
         hardware test_point
         exclude_from_bom
     net GND(ground_domain = "gnd"):

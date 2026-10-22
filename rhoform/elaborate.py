@@ -16,9 +16,10 @@ THE PASSES, in order, each total over its input:
      segment made an identifier; then each definition's parameter list;
   B. each module's own ports, each component's pins;
   C. the instantiation graph: a single-word definition must be a module
-     or component of the file, a dotted one is a library component (there
-     is no bundled library yet, so it is an ad-hoc component whose ports
-     are exactly its inline `pin` statements);
+     or component of the file; a dotted one under the reserved prefix
+     `rhoform.lib.` must be a component of the bundled standard library
+     (see THE STANDARD LIBRARY), and any other dotted one is an ad-hoc
+     component whose ports are exactly its inline `pin` statements;
   D. cycles (an error: elaboration terminates because no module may
      contain itself, whatever its parameters), then the root — the unique
      module of the entry file that nothing instantiates;
@@ -54,6 +55,15 @@ OR). Quantities keep their exact value; `rhoform/ir.py` performs the one
 Decimal-to-double conversion at emission, and this module refuses, with a
 diagnostic, any number that conversion could not carry.
 
+THE STANDARD LIBRARY is `rhoform/lib/<module>.rhoform`, files of
+`component` definitions only, listed in the source map as exactly that path
+so a definition's name, `rhoform.lib.<module>.<Name>`, follows the one
+naming rule. A compilation reads the library modules its qualified names
+mention and no other, so adding a module changes no existing design's
+`source_hash`. A library definition is used like one of the file's own:
+its pins are the instance's ports, inline pins must restate them, and its
+parameter list, when it has one, checks the arguments.
+
 REPLICATION is budgeted: loop iterations and array members together are
 capped at EXPANSION_LIMIT per design, counted over every instance, so a
 source that parses cannot make elaboration slow. `import` is the one 0.2
@@ -63,9 +73,10 @@ construct still refused here (RHO2033): it needs the package layer.
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from difflib import get_close_matches
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import hashlib
 import json
+import os
 import re
 
 from . import quantities
@@ -80,7 +91,14 @@ MAX_IR_INTEGER = 2 ** 53
 # Loop iterations plus array members, per design (decision S-4).
 EXPANSION_LIMIT = 4096
 
+# The bundled standard library (E-4, E-5, E-8): the reserved prefix of a
+# qualified name, where its modules live, and how the source map lists them.
+LIBRARY_PREFIX = ("rhoform", "lib")
+LIBRARY_DIR = Path(__file__).resolve().parent / "lib"
+LIBRARY_SUFFIX = ".rhoform"
+
 _PAIR_RE = re.compile(r"\A(-?[0-9]+(?:\.[0-9]+)?)(.+)\Z")
+_IDENTIFIER_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*\Z")
 _EQUALITY = ("==", "!=")
 
 
@@ -202,6 +220,80 @@ class Elaboration:
         return self.design is not None and not self.diagnostics.has_errors
 
 
+# ---- the standard library ---------------------------------------------------
+
+def library_file(module: str) -> str:
+    """The path a library module has in the source map and in spans."""
+    return f"rhoform/lib/{module}{LIBRARY_SUFFIX}"
+
+
+class Library:
+    """The bundled standard library: `<directory>/<module>.rhoform`, one file
+    per module. Module names are matched exactly as spelled on disk, so a
+    case-insensitive filesystem cannot make `rhoform.lib.Passive` resolve
+    where a case-sensitive one would not. Parses are cached per file
+    content; the bytes are read on every load, so what a compilation lists
+    is always what it read. A test may point one at another directory."""
+
+    def __init__(self, directory=LIBRARY_DIR):
+        self.directory = Path(directory)
+        self._modules = None
+        self._parsed = {}
+
+    def modules(self) -> tuple:
+        if self._modules is None:
+            try:
+                names = os.listdir(self.directory)
+            except OSError:
+                names = []
+            stems = (name[:-len(LIBRARY_SUFFIX)] for name in names
+                     if name.endswith(LIBRARY_SUFFIX))
+            self._modules = tuple(sorted(
+                stem for stem in stems if _IDENTIFIER_RE.match(stem)))
+        return self._modules
+
+    def load(self, module: str):
+        """The ParseResult of `module`, or None when there is none."""
+        if module not in self.modules():
+            return None
+        data = (self.directory / f"{module}{LIBRARY_SUFFIX}").read_bytes()
+        key = (module, data)
+        if key not in self._parsed:
+            from .parser import parse
+
+            self._parsed[key] = parse(
+                data.decode("utf-8", "surrogateescape"),
+                file=library_file(module))
+        return self._parsed[key]
+
+
+BUNDLED = Library()
+
+
+def library_modules(results) -> list:
+    """The library modules the qualified names of `results` mention, sorted:
+    the third word of every name under the reserved prefix."""
+    found = set()
+    for result in results:
+        work = [result.tree]
+        while work:
+            node = work.pop()
+            if not _is_tree(node):
+                continue
+            if node.data == "qualified_name":
+                words = _words(node)
+                if tuple(words[:2]) == LIBRARY_PREFIX and len(words) > 2:
+                    found.add(words[2])
+                continue
+            work.extend(node.children)
+    return sorted(found)
+
+
+def _component_names(result) -> list:
+    return [str(node.children[1]) for node in result.tree.children
+            if _is_tree(node) and node.data == "component_def"]
+
+
 # ---- names ------------------------------------------------------------------
 
 def _identifier(segment: str) -> str:
@@ -267,12 +359,18 @@ def _block_statements(block) -> list:
             if _is_tree(c) and c.data == "statement"]
 
 
-def _did_you_mean(word: str, choices, span: Span) -> tuple:
+def _one_close(word: str, choices):
+    """The one choice close to `word`, or None when none or several are."""
     matches = get_close_matches(word, sorted(choices), n=2, cutoff=0.6)
-    if len(matches) != 1:
+    return matches[0] if len(matches) == 1 else None
+
+
+def _did_you_mean(word: str, choices, span: Span) -> tuple:
+    match = _one_close(word, choices)
+    if match is None:
         return ()
-    return (FixIt(f"did you mean `{matches[0]}`?", "needs-review",
-                  (Edit(span, matches[0]),)),)
+    return (FixIt(f"did you mean `{match}`?", "needs-review",
+                  (Edit(span, match),)),)
 
 
 def _span_through(result, start: int, after: int, char: bytes) -> Span:
@@ -451,6 +549,13 @@ class _Definition:
     pin_spans: dict = field(default_factory=dict)  # component pin -> span
     quiet_ports: set = field(default_factory=set)  # misplaced port names
     quiet_members: set = field(default_factory=set)  # misplaced members
+    library: bool = False  # a standard library definition
+
+    @property
+    def spelled(self) -> str:
+        """The definition as a source names it: a library one by its
+        dotted name, which is how every source spells it."""
+        return self.definition if self.library else self.name
 
 
 @dataclass
@@ -560,11 +665,14 @@ class _UnionFind:
 # ---- the elaborator ---------------------------------------------------------
 
 def elaborate(results, *, root: str | None = None,
-              sink: Diagnostics | None = None) -> Elaboration:
+              sink: Diagnostics | None = None,
+              library: Library | None = None) -> Elaboration:
     """Elaborate a compilation: `results[0]` is the entry file's
     ParseResult, any others are further sources it may read. `root`
     names the root module explicitly; otherwise it is the unique module
-    of the entry file that nothing instantiates."""
+    of the entry file that nothing instantiates. `library` is the
+    standard library names under `rhoform.lib.` resolve against: the
+    bundled one unless a test supplies another."""
     results = list(results)
     sink = sink if sink is not None else Diagnostics()
     if not results:
@@ -587,26 +695,29 @@ def elaborate(results, *, root: str | None = None,
                       "tool": "elaborator"},
                      primary=span)
         return Elaboration(None, sink)
-    design = _Elaborator(results, sink).run(root)
+    design = _Elaborator(results, sink,
+                         BUNDLED if library is None else library).run(root)
     if sink.has_errors:
         design = None
     return Elaboration(design, sink)
 
 
 def elaborate_source(source: str, path: str = "design.rhoform", *,
-                     root: str | None = None) -> Elaboration:
+                     root: str | None = None,
+                     library: Library | None = None) -> Elaboration:
     """Parse and elaborate one file whose compile-root-relative path is
     `path`. The convenience entry point for tests and single files."""
     from .parser import parse
 
     result = parse(source, file=path)
-    return elaborate([result], root=root)
+    return elaborate([result], root=root, library=library)
 
 
 class _Elaborator:
-    def __init__(self, results, sink: Diagnostics):
+    def __init__(self, results, sink: Diagnostics, library: Library):
         self.results = results
         self.sink = sink
+        self.library = library
         self.defs: list[_Definition] = []
         self.visible: dict[str, dict[str, _Definition]] = {}
         self.models: dict = {}  # (id(defn), env key) -> _Model
@@ -690,8 +801,9 @@ class _Elaborator:
     # -- driver
 
     def run(self, root: str | None) -> ElaboratedDesign | None:
-        for result in self.results:
+        for result in list(self.results):
             self.collect_definitions(result)
+        self.load_library()
         for defn in self.defs:
             self.within(defn, self.collect_params, defn)
         for defn in self.defs:
@@ -731,7 +843,29 @@ class _Elaborator:
 
     # -- pass A: definitions and their parameter lists
 
-    def collect_definitions(self, result) -> None:
+    def load_library(self) -> None:
+        """Read the library modules the sources mention, and only those
+        (E-8): each joins the compilation as a source file, listed in the
+        source map, its definitions named `rhoform.lib.<module>.<Name>`. A
+        module that does not parse is a defect of the toolchain, reported
+        as its parse diagnostics; its names then resolve to nothing. So do
+        the names of a module whose library path an author's own source
+        already occupies (a file at `rhoform/lib/` under the compile root):
+        one path cannot name two files, and the prefix never resolves to
+        anything but the bundled library."""
+        for module in library_modules(self.results):
+            if library_file(module) in self.visible:
+                continue
+            result = self.library.load(module)
+            if result is None:
+                continue
+            if not result.ok:
+                self.sink.extend(result.diagnostics)
+                continue
+            self.results.append(result)
+            self.collect_definitions(result, library=True)
+
+    def collect_definitions(self, result, library: bool = False) -> None:
         mpath = module_path(result.file)
         table = self.visible.setdefault(result.file, {})
         for node in result.tree.children:
@@ -761,7 +895,8 @@ class _Elaborator:
             defn = _Definition(name=name, result=result, tree=node,
                                header=header,
                                definition=f"{mpath}.{name}",
-                               order=len(self.defs), kind=kind)
+                               order=len(self.defs), kind=kind,
+                               library=library)
             table[name] = defn
             self.defs.append(defn)
 
@@ -883,16 +1018,67 @@ class _Elaborator:
 
     def resolve(self, defn: _Definition, qualified):
         """(kind, target, definition) for a qualified_name tree, or None
-        when a single-word name is not visible. The one place definitions
-        resolve, so imports and a bundled library land here. `target` is
-        the module or component definition, or None for a dotted name."""
+        when a single-word name is not visible or a name under the
+        reserved prefix `rhoform.lib.` is not a library definition. The one
+        place definitions resolve, so imports land here too. `target` is
+        the module or component definition, or None for an ad-hoc
+        component (any other dotted name)."""
         words = _words(qualified)
         if len(words) == 1:
             target = self.visible[defn.result.file].get(words[0])
-            if target is None:
-                return None
-            return target.kind, target, target.definition
-        return "component", None, ".".join(words)
+        elif tuple(words[:2]) == LIBRARY_PREFIX:
+            target = None
+            if len(words) == 4:
+                table = self.visible.get(library_file(words[2]), {})
+                target = table.get(words[3])
+                if target is not None and not target.library:
+                    target = None
+        else:
+            return "component", None, ".".join(words)
+        if target is None:
+            return None
+        return target.kind, target, target.definition
+
+    def unresolved(self, defn, qualified) -> None:
+        """Report a qualified name `resolve` found nothing for: RHO2005
+        for a single word, RHO2048 under the library's reserved prefix,
+        each with the one close match as a fix-it when there is one."""
+        words = _words(qualified)
+        name = ".".join(words)
+        span = defn.result.span_of(qualified)
+        if len(words) == 1:
+            self.report("RHO2005", {"name": name}, span,
+                        fixits=_did_you_mean(
+                            name, self.visible[defn.result.file], span))
+            return
+        self.report("RHO2048", {"name": name}, span,
+                    fixits=self.library_fixits(words, span))
+
+    def library_fixits(self, words, span) -> tuple:
+        """The one library name a misspelled one is close to, as a fix-it.
+        Words are compared one at a time: whole dotted names share their
+        prefix, so every name of a module would look close. A misspelled
+        module is corrected only when the component name then exists in
+        it. Reads at most the one module named or meant, and only on this
+        path, where the compilation produces nothing."""
+        if len(words) != 4:
+            return ()
+        module, name = words[2], words[3]
+        modules = self.library.modules()
+        if module not in modules:
+            module = _one_close(module, modules)
+            if module is None:
+                return ()
+        result = self.library.load(module)
+        names = _component_names(result) if result is not None \
+            and result.ok else []
+        if name not in names:
+            name = _one_close(name, names)
+            if name is None or module != words[2]:
+                return ()
+        full = ".".join((*LIBRARY_PREFIX, module, name))
+        return (FixIt(f"did you mean `{full}`?", "needs-review",
+                      (Edit(span, full),)),)
 
     def collect_edges(self, defn: _Definition) -> None:
         """Every instantiation of a module anywhere in the body, taken or
@@ -1166,7 +1352,7 @@ class _Elaborator:
                 self.bad.add(id(token))
                 self.report(
                     "RHO2036",
-                    {"name": name, "definition": target.name,
+                    {"name": name, "definition": target.spelled,
                      "parameters": [p.name for p in target.params]},
                     span, about=instance,
                     fixits=_did_you_mean(name, declared, span))
@@ -1175,13 +1361,13 @@ class _Elaborator:
             if value is not None:
                 self.check_value(
                     defn, value, params, declared[name].type,
-                    f"parameter `{name}` of `{target.name}`")
+                    f"parameter `{name}` of `{target.spelled}`")
         for param in target.params:
             if param.name not in given and not param.has_default:
                 self.report(
                     "RHO2037",
                     {"instance": instance or anchor[1],
-                     "parameter": param.name, "definition": target.name},
+                     "parameter": param.name, "definition": target.spelled},
                     anchor[0], about=instance,
                     secondary=((param.span, "declared here"),))
 
@@ -1229,7 +1415,7 @@ class _Elaborator:
                      if len(c.children) == 1]
             self.check_arguments(
                 defn, target, [(c.children[0], None) for _i, c in plain],
-                None, (result.span_of(qualified), target.name), params)
+                None, (result.span_of(qualified), target.spelled), params)
             declared = {p.name: p.type for p in target.params}
             for i, column in plain:
                 types[i] = declared.get(str(column.children[0]))
@@ -1240,7 +1426,7 @@ class _Elaborator:
                 context = None
                 if expected is not None:
                     context = (f"parameter `{columns[i].children[0]}` of "
-                               f"`{target.name}`")
+                               f"`{target.spelled}`")
                 self.check_value(defn, value, params, expected, context)
 
     def check_condition(self, defn, cond, scope) -> None:
@@ -1607,15 +1793,11 @@ class _Elaborator:
         about = name if size is None else None
         resolved = self.resolve(defn, qualified)
         if resolved is None:
-            word = _words(qualified)[0]
-            qspan = result.span_of(qualified)
-            self.report("RHO2005", {"name": word}, qspan,
-                        fixits=_did_you_mean(
-                            word, self.visible[result.file], qspan))
+            self.unresolved(defn, qualified)
             if size is None:
                 model.members[name] = _Member(
-                    name, "component", word, None, {}, {}, span=span,
-                    broken=True)
+                    name, "component", ".".join(_words(qualified)), None,
+                    {}, {}, span=span, broken=True)
             else:
                 model.arrays[name] = None
             return
@@ -1776,7 +1958,7 @@ class _Elaborator:
             self.report(
                 "RHO2035",
                 {"instance": member.name, "pin": port.name,
-                 "component": target.name, "found": spell(port),
+                 "component": target.spelled, "found": spell(port),
                  "expected": spell(want) if want else "no such pin"},
                 pin_spans[port.name], about=about, secondary=secondary)
         for port in target.ports:
@@ -1785,7 +1967,7 @@ class _Elaborator:
             self.report(
                 "RHO2035",
                 {"instance": member.name, "pin": port.name,
-                 "component": target.name, "found": "no such pin",
+                 "component": target.spelled, "found": "no such pin",
                  "expected": spell(port)},
                 defn.result.span_of(qualified), about=about,
                 secondary=((target.pin_spans[port.name], "defined here"),))
@@ -1899,10 +2081,7 @@ class _Elaborator:
         target = None
         definition = qname
         if resolved is None:
-            qspan = result.span_of(qualified)
-            self.report("RHO2005", {"name": qname}, qspan,
-                        fixits=_did_you_mean(
-                            qname, self.visible[result.file], qspan))
+            self.unresolved(defn, qualified)
             broken = True
         elif resolved[0] == "module":
             self.report("RHO2006", {"name": qname},

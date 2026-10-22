@@ -90,7 +90,8 @@ three invariances.
 
 `source_hash` is `"sha256:"` plus the SHA-256 of this serialization of the list
 of `[path, sha256]` pairs for every source file the compilation read, sorted by
-path, each path POSIX and relative to the compile root
+path, each path POSIX and relative to the compile root, except that a bundled
+standard library module is listed by its library path `rhoform/lib/<module>.rhoform`
 ([spec 04](../spec/language/04-elaboration.md#the-source-map)). The gate verifies
 it for the benchmark goldens; the hand-written examples below predate the rule.
 

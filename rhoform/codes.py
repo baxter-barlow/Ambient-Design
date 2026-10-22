@@ -699,6 +699,18 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("file",),
         rule="L1",
     ),
+    # ---- the bundled standard library (E-5) -----------------------------
+    CodeDef(
+        code="RHO2048", slug="unknown-library-definition", severity="error",
+        message=(
+            "`{name}` names no definition of the bundled standard library; "
+            "a name under the reserved prefix `rhoform.lib.` must be "
+            "`rhoform.lib.<module>.<Component>` for a component the library "
+            "defines."
+        ),
+        params=("name",),
+        rule="L2",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that

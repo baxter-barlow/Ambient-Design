@@ -1,0 +1,28 @@
+# The standard library: discrete semiconductors. Generic, so no
+# designators: which pad is the cathode is the package's to say.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive
+    pin k passive
+
+# An n-channel MOSFET.
+component Nmos(vds_max: voltage):
+    pin d passive
+    pin g input
+    pin s passive
+
+component SchottkyDiode(forward_current: current, reverse_voltage: voltage):
+    pin a passive
+    pin k passive
+
+component TvsDiode(standoff_voltage: voltage):
+    pin a passive
+    pin k passive
+
+# A USB 2.0 ESD protection array across D+, D- and VBUS.
+component UsbEsdArray:
+    pin dm bidirectional
+    pin dp bidirectional
+    pin gnd power_in
+    pin vbus passive

@@ -2,8 +2,6 @@
 
 module Esp32s3Devboard:
     c1 = new rhoform.lib.passive.Capacitor(capacitance = 4.7uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 4.7uF +/- 10%
             dielectric = "X5R"
@@ -11,8 +9,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 25V
     c2 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -20,8 +16,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 50V
     c3 = new rhoform.lib.passive.Capacitor(capacitance = 4.7uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 4.7uF +/- 10%
             dielectric = "X5R"
@@ -29,8 +23,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 25V
     c4 = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 20%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 22uF +/- 20%
             dielectric = "X5R"
@@ -38,8 +30,6 @@ module Esp32s3Devboard:
             package = "0805"
             voltage_rating = 10V
     c5 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -47,8 +37,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c6 = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 20%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 22uF +/- 20%
             dielectric = "X5R"
@@ -56,8 +44,6 @@ module Esp32s3Devboard:
             package = "0805"
             voltage_rating = 10V
     c7 = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 10uF +/- 10%
             dielectric = "X5R"
@@ -65,8 +51,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 10V
     c8 = new rhoform.lib.passive.Capacitor(capacitance = 1uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 1uF +/- 10%
             dielectric = "X5R"
@@ -74,8 +58,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c9 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -83,8 +65,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c10 = new rhoform.lib.passive.Capacitor(capacitance = 1uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 1uF +/- 10%
             dielectric = "X5R"
@@ -92,8 +72,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c11 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -101,8 +79,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c12 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -110,8 +86,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c13 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -119,8 +93,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c14 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -128,8 +100,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c15 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -137,8 +107,6 @@ module Esp32s3Devboard:
             package = "0402"
             voltage_rating = 16V
     c16 = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 10uF +/- 10%
             dielectric = "X5R"
@@ -146,8 +114,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 10V
     c17 = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 10uF +/- 10%
             dielectric = "X5R"
@@ -155,8 +121,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 10V
     c18 = new rhoform.lib.passive.Capacitor(capacitance = 4.7nF +/- 10%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 4.7nF +/- 10%
             dielectric = "X7R"
@@ -164,8 +128,6 @@ module Esp32s3Devboard:
             package = "0603"
             voltage_rating = 100V
     c19 = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 20%):
-        pin a passive
-        pin b passive
         part abstract:
             capacitance = 22uF +/- 20%
             dielectric = "X5R"
@@ -173,53 +135,36 @@ module Esp32s3Devboard:
             package = "0805"
             voltage_rating = 10V
     d1 = new rhoform.lib.semiconductor.SchottkyDiode(forward_current = 3A, reverse_voltage = 40V):
-        pin a passive
-        pin k passive
         part abstract:
             mpn = "SS34-E3/57T"
             package = "SMA (DO-214AC)"
     d2 = new rhoform.lib.semiconductor.UsbEsdArray:
-        pin dm bidirectional
-        pin dp bidirectional
-        pin gnd power_in
-        pin vbus passive
         part abstract:
             mpn = "STMicro USBLC6-2SC6"
             package = "SOT-23-6"
     d3 = new rhoform.lib.semiconductor.TvsDiode(standoff_voltage = 5V):
-        pin a passive
-        pin k passive
         part abstract:
             mpn = "Littelfuse SMF5.0A"
             package = "SOD-123FL"
     d4 = new rhoform.lib.semiconductor.Led(color = "red"):
-        pin a passive
-        pin k passive
         part abstract:
             color = "red"
             mpn = "Kingbright KP-1608SURCK"
             package = "0603"
     d5 = new rhoform.lib.semiconductor.Led(color = "green"):
-        pin a passive
-        pin k passive
         part abstract:
             color = "green"
             mpn = "Kingbright APT1608SGC"
             package = "0603"
     f1 = new rhoform.lib.passive.PtcFuse(hold_current = 750mA, trip_current = 1.5A):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Littelfuse 1206L075YR"
             package = "1206"
     fb1 = new rhoform.lib.passive.FerriteBead(impedance = 600ohm):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Murata BLM31PG601SN1L"
             package = "1206"
     h1 = new rhoform.lib.mech.GroundedMountingHole(diameter = 3.2mm):
-        pin p passive
         hardware grounded_mounting_hole
         exclude_from_bom
     h2 = new rhoform.lib.mech.MountingHole(diameter = 3.2mm):
@@ -235,288 +180,153 @@ module Esp32s3Devboard:
         exclude_from_bom
         board_only
     j1 = new rhoform.lib.connector.UsbCReceptacle16:
-        pin cc1 bidirectional
-        pin cc2 bidirectional
-        pin dm bidirectional
-        pin dp bidirectional
-        pin gnd power_out
-        pin shield passive
-        pin vbus power_out
         part abstract:
             mpn = "GCT USB4105-GF-A"
             package = "USB-C-16P-HYBRID"
     j2 = new rhoform.lib.connector.PinHeader1x20:
-        pin p1 passive
-        pin p2 passive
-        pin p3 passive
-        pin p4 passive
-        pin p5 passive
-        pin p6 passive
-        pin p7 passive
-        pin p8 passive
-        pin p9 passive
-        pin p10 passive
-        pin p11 passive
-        pin p12 passive
-        pin p13 passive
-        pin p14 passive
-        pin p15 passive
-        pin p16 passive
-        pin p17 passive
-        pin p18 passive
-        pin p19 passive
-        pin p20 passive
         part abstract:
             mpn = "Sullins PRPC020SAAN-RC"
             package = "PinHeader_1x20_P2.54"
     j3 = new rhoform.lib.connector.PinHeader1x20:
-        pin p1 passive
-        pin p2 passive
-        pin p3 passive
-        pin p4 passive
-        pin p5 passive
-        pin p6 passive
-        pin p7 passive
-        pin p8 passive
-        pin p9 passive
-        pin p10 passive
-        pin p11 passive
-        pin p12 passive
-        pin p13 passive
-        pin p14 passive
-        pin p15 passive
-        pin p16 passive
-        pin p17 passive
-        pin p18 passive
-        pin p19 passive
-        pin p20 passive
         part abstract:
             mpn = "Sullins PRPC020SAAN-RC"
             package = "PinHeader_1x20_P2.54"
     j4 = new rhoform.lib.connector.PinHeader1x6:
-        pin p1 passive
-        pin p2 passive
-        pin p3 passive
-        pin p4 passive
-        pin p5 passive
-        pin p6 passive
         part abstract:
             mpn = "Sullins PRPC006SAAN-RC"
             package = "PinHeader_1x6_P2.54"
         dnp
     j5 = new rhoform.lib.connector.PinHeader1x2:
-        pin p1 passive
-        pin p2 passive
         part abstract:
             mpn = "Sullins PRPC002SAAN-RC"
             package = "PinHeader_1x2_P2.54"
     jp1 = new rhoform.lib.connector.Shunt2:
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Sullins SPC02SYAN"
             package = "Shunt_2.54"
     r1 = new rhoform.lib.passive.Resistor(resistance = 5.1kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-075K1L"
             package = "0402"
             resistance = 5.1kohm +/- 1%
     r2 = new rhoform.lib.passive.Resistor(resistance = 5.1kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-075K1L"
             package = "0402"
             resistance = 5.1kohm +/- 1%
     r3 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
             resistance = 10kohm +/- 1%
     r4 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
             resistance = 10kohm +/- 1%
     r5 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
             resistance = 10kohm +/- 1%
     r6 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
             resistance = 10kohm +/- 1%
         dnp
     r7 = new rhoform.lib.passive.Resistor(resistance = 1kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-071KL"
             package = "0402"
             resistance = 1kohm +/- 1%
     r8 = new rhoform.lib.passive.Resistor(resistance = 1kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-071KL"
             package = "0402"
             resistance = 1kohm +/- 1%
     r9 = new rhoform.lib.passive.Resistor(resistance = 1Mohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-071ML"
             package = "0402"
             resistance = 1Mohm +/- 1%
     r10 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
             resistance = 10kohm +/- 1%
         dnp
     r11 = new rhoform.lib.passive.Resistor(resistance = 0ohm +/- 5%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402JR-070RL"
             package = "0402"
             resistance = 0ohm +/- 5%
     r12 = new rhoform.lib.passive.Resistor(resistance = 0ohm +/- 5%):
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "Yageo RC0402JR-070RL"
             package = "0402"
             resistance = 0ohm +/- 5%
     sw1 = new rhoform.lib.switch.TactileSwitch:
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "C&K PTS645SM43SMTR92"
             package = "SW_SMD_6x6"
     sw2 = new rhoform.lib.switch.TactileSwitch:
-        pin a passive
-        pin b passive
         part abstract:
             mpn = "C&K PTS645SM43SMTR92"
             package = "SW_SMD_6x6"
     tp1 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp2 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp3 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp4 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp5 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp6 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp7 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     tp8 = new rhoform.lib.mech.TestPoint:
-        pin p passive
         part abstract:
             mpn = "Keystone 5015"
             package = "TestPoint_Keystone_5015"
         hardware test_point
         exclude_from_bom
     u1 = new rhoform.lib.module.Esp32S3Wroom1:
-        pin en input
-        pin gnd power_in
-        pin io0 bidirectional
-        pin io1 bidirectional
-        pin io2 bidirectional
-        pin io3 bidirectional
-        pin io4 bidirectional
-        pin io5 bidirectional
-        pin io6 bidirectional
-        pin io7 bidirectional
-        pin io8 bidirectional
-        pin io9 bidirectional
-        pin io10 bidirectional
-        pin io11 bidirectional
-        pin io12 bidirectional
-        pin io13 bidirectional
-        pin io14 bidirectional
-        pin io15 bidirectional
-        pin io16 bidirectional
-        pin io17 bidirectional
-        pin io18 bidirectional
-        pin io19 bidirectional
-        pin io20 bidirectional
-        pin io21 bidirectional
-        pin io35 bidirectional
-        pin io36 bidirectional
-        pin io37 bidirectional
-        pin io38 bidirectional
-        pin io39 bidirectional
-        pin io40 bidirectional
-        pin io41 bidirectional
-        pin io42 bidirectional
-        pin io43 bidirectional
-        pin io44 bidirectional
-        pin io45 bidirectional
-        pin io46 bidirectional
-        pin io47 bidirectional
-        pin io48 bidirectional
-        pin p3v3 power_in
         part abstract:
             mpn = "ESP32-S3-WROOM-1-N8R2"
             package = "XCVR_ESP32-S3-WROOM-1"
     u2 = new rhoform.lib.regulator.LinearRegulator(output_current = 1A, output_voltage = 3.3V):
-        pin gnd power_in
-        pin vin power_in
-        pin vout power_out
         part abstract:
             mpn = "AP7361C-33E-13"
             package = "SOT-223"

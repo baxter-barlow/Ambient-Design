@@ -1,0 +1,33 @@
+# The standard library: regulators and their controllers.
+#pragma rhoform-syntax 0.2
+
+# A generic three-terminal linear regulator.
+component LinearRegulator(output_current: current, output_voltage: voltage):
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+
+# TI LM25145 synchronous buck controller, VQFN-20. Pin names are the
+# datasheet's with "/" written "_"; pad 21 is the exposed pad, internally
+# tied to pin 15 (EP).
+component Lm25145(switching_frequency: frequency):
+    pin AGND power_in 6
+    pin BST power_out 17
+    pin COMP output 4
+    pin EN_UVLO input 1
+    pin EP passive 15 21
+    pin FB input 5
+    pin HO output 18
+    pin ILIM input 11
+    pin LO output 13
+    pin NC9 nc 9
+    pin NC16 nc 16
+    pin PGND power_in 12
+    pin PGOOD open_drain 10
+    pin RT input 2
+    pin SS_TRK input 3
+    pin SW passive 19
+    pin SYNCIN input 8
+    pin SYNCOUT output 7
+    pin VCC power_out 14
+    pin VIN power_in 20
