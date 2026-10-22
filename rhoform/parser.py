@@ -248,10 +248,65 @@ class ParseResult:
     tree: object | None
     diagnostics: Diagnostics
     file: str
+    # The author's exact bytes, and how far tree positions sit past them.
+    # The shift is nonzero only when the pragma pre-check prepended a
+    # header, and that always comes with an RHO1005 error, so on an `ok`
+    # result it is 0 — but a consumer subtracting it is correct either
+    # way, which is what lets the elaborator's spans be byte-true without
+    # depending on that coincidence.
+    data: bytes = b""
+    shift: int = 0
 
     @property
     def ok(self) -> bool:
         return self.tree is not None and not self.diagnostics.has_errors
+
+    def span_of(self, node) -> Span:
+        """The node's span over the author's bytes, first token to last.
+
+        A statement's `meta.end_pos` runs on through the trailing
+        `_NEWLINE` token, which swallows the next line's indentation, a
+        trailing `# comment` and any comment-only lines after it, so it
+        is not used. The extent is instead taken from what the tree
+        keeps: every named token, plus the two bracketed subtrees
+        (`arguments`, `net_attributes`) whose meta is exact and is the
+        only record of their parentheses. Tree positions are character
+        offsets, which equal byte offsets because a non-ASCII byte stops
+        the parse before a tree exists.
+        """
+        start, end = _extent(node)
+        start = max(0, min(start - self.shift, len(self.data)))
+        end = max(start, min(end - self.shift, len(self.data)))
+        return span_from_bytes(self.file, self.data, start, end)
+
+
+_BRACKETED = frozenset({"arguments", "net_attributes"})
+
+
+def _extent(node) -> tuple[int, int]:
+    """(first start, last end) over a subtree's kept tokens, in tree
+    positions. Iterative, so a deep tree cannot exhaust the stack."""
+    start = end = None
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        children = getattr(current, "children", None)
+        if children is None:
+            lo, hi = current.start_pos, current.end_pos
+        elif current.data in _BRACKETED and not current.meta.empty:
+            lo, hi = current.meta.start_pos, current.meta.end_pos
+        else:
+            stack.extend(children)
+            continue
+        if lo is None or hi is None:
+            continue
+        start = lo if start is None else min(start, lo)
+        end = hi if end is None else max(end, hi)
+    if start is None:
+        meta = getattr(node, "meta", None)
+        position = getattr(meta, "start_pos", 0) or 0
+        return position, position
+    return start, end
 
 
 def _describe_terminal(name: str, keyword_of: dict) -> str:
@@ -1062,14 +1117,15 @@ def parse(source: str, file: str = "design.rhoform",
     data = source.encode("utf-8", errors="surrogateescape")
 
     if not _prescan(file, data, sink):
-        return ParseResult(tree=None, diagnostics=sink, file=file)
+        return ParseResult(tree=None, diagnostics=sink, file=file, data=data)
 
     parse_text, shift = _pragma_precheck(file, source, data, loaded, sink)
     tree = _restart_parse(file, data, parse_text, shift, loaded, sink)
 
     if tree is not None:
         _postparse(file, data, shift, tree, loaded, sink)
-    return ParseResult(tree=tree, diagnostics=sink, file=file)
+    return ParseResult(tree=tree, diagnostics=sink, file=file, data=data,
+                       shift=shift)
 
 
 def _token_span(file: str, data: bytes, shift: int, token) -> Span:
