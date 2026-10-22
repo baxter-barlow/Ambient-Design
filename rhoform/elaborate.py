@@ -421,6 +421,7 @@ class _Elaborator:
         self.visible: dict[str, dict[str, _ModuleDef]] = {}
         self.models: dict[int, _Model] = {}
         self.mentioned: set[int] = set()
+        self.unresolved = False
 
     # -- reporting
 
@@ -530,7 +531,9 @@ class _Elaborator:
                     continue
                 seen.add(name)
                 resolved = self.resolve(defn, _tree(stmt, "qualified_name"))
-                if resolved is not None and resolved[0] == "module":
+                if resolved is None:
+                    self.unresolved = True
+                elif resolved[0] == "module":
                     defn.edges.append(
                         (name, resolved[1], defn.result.span_of(stmt)))
             elif stmt.data == "table_decl":
@@ -540,7 +543,9 @@ class _Elaborator:
                 # counting the module as used keeps that one defect from
                 # also making the module a second root candidate.
                 resolved = self.resolve(defn, _tree(stmt, "qualified_name"))
-                if resolved is not None and resolved[0] == "module":
+                if resolved is None:
+                    self.unresolved = True
+                elif resolved[0] == "module":
                     self.mentioned.add(id(resolved[1]))
 
     # -- pass D: cycles, root, paths
@@ -617,7 +622,12 @@ class _Elaborator:
         candidates = [d for d in local if id(d) not in targets]
         if len(candidates) == 1:
             return candidates[0]
-        if len(candidates) > 1:
+        # An unresolved single-word definition (RHO2005, reported with the
+        # body) is the likelier cause of a spare candidate: `new Divder`
+        # leaves Divider instantiated by nothing. Naming it as a possible
+        # root would send the author to the wrong line, so that defect is
+        # reported alone.
+        if len(candidates) > 1 and not self.unresolved:
             self.report(
                 "RHO2002", {"candidates": [d.name for d in candidates]},
                 candidates[1].header,
