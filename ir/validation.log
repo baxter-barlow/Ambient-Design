@@ -27,17 +27,17 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 62 checks.
+ir-hashes: self-test PASS: 71 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/blinker.rhoform does not exist yet
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/lib/indicator.rhoform does not exist yet
 ir-hashes: unverified: ir/examples/blinker.ir.json: source_hash is unverifiable — the IR spec pins no serialization for the (path, sha256) list it hashes
-ir-hashes: PASS: 1 document(s) hash to their committed design_hash, and every paired source map agrees.
+ir-hashes: PASS: 3 document(s) hash to their committed design_hash, and every paired source map agrees.
 exit=0
 
-Command: python3 tests/schemas/validate-schemas.py  (ir/ rows only)
+Command: python3 tests/schemas/validate-schemas.py  (ir/ rows, and the benchmark goldens routed to ir/)
 schemas: ir/netlist-ir.schema.json: well-formed.
 schemas: ir/source-map.schema.json: well-formed.
 schemas: ir/examples/blinker.ir.json: valid against netlist-ir.schema.json.
@@ -51,6 +51,10 @@ schemas: ir/examples/negative/n06_bad_path.ir.json: invalid as expected, at the 
 schemas: ir/examples/negative/n07_static_tier_dynamic_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
+schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.schema.json.
+schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.schema.json.
 exit=0
 
 === design_hash refrozen, 2026-08-18 (AMB-123 round 14) ===
@@ -87,3 +91,23 @@ in this commit rather than re-quoted down here. check-layout.sh reads only the
 first occurrence of each, so a second copy appended below would be the stale
 one nobody reads -- which is the failure that gate was written for, and which
 it caught me committing while writing this very section.
+
+=== benchmark goldens join both gates, 2026-10-22 ===
+The document count above went from 1 to 3 and the self-test from 62 to 71
+checks, in the commit that added them. The two new documents are the
+elaborator's output for the living benchmark sources,
+benchmarks/blinker-555/blinker-555.ir.json and
+benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json, each with its source
+map, compiled with the benchmark directory as the compile root. For those the
+gate resolves source paths in that directory, requires the sources to exist,
+and verifies source_hash; the three "unverified" lines above are all about
+ir/examples, whose sources were never committed. rhoform/tests/
+test_benchmarks.py holds each golden to what its source elaborates to, byte
+for byte.
+
+The span-overlap rule changed with them: two identities may now share one
+declaration span exactly (a module instantiated twice declares each copy of a
+member with the same statement, as source-map.schema.json already said),
+while two different spans over the same bytes still fail. The self-test case
+that planted an identical span as its overlap now plants a partial one, and
+new cases pin both directions.

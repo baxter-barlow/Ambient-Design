@@ -18,6 +18,11 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
     mapped schema;
   - any *.json under <root>/examples/ matched by no mapping rule is a hard
     failure, so a new example layout cannot be silently skipped;
+  - benchmark goldens, the compiler's committed output for each living
+    benchmark source (benchmarks/<id>/<id>.ir.json and
+    benchmarks/<id>/<id>.sourcemap.json), are validated as positives of the
+    ir/ root; any other file with a mapped suffix outside an examples/
+    directory is still a failure;
   - a root that declares schemas but ships no negative controls is a hard
     failure: a schema never shown to reject anything is an untested schema;
   - files are processed in sorted order and failures are collected, so
@@ -62,6 +67,26 @@ SCHEMA_ROOTS = {
 }
 
 NEGATIVE_DIR_NAME = "negative"
+
+# Goldens: compiler output committed beside the source it was built from,
+# directory -> the schema root whose suffix mapping and schemas apply. They
+# are not schema examples and do not live under an examples/ directory, but
+# nothing else checks their shape, so they are positives of that root. A
+# golden is exactly <directory>/<id>/<id><suffix>; tests/ir/check-hashes.py
+# uses the same rule, so a misnamed file is a stray here rather than a
+# document one gate checks and the other ignores.
+GOLDEN_ROOTS = {"benchmarks": "ir"}
+
+
+def golden_paths(root):
+    """{schema root: [golden paths]}, each list sorted."""
+    found = {}
+    for directory, schema_root in sorted(GOLDEN_ROOTS.items()):
+        for suffix, _schema in SCHEMA_ROOTS[schema_root]:
+            for path in sorted((root / directory).glob(f"*/*{suffix}")):
+                if path.name == path.parent.name + suffix:
+                    found.setdefault(schema_root, []).append(path)
+    return {name: sorted(paths) for name, paths in found.items()}
 
 
 def negative_control_floor_problems(root, controls, failures, minimum=None):
@@ -136,30 +161,33 @@ def load_json(path, rel, failures):
         return None
 
 
-def check_root(root, root_name, suffix_map, jsonschema, failures):
-    """Validate one schema root. Returns (schemas, positives, negatives)."""
+def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
+    """Validate one schema root, plus any goldens routed to it. Returns
+    (schemas, positives, negatives, goldens)."""
     root_dir = root / root_name
     examples_dir = root_dir / "examples"
 
     schema_paths = sorted(
         p for p in root_dir.rglob("*.schema.json") if examples_dir not in p.parents
-    )
+    ) if root_dir.is_dir() else []
     if not schema_paths:
         # A root that has examples but no schema is a DELETED or RENAMED
         # schema, not an empty root. Reporting "nothing to validate" and
         # exiting 0 would mean removing a schema file silently disables its
         # entire root — every example and every negative control with it.
+        # Goldens routed here are the same case.
         stray = sorted(examples_dir.rglob("*.json")) if examples_dir.is_dir() else []
+        stray += list(goldens)
         if stray:
             failures.append(
-                f"{root_name}/: {len(stray)} example file(s) exist under "
-                f"{root_name}/examples/ but the root declares NO *.schema.json. "
+                f"{root_name}/: {len(stray)} example or golden file(s) need "
+                f"{root_name}/'s schemas but the root declares NO *.schema.json. "
                 "A schema was deleted or renamed, which would otherwise switch "
                 "off this root's validation silently."
             )
-            return 0, 0, 0
+            return 0, 0, 0, 0
         print(f"schemas: {root_name}/: no *.schema.json files; nothing to validate.")
-        return 0, 0, 0
+        return 0, 0, 0, 0
 
     validators = {}
     for schema_path in schema_paths:
@@ -178,12 +206,16 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
 
     positive_count = 0
     negative_count = 0
+    golden_count = 0
 
     example_paths = sorted(examples_dir.rglob("*.json")) if examples_dir.is_dir() else []
-    for example_path in example_paths:
+    for example_path in example_paths + sorted(goldens):
         rel = example_path.relative_to(root)
-        rel_to_examples = example_path.relative_to(examples_dir)
-        expect_invalid = NEGATIVE_DIR_NAME in rel_to_examples.parts[:-1]
+        # A golden is a positive wherever it sits: it is compiler output,
+        # never a control.
+        is_golden = examples_dir not in example_path.parents
+        expect_invalid = not is_golden and NEGATIVE_DIR_NAME in \
+            example_path.relative_to(examples_dir).parts[:-1]
 
         schema_name = next(
             (s for suffix, s in suffix_map if example_path.name.endswith(suffix)),
@@ -242,7 +274,10 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
             else:
                 print(f"schemas: {rel}: invalid as expected, at the {len(declared)} location(s) it declares: {', '.join(sorted(declared))}.")
         else:
-            positive_count += 1
+            if is_golden:
+                golden_count += 1
+            else:
+                positive_count += 1
             for error in errors:
                 path = "/".join(str(part) for part in error.absolute_path) or "<root>"
                 failures.append(f"{rel}: at {path}: {error.message}")
@@ -258,7 +293,7 @@ def check_root(root, root_name, suffix_map, jsonschema, failures):
             "expected-invalid fixture."
         )
 
-    return len(schema_paths), positive_count, negative_count
+    return len(schema_paths), positive_count, negative_count, golden_count
 
 
 def self_test() -> int:
@@ -409,6 +444,56 @@ def self_test() -> int:
     code, text = run({"stability": "stable"}, {"n1.part.json": control})
     cases.append(("an invalid POSITIVE example is caught", code == 1))
 
+    # GOLDENS: the elaborator's committed output for each benchmark source,
+    # which sits outside every examples/ directory by design. Before they
+    # were routed here the stray rule failed them; routed wrongly, they
+    # would pass unvalidated.
+    def _ir_root(root):
+        (root / "ir" / "examples" / "negative").mkdir(parents=True)
+        for name in ("netlist-ir.schema.json", "source-map.schema.json"):
+            (root / "ir" / name).write_text(_json.dumps(SCHEMA))
+        (root / "ir" / "examples" / "negative" / "n1.ir.json").write_text(
+            _json.dumps(control))
+
+    def _golden(root, name, body):
+        (root / "benchmarks" / "x").mkdir(parents=True, exist_ok=True)
+        (root / "benchmarks" / "x" / name).write_text(_json.dumps(body))
+
+    def _good_goldens(root):
+        _ir_root(root)
+        _golden(root, "x.ir.json", good)
+        _golden(root, "x.sourcemap.json", good)
+    code, text = run_raw(_good_goldens)
+    cases.append(("valid goldens are validated and counted as goldens",
+                  code == 0
+                  and "benchmarks/x/x.ir.json: valid against" in text
+                  and "benchmarks/x/x.sourcemap.json: valid against" in text
+                  and "0 valid example(s), 2 valid golden(s)" in text))
+
+    def _bad_golden(root):
+        _ir_root(root)
+        _golden(root, "x.ir.json", {"stability": "stable"})
+    code, text = run_raw(_bad_golden)
+    cases.append(("an invalid golden is caught",
+                  code == 1 and "benchmarks/x/x.ir.json: at stability" in text))
+
+    def _misnamed_golden(root):
+        _ir_root(root)
+        _golden(root, "y.ir.json", good)
+    code, text = run_raw(_misnamed_golden)
+    cases.append(("a file not named after its benchmark is a stray, not a golden",
+                  code == 1 and "benchmarks/x/y.ir.json: carries a mapped" in text))
+
+    def _orphan_goldens(root):
+        # No ir/ directory at all: the goldens alone must bring the root
+        # into the run, or they would be excused from the stray rule and
+        # validated by nothing.
+        _golden(root, "x.ir.json", good)
+    code, text = run_raw(_orphan_goldens)
+    cases.append(("goldens whose schema root is gone are caught, not skipped",
+                  code == 1 and "1 example or golden file(s)" in text
+                  and "declares NO *.schema.json" in text))
+
     code, text = run(good, {})
     cases.append(("a root with no negative controls is caught",
                   code == 1 and "ships no negative controls" in text))
@@ -429,7 +514,11 @@ def main() -> int:
         return self_test()
     root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_ROOT
 
-    present = [name for name in sorted(SCHEMA_ROOTS) if (root / name).is_dir()]
+    goldens = golden_paths(root)
+    # A root that goldens route to is checked even if its directory is gone,
+    # so goldens with no schema left to validate them fail rather than skip.
+    present = [name for name in sorted(SCHEMA_ROOTS)
+               if (root / name).is_dir() or name in goldens]
     if not present:
         print("schemas: no declared schema roots present yet; nothing to validate.")
         return 0
@@ -447,7 +536,7 @@ def main() -> int:
         return 2
 
     failures = []
-    totals = [0, 0, 0]
+    totals = [0, 0, 0, 0]
 
     # A file carrying a mapped example suffix but living outside any
     # declared examples/ directory is validated by nothing. `make check`
@@ -458,6 +547,7 @@ def main() -> int:
         {suffix for suffixes in SCHEMA_ROOTS.values() for suffix, _ in suffixes}
     )
     known_example_dirs = [root / name / "examples" for name in SCHEMA_ROOTS]
+    golden_set = {path for paths in goldens.values() for path in paths}
     skip_dirs = {".git", "node_modules", "__pycache__", ".venv"}
     for path in sorted(root.rglob("*.json")):
         if skip_dirs & set(path.parts):
@@ -465,6 +555,8 @@ def main() -> int:
         if not any(path.name.endswith(suffix) for suffix in mapped_suffixes):
             continue
         if any(d in path.parents for d in known_example_dirs):
+            continue
+        if path in golden_set:
             continue
         failures.append(
             f"{path.relative_to(root)}: carries a mapped example suffix but sits "
@@ -475,7 +567,8 @@ def main() -> int:
 
     for root_name in present:
         counts = check_root(
-            root, root_name, SCHEMA_ROOTS[root_name], jsonschema, failures
+            root, root_name, SCHEMA_ROOTS[root_name], jsonschema, failures,
+            goldens=goldens.get(root_name, ()),
         )
         totals = [a + b for a, b in zip(totals, counts)]
 
@@ -489,7 +582,7 @@ def main() -> int:
 
     print(
         f"schemas: PASS: {totals[0]} schema(s) across {len(present)} root(s), "
-        f"{totals[1]} valid example(s), "
+        f"{totals[1]} valid example(s), {totals[3]} valid golden(s), "
         f"{totals[2]} negative control(s) rejected as expected."
     )
     return 0

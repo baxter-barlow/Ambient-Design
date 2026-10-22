@@ -307,6 +307,55 @@ class EmissionTest(unittest.TestCase):
                          nested["declaration"])
         self.assertEqual(len(nested["instantiation_trace"]), 2)
 
+    def test_the_gate_accepts_a_module_instantiated_twice(self):
+        # Both copies of a reused module's members are declared by one
+        # statement, so their declaration spans are identical. The gate
+        # rejected that as an overlap until it learned the difference
+        # between a shared span and an overlapping one.
+        twice = PRAGMA + """
+
+module Leg:
+    port a passive
+    r = new lib.R:
+        pin a passive
+        pin b passive
+    net MID:
+        r.b
+    a ~ r.a
+    assert m dynamic frequency(MID) within 1Hz to 2Hz
+
+module Top:
+    l1 = new Leg
+    l2 = new Leg
+    l1.a ~ l2.a
+"""
+        design = _design(twice, "twice.rhoform")
+        source_map = ir.to_source_map(design, "")
+        nodes = source_map["nodes"]
+        for left, right in (("/l1/r", "/l2/r"), ("l1/MID", "l2/MID"),
+                            ("/l1/m", "/l2/m")):
+            with self.subTest(pair=(left, right)):
+                self.assertEqual(nodes[left]["declaration"],
+                                 nodes[right]["declaration"])
+                self.assertNotEqual(nodes[left]["instantiation_trace"],
+                                    nodes[right]["instantiation_trace"])
+        with tempfile.TemporaryDirectory() as scratch:
+            ir_bytes, map_bytes = ir.emit(design)
+            (Path(scratch) / "twice.ir.json").write_bytes(ir_bytes)
+            (Path(scratch) / "twice.sourcemap.json").write_bytes(map_bytes)
+            (Path(scratch) / "twice.rhoform").write_bytes(twice.encode())
+            problems, notes = [], []
+            GATE.check_document(Path(scratch) / "twice.ir.json", problems,
+                                notes, compile_root=Path(scratch))
+        self.assertEqual(problems, [])
+        self.assertEqual(notes, [])
+
+    def test_source_hash_matches_the_gate(self):
+        files = [(f.path, f.sha256) for f in self.design.files]
+        self.assertEqual(
+            ir.source_hash_of(files),
+            GATE.source_hash_of([{"path": p, "sha256": h} for p, h in files]))
+
     def test_repeated_builds_are_byte_identical(self):
         self.assertEqual(ir.emit(_design()), ir.emit(_design()))
 

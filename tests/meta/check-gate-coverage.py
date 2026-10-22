@@ -123,7 +123,7 @@ CEILINGS = {
     "tests/corpus/check-corpus.py": (37, 3),
     "tests/diagnostics/check-registry.py": (12, 0),
     "tests/eval/check-run-records.py": (62, 9),
-    "tests/ir/check-hashes.py": (20, 2),
+    "tests/ir/check-hashes.py": (22, 1),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
@@ -188,8 +188,10 @@ OWNERS = {
         # `notes` is printed and never fails the gate. Counting it made two
         # print statements 2 of this gate's 4 published survivors -- unpinnable
         # by construction, and a route to lowering a ceiling by converting a
-        # real check into a note.
-        {"problems"}, {"checks", "notes", "seen_spans", "_p"}),
+        # real check into a note. `documents` lists what main() checks and
+        # `_seen` records what the self-test's wiring probe saw it check.
+        {"problems"}, {"checks", "notes", "seen_spans", "_p", "documents",
+                       "_seen"}),
     "tests/meta/check-gate-coverage.py": (
         {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
                        "gates", "notes", "unaccounted", "missed",

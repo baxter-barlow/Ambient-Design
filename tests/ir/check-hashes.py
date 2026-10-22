@@ -35,6 +35,20 @@ WHAT THIS CAN AND CANNOT CHECK, stated rather than blurred:
                        repository-relative path; reported unverified until
                        then.
 
+BENCHMARK GOLDENS. Each benchmark's living source has the IR and source map
+the elaborator makes of it committed beside it, as
+benchmarks/<id>/<id>.ir.json and <id>.sourcemap.json, compiled with the
+benchmark directory as the compile root. For those the rules above tighten:
+`files[].path` resolves against that directory, every source must exist (a
+golden whose source is gone describes nothing anyone can rebuild), and
+`source_hash` IS verified, because the elaborator pins its serialization: the
+canonical bytes of the sorted [path, sha256] list. ir/examples keeps the
+looser rules, since its sources were never committed.
+
+Declarations may share a span exactly -- a module instantiated twice gives
+each copy of its members the same statement -- but two different spans that
+overlap still fail.
+
 Exit codes follow tests/structure/check-layout.sh: 0 pass, 1 mismatch, 2 when
 the gate could not run.
 
@@ -46,6 +60,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -311,7 +326,34 @@ def design_hash_of(document) -> str:
     return "sha256:" + hashlib.sha256(canonical_bytes(blanked)).hexdigest()
 
 
-def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None:
+def source_hash_of(files) -> str:
+    """The pinned `source_hash` serialization: sha256 over the canonical
+    bytes of the [path, sha256] pairs of every source read, sorted by path.
+    rhoform/ir.py computes it the same way; this is the gate's own copy."""
+    pairs = sorted([str(entry.get("path")), str(entry.get("sha256"))]
+                   for entry in files if isinstance(entry, dict))
+    return "sha256:" + hashlib.sha256(canonical_bytes(pairs)).hexdigest()
+
+
+def documents_to_check(root: Path = ROOT) -> list[tuple[Path, Path | None]]:
+    """(IR document, compile root) for everything this gate checks.
+
+    The compile root is None for ir/examples, whose source map paths are
+    repository-relative and whose sources were never committed, and the
+    benchmark directory for each benchmark golden. A golden is exactly
+    benchmarks/<id>/<id>.ir.json; tests/schemas/validate-schemas.py uses
+    the same rule, so a misnamed file is a stray there rather than a
+    document one gate checks and the other ignores."""
+    documents = [(path, None)
+                 for path in sorted((root / "ir" / "examples").glob("*.ir.json"))]
+    for path in sorted((root / "benchmarks").glob("*/*.ir.json")):
+        if path.name == path.parent.name + ".ir.json":
+            documents.append((path, path.parent))
+    return documents
+
+
+def check_document(ir_path: Path, problems: list[str], notes: list[str],
+                   compile_root: Path | None = None) -> None:
     text = ir_path.read_text(encoding="utf-8")
     # `relative_to` only for display, and it must not raise: the self-test
     # drives this function over a planted document in a temp directory, which
@@ -416,6 +458,14 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
                                    declaration.get("byte_end", 0), name))
         seen_spans.sort()
         for left, right in zip(seen_spans, seen_spans[1:]):
+            # IDENTICAL spans are not an overlap. ir/source-map.schema.json
+            # says replicated entities share a declaration span: a module
+            # instantiated twice declares each copy of a member with the one
+            # statement. Rejecting that failed every design that reuses a
+            # module. Sorting puts identical spans next to each other, so the
+            # last of a run is still compared with whatever follows it.
+            if left[:3] == right[:3]:
+                continue
             # `>` not `>=`: byte_end is END-EXCLUSIVE per the Span schema, so
             # [496,519) and [519,543) are adjacent, not overlapping. The first
             # version reported that pair as an overlap, with a message about
@@ -426,7 +476,8 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
                     f"{source_map_path.name}: the declarations of {left[3]} and "
                     f"{right[3]} overlap in file {left[0]} "
                     f"([{left[1]}, {left[2]}) against [{right[1]}, "
-                    f"{right[2]})). Two declarations cannot share source bytes.")
+                    f"{right[2]})). Two declarations may be the same span, "
+                    "but different ones cannot share source bytes.")
         uncovered = sorted(identities - set(nodes))
         if uncovered:
             problems.append(
@@ -460,14 +511,23 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
 
     # Source-side hashes. Every one is checked the moment its file exists.
     for entry in source_map.get("files", []):
-        # `path` is defined by ir/source-map.schema.json as a
-        # REPOSITORY-relative POSIX path, not one relative to ir/. Resolving
-        # it the other way made this whole leg dead code: it looked for a
-        # file that could never be there, reported "does not exist yet", and
-        # passed — while a real source file sitting at the schema's location
-        # went unchecked.
-        source_path = (ROOT / entry["path"]).resolve()
+        # For ir/examples `path` is a REPOSITORY-relative POSIX path, not one
+        # relative to ir/. Resolving it the other way made this whole leg
+        # dead code: it looked for a file that could never be there, reported
+        # "does not exist yet", and passed -- while a real source file sitting
+        # at the schema's location went unchecked. A benchmark golden is
+        # compiled with its own directory as the compile root, so its paths
+        # resolve there.
+        base = ROOT if compile_root is None else compile_root
+        source_path = (base / entry["path"]).resolve()
         if not source_path.exists():
+            if compile_root is not None:
+                problems.append(
+                    f"{sm_rel}: {entry['path']} does not exist in "
+                    f"{base.name}/, the compile root this golden was built "
+                    "in. A golden whose source is gone cannot be rebuilt, so "
+                    "nothing proves it still describes anything.")
+                continue
             notes.append(f"{sm_rel}: {entry['path']} does not exist yet")
             continue
         digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
@@ -476,7 +536,14 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str]) -> None
                 f"{sm_rel}: {entry['path']} hashes to {digest}, not "
                 f"{entry.get('sha256')}"
             )
-    if header.get("source_hash"):
+    if compile_root is not None:
+        expected_source = source_hash_of(source_map.get("files") or [])
+        if header.get("source_hash") != expected_source:
+            problems.append(
+                f"{rel}: source_hash is {header.get('source_hash')}, but the "
+                f"source map's file table hashes to {expected_source}. The "
+                "IR no longer names the sources its paired map describes.")
+    elif header.get("source_hash"):
         notes.append(
             f"{rel}: source_hash is unverifiable — the IR spec pins no "
             "serialization for the (path, sha256) list it hashes"
@@ -826,8 +893,28 @@ def self_test() -> int:
             side["nodes"]["/ghost"] = side["nodes"]["/c_byp"]
 
         def _overlap(side):
+            # Starts one byte inside /c_ctl's statement and ends where it
+            # does: a different span over the same bytes.
+            inside = dict(side["nodes"]["/c_ctl"]["declaration"])
+            inside["byte_start"] += 1
+            inside["col_start"] += 1
+            side["nodes"]["/c_byp"]["declaration"] = inside
+
+        def _identical(side):
+            # What a module instantiated twice produces: two identities, one
+            # statement.
             side["nodes"]["/c_byp"]["declaration"] = dict(
                 side["nodes"]["/c_ctl"]["declaration"])
+
+        def _identical_then_overlap(side):
+            # The exemption is for EQUAL spans, not equal starts: a span that
+            # starts with a shared one and ends a byte earlier still overlaps
+            # it.
+            _identical(side)
+            shorter = dict(side["nodes"]["/c_ctl"]["declaration"])
+            shorter["byte_end"] -= 1
+            shorter["col_end"] -= 1
+            side["nodes"]["/c_t"]["declaration"] = shorter
 
         def _no_nodes(side):
             side.pop("nodes", None)
@@ -837,8 +924,13 @@ def self_test() -> int:
         checks.append(("a source map naming an identity the IR lacks is caught",
                        any("which the IR does not contain" in p
                            for p in _map_probe(_add_stray))))
-        checks.append(("two declarations at the same source position are caught",
+        checks.append(("two different declarations over the same bytes are caught",
                        any("overlap in file" in p for p in _map_probe(_overlap))))
+        checks.append(("two identities sharing one declaration span are allowed",
+                       not _map_probe(_identical)))
+        checks.append(("a partial overlap after a shared span is still caught",
+                       any("overlap in file" in p
+                           for p in _map_probe(_identical_then_overlap))))
         def _bad_order(side):
             side["nodes"]["/c_byp"]["declaration"]["byte_end"] = 1
 
@@ -893,6 +985,80 @@ def self_test() -> int:
         checks.append(("a source map whose design_hash disagrees is caught",
                        bool(problems)))
 
+        # BENCHMARK GOLDENS, over a planted compile root that holds the two
+        # sources the blinker map names, so every source-side leg has real
+        # bytes to read -- which ir/examples, whose sources were never
+        # committed, cannot give it. Until goldens existed the files[].sha256
+        # comparison had no case at all.
+        def _golden_probe(mutate=lambda bench, body, side: None):
+            bench = Path(tmp) / "bench"
+            if bench.exists():
+                shutil.rmtree(bench)
+            (bench / "lib").mkdir(parents=True)
+            sources = {"blinker.rhoform": b"module A:\n",
+                       "lib/indicator.rhoform": b"module B:\n"}
+            for name, data in sources.items():
+                (bench / name).write_bytes(data)
+            side = json.loads((IR_EXAMPLES / "blinker.sourcemap.json").read_text(
+                encoding="utf-8"))
+            side["files"] = [{"path": name,
+                              "sha256": hashlib.sha256(data).hexdigest()}
+                             for name, data in sorted(sources.items())]
+            body = json.loads(text)
+            body["header"]["source_hash"] = source_hash_of(side["files"])
+            mutate(bench, body, side)
+            body["header"]["design_hash"] = design_hash_of(body)
+            side["design_hash"] = body["header"]["design_hash"]
+            (bench / "bench.ir.json").write_text(json.dumps(body), encoding="utf-8")
+            (bench / "bench.sourcemap.json").write_text(json.dumps(side),
+                                                        encoding="utf-8")
+            found, unverified = [], []
+            check_document(bench / "bench.ir.json", found, unverified,
+                           compile_root=bench)
+            return found, unverified
+
+        clean, unverified = _golden_probe()
+        checks.append(("a well-built golden checks clean with nothing left "
+                       "unverified", not clean and not unverified))
+
+        def _source_gone(bench, body, side):
+            (bench / "lib" / "indicator.rhoform").unlink()
+
+        def _source_edited(bench, body, side):
+            (bench / "blinker.rhoform").write_bytes(b"module C:\n")
+
+        def _source_hash_stale(bench, body, side):
+            body["header"]["source_hash"] = "sha256:" + "0" * 64
+
+        checks.append(("a golden whose source is missing is caught, not noted",
+                       any("does not exist in bench/" in p
+                           for p in _golden_probe(_source_gone)[0])))
+        checks.append(("a source whose bytes moved under its sha256 is caught",
+                       any("hashes to" in p
+                           for p in _golden_probe(_source_edited)[0])))
+        checks.append(("a golden source_hash that does not hash the file "
+                       "table is caught",
+                       any("file table hashes to" in p
+                           for p in _golden_probe(_source_hash_stale)[0])))
+        checks.append((
+            "source_hash is the canonical bytes of the sorted [path, sha256] "
+            "pairs",
+            source_hash_of([{"path": "b", "sha256": "2"},
+                            {"path": "a", "sha256": "1"}])
+            == "sha256:" + hashlib.sha256(b'[["a","1"],["b","2"]]\n').hexdigest()))
+
+        tree = Path(tmp) / "tree"
+        for planted in ("ir/examples/a.ir.json", "benchmarks/x/x.ir.json",
+                        "benchmarks/x/y.ir.json", "benchmarks/x/x.sourcemap.json"):
+            (tree / planted).parent.mkdir(parents=True, exist_ok=True)
+            (tree / planted).write_text("{}", encoding="utf-8")
+        checks.append((
+            "a benchmark golden is checked in its own directory, and a "
+            "misnamed one is not taken for a golden",
+            documents_to_check(tree) == [
+                (tree / "ir/examples/a.ir.json", None),
+                (tree / "benchmarks/x/x.ir.json", tree / "benchmarks/x")]))
+
 
     # WIRING. Everything above drives the check function; nothing proved
     # `main()` turns a finding into a non-zero exit. That branch was still one
@@ -900,17 +1066,26 @@ def self_test() -> int:
     # stopped.
     import contextlib as _c, io as _i
     _real = check_document
+    _seen = []
     try:
-        globals()["check_document"] = lambda _path, _p, _n: _p.append("planted")
+        globals()["check_document"] = \
+            lambda _path, _p, _n, compile_root=None: _p.append("planted")
         with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
             _planted = main([])
-        globals()["check_document"] = lambda _path, _p, _n: None
+        globals()["check_document"] = \
+            lambda _path, _p, _n, compile_root=None: _seen.append(
+                (_path, compile_root))
         with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
             _clean = main([])
     finally:
         globals()["check_document"] = _real
     checks.append(("main() exits non-zero when a problem is found", _planted == 1))
     checks.append(("main() exits zero when none is", _clean == 0))
+    checks.append((
+        "main() checks the committed benchmark goldens, each in its own "
+        "directory",
+        any(path.parent.parent == ROOT / "benchmarks"
+            and compile_root == path.parent for path, compile_root in _seen)))
 
     failed = 0
     for name, ok in checks:
@@ -983,15 +1158,15 @@ def main(argv: list[str] | None = None) -> int:
     # `negative/` is deliberately malformed for the SCHEMA gate; its documents
     # are not required to be hash-consistent and checking them would make two
     # gates fight over the same fixtures.
-    documents = sorted(p for p in IR_EXAMPLES.glob("*.ir.json"))
-    if not documents:
+    documents = documents_to_check()
+    if not any(compile_root is None for _path, compile_root in documents):
         print("ir-hashes: FAIL: no IR examples found to check", file=sys.stderr)
         return 2
 
     problems: list[str] = []
     notes: list[str] = []
-    for path in documents:
-        check_document(path, problems, notes)
+    for path, compile_root in documents:
+        check_document(path, problems, notes, compile_root=compile_root)
     readme_digest_problems(problems)
 
     for note in notes:
