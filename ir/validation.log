@@ -34,7 +34,7 @@ Command: python3 tests/ir/check-hashes.py
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/blinker.rhoform does not exist yet
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/lib/indicator.rhoform does not exist yet
 ir-hashes: unverified: ir/examples/blinker.ir.json: source_hash is unverified — this hand-written example predates the pinned serialization and carries a placeholder
-ir-hashes: PASS: 3 document(s) hash to their committed design_hash, and every paired source map agrees.
+ir-hashes: PASS: 4 document(s) hash to their committed design_hash, and every paired source map agrees.
 exit=0
 
 Command: python3 tests/schemas/validate-schemas.py  (ir/ rows, and the benchmark goldens routed to ir/)
@@ -53,6 +53,8 @@ schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as e
 schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
 schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.schema.json.
 schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.sourcemap.json: valid against source-map.schema.json.
 schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.schema.json.
 schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.schema.json.
 exit=0
@@ -111,3 +113,13 @@ member with the same statement, as source-map.schema.json already said),
 while two different spans over the same bytes still fail. The self-test case
 that planted an identical span as its overlap now plants a partial one, and
 new cases pin both directions.
+
+=== benchmark (b) joins, 2026-10-22 ===
+The document count went from 3 to 4 when benchmarks/buck-3v3/buck-3v3.rhoform
+became a living source (a component-level proposal pending EE review,
+AMB-128) with its IR and source map beside it. The PASS line and the schemas
+rows above were updated in that commit, for the reason the round-14 section
+gives. The third "unverified" line was reworded on the same branch: the spec
+now pins the source_hash serialization, so the example's value is unverified
+because it is a placeholder written before that rule, not because no rule
+exists.
