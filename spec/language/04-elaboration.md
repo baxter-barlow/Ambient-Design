@@ -91,8 +91,12 @@ More than one candidate is an error (RHO2002), except when the
 compilation reports an unresolved single-word definition (RHO2005): a
 misspelled `d = new Divder` leaves `Divider` instantiated by nothing, and
 the unresolved name is the defect, so it is reported alone and no root
-is chosen. A misspelling in a branch no instance takes is not reported
-(see [Diagnostics](#diagnostics)), so it does not suppress RHO2002. An implementation MAY let the user name the root explicitly
+is chosen. Candidates are found in the text, so that defect is too: a
+single-word `new` whose one close match is a candidate is reported
+(RHO2005, with that match as its fix-it) wherever it stands, in an `if`
+branch no instance takes included. Any other misspelling in a branch no
+instance takes is not reported (see [Diagnostics](#diagnostics)), so it
+does not suppress RHO2002. An implementation MAY let the user name the root explicitly
 (the reference CLI's `--root-module NAME`); a name that is not a module
 of the entry file is then an error (RHO2003). There is no separate error
 for zero candidates: a file whose every module is instantiated by
@@ -281,12 +285,14 @@ changing one a design does not name, therefore changes no existing
 design's hashes. Diagnostics that point into a library definition
 (RHO2035's "defined here") span the library file by the same path.
 Because a library module holds component definitions only, it imports
-nothing: no author's file is ever read on the library's behalf. An
-author's own file whose compile-root-relative path is a library path
-(`rhoform/lib/passive.rhoform` under the compile root) does not stand
-in for the library module: that module is then not read, and names
-under the prefix that need it are RHO2067, since one path cannot name
-two files.
+nothing: no author's file is ever read on the library's behalf. No
+author's file is compiled whose module path falls under the reserved
+prefix — `rhoform/lib.rhoform`, or any file under `rhoform/lib/`,
+relative to the compile root: its definitions would take the library's
+names, and one path cannot name two files. Such a file is refused
+before it is read (RHO2068), at the import that names it or, as the
+entry, at its start, so a library path always means the toolchain's
+file.
 
 ## Values
 
@@ -315,7 +321,10 @@ the canonical profile requires. This is the only point at which a value
 is rounded; the source and the elaborated design stay exact, and the IR
 is inspectable, not authoritative (P7). An integer whose magnitude
 exceeds 2^53, or a quantity whose double would not be finite, is an
-error rather than a rounding (RHO2017). Conformance case
+error rather than a rounding (RHO2017). The integer bound holds for
+every integer literal, not only for values: an array size, a `range`
+bound, an index or its offset, or a condition's operand past 2^53 is
+RHO2017 too, whether or not its branch is taken. Conformance case
 `elaborate/accept/a08_decimal_to_double` pins both directions: a bound
 written exactly halfway between the doubles 1 and 1 + 2^-52 is `1` in
 the IR (ties to even), and one with more significant digits than a
@@ -333,7 +342,10 @@ checks them as [Parameters](#parameters) says.
 ## Parameters
 
 A `module` or `component` MAY declare a parameter list,
-`(name: type [= default], ...)`. Parameter names are unique per list
+`(name: type [= default], ...)`. An empty list, `()`, is no list: the
+definition checks its arguments as one written without a list does,
+which is what lets the formatter remove it
+([07 — Formatting](07-formatting.md)). Parameter names are unique per list
 (RHO2007). The type is a `param_type` word ([02 — Grammar](02-grammar.md)):
 `string`, `int`, `bool`, or a quantity dimension. A value has a type: a
 string literal is a `string`, an integer an `int`, `true` and `false`

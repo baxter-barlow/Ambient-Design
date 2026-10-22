@@ -28,6 +28,13 @@ files name under `rhoform.lib.`; those are the toolchain's own files,
 recorded by their fixed library path, and are not imported: no import
 path names one, and no manifest or `[deps]` entry is needed to use one.
 
+Every name on a path — a directory, a file, a manifest — matches the
+file system's name exactly, letter case included, on every host: a name
+that matches only when case is ignored names nothing, so a
+case-insensitive file system resolves no path a case-sensitive one
+reports missing, and one file never has two spellings in one
+compilation.
+
 A file belongs to the package rooted at the nearest directory, from the
 file's own up to the compile root, that holds a `rhoform.toml`. A file
 with no such directory belongs to no package: the compile root then
@@ -37,10 +44,15 @@ manifest above the compile root is not read.
 Compilation is hermetic (L2, I3). It reads the files of the import
 closure, the manifests that govern them — the entry file's package's
 and, transitively, those of the packages it depends on — and the
-standard library modules those files name, and nothing else: no
-directory of the author's is listed (only the toolchain's own library
-directory, to match module names exactly), no network is opened, and a
-dependency's source files are read only when something imports them. When the
+standard library modules those files name, and nothing else: a
+directory of the author's is listed only to match the spelling of a name
+on a path being resolved (as the toolchain's own library directory is,
+to match module names exactly), no network is opened, and a
+dependency's source files are read only when something imports them.
+Nothing a symbolic link leads outside the compile root is read: an
+import or a dependency reaching one is the error above, and the entry
+file or a governing manifest, which no statement names, is an
+operational failure (the CLI's exit 2). When the
 package layer reports any error, the compilation is not elaborated.
 
 ## The manifest
@@ -99,7 +111,8 @@ makes the same value. The dependency keys are `git`, `integrity`,
 
 - `version` is required (RHO2050) and is a range (RHO2054).
 - `path` is the dependency's package root, relative to the directory of
-  the manifest that declares it. It MUST lie under the compile root, and
+  the manifest that declares it. It MUST lie under the compile root,
+  also once symbolic links are resolved, and
   MUST hold a `rhoform.toml` that declares the package the key names, at
   a version the range admits (RHO2057). One package name has one source
   across the whole compilation: two declarations of one name at
@@ -139,10 +152,10 @@ path. The path names one file:
 
 - A path beginning `./` or `../`, or holding no `/`, is a **module of
   the importing file's own package** (X1). It is relative to the
-  importing file's directory and normalized lexically (no symbolic link
-  is followed). It MUST NOT leave that package: neither above its root
-  nor into a directory below it that holds a `rhoform.toml` of its own
-  (RHO2061).
+  importing file's directory and normalized lexically, and the file is
+  identified by that path. It MUST NOT leave that package: neither above
+  its root nor into a directory below it that holds a `rhoform.toml` of
+  its own (RHO2061).
 - Any other path is `<namespace>/<name>/<module>...`: its first two
   segments are a **package the importing package lists in `[deps]`**
   (X2), and the rest a module path within that package's root. A package
@@ -151,7 +164,15 @@ path. The path names one file:
   or `..` segments, and MUST NOT lead into a nested package (RHO2061).
 
 A module path names `<module path>.rhoform`; the suffix may also be
-written. The file MUST exist (RHO2060). A path that is empty, absolute,
+written. The file MUST exist (RHO2060); when the path misses a file only
+by letter case, the diagnostic carries the file system's spelling as a
+fix-it. A symbolic link on the path is
+followed only when what it leads to is still inside the package the
+path is in, so neither form of import can leave its package, or the
+compile root, through one (RHO2061). A path naming a file whose module
+path falls under the reserved prefix `rhoform.lib.` is RHO2068, and so
+is such a file as the entry
+([04](04-elaboration.md#the-standard-library)). A path that is empty, absolute,
 holds an empty segment, ends in `.` or `..`, or is not `./`-relative
 and whose first two segments are not a package name or name no module,
 is RHO2062.

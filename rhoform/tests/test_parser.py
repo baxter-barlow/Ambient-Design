@@ -1208,6 +1208,24 @@ class Syntax02Test(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(self._ok(text), ok)
 
+    def test_nesting_past_the_recursion_limit_still_gets_its_checks(self):
+        """if/for nest without bound, so the post-parse checks may not
+        spend a frame per level: 1000 levels used to raise RecursionError
+        out of parse(), which promises never to raise on bad input. The
+        bad quantity sits at the bottom so the walk has to reach it."""
+        lines = [PRAGMA_0_2, "module M(flag: bool = true, n: int = 1):",
+                 "    port a passive", "    port b passive"]
+        indent = "    "
+        for level in range(1000):
+            lines.append(indent + (f"for i{level} in range(1):"
+                                   if level % 2 else "if flag:"))
+            indent += "    "
+        lines += [indent + "if n == 5kOhm:", indent + "    a ~ b"]
+        result = _parse("\n".join(lines) + "\n")
+        self.assertEqual(_codes(result), ["RHO1010"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["params"]["literal"], "5kOhm")
+
     def test_imports_come_before_every_definition(self):
         self.assertTrue(self._ok('import A, B from "x.rhoform"\n'
                                  "module M:\n    port p passive\n"))

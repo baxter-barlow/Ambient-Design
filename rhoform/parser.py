@@ -1243,9 +1243,17 @@ def _postparse(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
                         primary=span,
                         fixits=_closest_fixit(str(word), allowed, span),
                     )
-    for token in tree.scan_values(
-        lambda value: getattr(value, "type", None) in _QUANTITY_TOKEN_TYPES
-    ):
+    # Tree.scan_values recurses once per level, and if/for nest without
+    # bound; this is the same left-to-right walk on an explicit stack.
+    work = [tree]
+    while work:
+        token = work.pop()
+        children = getattr(token, "children", None)
+        if children is not None:
+            work.extend(reversed(children))
+            continue
+        if getattr(token, "type", None) not in _QUANTITY_TOKEN_TYPES:
+            continue
         try:
             parse_quantity(str(token))
         except QuantityError as exc:

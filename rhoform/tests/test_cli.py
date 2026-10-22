@@ -196,6 +196,15 @@ class CheckTest(_Tmp):
         self.assertEqual(lines(out)[0]["spans"][0]["file"],
                          "boards/bad.rhoform")
 
+    def test_only_a_file_named_rhoform_toml_exactly_is_a_manifest(self):
+        # A case-insensitive file system also answers for RHOFORM.TOML;
+        # Linux does not, and the compile root may not depend on the host.
+        from rhoform import cli
+
+        self.write("pkg/RHOFORM.TOML", MANIFEST)
+        entry = self.write("pkg/boards/main.rhoform", CLEAN)
+        self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
+
     def test_explicit_compile_root_wins_and_must_contain_the_entry(self):
         self.write("pkg/rhoform.toml", MANIFEST)
         entry = self.write("pkg/boards/bad.rhoform", BROKEN)

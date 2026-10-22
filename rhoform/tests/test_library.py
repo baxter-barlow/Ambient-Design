@@ -284,16 +284,22 @@ class ResolutionTest(unittest.TestCase):
                             for d in _diagnostics(result)))
         self.assertIsNone(result.design)
 
-    def test_an_authors_file_at_a_library_path_shadows_nothing(self):
-        # One path cannot name two files: the bundled module is not read,
-        # and the prefix still resolves only against the bundled library.
+    def test_an_authors_file_at_a_library_path_is_refused(self):
+        # Its definitions would be named under the reserved prefix, and
+        # one path cannot name two files: the file is refused, so the
+        # library path always means the bundled module.
         from rhoform.elaborate import elaborate_source
 
-        result = elaborate_source(
-            P + "module Top:\n    r = new rhoform.lib.passive.Resistor\n",
-            "rhoform/lib/passive.rhoform")
-        self.assertEqual([d["code"] for d in _diagnostics(result)],
-                         ["RHO2067"])
+        for path in ("rhoform/lib/passive.rhoform", "rhoform/lib.rhoform",
+                     "rhoform/lib/sub/x.rhoform"):
+            with self.subTest(path=path):
+                result = elaborate_source(
+                    P + "module Top:\n"
+                    "    r = new rhoform.lib.passive.Resistor\n", path)
+                found = _diagnostics(result)
+                self.assertEqual([d["code"] for d in found], ["RHO2068"])
+                self.assertEqual(found[0]["params"]["file"], path)
+                self.assertIsNone(result.design)
 
     def test_a_missing_library_directory_resolves_nothing(self):
         from rhoform.elaborate import Library

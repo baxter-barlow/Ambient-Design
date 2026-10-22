@@ -256,6 +256,27 @@ class GoldenTest(unittest.TestCase):
 
         self.assertTrue(is_canonical(source))
 
+    def test_digit_runs_sort_however_long(self):
+        """Natural sort keys a digit run by its value without int(), which
+        CPython refuses past sys.get_int_max_str_digits (4300 by default):
+        a long designator or index used to crash `rhoform fmt`."""
+        from rhoform.fmt import natural_key
+
+        long = "1" * 5000
+        self.assertLess(natural_key("2"), natural_key(long))
+        self.assertLess(natural_key(long), natural_key("2" + "0" * 4999))
+        self.assertLess(natural_key(long), natural_key("0" + long))
+        self.assertLess(natural_key("0"), natural_key("00"))
+        self.assertLess(natural_key("00"), natural_key("1"))
+        self._check(
+            "long designator and index",
+            P2 + "\ncomponent C:\n    pin a passive " + long + " 2\n\n"
+            "module M:\n    port p passive\n    cs = new C[2]\n"
+            "    net N:\n        cs[" + long + "].a\n        cs[0].a\n",
+            P2 + "\ncomponent C:\n    pin a passive 2 " + long + "\n\n"
+            "module M:\n    port p passive\n    cs = new C[2]\n"
+            "    net N:\n        cs[0].a\n        cs[" + long + "].a\n")
+
     def test_is_canonical_and_first_difference(self):
         from rhoform.fmt import first_difference, is_canonical
 
@@ -611,9 +632,10 @@ class TotalityFuzzTest(unittest.TestCase):
         self.assertGreaterEqual(clean, 150)
 
     def test_nesting_as_deep_as_the_parser_accepts(self):
-        """Blocks nest as deep as the parser takes them, so no walk may
-        spend a Python frame per level: 300 levels of `for` and `if`/`else`
-        parse, and used to overflow the normalized-AST walk."""
+        """Blocks nest without bound, so no walk may spend a Python frame
+        per level: 1000 levels of `for` and `if`/`else` parse, format and
+        elaborate. 300 used to overflow the normalized-AST walk, and 330
+        the parser's own quantity scan, which the self-check re-parse hit."""
         from rhoform.elaborate import elaborate
         from rhoform.parser import parse
 
@@ -621,7 +643,7 @@ class TotalityFuzzTest(unittest.TestCase):
                  "    port b passive"]
         branches = []
         indent = "    "
-        for level in range(300):
+        for level in range(1000):
             if level % 2:
                 lines.append(indent + "if flag:")
                 branches.append([indent + "else:", indent + "    b ~ a"])
@@ -716,6 +738,21 @@ class FormattingPreservesTheDesignTest(unittest.TestCase):
         # Every elaboration accept case and benchmark must have reached
         # the hash comparison, not only the code comparison.
         self.assertGreaterEqual(designs, 15)
+
+    def test_an_empty_parameter_list_is_no_list(self):
+        """The formatter drops `()` on a definition (F-7), so the elaborator
+        may not give it a meaning: a typed list of nothing would reject the
+        arguments that the formatted file, with no list, records."""
+        source = (P2 + "\ncomponent C():\n    pin a passive\n"
+                  "    pin b passive\n\nmodule M():\n    port p passive\n"
+                  "    c = new C(x = 1)\n    c.a ~ p\n    table C (y):\n"
+                  "        t1  2\n\nmodule Top:\n    port p passive\n"
+                  "    m = new M(y = 2)\n    m.p ~ p\n")
+        formatted = _fmt(source).text
+        self.assertNotIn("()", formatted)
+        before = _design_and_codes(source, "e.rhoform")
+        self.assertEqual(_design_and_codes(formatted, "e.rhoform"), before)
+        self.assertIsNotNone(before[0], before[1])
 
 
 # --------------------------------------------------------------------------

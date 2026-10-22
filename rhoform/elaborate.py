@@ -439,6 +439,15 @@ def _representable(*values: Decimal) -> bool:
 # `string`, `int`, `bool`, or a quantity dimension. A bare-interval literal
 # has the type ("interval", dimension): it is never a parameter value.
 
+def _beyond_ir(integer: str) -> bool:
+    """Whether an INTEGER token's magnitude exceeds 2^53 (RHO2017). Its
+    digits have no leading zero, and 2^53 has 16, so a longer one is past
+    it without int(), which CPython refuses for a long enough digit string
+    (sys.get_int_max_str_digits)."""
+    digits = integer.lstrip("-")
+    return len(digits) > 16 or int(digits) > MAX_IR_INTEGER
+
+
 def _literal_type(token):
     kind = token.type
     if kind == "STRING":
@@ -739,6 +748,7 @@ class _Elaborator:
         self.limit_reported = False
         self.elaborated: set[str] = set()  # instance paths the walk built
         self.spare_roots: list = []  # root candidates, when several
+        self.unresolved_news: list = []  # (defn, qualified), taken or not
 
     # -- reporting
 
@@ -859,9 +869,9 @@ class _Elaborator:
         module that does not parse is a defect of the toolchain, reported
         as its parse diagnostics; its names then resolve to nothing. So do
         the names of a module whose library path an author's own source
-        already occupies (a file at `rhoform/lib/` under the compile root):
-        one path cannot name two files, and the prefix never resolves to
-        anything but the bundled library."""
+        already occupies, which the package layer refuses (RHO2068) before
+        elaboration: this only keeps a caller that brings its own imports
+        from making one path name two files."""
         for module in library_modules(self.results):
             if library_file(module) in self.visible:
                 continue
@@ -951,7 +961,9 @@ class _Elaborator:
 
     def collect_params(self, defn: _Definition) -> None:
         node = _tree(defn.tree, "params")
-        if node is None:
+        # An empty `()` is no list: the formatter drops it (F-7), so it
+        # must not check arguments against nothing.
+        if node is None or not _trees(node, "param"):
             return
         result = defn.result
         defn.params = []
@@ -1151,8 +1163,11 @@ class _Elaborator:
                     if name in seen:
                         continue
                     seen.add(name)
-                resolved = self.resolve(defn, _tree(stmt, "qualified_name"))
-                if resolved is not None and resolved[0] == "module":
+                qualified = _tree(stmt, "qualified_name")
+                resolved = self.resolve(defn, qualified)
+                if resolved is None and len(_words(qualified)) == 1:
+                    self.unresolved_news.append((defn, qualified))
+                elif resolved is not None and resolved[0] == "module":
                     defn.edges.append(
                         (name, resolved[1], defn.result.span_of(stmt)))
             elif stmt.data == "table_decl":
@@ -1262,7 +1277,10 @@ class _Elaborator:
         as a possible root would send the author to the wrong line, so that
         defect is reported alone. Only a REPORTED one counts: a typo in a
         branch no instance takes draws no RHO2005, and suppressing RHO2002
-        for it would leave the file failing with nothing said."""
+        for it would leave the file failing with nothing said. Except that
+        candidates are found in the text, taken branches or not, so a
+        `new` whose one close match is a candidate is why that candidate
+        is spare wherever it stands: it is reported here, and alone."""
         candidates = self.spare_roots
         if not candidates:
             return
@@ -1271,6 +1289,19 @@ class _Elaborator:
         if any(d.code == "RHO2005" for d in self.sink) or any(
                 item[0] == "RHO2005" for buckets in held
                 for bucket in buckets for item in bucket.items.values()):
+            return
+        spare = {id(d) for d in candidates}
+        typos = []
+        for defn, qualified in self.unresolved_news:
+            file = defn.result.file
+            name = _words(qualified)[0]
+            match = _one_close(name, self.visible[file])
+            if match is not None and name not in self.unbound.get(file, ()) \
+                    and id(self.visible[file][match]) in spare:
+                typos.append((defn, qualified))
+        if typos:
+            for defn, qualified in typos:
+                self.unresolved(defn, qualified)
             return
         self.report(
             "RHO2002", {"candidates": [d.name for d in candidates]},
@@ -1323,8 +1354,10 @@ class _Elaborator:
                         stmt, "chain_head"):
                     index = _tree(node, "index")
                     if index is not None:
-                        self.check_int(defn, index, index.children[0],
-                                       scope, "an index")
+                        # The base, then the offset of `i + 1`.
+                        for token in index.children[::2]:
+                            self.check_int(defn, index, token, scope,
+                                           "an index")
             elif data == "if_stmt":
                 self.check_condition(defn, _tree(stmt, "condition"), scope)
                 for block in reversed(_trees(stmt, "block")):
@@ -1368,15 +1401,24 @@ class _Elaborator:
         return None
 
     def check_int(self, defn, node, token, scope, context) -> None:
-        """An index, `range` bound or array size: an INTEGER, or a name in
-        scope whose type is int."""
+        """An index, `range` bound or array size: an INTEGER no larger than
+        a value may be, or a name in scope whose type is int."""
         if token.type != "FREE_NAME":
+            self.check_integer(defn, node, token)
             return
         found = self.reference(defn, token, scope)
         if found is None:
             self.bad.add(id(node))
         elif found != "int":
             self.mismatch(defn, token, found, context, "int")
+            self.bad.add(id(node))
+
+    def check_integer(self, defn, node, token) -> None:
+        """E-7 bounds every integer literal, not only values: past 2^53 is
+        RHO2017 wherever it is written, and `node` is not evaluated."""
+        if token.type == "INTEGER" and _beyond_ir(str(token)):
+            self.report("RHO2017", {"literal": str(token)},
+                        defn.result.span_of(token))
             self.bad.add(id(node))
 
     def check_value(self, defn, node, scope, expected, context) -> None:
@@ -1514,6 +1556,9 @@ class _Elaborator:
                 self.bad.add(id(cond))
                 return
         else:
+            self.check_integer(defn, cond, token)
+            if id(cond) in self.bad:
+                return
             right = _literal_type(token)
             if token.type in ("QUANTITY", "QUANTITY_INTERVAL") \
                     and right == left \
@@ -2103,11 +2148,10 @@ class _Elaborator:
         if text in ("true", "false"):
             return text == "true"
         if token.type == "INTEGER":
-            number = int(text)
-            if abs(number) > MAX_IR_INTEGER:
+            if _beyond_ir(text):
                 self.report("RHO2017", {"literal": text}, span)
                 return UNKNOWN
-            return number
+            return int(text)
         parsed = quantities.parse_quantity(text)
         if parsed.nominal is None:
             self.report("RHO2016", {"literal": text, "name": name}, span)

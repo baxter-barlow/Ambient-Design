@@ -848,6 +848,17 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("name",),
         rule="L2",
     ),
+    CodeDef(
+        code="RHO2068", slug="reserved-module-path", severity="error",
+        message=(
+            "`{file}` has the module path `{module}`, under the reserved "
+            "prefix `rhoform.lib.`, which names the bundled standard "
+            "library's modules and nothing else; an author's file there "
+            "would take their names, so it is not compiled."
+        ),
+        params=("file", "module"),
+        rule="L2",
+    ),
     # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
     # The GA spec published these as "placeholders in a reserved block;
     # final numbers are assigned when the A1 registry lands". This is that
