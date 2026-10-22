@@ -1,0 +1,12 @@
+# RHO2035 against the standard library: pins an instance restates must be
+# the library definition's exactly. A generic resistor declares no
+# designators, because its pads are the footprint's.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor(resistance = 1kohm):
+        pin a passive 1
+        pin b passive 2
+    vin ~ r1.a
+    isolated r1.b

@@ -1079,7 +1079,8 @@ are that PDF's printed page numbers. Pin numbers, names and types come from sect
 it was checked against the table of contents page by page.
 
 Type column (datasheet footnote, p. 4): P = power, G = ground, I = input, O = output.
-"Role" is the T2 lattice role `buck-3v3.rhoform` declares
+"Role" is the T2 lattice role the library definition `rhoform.lib.regulator.Lm25145`
+declares in `rhoform/lib/regulator.rhoform`, which the source takes its pins from
 (`lang/grammar/rhoform_syntax.py` CLOSED_VOCABULARIES pin_role). "Rhoform pin" is the
 datasheet name with `/` written `_`, because a pin name must be an identifier.
 
@@ -1116,7 +1117,7 @@ datasheet name with `/` written `_`, because a pin name must be an identifier.
    pin exists on other TI controllers, not on this one.
 3. **Exposed-pad designator 21.** The pin table does not number the exposed pad; it
    is row "-" (p. 5). Pin 15 (EP) is "internally connected to exposed pad", so the
-   source declares one port `EP` with designators `15 21`. TI's RGY0020B package
+   library definition `Lm25145` declares one pin `EP` with designators `15 21`. TI's RGY0020B package
    drawing 4222860/B (DS pp. 55-57) numbers the 1.7 x 2.7 mm thermal pad 21, so the
    number is the drawing's. The KiCad footprint that R30 eventually binds must be
    that RGY0020B land pattern.
@@ -1167,8 +1168,9 @@ three separate source pads. Roles: d passive, s passive, g input.
 
 ### Inductor
 
-Coilcraft XGL6060-103ME (CC 1621-2 part table), two terminals declared `a` (1) and
-`b` (2). l1.a is on SW and l1.b is on VOUT. The inductor is electrically
+Coilcraft XGL6060-103ME (CC 1621-2 part table), two terminals `a` and `b` from the
+library's generic `Inductor`, which carries no pad numbers (they belong to the
+footprint: pads 1 and 2). l1.a is on SW and l1.b is on VOUT. The inductor is electrically
 unpolarised but marked for EMI: the CC 1621-1 drawing marks the start (short) lead
 and says "Connect high dv/dt here for lowest EMI". So l1.a, the SW end, must be
 the marked start-lead pad, and the footprint R30 binds has to carry that marking.
@@ -1235,3 +1237,8 @@ DCR, or spelling for the efficiency probe, measurement windows and
 undefined library names `rhoform.lib.regulator.Lm25145` and
 `rhoform.lib.semiconductor.Nmos`; and no net-tie or Kelvin spelling for R10, where
 one GND net is electrically correct. Statement order is now held by `rhoform fmt`.
+
+*Note added with syntax 0.2 (2026-10-22):* two of those DSL items are now handled. The
+bundled library defines `rhoform.lib.regulator.Lm25145` and
+`rhoform.lib.semiconductor.Nmos`, and generic passives carry no pad designators
+(decision E-5), so the source takes every pin from the library.

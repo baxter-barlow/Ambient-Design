@@ -86,7 +86,7 @@ the author wrapped over several lines is written on one line.
 |---|---|---|
 | import | `import Led, Resistor from "lib/parts.rhoform"` | names sorted |
 | module | `module Power:` | (its body: see Ordering) |
-| component | `component UsbC:` with one pin per line | (its body: pins sorted by name) |
+| component | `component UsbC:` with one pin per line, or `component Fiducial` with no pins | (its body: pins sorted by name) |
 | parameter list | `module Divider(r_top: resistance = 10kohm, stages: int = 1):` | parameters keep source order |
 | port | `port vin power_in` | |
 | instance | `r1 = new rhoform.lib.passive.Resistor(power_rating = 250mW, resistance = 1kohm)` | arguments sorted by name |

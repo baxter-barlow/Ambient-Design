@@ -1,0 +1,40 @@
+# The standard library: a name under the reserved prefix rhoform.lib. is a
+# component the bundled library defines, and an instance gets that
+# definition's pins as its ports without restating them. A generic part's
+# pins carry no designators and a part-specific one's carry its pads; a
+# pinless kind has no ports and a test point one passive pin. Pins an
+# instance does restate agree with the definition, and a definition with a
+# parameter list records the instance's whole environment.
+#pragma rhoform-syntax 0.1
+
+module Board:
+    port gnd power_in
+    port out output
+    port vcc power_in
+    c1 = new rhoform.lib.passive.Capacitor(capacitance = 10nF)
+    fb1 = new rhoform.lib.passive.FerriteBead(impedance = 600ohm)
+    mh1 = new rhoform.lib.mech.MountingHole(diameter = 3.2mm):
+        hardware mounting_hole
+        board_only
+    r1 = new rhoform.lib.passive.Resistor(resistance = 1kohm):
+        pin a passive
+        pin b passive
+    tp1 = new rhoform.lib.mech.TestPoint:
+        hardware test_point
+    u1 = new rhoform.lib.timer.Ne555
+    net GND:
+        c1.b
+        gnd
+        u1.gnd
+    net OUT:
+        out
+        r1.a
+        tp1.p
+        u1.out
+    net VCC:
+        fb1.b
+        u1.rst
+        u1.vcc
+    vcc ~ fb1.a
+    u1.ctl ~ c1.a
+    isolated r1.b

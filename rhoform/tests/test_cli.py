@@ -16,6 +16,7 @@ compile need jsonschema too, which the CI job running rhoform/tests pins.
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import stat
@@ -472,9 +473,10 @@ atexit.register(lambda: sys.stderr.write(
 
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)
 class HermeticTest(_Tmp):
-    """C-6: no network, no reads beyond the input closure plus the grammar,
-    the IR schema and the interpreter's own files, no writes except targets
-    and --emit-ir."""
+    """C-6: no network, no reads beyond the input closure (the sources and
+    the standard library modules they name) plus the grammar, the IR schema
+    and the interpreter's own files, no writes except targets and
+    --emit-ir."""
 
     def test_no_network_and_no_stray_files(self):
         def refuse(*_args, **_kwargs):
@@ -499,29 +501,69 @@ class HermeticTest(_Tmp):
             + [f"ir/{stem}.{kind}" for stem in stems
                for kind in ("ir.json", "sourcemap.json")]))
 
-    def test_a_check_opens_only_its_closure(self):
-        sources = sorted((ROOT / "benchmarks").glob("*/*.rhoform"))
-        for source in sources:
-            shutil.copy(source, self.tmp / source.name)
-        done = _subprocess(["check", "--emit-ir", "ir",
-                            *(s.name for s in sources)], self.tmp,
+    def _audited_check(self, names):
+        """(opened paths, the interpreter's own locations) of one audited
+        `check --emit-ir ir NAMES...` run in self.tmp."""
+        done = _subprocess(["check", "--emit-ir", "ir", *names], self.tmp,
                            prelude=_AUDIT)
         self.assertEqual(done.returncode, 0, done.stderr.decode())
         report = json.loads(next(
             line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
             if line.startswith("AUDIT ")))
         real = os.path.realpath
+        return ([real(os.path.join(self.tmp, path))
+                 for path in report["opened"]],
+                [real(p) for p in report["python"]])
+
+    @staticmethod
+    def _within(path, root):
+        return path == root or path.startswith(root + os.sep)
+
+    def test_a_check_opens_only_its_closure(self):
+        # The package's code, the grammar, the IR schema, the sources, the
+        # --emit-ir directory, and of the standard library exactly the
+        # modules the sources name (E-8): nothing else under rhoform/lib/.
+        real = os.path.realpath
+        sources = sorted((ROOT / "benchmarks").glob("*/*.rhoform"))
+        for source in sources:
+            shutil.copy(source, self.tmp / source.name)
+        opened, python = self._audited_check([s.name for s in sources])
+        library = real(ROOT / "rhoform" / "lib")
+        named = set()
+        for source in sources:
+            named.update(re.findall(r"rhoform\.lib\.(\w+)\.",
+                                    source.read_text(encoding="utf-8")))
+        self.assertTrue(named)
+        self.assertEqual(
+            sorted({path for path in opened if self._within(path, library)}),
+            sorted(real(ROOT / "rhoform" / "lib" / f"{module}.rhoform")
+                   for module in named))
         allowed = [real(ROOT / "rhoform"), real(ROOT / "lang" / "grammar"),
                    real(ROOT / "ir" / "netlist-ir.schema.json"),
                    real(self.tmp / "ir")]
         allowed += [real(self.tmp / s.name) for s in sources]
-        allowed += [real(p) for p in report["python"]]
-        stray = [path for path in report["opened"]
-                 if not any(real(os.path.join(self.tmp, path)) == root
-                            or real(os.path.join(self.tmp, path)).startswith(
-                                root + os.sep)
-                            for root in allowed)]
+        allowed += python
+        stray = [path for path in opened
+                 if not any(self._within(path, root) for root in allowed)]
         self.assertEqual(stray, [])
+
+    def test_a_check_reads_only_the_library_modules_it_names(self):
+        # One module named, one module read: adding or editing any other
+        # library module cannot touch this design's source_hash.
+        real = os.path.realpath
+        self.write("divider.rhoform", P + "\nmodule Divider:\n"
+                   "    port top passive\n"
+                   "    r1 = new rhoform.lib.passive.Resistor\n"
+                   "    top ~ r1.a\n")
+        opened, _python = self._audited_check(["divider.rhoform"])
+        library = real(ROOT / "rhoform" / "lib")
+        self.assertEqual(
+            [path for path in opened if self._within(path, library)],
+            [real(ROOT / "rhoform" / "lib" / "passive.rhoform")])
+        source_map = json.loads(
+            (self.tmp / "ir" / "divider.sourcemap.json").read_text())
+        self.assertEqual([entry["path"] for entry in source_map["files"]],
+                         ["divider.rhoform", "rhoform/lib/passive.rhoform"])
 
 
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)

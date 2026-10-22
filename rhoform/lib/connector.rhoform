@@ -1,0 +1,61 @@
+# The standard library: connectors. Spec 04, "The standard library", says
+# what a definition here may hold. A generic connector names its contacts
+# and declares no designators (the footprint knows its pads); a connector
+# that names one part carries that part's pad numbers.
+#pragma rhoform-syntax 0.2
+
+# A 9 V battery snap, Keystone 232 style: pad 1 positive.
+component BatteryConnector9V:
+    pin neg power_out 2
+    pin pos power_out 1
+
+component PinHeader1x2:
+    pin p1 passive
+    pin p2 passive
+
+component PinHeader1x6:
+    pin p1 passive
+    pin p2 passive
+    pin p3 passive
+    pin p4 passive
+    pin p5 passive
+    pin p6 passive
+
+component PinHeader1x20:
+    pin p1 passive
+    pin p2 passive
+    pin p3 passive
+    pin p4 passive
+    pin p5 passive
+    pin p6 passive
+    pin p7 passive
+    pin p8 passive
+    pin p9 passive
+    pin p10 passive
+    pin p11 passive
+    pin p12 passive
+    pin p13 passive
+    pin p14 passive
+    pin p15 passive
+    pin p16 passive
+    pin p17 passive
+    pin p18 passive
+    pin p19 passive
+    pin p20 passive
+
+# A two-position jumper shunt.
+component Shunt2:
+    pin a passive
+    pin b passive
+
+# A USB-C receptacle in its 16-contact USB 2.0 form, one pin per signal:
+# the doubled contacts (VBUS, GND, D+, D-) are each one pin, so which pads
+# a signal occupies is the footprint's to say.
+component UsbCReceptacle16:
+    pin cc1 bidirectional
+    pin cc2 bidirectional
+    pin dm bidirectional
+    pin dp bidirectional
+    pin gnd power_out
+    pin shield passive
+    pin vbus power_out

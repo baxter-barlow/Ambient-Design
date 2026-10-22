@@ -1,0 +1,7 @@
+# The standard library: switches.
+#pragma rhoform-syntax 0.2
+
+# A normally open momentary tactile switch, its paired legs one pin each.
+component TactileSwitch:
+    pin a passive
+    pin b passive

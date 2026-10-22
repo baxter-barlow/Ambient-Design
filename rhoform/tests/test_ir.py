@@ -66,9 +66,6 @@ module Indicator:
 module Blinker:
     port vin power_in
     timer = new rhoform.lib.timer.Ne555:
-        pin gnd power_in 1
-        pin out output 3
-        pin vcc power_in 8
         part "timer.555/ti-NE555P@2"
     c_t = new rhoform.lib.passive.Capacitor(capacitance = 1uF +/- 5%):
         pin a passive
@@ -124,9 +121,6 @@ module Indicator:
 module Blinker:
     port vin power_in
     timer = new rhoform.lib.timer.Ne555:
-        pin gnd power_in 1
-        pin out output 3
-        pin vcc power_in 8
         part "timer.555/ti-NE555P@2"
     c_t = new rhoform.lib.passive.Capacitor(capacitance = 1000nF +/- 5%):
         pin a passive
@@ -233,15 +227,22 @@ class EmissionTest(unittest.TestCase):
                          GATE.design_hash_of(self.document))
 
     def test_source_hash_is_the_pinned_serialization(self):
+        # The entry file, then exactly the library modules it names (E-8):
+        # connector, module, regulator and the rest are not read, so they
+        # are not listed.
         data = DESIGN.encode()
         pairs = [["blinker.rhoform", hashlib.sha256(data).hexdigest()]]
+        for module in ("mech", "passive", "semiconductor", "timer"):
+            library = ROOT / "rhoform" / "lib" / f"{module}.rhoform"
+            pairs.append([f"rhoform/lib/{module}.rhoform",
+                          hashlib.sha256(library.read_bytes()).hexdigest()])
         expected = "sha256:" + hashlib.sha256(
             json.dumps(pairs, separators=(",", ":")).encode()
             + b"\n").hexdigest()
         self.assertEqual(self.document["header"]["source_hash"], expected)
         self.assertEqual(self.source_map["files"],
-                         [{"path": "blinker.rhoform",
-                           "sha256": pairs[0][1]}])
+                         [{"path": path, "sha256": digest}
+                          for path, digest in pairs])
 
     @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
     def test_documents_validate_against_their_schemas(self):

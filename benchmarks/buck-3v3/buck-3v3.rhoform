@@ -3,9 +3,10 @@
 module Buck3v3:
     # Benchmark (b), component level. EE-reviewed 2026-10-22 (AMB-128).
     # Values: design.md section 10; pin map: section 11; review decisions:
-    # section 12. Explicit form: every pin is declared inline with its T2
-    # role and footprint designators, because no component library exists
-    # yet.
+    # section 12. Pins come from the standard library (rhoform/lib/): the
+    # LM25145 carries its pad numbers there, while the generic passives and
+    # MOSFETs carry none (their pads are the footprint's, so part data
+    # supplies them).
     #
     # Refdes map (instance -> refdes; parts.yaml line):
     #   u1 -> U1; q1 -> Q1; q2 -> Q2; l1 -> L1; c3 -> C3; r1 -> R1; r2 -> R2
@@ -18,8 +19,6 @@ module Buck3v3:
     #
     # Power stage.
     c1a = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 10uF +/- 10%
             dielectric = "X7R"
@@ -27,8 +26,6 @@ module Buck3v3:
             package = "1210"
             voltage_rating = 25V
     c1b = new rhoform.lib.passive.Capacitor(capacitance = 10uF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 10uF +/- 10%
             dielectric = "X7R"
@@ -36,8 +33,6 @@ module Buck3v3:
             package = "1210"
             voltage_rating = 25V
     c2a = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 22uF +/- 10%
             dielectric = "X5R"
@@ -45,8 +40,6 @@ module Buck3v3:
             package = "1210"
             voltage_rating = 16V
     c2b = new rhoform.lib.passive.Capacitor(capacitance = 22uF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 22uF +/- 10%
             dielectric = "X5R"
@@ -54,8 +47,6 @@ module Buck3v3:
             package = "1210"
             voltage_rating = 16V
     c3 = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -63,8 +54,6 @@ module Buck3v3:
             package = "0603"
             voltage_rating = 50V
     l1 = new rhoform.lib.passive.Inductor(inductance = 10uH +/- 20%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             dcr_max = 20.4mohm
             inductance = 10uH +/- 20%
@@ -73,18 +62,12 @@ module Buck3v3:
             rms_current = 7.3A
             saturation_current = 3.6A
     q1 = new rhoform.lib.semiconductor.Nmos(vds_max = 40V):
-        pin d passive 5 6 7 8
-        pin g input 4
-        pin s passive 1 2 3
         part abstract:
             mpn = "Infineon BSC059N04LS6ATMA1"
             package = "PG-TDSON-8 FL (SuperSO8 5x6)"
             rds_on_max = 5.9mohm
             vds_max = 40V
     q2 = new rhoform.lib.semiconductor.Nmos(vds_max = 40V):
-        pin d passive 5 6 7 8
-        pin g input 4
-        pin s passive 1 2 3
         part abstract:
             mpn = "Infineon BSC059N04LS6ATMA1"
             package = "PG-TDSON-8 FL (SuperSO8 5x6)"
@@ -94,26 +77,6 @@ module Buck3v3:
     # Controller. Pin names are the datasheet's with "/" written "_";
     # pad 21 is the exposed pad, internally tied to pin 15 (EP).
     u1 = new rhoform.lib.regulator.Lm25145(switching_frequency = 500kHz):
-        pin AGND power_in 6
-        pin BST power_out 17
-        pin COMP output 4
-        pin EN_UVLO input 1
-        pin EP passive 15 21
-        pin FB input 5
-        pin HO output 18
-        pin ILIM input 11
-        pin LO output 13
-        pin NC9 nc 9
-        pin NC16 nc 16
-        pin PGND power_in 12
-        pin PGOOD open_drain 10
-        pin RT input 2
-        pin SS_TRK input 3
-        pin SW passive 19
-        pin SYNCIN input 8
-        pin SYNCOUT output 7
-        pin VCC power_out 14
-        pin VIN power_in 20
         part abstract:
             function = "sync_buck_controller"
             mpn = "TI LM25145RGYR"
@@ -122,8 +85,6 @@ module Buck3v3:
 
     # Controller support parts (AMB-128).
     c_bst = new rhoform.lib.passive.Capacitor(capacitance = 100nF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 100nF +/- 10%
             dielectric = "X7R"
@@ -131,8 +92,6 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 25V
     c_ilim = new rhoform.lib.passive.Capacitor(capacitance = 82pF +/- 5%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 82pF +/- 5%
             dielectric = "C0G"
@@ -140,8 +99,6 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 50V
     c_ss = new rhoform.lib.passive.Capacitor(capacitance = 6.8nF +/- 5%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 6.8nF +/- 5%
             dielectric = "C0G"
@@ -149,8 +106,6 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 50V
     c_vcc = new rhoform.lib.passive.Capacitor(capacitance = 2.2uF +/- 10%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 2.2uF +/- 10%
             dielectric = "X7R"
@@ -158,48 +113,36 @@ module Buck3v3:
             package = "0805"
             voltage_rating = 25V
     r_ilim = new rhoform.lib.passive.Resistor(resistance = 634ohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-07634RL"
             package = "0402"
             power_rating = 62.5mW
             resistance = 634ohm +/- 1%
     r_pg = new rhoform.lib.passive.Resistor(resistance = 49.9kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-0749K9L"
             package = "0402"
             power_rating = 62.5mW
             resistance = 49.9kohm +/- 1%
     r_rt = new rhoform.lib.passive.Resistor(resistance = 20kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-0720KL"
             package = "0402"
             power_rating = 62.5mW
             resistance = 20kohm +/- 1%
     r_sns = new rhoform.lib.passive.Resistor(resistance = 20mohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Vishay WSLP1206R0200FEA"
             package = "1206"
             power_rating = 1W
             resistance = 20mohm +/- 1%
     r_uv1 = new rhoform.lib.passive.Resistor(resistance = 100kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-07100KL"
             package = "0402"
             power_rating = 62.5mW
             resistance = 100kohm +/- 1%
     r_uv2 = new rhoform.lib.passive.Resistor(resistance = 16.9kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-0716K9L"
             package = "0402"
@@ -209,15 +152,11 @@ module Buck3v3:
     # Feedback divider. R1 ships as a 0.1% part; the constraint states the
     # +/-1% requirement the design.md error stack is computed at.
     r1 = new rhoform.lib.passive.Resistor(resistance = 31.2kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Vishay TNPW040231K2BEED"
             package = "0402"
             resistance = 31.2kohm +/- 1%
     r2 = new rhoform.lib.passive.Resistor(resistance = 10kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-0710KL"
             package = "0402"
@@ -227,8 +166,6 @@ module Buck3v3:
     # and c_c2 from COMP to FB; r_c2 + c_c3 from VOUT to FB. First zero at
     # half the LC resonance, second at it (the datasheet's placement).
     c_c1 = new rhoform.lib.passive.Capacitor(capacitance = 5.6nF +/- 5%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 5.6nF +/- 5%
             dielectric = "C0G"
@@ -236,8 +173,6 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 50V
     c_c2 = new rhoform.lib.passive.Capacitor(capacitance = 82pF +/- 5%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 82pF +/- 5%
             dielectric = "C0G"
@@ -245,8 +180,6 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 50V
     c_c3 = new rhoform.lib.passive.Capacitor(capacitance = 560pF +/- 5%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             capacitance = 560pF +/- 5%
             dielectric = "C0G"
@@ -254,16 +187,12 @@ module Buck3v3:
             package = "0402"
             voltage_rating = 50V
     r_c1 = new rhoform.lib.passive.Resistor(resistance = 7.5kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-077K5L"
             package = "0402"
             power_rating = 62.5mW
             resistance = 7.5kohm +/- 1%
     r_c2 = new rhoform.lib.passive.Resistor(resistance = 1.13kohm +/- 1%):
-        pin a passive 1
-        pin b passive 2
         part abstract:
             mpn = "Yageo RC0402FR-071K13L"
             package = "0402"

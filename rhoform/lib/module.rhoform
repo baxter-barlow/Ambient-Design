@@ -1,0 +1,46 @@
+# The standard library: pre-certified modules. A module part names one
+# product, so its pins are that product's signals.
+#pragma rhoform-syntax 0.2
+
+# Espressif ESP32-S3-WROOM-1: one pin per GPIO, plus enable, the 3.3 V
+# supply and ground.
+component Esp32S3Wroom1:
+    pin en input
+    pin gnd power_in
+    pin io0 bidirectional
+    pin io1 bidirectional
+    pin io2 bidirectional
+    pin io3 bidirectional
+    pin io4 bidirectional
+    pin io5 bidirectional
+    pin io6 bidirectional
+    pin io7 bidirectional
+    pin io8 bidirectional
+    pin io9 bidirectional
+    pin io10 bidirectional
+    pin io11 bidirectional
+    pin io12 bidirectional
+    pin io13 bidirectional
+    pin io14 bidirectional
+    pin io15 bidirectional
+    pin io16 bidirectional
+    pin io17 bidirectional
+    pin io18 bidirectional
+    pin io19 bidirectional
+    pin io20 bidirectional
+    pin io21 bidirectional
+    pin io35 bidirectional
+    pin io36 bidirectional
+    pin io37 bidirectional
+    pin io38 bidirectional
+    pin io39 bidirectional
+    pin io40 bidirectional
+    pin io41 bidirectional
+    pin io42 bidirectional
+    pin io43 bidirectional
+    pin io44 bidirectional
+    pin io45 bidirectional
+    pin io46 bidirectional
+    pin io47 bidirectional
+    pin io48 bidirectional
+    pin p3v3 power_in

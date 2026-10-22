@@ -1,0 +1,26 @@
+# The standard library: two-terminal passives. Generic, so no designators:
+# a resistor's pad numbers belong to its footprint. A parameter list is
+# declared where every use agrees on what an instance must state; the
+# others record their arguments as written.
+#pragma rhoform-syntax 0.2
+
+component Capacitor:
+    pin a passive
+    pin b passive
+
+component FerriteBead(impedance: resistance):
+    pin a passive
+    pin b passive
+
+component Inductor(inductance: inductance):
+    pin a passive
+    pin b passive
+
+# A resettable PTC fuse.
+component PtcFuse(hold_current: current, trip_current: current):
+    pin a passive
+    pin b passive
+
+component Resistor:
+    pin a passive
+    pin b passive

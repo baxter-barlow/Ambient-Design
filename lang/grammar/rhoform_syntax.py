@@ -871,12 +871,14 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "component_def",
         "A component definition: its pins and nothing else. Defaults such "
-        "as `hardware` or flags are deliberately not definable here.",
+        "as `hardware` or flags are deliberately not definable here. A "
+        "component with no pins (a mounting hole, a fiducial, artwork) has "
+        "no block, as a `part` binding with no constraints has none.",
         Seq(
             Lit("component"),
             FREE_NAME,
             Opt(Ref("params")),
-            _block(Rep(Ref("pin_decl"), 1)),
+            Alt(_block(Rep(Ref("pin_decl"), 1)), NEWLINE),
         ),
     ),
     (

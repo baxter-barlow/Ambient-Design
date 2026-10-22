@@ -27,7 +27,7 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 71 checks.
+ir-hashes: self-test PASS: 72 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
@@ -123,3 +123,12 @@ gives. The third "unverified" line was reworded on the same branch: the spec
 now pins the source_hash serialization, so the example's value is unverified
 because it is a placeholder written before that rule, not because no rule
 exists.
+
+=== the standard library joins, 2026-10-22 ===
+The benchmark goldens now list the standard library modules each source
+names, as rhoform/lib/<module>.rhoform (spec 04, "The standard library";
+E-8). Those files are the toolchain's, not the benchmark's, so the gate
+resolves a path under rhoform/lib/ against the repository root instead of
+the benchmark directory, and checks their bytes there. One self-test case
+pins that (72 checks, up from 71): a planted library module whose bytes
+moved under its recorded sha256 is caught in the toolchain's tree.

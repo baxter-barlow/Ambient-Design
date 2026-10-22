@@ -32,11 +32,14 @@ PATHS (spec 04, E-8). Each compilation's compile root is `--compile-root`,
 else the nearest ancestor of the entry file holding `rhoform.toml`, else
 the entry file's directory. Span files, the source map's `files[].path`
 and definition names are POSIX paths relative to it, so a span names the
-same file the source map does.
+same file the source map does. The standard library modules a compilation
+reads are the exception: they are the toolchain's own files, listed as
+`rhoform/lib/<module>.rhoform` whatever the compile root.
 
 HERMETIC (I3, C-6). No network module is imported and nothing reads the
-environment or the clock. Reads: the input files, the grammar artifacts
-the parser loads, and the IR schema. Writes: fmt's targets and
+environment or the clock. Reads: the input files, the standard library
+modules their qualified names mention (rhoform/lib/, no others), the
+grammar artifacts the parser loads, and the IR schema. Writes: fmt's targets and
 --emit-ir's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.

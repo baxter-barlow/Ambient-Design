@@ -9,8 +9,12 @@ silent one. tests/schemas/validate-schemas.py and tests/ir/check-hashes.py
 check the same goldens' shape and hashes; this file checks that they are
 still what the compiler makes.
 
-The sources are the explicit form: every pin is written inline, because no
-component library exists yet to supply them.
+The sources are the library-pins form (E-17, wave 3): a standard library
+component's pins come from its definition under rhoform/lib/, so the sources
+state only what the library cannot know (parts, hardware, flags). Writing
+those pins back inline -- the explicit form the sources had before the
+library existed -- must elaborate to the same design_hash; a test below
+holds every benchmark to that.
 """
 
 import unittest
@@ -137,20 +141,109 @@ class BenchmarkGoldenTest(unittest.TestCase):
                         f"with: {REGENERATE}")
 
     def test_the_compile_root_is_the_benchmark_directory(self):
+        # The source is named relative to its own directory; the library
+        # modules it uses are listed as rhoform/lib/<module>.rhoform (E-8),
+        # each one the toolchain's own file, byte for byte.
+        import hashlib
+
+        from rhoform import elaborate as elaborator
         from rhoform import ir
 
         for source in sources():
             with self.subTest(benchmark=source.parent.name):
-                _result, elaboration = build(source)
+                result, elaboration = build(source)
                 document = ir.to_ir(elaboration.design)
                 source_map = ir.to_source_map(
                     elaboration.design, document["header"]["design_hash"])
-                self.assertEqual([entry["path"] for entry in
-                                  source_map["files"]], [source.name])
+                modules = elaborator.library_modules([result])
+                self.assertTrue(modules)
+                self.assertEqual(
+                    [entry["path"] for entry in source_map["files"]],
+                    [source.name] + [f"rhoform/lib/{module}.rhoform"
+                                     for module in modules])
+                for entry in source_map["files"][1:]:
+                    self.assertEqual(entry["sha256"], hashlib.sha256(
+                        (ROOT / entry["path"]).read_bytes()).hexdigest())
                 stem = source.parent.name.replace("-", "_")
                 root = next(i for i in document["instances"]
                             if i["path"] == "/")
                 self.assertEqual(root["definition"].split(".")[0], stem)
+
+
+def explicit_form(source: Path) -> str:
+    """The source with every standard library instance's pins written back
+    inline, copied from its definition: what the benchmark sources were
+    before the library existed (E-17)."""
+    from rhoform import elaborate as E
+    from rhoform.parser import parse
+
+    data = source.read_bytes()
+    text = data.decode("utf-8")
+    result = parse(text, file=source.name)
+    pins = {}
+    for module in E.library_modules([result]):
+        library = E.BUNDLED.load(module)
+        for node in library.tree.children:
+            if E._is_tree(node) and node.data == "component_def":
+                pins[f"rhoform.lib.{module}.{node.children[1]}"] = [
+                    library.data[library.span_of(pin).byte_start:
+                                 library.span_of(pin).byte_end].decode()
+                    for pin in E._trees(node, "pin_decl")]
+    lines = text.split("\n")
+    inserts = {}
+    work = [result.tree]
+    while work:
+        node = work.pop()
+        if not E._is_tree(node):
+            continue
+        work.extend(node.children)
+        if node.data != "instance_decl":
+            continue
+        name = ".".join(E._words(E._tree(node, "qualified_name")))
+        if name not in pins:
+            continue
+        body = E._tree(node, "instance_body")
+        assert body is None or not E._trees(body, "pin_decl"), name
+        start = result.span_of(node).byte_start
+        line = data.count(b"\n", 0, start)
+        indent = " " * (len(lines[line]) - len(lines[line].lstrip()) + 4)
+        inserts[line] = (body is None, [indent + pin for pin in pins[name]])
+    out = []
+    for number, line in enumerate(lines):
+        if number in inserts:
+            bare, extra = inserts[number]
+            out.append(line + ":" if bare else line)
+            out.extend(extra)
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+@unittest.skipUnless(HAVE_LARK, "lark (pinned in toolchain/versions.yaml) "
+                     "is required")
+class LibraryFormTest(unittest.TestCase):
+    """E-5/E-17: a standard library instance's ports are its definition's
+    pins, so restating them inline is the same design. Re-rendering (a)
+    and (c) to the library form therefore left their design_hash where it
+    was; this holds every benchmark, and every later edit, to that."""
+
+    def test_restating_library_pins_inline_keeps_the_design_hash(self):
+        from rhoform import ir
+        from rhoform.elaborate import elaborate
+        from rhoform.parser import parse
+
+        for source in sources():
+            with self.subTest(benchmark=source.parent.name):
+                explicit = explicit_form(source)
+                self.assertGreater(explicit.count("\n"),
+                                   source.read_text().count("\n"))
+                result = parse(explicit, file=source.name)
+                elaboration = elaborate([result])
+                self.assertEqual(elaboration.diagnostics.render(), "")
+                design_hash = ir.to_ir(elaboration.design)["header"][
+                    "design_hash"]
+                golden = goldens(source)[0].read_text(encoding="utf-8")
+                self.assertIn(f'"design_hash":"{design_hash}"', golden)
 
 
 class BlinkerOracleTest(unittest.TestCase):

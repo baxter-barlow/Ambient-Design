@@ -1,0 +1,10 @@
+# RHO2048: a name under the reserved prefix rhoform.lib. must be a
+# component of the bundled standard library. A close match, in a module the
+# library has, is offered as a fix-it; a module it lacks offers nothing.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistr(resistance = 1kohm)
+    r2 = new rhoform.lib.pasive.Resistor(resistance = 1kohm)
+    u1 = new rhoform.lib.ic.Mcu
+    r1.b ~ r2.a

@@ -83,7 +83,9 @@ included. The gate also validates that IR against
 so the suite cannot commit an expectation the IR schema forbids. Each case is compiled alone with its own
 directory as the compile root, so its one source file is
 `<case>.rhoform`, its definitions are `<case>.<Module>`, and its
-`source_hash` covers that file alone.
+`source_hash` covers that file and the standard library modules it
+names (`rhoform/lib/<module>.rhoform`): a case's expected IR moves when
+one of those modules' bytes do.
 
 Third-party note: `header.generator` names the implementation that
 produced the document and is outside `design_hash`; an independent

@@ -117,8 +117,8 @@ qualified_name: NAME ("." NAME)*
 // Names imported from another file. The names are BOUND here, so each is a FREE_NAME; resolving the path is the package layer's job.
 import_stmt: /import(?![A-Za-z0-9_])/ FREE_NAME ("," FREE_NAME)* /from(?![A-Za-z0-9_])/ STRING _NEWLINE
 
-// A component definition: its pins and nothing else. Defaults such as `hardware` or flags are deliberately not definable here.
-component_def: /component(?![A-Za-z0-9_])/ FREE_NAME params? ":" _NEWLINE _INDENT pin_decl+ _DEDENT
+// A component definition: its pins and nothing else. Defaults such as `hardware` or flags are deliberately not definable here. A component with no pins (a mounting hole, a fiducial, artwork) has no block, as a `part` binding with no constraints has none.
+component_def: /component(?![A-Za-z0-9_])/ FREE_NAME params? (":" _NEWLINE _INDENT pin_decl+ _DEDENT | _NEWLINE)
 
 // A definition's parameter list. It may be empty, and like an argument list it may wrap, because `(` suspends layout.
 params: "(" (param ("," param)*)? ")"

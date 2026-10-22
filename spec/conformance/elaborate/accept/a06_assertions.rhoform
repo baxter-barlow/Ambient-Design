@@ -6,7 +6,7 @@
 module Rail:
     port out power_out
     port vin power_in
-    reg = new rhoform.lib.ic.Regulator:
+    reg = new acme.ic.Regulator:
         pin gnd power_in
         pin in power_in
         pin out power_out

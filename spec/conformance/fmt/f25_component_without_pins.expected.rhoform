@@ -1,0 +1,9 @@
+#pragma rhoform-syntax 0.2
+
+component Fiducial
+
+component MountingHole(diameter: length = 3.2mm)  # trails
+
+module Board:
+    mh = new MountingHole:
+        hardware mounting_hole

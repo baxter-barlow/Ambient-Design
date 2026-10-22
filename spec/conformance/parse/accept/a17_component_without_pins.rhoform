@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+# A component with no pins has no block: no colon, nothing indented.
+component Fiducial
+component MountingHole(diameter: length = 3.2mm)  # a trailing comment
+
+component TestPoint:
+    pin p passive
+
+module Board:
+    fid = new Fiducial:
+        hardware fiducial
+    mh = new MountingHole:
+        hardware mounting_hole

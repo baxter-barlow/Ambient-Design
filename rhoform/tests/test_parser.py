@@ -1199,6 +1199,15 @@ class Syntax02Test(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertEqual(self._ok(f"component C:\n    {line}\n"), ok)
 
+    def test_a_component_with_no_pins_has_no_block(self):
+        for text, ok in (("component C\n", True),
+                         ("component C(d: length = 3mm)\n", True),
+                         ("component C:\n", False),
+                         ("component C:\nmodule M:\n    port p passive\n",
+                          False)):
+            with self.subTest(text=text):
+                self.assertEqual(self._ok(text), ok)
+
     def test_imports_come_before_every_definition(self):
         self.assertTrue(self._ok('import A, B from "x.rhoform"\n'
                                  "module M:\n    port p passive\n"))

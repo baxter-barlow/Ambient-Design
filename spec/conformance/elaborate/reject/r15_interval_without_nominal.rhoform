@@ -2,4 +2,4 @@
 #pragma rhoform-syntax 0.1
 
 module Top:
-    u1 = new rhoform.lib.ic.Ldo(vout = 3V to 3.6V)
+    u1 = new acme.ic.Ldo(vout = 3V to 3.6V)
