@@ -65,7 +65,11 @@ gives the module path `boards.blinker_555`; `555/main.rhoform` gives
 The **root** is the unique module of the entry file that no module of
 the compilation instantiates. (A `table` that names a module counts as a
 use for this purpose; it is an error of its own, see [Tables](#tables).)
-More than one candidate is an error (RHO2002). An implementation MAY let
+More than one candidate is an error (RHO2002), except while any
+single-word definition of the compilation is unresolved (RHO2005): a
+misspelled `d = new Divder` leaves `Divider` instantiated by nothing, and
+the unresolved name is the defect, so it is reported alone and no root
+is chosen. An implementation MAY let
 the user name the root explicitly; a name that is not a module of the
 entry file is then an error (RHO2003). There is no separate error for
 zero candidates: in v0.1 a file whose every module is instantiated by

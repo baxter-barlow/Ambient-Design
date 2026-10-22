@@ -510,6 +510,21 @@ class CodeTest(unittest.TestCase):
         self.assertEqual(text, "Lef")
         self.assertEqual(d["fixits"][0]["edits"][0]["replacement"], "Leaf")
 
+    def test_rho2005_typo_on_a_modules_only_use_is_not_also_rho2002(self):
+        # The typo leaves Divider instantiated by nothing, so it looks like
+        # a second root candidate beside Top. The unresolved name is the
+        # defect; naming Divider as a possible root sends the author to the
+        # wrong line.
+        for body in ("    d = new Divder\n",
+                     "    table Divder (v):\n        d 1V\n"):
+            with self.subTest(body=body):
+                d, text, result = self.only(
+                    "module Divider:\n    port mid passive\n"
+                    "module Top:\n" + body, "RHO2005")
+                self.assertEqual(d["params"], {"name": "Divder"})
+                self.assertEqual(text, "Divder")
+                self.assertIsNone(result.design)
+
     def test_rho2006_table_of_modules(self):
         d, text, _ = self.only("module Leaf:\n    port p passive\n"
                                "module Top:\n    table Leaf ():\n"
