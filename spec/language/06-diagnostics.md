@@ -21,6 +21,44 @@ Exit-code contract for checking tools: `0` — ran, no error-severity
 diagnostics; `1` — ran, at least one error; `2` — could not run (a
 missing dependency is an unavailable gate, never a pass).
 
+**Filter mode** is the one stated carve-out from "nothing else on
+stdout". A tool that reads a proposed source on stdin and answers with
+its accepted form (the A2 write gate, `rhoform fmt --stdin`) puts the
+canonical source on stdout when it exits `0` and the diagnostic stream
+when it exits `1`; on exit `2` stdout is empty. A consumer branches on
+the exit code before reading stdout.
+
+## The command line
+
+`python3 -m rhoform` is the reference command line (R18). It speaks the
+stream and the exit codes above, and its paths are those of
+[04 — Elaboration](04-elaboration.md#the-compile-root): every span's
+`file` is a POSIX path relative to its compilation's compile root.
+
+`rhoform check PATH...` compiles each PATH as the entry file of its own
+compilation (a directory stands for every `*.rhoform` file under it, in
+sorted order): parse, file-local checks, elaboration, and validation of
+the IR against `ir/netlist-ir.schema.json`. IR that cannot be validated
+because the validator is missing exits `2`, and so does IR the schema
+rejects (an internal error). It writes nothing, except that
+`--emit-ir DIR` writes `<stem>.ir.json` and `<stem>.sourcemap.json` for
+each entry that elaborates. `--compile-root DIR` and
+`--root-module NAME` name the compile root and the root module.
+
+`rhoform fmt PATH...` rewrites each file in its canonical form
+([07 — Formatting](07-formatting.md)), atomically and only when its
+bytes change. A file that does not parse is refused: its diagnostics are
+reported and its bytes are left alone. `rhoform fmt --check PATH...`
+writes nothing and reports each file that would change as one
+`RHO1017` (`not-canonical`) error spanning the first line that differs.
+
+`rhoform fmt --stdin TARGET` is the write gate, in filter mode. A
+proposal that does not parse is rejected: its diagnostics on stdout,
+TARGET untouched, exit `1`. An accepted proposal's canonical bytes
+atomically replace TARGET and are echoed on stdout, exit `0`, so the
+writer always holds the bytes that were written (I1). `--dry-run` leaves
+TARGET alone and answers the same way.
+
 ## Codes are forever
 
 A diagnostic code is `RHO` plus four digits. The registry

@@ -52,7 +52,7 @@ either machine-reconciled or absent.
 | [03 — Literals and the SI normal form](language/03-literals.md) | normative, v0.1 (T3; the single source R16 and R21 consume) |
 | [04 — Elaboration](language/04-elaboration.md) | normative, v0.1 (R13 slice 1 and R15; parameters, control flow and imports land with their slices) |
 | [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
-| [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1) |
+| [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes) |
 | [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.1 (I1, AC6; the canonical form R16's formatter writes) |
 
 The milestone plan for growth is the roadmap's: each milestone that
