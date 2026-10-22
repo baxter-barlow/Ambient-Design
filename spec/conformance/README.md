@@ -72,8 +72,9 @@ The machine-checked half of
 the IR it elaborates to MUST equal `<case>.expected.ir.json` byte for
 byte: the IR v0 document in `rhoform-canonical-json/1`, hashes
 included. The gate also validates that IR against
-`ir/netlist-ir.schema.json`, so the suite cannot commit an expectation
-the IR schema forbids. Each case is compiled alone with its own
+`ir/netlist-ir.schema.json`, as does the schema gate
+(`tests/schemas/validate-schemas.py`) for every committed expectation,
+so the suite cannot commit an expectation the IR schema forbids. Each case is compiled alone with its own
 directory as the compile root, so its one source file is
 `<case>.rhoform`, its definitions are `<case>.<Module>`, and its
 `source_hash` covers that file alone.

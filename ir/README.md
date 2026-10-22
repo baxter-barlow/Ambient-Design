@@ -225,8 +225,9 @@ without `jsonschema` the gate prints one FAIL line and exits 2, because an unava
 not a pass. (This paragraph described `ir/validate.sh`, which no longer exists; it promised an
 ajv fallback and a well-formedness mode the gate has never had.)
 
-Two case kinds run. The two examples, and every benchmark golden
-(`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), must **validate**; every file in
+Two case kinds run. The two examples, every benchmark golden
+(`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), and every elaboration conformance
+expectation (`spec/conformance/elaborate/accept/<case>.expected.ir.json`) must **validate**; every file in
 `examples/negative/` must be **rejected**. A negative control that validates fails the run, which is what stops the schema from
 quietly losing a constraint it advertises. Each fixture is a minimal complete document carrying
 exactly one defect, described in its own `x_negative_control` member:
