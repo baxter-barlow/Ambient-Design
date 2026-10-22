@@ -182,7 +182,11 @@ the canonical profile requires. This is the only point at which a value
 is rounded; the source and the elaborated design stay exact, and the IR
 is inspectable, not authoritative (P7). An integer whose magnitude
 exceeds 2^53, or a quantity whose double would not be finite, is an
-error rather than a rounding (RHO2017).
+error rather than a rounding (RHO2017). Conformance case
+`elaborate/accept/a08_decimal_to_double` pins both directions: a bound
+written exactly halfway between the doubles 1 and 1 + 2^-52 is `1` in
+the IR (ties to even), and one with more significant digits than a
+double holds is the nearest double, `3.4`.
 
 ### Arguments
 
