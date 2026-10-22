@@ -39,10 +39,19 @@ See [NOTICE](NOTICE) for the per-directory statement.
 ## Attribution
 
 Rhoform's surface syntax adopts constructs from
-[atopile](https://github.com/atopile/atopile), which is MIT-licensed —
-principally the `module` and `new` keywords and the `~` connection operator.
+[atopile](https://github.com/atopile/atopile), which is MIT-licensed. What was
+adopted is the shape of the surface, not text:
+
+- the definition nouns `module`, `component` and `interface` (the last two
+  are reserved words whose definitions arrive in later syntax versions);
+- the `new` keyword;
+- the `~` connection operator.
+
 Requirement L2 makes that attribution a first-class obligation rather than a
 courtesy: "Adopt atopile's MIT-licensed surface with public attribution."
+References to atopile and to its `.ato` file format anywhere in this
+repository are nominative only. They identify atopile's work and imply no
+affiliation with or endorsement by its authors.
 
 The frozen grammar is generated from an original rule table
 (`lang/grammar/rhoform_syntax.py`), and the bake-off's atopile-faithful
