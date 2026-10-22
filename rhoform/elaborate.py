@@ -27,7 +27,9 @@ THE PASSES, in order, each total over its input:
   F. flattening: instances become paths, nets are a union-find over
      (instance path, port) nodes, so a module port — named by the parent
      as `inst.port` and by the module as `port` — is one node and nets
-     merge across the hierarchy with no special case.
+     merge across the hierarchy with no special case. A defect of a
+     flattened net that each copy of a module repeats is reported once,
+     as pass E does for bodies.
 
 NET NAMES. The shallowest label wins; two different labels at that depth
 are an error. A label declared inside a module instance is qualified by
@@ -1253,6 +1255,18 @@ class _Elaborator:
         for node, site in statements:
             group_sites.setdefault(found.find(node), []).append(site)
 
+        # A net defect is found once per flattened net, so a module used
+        # several times would repeat it once per copy. Copies share their
+        # code and spans (and, for RHO2028, the attribute); spec 04 reports
+        # them once, with the least params and an entity only when every
+        # copy names the same one.
+        defects = {}
+
+        def defect(code, params, primary, detail=None, *, entity=None,
+                   secondary=()):
+            defects.setdefault((code, primary, secondary, detail), []).append(
+                (tuple(sorted(params.items())), entity))
+
         nets, names = [], {}
         for key, members in groups.items():
             members = tuple(sorted(set(members)))
@@ -1266,7 +1280,7 @@ class _Elaborator:
                 name = distinct[0]
                 if len(distinct) > 1:
                     clash = next(c for c in top if c[1] != top[0][1])
-                    self.report(
+                    defect(
                         "RHO2027", {"labels": distinct}, clash[0][2],
                         secondary=((top[0][0][2], "the other label"),))
                 site = next(c[0] for c in top if c[1] == name)
@@ -1277,12 +1291,12 @@ class _Elaborator:
                             domains[attribute] = value
                             setters[attribute] = csite[2]
                         elif domains[attribute] != value:
-                            self.report(
+                            defect(
                                 "RHO2028",
                                 {"net": name, "attribute": attribute,
                                  "first": domains[attribute],
                                  "second": value},
-                                csite[2], entity=name,
+                                csite[2], attribute, entity=name,
                                 secondary=((setters[attribute],
                                             "first set here"),))
             else:
@@ -1301,10 +1315,18 @@ class _Elaborator:
                             for p, port in set(groups[key]) if
                             (p, port) != node)
             if others:
-                self.report(
+                defect(
                     "RHO2026",
                     {"endpoint": endpoint.text, "other": others[0]},
                     span, entity=names[key])
+
+        for (code, primary, secondary, _detail), copies in defects.items():
+            params = min(params for params, _entity in copies)
+            entities = {entity for _params, entity in copies}
+            self.report(code, dict(params), primary,
+                        entity=entities.pop() if len(entities) == 1
+                        else None,
+                        secondary=secondary)
 
         assertions = [
             Assertion(apath, check.tier, check.measurement,

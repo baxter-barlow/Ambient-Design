@@ -777,3 +777,65 @@ class CodeTest(unittest.TestCase):
         self.assertEqual([d["code"] for d in diagnostics], ["RHO2013"])
         # Two instances share the definition: no single entity exists.
         self.assertIsNone(diagnostics[0]["entity"])
+
+    def test_a_net_defect_in_a_reused_module_is_reported_once(self):
+        # The flatten-phase checks see one net per copy; spec 04 still
+        # counts the defect once per module, with no single entity.
+        cases = {
+            "RHO2027": ("module Channel:\n    port vin power_in\n"
+                        + RESISTOR.format(name="r1")
+                        + "    net VIN:\n        vin\n        r1.a\n"
+                          "    net VDD:\n        r1.a\n"
+                          "module Top:\n    a = new Channel\n"
+                          "    b = new Channel\n    c = new Channel\n",
+                        ["RHO2027"], {"labels": ["a/VDD", "a/VIN"]}),
+            "RHO2026": ("module Probe:\n" + RESISTOR.format(name="r1")
+                        + "    isolated r1.a\n    r1.a ~ r1.b\n"
+                          "module Top:\n    p1 = new Probe\n"
+                          "    p2 = new Probe\n",
+                        ["RHO2026"], {"endpoint": "r1.a",
+                                      "other": "p1/r1.b"}),
+            "RHO2028": ("module Sensor:\n" + RESISTOR.format(name="r1")
+                        + '    net AGND(ground_domain = "agnd"):\n'
+                          "        r1.a\n"
+                          '    net DGND(ground_domain = "dgnd"):\n'
+                          "        r1.a\n"
+                          "module Top:\n    s1 = new Sensor\n"
+                          "    s2 = new Sensor\n",
+                        ["RHO2027", "RHO2028"],
+                        {"net": "s1/AGND", "attribute": "ground_domain",
+                         "first": "agnd", "second": "dgnd"}),
+        }
+        for code, (source, expected, params) in cases.items():
+            with self.subTest(code=code):
+                diagnostics = _diagnostics(_elaborate(source))
+                self.assertEqual(sorted(d["code"] for d in diagnostics),
+                                 expected)
+                for d in diagnostics:
+                    self.assertIsNone(d["entity"])
+                d = next(d for d in diagnostics if d["code"] == code)
+                self.assertEqual(d["params"], params)
+
+    def test_copies_of_one_net_defect_keep_a_shared_entity(self):
+        # Both copies land on the root's GND: one defect, one entity.
+        source = ("module Inner:\n    port g passive\n"
+                  '    net L(ground_domain = "agnd"):\n        g\n'
+                  "module Top:\n    a = new Inner\n    b = new Inner\n"
+                  '    net GND(ground_domain = "gnd"):\n'
+                  "        a.g\n        b.g\n")
+        diagnostics = _diagnostics(_elaborate(source))
+        self.assertEqual([(d["code"], d["entity"]) for d in diagnostics],
+                         [("RHO2028", "GND")])
+
+    def test_two_net_defects_on_one_span_stay_two(self):
+        # One label clashes on both attributes: two defects, not copies.
+        source = ("module Inner:\n    port g passive\n"
+                  '    net L(ground_domain = "agnd", '
+                  'voltage_domain = "3v3"):\n        g\n'
+                  "module Top:\n    inner = new Inner\n"
+                  '    net GND(ground_domain = "gnd", '
+                  'voltage_domain = "5v"):\n        inner.g\n')
+        diagnostics = _diagnostics(_elaborate(source))
+        self.assertEqual(sorted(d["params"]["attribute"]
+                                for d in diagnostics),
+                         ["ground_domain", "voltage_domain"])
