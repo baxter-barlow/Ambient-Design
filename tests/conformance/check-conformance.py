@@ -96,7 +96,7 @@ MINIMUM_ELABORATE_REJECT_CASES = 48
 # came with the standard library.
 PACKAGES = CONFORMANCE / "packages"
 MINIMUM_PACKAGE_ACCEPT_CASES = 5
-MINIMUM_PACKAGE_REJECT_CASES = 20
+MINIMUM_PACKAGE_REJECT_CASES = 21
 PACKAGE_ENTRY = "main.rhoform"
 
 # Block-2 codes no source text can trigger, each with its reason. Every

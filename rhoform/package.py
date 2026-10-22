@@ -24,16 +24,21 @@ IMPORTS (§7). `import Name[, Name]* from "path"`: a path beginning `./` or
 relative to the importing file (X1); any other path is
 `<namespace>/<name>/<module...>`, a file of a package the importing package
 lists in `[deps]` (X2). A module path names `<path>.rhoform`; the suffix may
-also be written. Resolution is lexical (no symlink is followed) and never
-leaves the compile root.
+also be written. Resolution is lexical and never leaves the compile root:
+a file is identified by the path the import spells, and a symbolic link on
+that path is followed only when what it leads to is still inside the
+package the lexical path is in. Every name on the path matches the file
+system's exactly, letter case included, so a case-insensitive file system
+resolves nothing a case-sensitive one would report missing.
 
 THE COMPILATION is the entry file plus its import closure. `load` reads
 exactly that closure plus the `rhoform.toml` files that govern it (the
-entry's package and its dependencies, transitively): no directory is
-listed, nothing outside the compile root is opened, and nothing touches
-the network. Name binding (an imported name must be defined in its file,
-and must not collide with a definition or another import) is the
-elaborator's, because it needs the files' definitions.
+entry's package and its dependencies, transitively): a directory is listed
+only to match the spelling of a name on a path being resolved, nothing
+outside the compile root is opened, and nothing touches the network. Name
+binding (an imported name must be defined in its file, and must not
+collide with a definition or another import) is the elaborator's, because
+it needs the files' definitions.
 """
 
 from dataclasses import dataclass, field
@@ -42,7 +47,7 @@ import os
 import posixpath
 import re
 
-from .diagnostics import Diagnostics, Span, span_from_bytes
+from .diagnostics import Diagnostics, Edit, FixIt, Span, span_from_bytes
 
 MANIFEST = "rhoform.toml"
 SUFFIX = ".rhoform"
@@ -83,9 +88,16 @@ def version_problem(text: str) -> str | None:
     return None
 
 
+def _number(digits: str) -> tuple:
+    """A SemVer number as a key that orders as its value does. It has no
+    leading zero, so the shorter is the smaller; SemVer sets no length
+    limit, and int() has one (sys.get_int_max_str_digits)."""
+    return len(digits), digits
+
+
 def _version_key(text: str) -> tuple:
     major, minor, patch, pre, _build = _SEMVER.fullmatch(text).groups()
-    return int(major), int(minor), int(patch), pre
+    return _number(major), _number(minor), _number(patch), pre
 
 
 def range_problem(text: str) -> str | None:
@@ -112,11 +124,10 @@ def range_admits(text: str, version: str) -> bool:
         return want == have
     if have[3] is not None:
         return False
-    if want[0] > 0:
-        upper = (want[0] + 1, 0, 0)
-    else:
-        upper = (0, want[1] + 1, 0)
-    return want[:3] <= have[:3] < upper
+    # The window is everything from `want` up to the next major, or the
+    # next minor for 0.Y: the numbers above the bumped one must match.
+    same = 2 if want[0] == _number("0") else 1
+    return have[:same] == want[:same] and want[:3] <= have[:3]
 
 
 def language_versions() -> tuple[str, ...]:
@@ -442,10 +453,16 @@ def read_manifest(package: Package, sink: Diagnostics) -> None:
         return
     try:
         document = tomllib.loads(text)
-    except (tomllib.TOMLDecodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         package.ok = False
-        message = str(exc) if isinstance(exc, tomllib.TOMLDecodeError) \
-            else "it nests too deeply"
+        if isinstance(exc, tomllib.TOMLDecodeError):
+            message = str(exc)
+        elif isinstance(exc, RecursionError):
+            message = "it nests too deeply"
+        else:
+            # A bare ValueError is int() refusing a digit string past
+            # sys.get_int_max_str_digits, far outside TOML's 64 bits.
+            message = "an integer in it is outside TOML's 64-bit range"
         where = _TOML_POSITION.search(message)
         reason, offset = message, len(text)
         if where is not None:
@@ -707,16 +724,23 @@ def classify(text: str):
 
 
 class Resolver:
-    """Import strings to file keys. `exists(key)` and `owner(key)` (the
-    directory key of the package a file belongs to) are the only questions
-    it asks of the file system, so `link` can run it over files already in
-    hand and `load` over the disk."""
+    """Import strings to file keys. `exists(key)`, `owner(key)` (the
+    directory key of the package a file belongs to), `real(key)` (the key
+    once symbolic links are resolved, None outside the compile root) and
+    `spelling(key)` (how the disk spells a file `key` misses only by
+    letter case, else None) are the only questions it asks of the file
+    system, so `link` can run it over files already in hand and `load`
+    over the disk."""
 
-    def __init__(self, sink, exists, owner, package_of):
+    def __init__(self, sink, exists, owner, package_of, real=None,
+                 spelling=None):
         self.sink = sink
         self.exists = exists
         self.owner = owner
         self.package_of = package_of  # directory key -> Package
+        self.real = real if real is not None else (lambda key: key)
+        self.spelling = spelling if spelling is not None \
+            else (lambda key: None)
 
     def resolve(self, importer: str, text: str, span: Span) -> str | None:
         package = self.package_of(self.owner(importer))
@@ -749,11 +773,74 @@ class Resolver:
             self.sink.add("RHO2061", {"path": text, "boundary": boundary},
                           primary=span)
             return None
+        module = reserved_module(target)
+        if module is not None:
+            self.sink.add("RHO2068", {"file": target, "module": module},
+                          primary=span)
+            return None
         if not self.exists(target):
             self.sink.add("RHO2060", {"path": text, "file": target},
+                          primary=span, fixits=_respelt(
+                              text, target, self.spelling(target), span))
+            return None
+        # The same boundary once links are resolved: a link may not lead
+        # out of the package, nor out of the compile root, where nothing
+        # is ever read.
+        real, real_root = self.real(target), self.real(root)
+        if real is None or real_root is None or _outside(real, real_root) \
+                or self.owner(real) != real_root:
+            self.sink.add("RHO2061", {"path": text, "boundary": boundary},
                           primary=span)
             return None
         return target
+
+
+def _respelt(text: str, target: str, spelled: str | None,
+             span: Span) -> tuple:
+    """A fix-it rewriting the import path `text`, which names `target`, to
+    name `spelled`, the file system's spelling of it; () when there is
+    none, or when the names that differ are not ones `text` writes."""
+    if spelled is None or spelled == target or not spelled.endswith(SUFFIX):
+        return ()
+    written = text.split("/")
+    if classify(text)[0] == "package":
+        first = 2
+    else:
+        first = max((i + 1 for i, part in enumerate(written)
+                     if part in (".", "..")), default=0)
+    count = len(written) - first
+    have, want = target.split("/"), spelled.split("/")
+    if count < 1 or have[:-count] != want[:-count]:
+        return ()
+    tail = want[-count:]
+    if not written[-1].endswith(SUFFIX):
+        tail[-1] = tail[-1][:-len(SUFFIX)]
+    fixed = "/".join(written[:first] + tail)
+    return (FixIt(f"did you mean `{fixed}`?", "needs-review",
+                  (Edit(span, f'"{fixed}"'),)),)
+
+
+def reserved_module(key: str) -> str | None:
+    """The module path of the file `key`, when it falls under the reserved
+    prefix `rhoform.lib.`: only the bundled library's modules are named
+    there, and an author's file at such a path would take their names."""
+    from .elaborate import module_path
+
+    module = module_path(key)
+    if module == "rhoform.lib" or module.startswith("rhoform.lib."):
+        return module
+    return None
+
+
+def _refuse_reserved_entry(key: str, data: bytes, sink) -> bool:
+    """Report an entry file at a reserved module path (RHO2068); True if
+    it is one. No statement names an entry, so the span is its start."""
+    module = reserved_module(key)
+    if module is None:
+        return False
+    sink.add("RHO2068", {"file": key, "module": module},
+             primary=span_from_bytes(key, data, 0, 0))
+    return True
 
 
 def import_statements(result) -> list:
@@ -837,6 +924,8 @@ def link(results, sink: Diagnostics) -> dict:
     them, and their compile root is their common root. This is what
     `elaborate()` does for a caller that brings its own files; the command
     line goes through `load`, which reads the import closure."""
+    if _refuse_reserved_entry(results[0].file, results[0].data, sink):
+        return {}
     keys = {result.file for result in results}
     loose = Package(root="", manifest=None)
     resolver = Resolver(sink, keys.__contains__, lambda _key: "",
@@ -857,7 +946,7 @@ class ReadFailure(Exception):
     """A file the compilation needs exists but could not be read: an
     operational failure (exit 2), not a diagnostic."""
 
-    def __init__(self, path: Path, error: OSError):
+    def __init__(self, path: Path, error: OSError | str):
         super().__init__(f"cannot read {path}: {error}")
         self.path = path
 
@@ -879,7 +968,9 @@ def _is_file(path: Path) -> bool:
 class _Loader:
     def __init__(self, root: Path, sink: Diagnostics):
         self.root = root
+        self.real_root = os.path.realpath(root)
         self.sink = sink
+        self.listings: dict[str, frozenset | None] = {}
         self.owners: dict[str, str] = {}
         self.packages: dict[str, Package] = {}
         self.expanded: set[str] = set()  # packages whose deps are checked
@@ -887,6 +978,68 @@ class _Loader:
 
     def disk(self, key: str) -> Path:
         return self.root / key if key else self.root
+
+    def listing(self, directory: str) -> frozenset | None:
+        """The names in the directory `directory` keys, or None when no
+        directory is spelled exactly so, letter case included, on the way
+        down from the compile root. Each is listed once at most."""
+        pending = []
+        walk = directory
+        while walk not in self.listings:
+            pending.append(walk)
+            if not walk:
+                break
+            walk = posixpath.dirname(walk)
+        for walk in reversed(pending):
+            names = None
+            parent = self.listings.get(posixpath.dirname(walk)) \
+                if walk else frozenset()
+            if not walk or (parent and posixpath.basename(walk) in parent):
+                try:
+                    names = frozenset(os.listdir(self.disk(walk)))
+                except OSError:
+                    names = None
+            self.listings[walk] = names
+        return self.listings[directory]
+
+    def is_file(self, key: str) -> bool:
+        """Whether `key` names a regular file spelled exactly so. Only a
+        path the file system resolves is listed, to check its spelling."""
+        if not _is_file(self.disk(key)):
+            return False
+        names = self.listing(posixpath.dirname(key))
+        return names is not None and posixpath.basename(key) in names
+
+    def spelling(self, key: str) -> str | None:
+        """How the file system spells the file `key` names when they differ
+        only in letter case (one way only), else None."""
+        spelled = []
+        for part in key.split("/"):
+            names = self.listing("/".join(spelled))
+            if names is None:
+                return None
+            if part not in names:
+                close = [name for name in names
+                         if name.casefold() == part.casefold()]
+                if len(close) != 1:
+                    return None
+                part = close[0]
+            spelled.append(part)
+        found = "/".join(spelled)
+        return found if found != key and self.is_file(found) else None
+
+    def real_key(self, key: str) -> str | None:
+        """The key of what `key` names once symbolic links are resolved,
+        or None when that lies outside the compile root. Both sides are
+        resolved, so a compile root named through a link (macOS's /tmp)
+        still holds its own files."""
+        real = os.path.realpath(self.disk(key))
+        if real == self.real_root:
+            return ""
+        prefix = self.real_root.rstrip(os.sep) + os.sep
+        if not real.startswith(prefix):
+            return None
+        return Path(real[len(prefix):]).as_posix()
 
     def owner(self, key: str) -> str:
         """The directory key of the package `key` belongs to: the nearest
@@ -897,7 +1050,7 @@ class _Loader:
             return self.owners[directory]
         walk = directory
         while True:
-            if _is_file(self.disk(walk) / MANIFEST):
+            if self.is_file(posixpath.join(walk, MANIFEST)):
                 found = walk
                 break
             if not walk:
@@ -909,6 +1062,15 @@ class _Loader:
 
     def read(self, key: str) -> bytes:
         path = self.disk(key)
+        # The backstop for what has no import or [deps] entry to blame (the
+        # entry file, a governing manifest): nothing outside is opened.
+        if self.real_key(key) is None:
+            raise ReadFailure(path, "a symbolic link leads it outside the "
+                              "compile root, which a compilation never reads")
+        spelled = self.spelling(key)
+        if spelled is not None:
+            raise ReadFailure(path, f"the file system spells it `{spelled}`, "
+                              "and names match exactly, letter case included")
         try:
             return path.read_bytes()
         except OSError as exc:
@@ -932,7 +1094,7 @@ class _Loader:
         files are read when something imports them)."""
         if root in self.packages and root in self.expanded:
             return self.packages[root]
-        if not _is_file(self.disk(root) / MANIFEST):
+        if not self.is_file(posixpath.join(root, MANIFEST)):
             self.packages[root] = Package(root=root, manifest=None)
             self.expanded.add(root)
             return self.packages[root]
@@ -963,7 +1125,19 @@ class _Loader:
             return False
 
         root = dependency.root
-        if not _is_file(self.disk(root) / MANIFEST):
+        if self.real_key(root) is None or self.real_key(
+                posixpath.join(root, MANIFEST)) is None:
+            return wrong("lies outside the compile root through a symbolic "
+                         "link, so its files cannot be read; compile from a "
+                         "root that holds both packages", dependency.path_span)
+        manifest = posixpath.join(root, MANIFEST)
+        if not self.is_file(manifest):
+            spelled = self.spelling(manifest)
+            if spelled is not None and posixpath.dirname(spelled) != root:
+                return wrong(f"names `{root}`, which the file system spells "
+                             f"`{posixpath.dirname(spelled)}`; names match "
+                             "exactly, letter case included",
+                             dependency.path_span)
             return wrong("holds no rhoform.toml, so it is not a package",
                          dependency.path_span)
         claimed = self.sources.get(dependency.name)
@@ -983,9 +1157,11 @@ class _Loader:
         return target.ok
 
     def load(self, entry: str, parse) -> Compilation:
+        if _refuse_reserved_entry(entry, b"", self.sink):
+            return Compilation([], {}, False)
         before = self.sink.counts()["error"]
-        resolver = Resolver(self.sink, lambda key: _is_file(self.disk(key)),
-                            self.owner, self.packages.get)
+        resolver = Resolver(self.sink, self.is_file, self.owner,
+                            self.packages.get, self.real_key, self.spelling)
         results, imports, order, queued = [], {}, [], {entry}
         work = [entry]
         refused = False

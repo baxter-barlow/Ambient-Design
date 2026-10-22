@@ -725,6 +725,48 @@ class CodeTest(unittest.TestCase):
                              "RHO2017")
         self.assertEqual(d["params"], {"literal": huge})
 
+    def test_rho2017_bounds_every_integer_literal_however_long(self):
+        """2^53 bounds every integer literal, not only values, and is
+        decided without int(): CPython refuses to convert a digit string
+        past sys.get_int_max_str_digits (4300 by default), which used to
+        crash the elaborator at each of these sites."""
+        long = "1" * 5000
+        leaf = "component L:\n    pin a passive\n\n"
+        sites = {
+            "argument": "module Top:\n    x = new X.R(n = {n})\n",
+            "table cell": leaf + "module Top:\n    table L (n):\n"
+                          "        t1  {n}\n",
+            "default": "module Sub(n: int = {n}):\n    port a passive\n\n"
+                       "module Top:\n    s = new Sub\n",
+            "condition": "module Top(n: int = 1):\n    if n > {n}:\n"
+                         "        x = new X.R\n",
+            "array size": leaf + "module Top:\n    ls = new L[{n}]\n",
+            "range bound": "module Top:\n    port a passive\n"
+                           "    port b passive\n    for i in range({n}):\n"
+                           "        a ~ b\n",
+            "upper range bound": "module Top:\n    port a passive\n"
+                                 "    port b passive\n"
+                                 "    for i in range(1, {n}):\n"
+                                 "        a ~ b\n",
+            "index": leaf + "module Top:\n    port a passive\n"
+                     "    ls = new L[2]\n    a ~ ls[{n}].a\n",
+            "index offset": leaf + "module Top:\n    port a passive\n"
+                            "    ls = new L[2]\n"
+                            "    for i in range(1):\n"
+                            "        a ~ ls[i + {n}].a\n",
+        }
+        for site, template in sites.items():
+            for literal in (long, "-" + long, str(2 ** 53 + 1)):
+                with self.subTest(site=site, literal=literal[:20]):
+                    d, text, _ = self.only2(template.format(n=literal),
+                                            "RHO2017")
+                    self.assertEqual(text, literal)
+                    self.assertEqual(d["params"], {"literal": literal})
+        # The bound is inclusive, as for values: 2^53 itself is a size
+        # past the budget, not an unrepresentable number.
+        self.only2(leaf + f"module Top:\n    ls = new L[{2 ** 53}]\n",
+                   "RHO2046")
+
     def test_rho2018_table_row_arity_is_reported_against_the_header(self):
         d, text, _ = self.only("module Top:\n    table lib.R (a, b):\n"
                                "        r1 1V\n", "RHO2018")
@@ -1291,16 +1333,45 @@ module Top:
     def test_a_typo_in_a_branch_not_taken_still_draws_rho2002(self):
         # Merging Landing A's RHO2002 suppression: it counted every
         # unresolved `new`, but one in a branch not taken draws no RHO2005,
-        # so this file failed with no diagnostic at all.
-        source = ("module Divider:\n    port p passive\n\n"
+        # so this file failed with no diagnostic at all. Here the typo is
+        # close to no candidate, so it is not why the root is ambiguous.
+        source = ("module Spare:\n    port p passive\n\n"
                   "module Top(fast: bool = {}):\n"
                   "    if fast:\n        d = new Divder\n")
         result = _elaborate2(source.format("false"))
         self.assertIsNone(result.design)
         self.assertEqual(_codes(result), ["RHO2002"])
-        # Taken, the typo is reported and is the defect: RHO2005 alone.
+        # Taken, the typo is reported, and any reported one stands alone.
         self.assertEqual(_codes(_elaborate2(source.format("true"))),
                          ["RHO2005"])
+
+    def test_a_typo_that_leaves_a_root_candidate_is_reported_alone(self):
+        # Root candidates are a fact of the text, so the typo that makes
+        # one is too: `new TvsClmap` leaves TvsClamp instantiated by
+        # nothing whether or not its branch is taken, and RHO2002 would
+        # send the author to the wrong line. Here the only instance that
+        # takes the branch is one the ambiguous root never walks.
+        tvs = ("module TvsClamp:\n    port line passive\n\n"
+               "module InputStage(with_tvs: bool = false):\n"
+               "    port vin passive\n    if with_tvs:\n"
+               "        tvs = new TvsClmap\n        vin ~ tvs.line\n\n"
+               "module Board:\n    port vin passive\n"
+               "    inp = new InputStage(with_tvs = {})\n"
+               "    vin ~ inp.vin\n")
+        divider = ("module Divider:\n    port p passive\n\n"
+                   "module Top(fast: bool = {}):\n"
+                   "    if fast:\n        d = new Divder\n")
+        for source, typo, meant in ((tvs, "TvsClmap", "TvsClamp"),
+                                    (divider, "Divder", "Divider")):
+            for taken in ("true", "false"):
+                with self.subTest(typo=typo, taken=taken):
+                    result = _elaborate2(source.format(taken))
+                    found = _diagnostics(result)
+                    self.assertEqual([d["code"] for d in found],
+                                     ["RHO2005"], result.diagnostics.render())
+                    self.assertEqual(found[0]["params"], {"name": typo})
+                    edit = found[0]["fixits"][0]["edits"][0]
+                    self.assertEqual(edit["replacement"], meant)
 
 
 @unittest.skipUnless(HAVE_LARK, "lark required")

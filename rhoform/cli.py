@@ -47,7 +47,9 @@ environment or the clock. Reads: the input files and their import
 closures, the rhoform.toml files governing them, the standard library
 modules their qualified names mention (rhoform/lib/, no others), the
 grammar artifacts the parser loads, and the IR schema. Nothing outside a
-compile root is read as an author's source. Writes: fmt's targets and
+compile root is read as an author's source, and a directory is listed only
+to check the exact spelling of a name the file system resolved (a manifest
+or a path being imported). Writes: fmt's targets and
 --emit-ir's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.
@@ -111,13 +113,26 @@ def _absolute(path) -> Path:
     return Path(os.path.normpath(os.path.abspath(path)))
 
 
+def _has_manifest(directory: Path) -> bool:
+    """Whether `directory` holds a file named rhoform.toml exactly: a
+    case-insensitive file system also answers for RHOFORM.TOML, and the
+    compile root must not depend on the host. Only a directory that
+    answers is listed, to check the name."""
+    if not (directory / MANIFEST).is_file():
+        return False
+    try:
+        return MANIFEST in os.listdir(directory)
+    except OSError:
+        return False
+
+
 def compile_root(entry, explicit=None) -> Path:
     """The compile root of a compilation whose entry file is `entry`."""
     if explicit is not None:
         return _absolute(explicit)
     directory = _absolute(entry).parent
     for candidate in (directory, *directory.parents):
-        if (candidate / MANIFEST).is_file():
+        if _has_manifest(candidate):
             return candidate
     return directory
 

@@ -108,11 +108,16 @@ def natural_key(text: str) -> tuple:
     digits, 1 for text) is only ever compared between runs of the same
     type. Two text runs compare as whole strings, so a run that is a prefix
     of the other sorts first: `r1.a` (runs `r`, `1`, `.a`) sorts before
-    `r.a` (one run), where bytewise order would put `r.a` first."""
+    `r.a` (one run), where bytewise order would put `r.a` first.
+
+    A digit run's value is keyed as its significant digits, shortest
+    first, which orders exactly as int(run) would without converting:
+    CPython refuses int() past sys.get_int_max_str_digits."""
     runs = []
     for run in _RUNS.findall(text):
         if run[0].isdigit():
-            runs.append((0x30, 0, int(run), len(run)))
+            value = run.lstrip("0")
+            runs.append((0x30, 0, (len(value), value), len(run)))
         else:
             runs.append((ord(run[0]), 1, run))
     return (tuple(runs), text)

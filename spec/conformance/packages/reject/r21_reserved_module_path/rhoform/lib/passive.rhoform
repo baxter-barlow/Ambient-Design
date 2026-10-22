@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.2
+
+component Resistor:
+    pin a passive
+    pin b passive

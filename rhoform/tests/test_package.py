@@ -117,6 +117,27 @@ class VersionsTest(unittest.TestCase):
             self.assertEqual(range_admits(range_, version), admitted,
                              (range_, version))
 
+    def test_version_numbers_compare_however_long(self):
+        """SemVer numbers have no length limit, and int() has one
+        (sys.get_int_max_str_digits): a long one used to crash the range
+        check instead of comparing."""
+        from rhoform.package import range_admits, range_problem
+
+        long = "1" * 5000
+        self.assertIsNone(range_problem(f"^0.{long}.0"))
+        table = [
+            (f"^0.{long}.0", "0.2.0", False),
+            (f"^0.{long}.0", f"0.{long}.7", True),
+            (f"^{long}.0.0", f"{long}.9.0", True),
+            (f"^{long}.0.0", f"2{long[1:]}.0.0", False),
+            (f"^1.0.{long}", "1.0.2", False),
+            (f"^0.0.{long}", f"0.0.{long}", True),
+            (f"={long}.0.0", f"{long}.0.0", True),
+        ]
+        for range_, version, admitted in table:
+            self.assertEqual(range_admits(range_, version), admitted,
+                             (range_[:12], version[:12]))
+
     @unittest.skipUnless(HAVE_LARK, "lark required")
     def test_language_versions_come_from_the_grammar(self):
         import importlib.util
@@ -467,6 +488,184 @@ MAIN = (P2 + 'import Divider from "./divider"\n\nmodule Main:\n'
 
 
 @unittest.skipUnless(HAVE_LARK, "lark required")
+class LetterCaseTest(_Tree):
+    """Names on a path match the file system's exactly, letter case
+    included, on every host: a case-insensitive file system (macOS's
+    default) must not resolve what Linux reports as missing, nor give one
+    file two keys and so two identities."""
+
+    def fixit(self, found):
+        (edit,) = found["fixits"][0]["edits"]
+        return edit["replacement"]
+
+    def test_an_import_spelled_in_the_wrong_case_names_nothing(self):
+        cases = {"./LEDS": '"./leds"', "LEDS.rhoform": '"leds.rhoform"',
+                 "./Lib/leds": '"./lib/leds"'}
+        for spelled, meant in cases.items():
+            with self.subTest(spelled=spelled):
+                where = "lib/" if "Lib" in spelled else ""
+                d, text = self.only({
+                    "main.rhoform": TOP.replace("./leds", spelled),
+                    where + "leds.rhoform": LED}, "RHO2060")
+                self.assertEqual(text, f'"{spelled}"')
+                self.assertEqual(self.fixit(d), meant)
+                shutil.rmtree(self.tmp)
+                self.tmp.mkdir()
+
+    def test_one_file_never_gets_a_second_key(self):
+        sub = (P2 + 'import Led from "./Leds"\n\nmodule Sub:\n'
+               "    port p passive\n    q = new Led\n    q.a ~ p\n"
+               "    isolated q.k\n")
+        main = (P2 + 'import Led from "./leds"\nimport Sub from "./sub"\n\n'
+                "module Main:\n    port p passive\n    s = new Sub\n"
+                "    d = new Led\n    d.a ~ p\n    s.p ~ p\n"
+                "    isolated d.k\n")
+        files = {"main.rhoform": main, "sub.rhoform": sub,
+                 "leds.rhoform": LED}
+        found, _c, _e = self.compile(files)
+        self.assertEqual([(d["code"], d["spans"][0]["file"]) for d in found],
+                         [("RHO2060", "sub.rhoform")])
+        files["sub.rhoform"] = sub.replace("./Leds", "./leds")
+        found, _c, elaboration = self.compile(files)
+        self.assertEqual(found, [])
+        self.assertEqual(
+            sorted({i.definition for i in elaboration.design.instances}),
+            ["leds.Led", "main.Main", "sub.Sub"])
+
+    def test_a_manifest_is_named_rhoform_toml_exactly(self):
+        found, compilation, _e = self.compile({
+            "app/RHOFORM.TOML": "not toml at all = = =\n",
+            "app/main.rhoform": TOP, "app/leds.rhoform": LED},
+            entry="app/main.rhoform")
+        self.assertEqual(found, [])
+        self.assertTrue(compilation.ok)
+
+    def test_a_dependency_path_in_the_wrong_case_is_refused(self):
+        found, _c, _e = self.compile({
+            "app/rhoform.toml": MANIFEST + '[deps]\n"acme/parts" = '
+            '{ version = "^1.0.0", path = "../Parts" }\n',
+            "app/main.rhoform": TOP.replace("./leds", "acme/parts/leds"),
+            "parts/rhoform.toml": PARTS, "parts/leds.rhoform": LED},
+            entry="app/main.rhoform")
+        self.assertEqual([d["code"] for d in found], ["RHO2057"])
+        self.assertIn("`parts`", found[0]["params"]["problem"])
+
+    def test_an_entry_spelled_in_the_wrong_case_is_not_read(self):
+        from rhoform import package
+
+        with self.assertRaises(package.ReadFailure):
+            self.compile({"main.rhoform": TOP, "leds.rhoform": LED},
+                         entry="MAIN.rhoform")
+
+    def test_a_package_import_spelled_in_the_wrong_case_names_nothing(self):
+        d, text = self.only({
+            "app/rhoform.toml": MANIFEST + '[deps]\n"acme/parts" = '
+            '{ version = "^1.0.0", path = "../parts" }\n',
+            "app/main.rhoform": TOP.replace("./leds", "acme/parts/Leds"),
+            "parts/rhoform.toml": PARTS, "parts/leds.rhoform": LED},
+            "RHO2060", entry="app/main.rhoform")
+        self.assertEqual(self.fixit(d), '"acme/parts/leds"')
+
+
+@unittest.skipUnless(HAVE_LARK and hasattr(os, "symlink"),
+                     "lark and symbolic links required")
+class SymlinkTest(_Tree):
+    """Nothing outside the compile root is opened, and an import stays in
+    its package, however the file system links its names: a lexical path
+    under the root that leads out of it through a symbolic link is
+    refused before anything there is read."""
+
+    SECRET = "SECRET_TOKEN=abc123xyz\n"
+
+    def setUp(self):
+        super().setUp()
+        self.root = self.tmp / "ws"
+        self.outside = self.tmp / "outside"
+        self.outside.mkdir()
+        (self.outside / "notes.txt").write_text(self.SECRET)
+        (self.outside / "secret.rhoform").write_text(LED)
+
+    def link(self, name, target):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(target, path)
+
+    def load(self, files, entry="app/main.rhoform"):
+        from rhoform import package
+        from rhoform.diagnostics import Diagnostics
+
+        for rel, text in files.items():
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        sink = Diagnostics()
+        compilation = package.load(entry, self.root, sink)
+        rendered = sink.render()
+        self.assertNotIn("SECRET", rendered)
+        return [json.loads(line) for line in rendered.splitlines()], \
+            compilation
+
+    def test_a_linked_module_file_out_of_the_root_is_not_read(self):
+        self.link("app/leds.rhoform", "../../outside/notes.txt")
+        found, compilation = self.load({"app/rhoform.toml": MANIFEST,
+                                        "app/main.rhoform": TOP})
+        self.assertEqual([(d["code"], d["params"]) for d in found],
+                         [("RHO2061", {"path": "./leds",
+                                       "boundary": "package `acme/app`"})])
+        self.assertEqual([r.file for r in compilation.results],
+                         ["app/main.rhoform"])
+
+    def test_a_linked_directory_out_of_the_root_is_not_entered(self):
+        self.link("app/shared", "../../outside")
+        found, _c = self.load({"main.rhoform": TOP.replace(
+            "./leds", "./app/shared/secret")}, entry="main.rhoform")
+        self.assertEqual([(d["code"], d["params"]) for d in found],
+                         [("RHO2061", {"path": "./app/shared/secret",
+                                       "boundary": "the compile root"})])
+
+    def test_a_link_into_another_package_leaves_this_one(self):
+        self.link("app/leds.rhoform", "../parts/leds.rhoform")
+        found, _c = self.load({"app/rhoform.toml": MANIFEST,
+                               "app/main.rhoform": TOP,
+                               "parts/rhoform.toml": PARTS,
+                               "parts/leds.rhoform": LED})
+        self.assertEqual([d["code"] for d in found], ["RHO2061"])
+
+    def test_a_link_that_stays_in_the_package_is_followed(self):
+        self.link("app/leds.rhoform", "real/leds.rhoform")
+        found, compilation = self.load({"app/rhoform.toml": MANIFEST,
+                                        "app/main.rhoform": TOP,
+                                        "app/real/leds.rhoform": LED})
+        self.assertEqual(found, [])
+        self.assertTrue(compilation.ok)
+
+    def test_a_linked_dependency_root_out_of_the_root_is_refused(self):
+        (self.outside / "parts").mkdir()
+        (self.outside / "parts" / "rhoform.toml").write_text(PARTS)
+        (self.outside / "parts" / "leds.rhoform").write_text(LED)
+        self.link("parts", "../outside/parts")
+        found, _c = self.load({
+            "app/rhoform.toml": MANIFEST + '[deps]\n"acme/parts" = '
+            '{ version = "^1.0.0", path = "../parts" }\n',
+            "app/main.rhoform": TOP.replace("./leds", "acme/parts/leds")})
+        self.assertEqual([d["code"] for d in found], ["RHO2057"])
+        self.assertIn("outside the compile root",
+                      found[0]["params"]["problem"])
+
+    def test_a_linked_manifest_or_entry_out_of_the_root_is_never_read(self):
+        from rhoform import package
+
+        (self.outside / "rhoform.toml").write_text(MANIFEST)
+        self.link("app/rhoform.toml", "../../outside/rhoform.toml")
+        with self.assertRaises(package.ReadFailure) as raised:
+            self.load({"app/main.rhoform": TOP, "app/leds.rhoform": LED})
+        self.assertIn("outside the compile root", str(raised.exception))
+        self.link("main.rhoform", "../outside/secret.rhoform")
+        with self.assertRaises(package.ReadFailure):
+            self.load({}, entry="main.rhoform")
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
 class LibraryTest(_Tree):
     """The bundled library (spec 04) seen from a compilation of several
     files: every file of the closure resolves `rhoform.lib.` names, the
@@ -557,6 +756,47 @@ class CodesTest(_Tree):
         found, _c, _e = self.compile({})
         self.assertEqual([(d["code"], d["params"]) for d in found],
                          [("RHO2048", {"reason": "it is not UTF-8"})])
+
+    def test_rho2048_an_integer_too_long_to_read(self):
+        """tomllib lets a bare ValueError out for an integer past
+        sys.get_int_max_str_digits. TOML 1.0.0 integers are 64-bit, so
+        that is invalid TOML, not an internal error."""
+        d, _text = self.only({"rhoform.toml": MANIFEST + "description = "
+                              + "1" * 5000 + "\n", "main.rhoform": TOP},
+                             "RHO2048")
+        self.assertEqual(d["params"], {
+            "reason": "an integer in it is outside TOML's 64-bit range"})
+
+    def test_rho2058_a_range_whose_numbers_are_too_long_to_convert(self):
+        d, _text = self.only({"rhoform.toml": MANIFEST.replace(
+            "^0.2.0", "^0." + "1" * 5000 + ".0"), "main.rhoform": TOP},
+            "RHO2058")
+        self.assertEqual(d["params"]["supported"], "0.1.0, 0.2.0")
+
+    def test_rho2068_reserved_module_path(self):
+        # An author's file whose module path is under `rhoform.lib.` would
+        # take the library's identities: refused at the import, unread.
+        resistor = (P2 + "\ncomponent Resistor:\n    pin x passive 7\n"
+                    "    pin y passive 9\n")
+        main = (P2 + 'import Resistor from "./rhoform/lib/passive"\n\n'
+                "module Panel:\n    r1 = new Resistor\n"
+                "    r2 = new rhoform.lib.passive.Resistor\n"
+                "    isolated r1.x\n    isolated r1.y\n"
+                "    isolated r2.a\n    isolated r2.b\n")
+        files = {"main.rhoform": main,
+                 "rhoform/lib/passive.rhoform": resistor}
+        d, text = self.only(files, "RHO2068")
+        self.assertEqual(d["params"], {"file": "rhoform/lib/passive.rhoform",
+                                       "module": "rhoform.lib.passive"})
+        self.assertEqual(text, '"./rhoform/lib/passive"')
+        _f, compilation, _e = self.compile(files)
+        self.assertEqual([r.file for r in compilation.results],
+                         ["main.rhoform"])
+        # As the entry it is refused before it is read.
+        found, compilation, _e = self.compile(
+            {}, entry="rhoform/lib/passive.rhoform")
+        self.assertEqual([d["code"] for d in found], ["RHO2068"])
+        self.assertEqual(compilation.results, [])
 
     def test_rho2049_manifest_unknown_key(self):
         d, text = self.only({"rhoform.toml": MANIFEST + 'autor = "x"\n',
