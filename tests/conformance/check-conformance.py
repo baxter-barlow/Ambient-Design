@@ -73,7 +73,7 @@ MINIMUM_FMT_CASES = 16
 # true as codes are added, the floor is what keeps cases from vanishing.
 ELABORATE = CONFORMANCE / "elaborate"
 IR_SCHEMA_PATH = ROOT / "ir" / "netlist-ir.schema.json"
-MINIMUM_ELABORATE_ACCEPT_CASES = 7
+MINIMUM_ELABORATE_ACCEPT_CASES = 8
 MINIMUM_ELABORATE_REJECT_CASES = 31
 
 # Block-2 codes no source text can trigger, each with its reason. Every

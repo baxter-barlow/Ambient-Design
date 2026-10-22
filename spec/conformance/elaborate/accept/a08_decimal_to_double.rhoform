@@ -1,0 +1,15 @@
+# Decimal to double: elaboration keeps the exact decimal the source wrote,
+# and an IR number is the double nearest it, ties to even. The lower bound
+# lies exactly halfway between the doubles 1 and 1 + 2^-52, so it is 1 (the
+# even one) in the IR; the upper bound carries more significant digits than
+# a double holds and is 3.4. Neither IR number spells its source text back.
+#pragma rhoform-syntax 0.1
+
+module Rounding:
+    port out power_out
+    reg = new rhoform.lib.ic.Regulator:
+        pin out power_out
+    net VOUT:
+        out
+        reg.out
+    assert v_out static operating_point(VOUT) within 1.00000000000000011102230246251565404236316680908203125V to 3.39999999999999999999V
