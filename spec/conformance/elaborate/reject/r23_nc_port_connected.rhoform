@@ -1,0 +1,11 @@
+# RHO2024: a declared no-connect cannot join a net.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    u1 = new rhoform.lib.ic.Mcu:
+        pin io0 bidirectional 1
+        pin nc1 nc 2
+    r1.a ~ u1.nc1

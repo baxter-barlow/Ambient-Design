@@ -1,0 +1,31 @@
+# Unlabelled and isolated nets: an unlabelled net is N_ plus its least
+# member spelled <instance path>.<port> (a root port spells with a leading
+# dot), an endpoint named by two statements merges them, an isolated port
+# is a single-member net, and an nc pin joins nothing.
+#pragma rhoform-syntax 0.1
+
+module Sensor:
+    port out output
+    port vdd power_in
+    u1 = new rhoform.lib.sensor.Thermistor:
+        pin a passive 1
+        pin b passive 2
+        pin c passive 3
+        pin d nc 4
+    vdd ~ u1.a
+    u1.b ~ out
+    isolated u1.c
+
+module Top:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor(resistance = 10kohm):
+        pin a passive
+        pin b passive
+    r2 = new rhoform.lib.passive.Resistor(resistance = 22kohm):
+        pin a passive
+        pin b passive
+    s = new Sensor
+    vin ~ r1.a
+    r1.b ~ r2.a
+    r2.a ~ s.vdd
+    isolated r2.b

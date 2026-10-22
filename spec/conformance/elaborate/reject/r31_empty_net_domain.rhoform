@@ -1,0 +1,9 @@
+# RHO2032: a domain is a name, never the empty string.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    net VCC(voltage_domain = ""):
+        r1.a

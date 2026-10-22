@@ -7,7 +7,7 @@ These cases define, executably, what a conforming Rhoform implementation
 does. In this repository `tests/conformance/check-conformance.py` (the
 gate; Apache-2.0 code) runs them against the reference implementation on
 every `make all`; a third-party implementation conforms to the parse,
-literal and formatter layers exactly when it reproduces them. The suite is standing —
+literal, elaboration and formatter layers exactly when it reproduces them. The suite is standing —
 each milestone that changes the language adds its cases in the same
 change (parser disambiguation with R12, formatter cases with R16, type
 cases with M2, and so on).
@@ -64,6 +64,40 @@ vector that contradicts the properties cannot be committed. `errors`
 rows pin the stable rejection reasons ill-formed literals carry
 (RHO1010's `reason` param).
 
+## `elaborate/accept/` — sources that elaborate clean, and the exact IR
+
+The machine-checked half of
+[04 — Elaboration](../language/04-elaboration.md). Each
+`<case>.rhoform` MUST parse and elaborate with **zero diagnostics**, and
+the IR it elaborates to MUST equal `<case>.expected.ir.json` byte for
+byte: the IR v0 document in `rhoform-canonical-json/1`, hashes
+included. The gate also validates that IR against
+`ir/netlist-ir.schema.json`, so the suite cannot commit an expectation
+the IR schema forbids. Each case is compiled alone with its own
+directory as the compile root, so its one source file is
+`<case>.rhoform`, its definitions are `<case>.<Module>`, and its
+`source_hash` covers that file alone.
+
+Third-party note: `header.generator` names the implementation that
+produced the document and is outside `design_hash`; an independent
+implementation conforms at this layer when its IR equals the expected
+document with `header.generator` set aside.
+
+## `elaborate/reject/` — sources the elaborator reports, and the exact report
+
+Each `<case>.rhoform` MUST parse clean — a case that stops at the
+parser belongs under `parse/` — and its elaboration diagnostic stream
+MUST equal `<case>.expected.ndjson` byte for byte, exactly as for
+`parse/reject/`. There is one case per block-2 code a source can
+trigger, and the gate fails when an active block-2 code is emitted by
+no case, unless it exempts the code with a stated reason it cannot be
+reached from source text. A case pinning a warning (a repeated flag, a
+repeated endpoint) still elaborates to a design; the stream is what it
+pins.
+
+`--write` regenerates the elaboration cases' expected IR and streams
+along with the parse reject cases'; the diff is the review artifact.
+
 ## `fmt/` — formatter cases
 
 The machine-checked half of
@@ -85,6 +119,8 @@ Its expected file is never escaped: canonical output carries neither.
 ## Case naming
 
 `aNN_...` accept cases, `rNN_...` reject cases, `fNN_...` formatter
-cases, numbered in the order they were added, never renumbered — a
-conformance case is cited by name in commit messages and issues, and a
-renamed case orphans every citation.
+cases, numbered within their directory in the order they were added,
+never renumbered — a conformance case is cited by name in commit
+messages and issues, and a renamed case orphans every citation. Cite an
+elaboration case with its directory (`elaborate/r04_unknown_definition`),
+since the parse cases use the same prefixes.

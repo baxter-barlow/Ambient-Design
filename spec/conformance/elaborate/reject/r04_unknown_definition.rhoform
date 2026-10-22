@@ -1,0 +1,9 @@
+# RHO2005: a single-word definition must be a module of this file.
+#pragma rhoform-syntax 0.1
+
+module Divider:
+    port mid passive
+
+module Top:
+    d1 = new Divider
+    d2 = new Divder

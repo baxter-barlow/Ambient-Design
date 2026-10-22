@@ -1,0 +1,35 @@
+# Assertions: an assertion in a module instance is pathed under that
+# instance, its subject resolves to the flattened net's final name, and
+# its bounds take the T3 normal-form unit (a plain number's unit is "1").
+#pragma rhoform-syntax 0.1
+
+module Rail:
+    port out power_out
+    port vin power_in
+    reg = new rhoform.lib.ic.Regulator:
+        pin gnd power_in
+        pin in power_in
+        pin out power_out
+    net VIN:
+        reg.in
+        vin
+    net VOUT:
+        out
+        reg.out
+    isolated reg.gnd
+    assert dropout dynamic operating_point(VIN) within 900mV to 1.1V
+    assert ripple dynamic ripple(VOUT) at most 30mV
+    assert v_out static operating_point(VOUT) within 3.2V to 3.4V
+
+module Board:
+    port vbat power_in
+    core = new Rail
+    io = new Rail
+    net V3V3:
+        core.out
+    net VBAT:
+        core.vin
+        io.vin
+        vbat
+    assert eff static efficiency(VBAT) at least 0.8
+    assert f_sw dynamic frequency(V3V3) within 450kHz to 550kHz

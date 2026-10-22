@@ -1,0 +1,7 @@
+# RHO2013: a test point takes exactly one passive pin.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    tp1 = new rhoform.lib.mech.TestPoint:
+        pin p input
+        hardware test_point

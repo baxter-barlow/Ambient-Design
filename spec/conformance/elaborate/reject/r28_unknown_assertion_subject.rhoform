@@ -1,0 +1,10 @@
+# RHO2029: an assertion's subject is a net label of its own module.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    net OUT:
+        r1.a
+    assert f dynamic frequency(OTU) at least 1Hz

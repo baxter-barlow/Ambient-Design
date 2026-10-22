@@ -1,0 +1,18 @@
+# RHO2026: an isolated port's net reaches another port, across a module
+# port here.
+#pragma rhoform-syntax 0.1
+
+module Probe:
+    port tip passive
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    isolated r1.a
+    r1.a ~ tip
+
+module Top:
+    r9 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    p = new Probe
+    p.tip ~ r9.a

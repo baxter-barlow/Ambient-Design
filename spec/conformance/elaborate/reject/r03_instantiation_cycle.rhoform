@@ -1,0 +1,11 @@
+# RHO2004: modules that instantiate one another cannot terminate.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    a = new A
+
+module A:
+    b = new B
+
+module B:
+    a = new A

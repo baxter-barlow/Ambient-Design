@@ -1,0 +1,48 @@
+# Fabrication reality: flags stated on a module instance are inherited by
+# every instance beneath it (logical OR with their own), pinless hardware
+# carries no ports, and net-attachable hardware carries one passive pin.
+#pragma rhoform-syntax 0.1
+
+module DebugHeader:
+    port io bidirectional
+    j1 = new rhoform.lib.connector.Header1x2:
+        pin p1 bidirectional 1
+        pin p2 passive 2
+        no exclude_from_bom
+    tp1 = new rhoform.lib.mech.TestPoint:
+        pin p passive
+        hardware test_point
+        exclude_from_bom
+    net IO:
+        io
+        j1.p1
+        tp1.p
+    isolated j1.p2
+
+module Board:
+    port gnd power_in
+    port io bidirectional
+    dbg = new DebugHeader:
+        board_only
+        dnp
+    fid1 = new rhoform.lib.mech.Fiducial:
+        hardware fiducial
+        exclude_from_bom
+        board_only
+    logo = new rhoform.lib.mech.Logo:
+        hardware artwork
+        exclude_from_bom
+        board_only
+    mh1 = new rhoform.lib.mech.MountingHole(diameter = 3.2mm):
+        hardware mounting_hole
+        exclude_from_bom
+        board_only
+    mh2 = new rhoform.lib.mech.GroundedMountingHole(diameter = 3.2mm):
+        pin p passive
+        hardware grounded_mounting_hole
+        exclude_from_bom
+        board_only
+    net GND(ground_domain = "chassis"):
+        gnd
+        mh2.p
+    io ~ dbg.io

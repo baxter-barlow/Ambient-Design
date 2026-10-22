@@ -1,0 +1,7 @@
+# RHO2012: a flag and its negation on one instance.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    u1 = new rhoform.lib.ic.Mcu:
+        exclude_from_bom
+        no exclude_from_bom

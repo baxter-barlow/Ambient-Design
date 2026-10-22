@@ -1,0 +1,5 @@
+# RHO2016: an IR quantity needs a nominal, which a bare interval lacks.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    u1 = new rhoform.lib.ic.Ldo(vout = 3V to 3.6V)

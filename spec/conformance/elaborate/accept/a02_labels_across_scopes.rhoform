@@ -1,0 +1,36 @@
+# Labels across scopes: the shallowest label names a net, a label declared
+# inside a module instance is qualified by that instance's path, and the
+# domain attributes of every label on one net merge.
+#pragma rhoform-syntax 0.1
+
+module Indicator:
+    port ctl input
+    port gnd power_in
+    d1 = new rhoform.lib.semiconductor.Led:
+        pin a passive
+        pin k passive
+    r1 = new rhoform.lib.passive.Resistor(resistance = 560ohm):
+        pin a passive
+        pin b passive
+    net CTL(voltage_domain = "logic"):
+        ctl
+        r1.a
+    net LED:
+        d1.a
+        r1.b
+    net RETURN(ground_domain = "gnd"):
+        d1.k
+        gnd
+
+module Board:
+    port gnd power_in
+    port sig output
+    left = new Indicator
+    right = new Indicator
+    net GND:
+        gnd
+        left.gnd
+        right.gnd
+    net SIG:
+        left.ctl
+        sig

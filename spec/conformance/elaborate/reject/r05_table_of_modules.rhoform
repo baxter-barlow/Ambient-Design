@@ -1,0 +1,9 @@
+# RHO2006: table rows elaborate to components, never to modules.
+#pragma rhoform-syntax 0.1
+
+module Cell:
+    port p passive
+
+module Top:
+    table Cell (gain):
+        c1  2

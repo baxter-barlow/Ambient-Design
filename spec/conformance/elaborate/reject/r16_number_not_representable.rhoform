@@ -1,0 +1,5 @@
+# RHO2017: an integer beyond 2^53 has no exact IEEE double.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    u1 = new rhoform.lib.ic.Counter(modulus = 9007199254740993)

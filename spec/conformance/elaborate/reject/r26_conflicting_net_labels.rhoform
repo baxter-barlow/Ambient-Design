@@ -1,0 +1,11 @@
+# RHO2027: one net is labelled twice at the same depth.
+#pragma rhoform-syntax 0.1
+
+module Top:
+    r1 = new rhoform.lib.passive.Resistor:
+        pin a passive
+        pin b passive
+    net VCC:
+        r1.a
+    net VDD:
+        r1.a
