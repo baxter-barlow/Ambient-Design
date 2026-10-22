@@ -268,8 +268,9 @@ LC resonance. The LM25145's Type-III network (sec. 10.8) does not: it takes
 the datasheet's placement, first zero at f0/2 and second at f0, which keeps
 the estimated phase margin at 55.4-60.9 deg over every load and L/C corner
 taken one at a time (with the R10 shunt's damping in the plant) and at
-50.5 deg or more at the benchmark's 1-2 A load with every tolerance stacked,
-inside the datasheet's 50-70 deg target; the double zero fell to 47.6 deg one
+50.1 deg or more at the benchmark's 1-2 A load with every tolerance stacked
+(50.5 deg with the resistors held to +/-1 % and their TCR left out), inside the
+datasheet's 50-70 deg target; the double zero fell to 47.6 deg one
 at a time. Both cross over at about 30 kHz.
 Required compensator gain at fc, with divider gain h = 0.8/3.3 =
 0.242 and |P(fc)| ~= (f0/fc)^2 = 0.078:
@@ -921,7 +922,8 @@ load and at the L +20 %, C +22 % corner (loop estimate below).
 
 Why these neighbours:
 - **C_C1.** 4.7 nF is fractionally nearer the ideal by ratio (8.5 % against 9.8 %) and
-  would also hold the phase-margin window (53.7-59.4 deg by the same estimate).
+  would also hold the phase-margin window (54.1-59.8 deg by the same estimate with R10 in the plant; 53.7-59.4 deg
+  without it).
   5.6 nF errs toward a lower z1, which adds about 1 deg at every corner.
 - **C_C3.** The exact expression includes R_C2: w_z2 = 1/((R_FB1 + R_C2) C_C3) (DS
   Table 3), so the ideal is 586 pF. 560 pF lands 4.8 % above f_0; 680 pF would land
