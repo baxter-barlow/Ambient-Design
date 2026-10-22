@@ -50,5 +50,7 @@ candidate is the one that LOST, so no grammar text is copied. The attribution
 above is owed regardless, and is stated here rather than deferred, because the
 repository has been public since the artifacts were first pushed.
 
-Shipping atopile's full MIT licence text in a `THIRD_PARTY_NOTICES` file is
-tracked separately as AMB-117, gated on a public release.
+atopile's MIT licence text is reproduced verbatim in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES), taken from a pinned atopile commit
+and recorded with its source URL, git blob id and SHA-256 so the copy can be
+checked against upstream.

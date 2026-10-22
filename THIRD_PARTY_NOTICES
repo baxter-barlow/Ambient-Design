@@ -1,0 +1,78 @@
+Rhoform third-party notices
+===========================
+
+This file reproduces the licence text of third-party work that Rhoform
+credits. Each entry records the licence basis for carrying it, what (if
+anything) was copied, and where the reproduced text came from -- the source URL
+at a pinned commit, the git blob id and a SHA-256 -- which is the record
+AGENTS.md asks for before the repository redistributes third-party material.
+The project's own licensing is described in LICENSES.md and NOTICE.
+
+--------------------------------------------------------------------------------
+atopile
+--------------------------------------------------------------------------------
+
+Why this notice is here
+
+    Requirement L2 reads: "Adopt atopile's MIT-licensed surface with public
+    attribution." Rhoform adopts constructs of atopile's surface syntax --
+    principally the `module` and `new` keywords and the `~` connection
+    operator -- and owes atopile public attribution for them. The attribution
+    itself is the "Attribution" section of LICENSES.md; this entry carries the
+    licence text that section refers to.
+
+What is and is not copied
+
+    No atopile code, grammar text or documentation is copied into this
+    repository. Rhoform's grammar is generated from an original rule table
+    (lang/grammar/rhoform_syntax.py), and the bake-off candidate that stayed
+    closest to atopile's surface is the one that lost. The only atopile-related
+    text in the tree is four short quotations from public atopile issue and
+    pull-request discussions in corpus/bugs.yaml (BUG-0038 to BUG-0041). They
+    are their individual authors' prose, not material under the licence below,
+    and they are covered by the corpus/bugs.yaml entry in NOTICE.
+
+Where the text below comes from
+
+    Repository  https://github.com/atopile/atopile
+    File        https://github.com/atopile/atopile/blob/619eda7f777558a3e500dbad9cc2941712881495/LICENSE
+    Commit      619eda7f777558a3e500dbad9cc2941712881495
+    Git blob    83a6d8495200e79f6f0f1eff096b01d55dcc79ae
+    SHA-256     1e7c9c30fabbd1429890d78d4bda8fd261a80052fa0855198e6451d74f9ceefd
+    Licence     MIT (SPDX identifier: MIT)
+
+    The commit is pinned because atopile's LICENSE file has not always carried
+    this text; the copy below is the file as it stands at that commit, which
+    was atopile's main branch when it was taken (2026-10-22).
+
+    The 21 lines between the BEGIN and END markers are byte-identical to that
+    file (1064 bytes, LF line endings). To check the copy:
+
+        awk '/^END atopile LICENSE$/{f=0} f; /^BEGIN atopile LICENSE$/{f=1}' \
+            THIRD_PARTY_NOTICES | shasum -a 256
+
+    should print the SHA-256 above (sha256sum works in place of shasum -a 256).
+
+BEGIN atopile LICENSE
+MIT License
+
+Copyright (c) 2024 atopile
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+END atopile LICENSE
