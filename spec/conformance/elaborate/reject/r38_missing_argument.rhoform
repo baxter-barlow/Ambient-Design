@@ -1,0 +1,11 @@
+# A parameter with no default needs an argument.
+#pragma rhoform-syntax 0.2
+
+component Resistor(resistance: resistance, package: string = "0402"):
+    pin a passive 1
+    pin b passive 2
+
+module Panel:
+    port vin power_in
+    r1 = new Resistor(package = "0603")
+    vin ~ r1.a

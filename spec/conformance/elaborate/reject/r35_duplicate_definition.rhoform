@@ -1,0 +1,15 @@
+# A component and a module, or two components, may not share a name; two
+# modules sharing one stay RHO2001. The first definition keeps the name.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Led:
+    port p passive
+
+module Panel:
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a

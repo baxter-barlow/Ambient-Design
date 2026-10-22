@@ -1,0 +1,27 @@
+# Component definitions: an instance of a `component` takes its ports from
+# the definition's pins, and pins it states anyway must restate them
+# exactly. A table over a component definition gives each row its pins.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+component Resistor:
+    pin a passive 1
+    pin b passive 2
+
+module Indicator:
+    port gnd passive
+    port vin power_in
+    table Resistor (resistance):
+        r1  1kohm
+    d1 = new Led
+    d2 = new Led:
+        pin a passive 1
+        pin k passive 2
+        part "led.red/ltst-c191@1"
+    vin ~ r1.a
+    r1.b ~ d1.a
+    d1.k ~ d2.a
+    d2.k ~ gnd

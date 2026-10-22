@@ -1,0 +1,23 @@
+# An index must select a member. The defect depends on a parameter value,
+# so it is reported once per instance whose environment shows it, with
+# that instance as its entity: `short` has two members, `long` three.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Bank(n: int = 2):
+    port vin power_in
+    leds = new Led[n]
+    vin ~ leds[0].a
+    isolated leds[2].k
+
+module Panel:
+    port vin power_in
+    long = new Bank(n = 3)
+    short = new Bank
+    net VIN:
+        long.vin
+        short.vin
+        vin

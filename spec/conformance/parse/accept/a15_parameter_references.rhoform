@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.2
+module Filter(r_value: resistance = 10kohm, c_value: capacitance = 100nF,
+              pkg: string = "0402", limit: resistance = r_value):
+    port vin input
+    port vout output
+    r1 = new rhoform.lib.passive.Resistor(resistance = r_value):
+        part abstract:
+            package = pkg
+    c1 = new rhoform.lib.passive.Capacitor(capacitance = c_value)
+    table rhoform.lib.passive.Resistor part abstract (resistance, part.package):
+        ra r_value pkg
+        rb limit "0603"
+        rc 1kohm pkg
+    if r_value > limit:
+        isolated r1.b
+    vin ~ r1.a
+    r1.b ~ c1.a ~ vout

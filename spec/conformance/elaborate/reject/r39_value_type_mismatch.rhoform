@@ -1,0 +1,12 @@
+# A value must have its parameter's declared type: a voltage is not a
+# resistance.
+#pragma rhoform-syntax 0.2
+
+component Resistor(resistance: resistance):
+    pin a passive 1
+    pin b passive 2
+
+module Panel:
+    port vin power_in
+    r1 = new Resistor(resistance = 3.3V)
+    vin ~ r1.a

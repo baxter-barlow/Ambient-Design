@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.2
+module M(fast: bool, wide: bool):
+    port p passive
+    if fast and wide:
+        isolated p

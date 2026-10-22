@@ -1,4 +1,4 @@
-"""The elaborator (R13 slice 1, R15): parsed v0.1 sources to a design.
+"""The elaborator (R13, R15): parsed sources to a design.
 
 LAYERING. This module turns `ok` parse trees into an in-memory
 `ElaboratedDesign` that keeps every value as an exact `Decimal` and every
@@ -10,53 +10,62 @@ report the consequences of text the author never wrote.
 
 THE PASSES, in order, each total over its input:
 
-  A. definitions: every `module` per file, named `<module path>.<Name>`
-     where the module path is the file's path relative to the compile
-     root with `/` turned into `.` and each segment made an identifier;
-  B. each module's own ports;
+  A. definitions: every `module` and (0.2) `component` per file, named
+     `<module path>.<Name>` where the module path is the file's path
+     relative to the compile root with `/` turned into `.` and each
+     segment made an identifier; then each definition's parameter list;
+  B. each module's own ports, each component's pins;
   C. the instantiation graph: a single-word definition must be a module
-     visible in the file, a dotted one is a library component (there is
-     no bundled library yet, so it is an ad-hoc component whose ports
+     or component of the file, a dotted one is a library component (there
+     is no bundled library yet, so it is an ad-hoc component whose ports
      are exactly its inline `pin` statements);
   D. cycles (an error: elaboration terminates because no module may
-     contain itself), then the root — the unique module of the entry
-     file that nothing instantiates — and every module's instance paths;
-  E. each module body, checked once per DEFINITION, so a module used
-     twice reports a defect in its body once; a diagnostic carries the
-     IR entity it is about whenever that entity is unique;
-  F. flattening: instances become paths, nets are a union-find over
-     (instance path, port) nodes, so a module port — named by the parent
-     as `inst.port` and by the module as `port` — is one node and nets
-     merge across the hierarchy with no special case. A defect of a
-     flattened net that each copy of a module repeats is reported once,
-     as pass E does for bodies.
+     contain itself, whatever its parameters), then the root — the unique
+     module of the entry file that nothing instantiates;
+  E. the checks that need no parameter VALUE, once per definition: names a
+     value refers to, the types of arguments, defaults, conditions,
+     bounds and indexes, and where a statement may stand;
+  F. the walk: from the root, each module instance's body is evaluated
+     under its parameter environment — `if` picks a branch, `for`
+     unrolls, arrays replicate — once per distinct (definition,
+     environment), and the instance tree is built from the results;
+  G. reporting: a body defect found identically under every environment
+     the design gives its definition is reported once per definition, as
+     in v0.1; one found under some environments only depends on the
+     values and is reported per instance, carrying that entity;
+  H. flattening: nets are a union-find over (instance path, port) nodes,
+     so a module port — named by the parent as `inst.port` and by the
+     module as `port` — is one node and nets merge across the hierarchy
+     with no special case. A defect of a flattened net that every copy of
+     a module repeats alike is reported once, as pass G does for bodies.
 
 NET NAMES. The shallowest label wins; two different labels at that depth
 are an error. A label declared inside a module instance is qualified by
-the instance path (`indicator/LED`) always, so a name never depends on
-unrelated parts of the design. An unlabelled net is `N_` plus its
-lexicographically least member, spelled `<instance path without the
+the instance path (`indicator/LED`, `cells[2]/LED`) always, so a name never
+depends on unrelated parts of the design. An unlabelled net is `N_` plus
+its lexicographically least member, spelled `<instance path without the
 leading slash>.<port>` — so a root port `vin` is `.vin` and its net
-`N_.vin`. That rule is interim (R27/M3 owns naming) and is recorded in
-the spec so a later change is a ledgered one. Every net a statement
-creates is emitted, including the single-member net `isolated` makes.
+`N_.vin`. That rule is interim (R27/M3 owns naming) and is recorded in the
+spec so a later change is a ledgered one. Every net a statement creates is
+emitted, including the single-member net `isolated` makes.
 
 FLAGS on a module instance are inherited by every descendant (logical
 OR). Quantities keep their exact value; `rhoform/ir.py` performs the one
 Decimal-to-double conversion at emission, and this module refuses, with a
 diagnostic, any number that conversion could not carry.
 
-Structured for the 0.2 surface (imports, `component`, parameter lists,
-`if`/`for`, arrays): definitions resolve through one function, statements
-dispatch on `tree.data`, and values evaluate through one function, so each
-construct lands as a new branch rather than a new pass.
+REPLICATION is budgeted: loop iterations and array members together are
+capped at EXPANSION_LIMIT per design, counted over every instance, so a
+source that parses cannot make elaboration slow. `import` is the one 0.2
+construct still refused here (RHO2033): it needs the package layer.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from difflib import get_close_matches
 from pathlib import PurePosixPath
 import hashlib
+import json
 import re
 
 from . import quantities
@@ -68,8 +77,23 @@ PINLESS_HARDWARE = frozenset({"mounting_hole", "fiducial", "artwork"})
 SINGLE_PIN_HARDWARE = frozenset({"test_point", "grounded_mounting_hole"})
 FLAGS = ("dnp", "exclude_from_bom", "board_only")
 MAX_IR_INTEGER = 2 ** 53
+# Loop iterations plus array members, per design (decision S-4).
+EXPANSION_LIMIT = 4096
 
 _PAIR_RE = re.compile(r"\A(-?[0-9]+(?:\.[0-9]+)?)(.+)\Z")
+_EQUALITY = ("==", "!=")
+
+
+class _Unknown:
+    """A value elaboration could not determine because an error was
+    already reported for it. Anything computed from it is skipped
+    quietly, so one defect is one diagnostic."""
+
+    def __repr__(self):
+        return "<unknown>"
+
+
+UNKNOWN = _Unknown()
 
 
 # ---- the elaborated design ------------------------------------------------
@@ -238,6 +262,11 @@ def _words(node) -> list[str]:
     return [str(c) for c in node.children if not _is_tree(c)]
 
 
+def _block_statements(block) -> list:
+    return [_unwrap(c) for c in block.children
+            if _is_tree(c) and c.data == "statement"]
+
+
 def _did_you_mean(word: str, choices, span: Span) -> tuple:
     matches = get_close_matches(word, sorted(choices), n=2, cutoff=0.6)
     if len(matches) != 1:
@@ -268,6 +297,12 @@ def _span_through(result, start: int, after: int, char: bytes) -> Span:
     return span_from_bytes(result.file, data, start, max(start, position))
 
 
+def _text_of(result, node) -> str:
+    span = result.span_of(node)
+    return result.data[span.byte_start:span.byte_end].decode(
+        "utf-8", "surrogateescape")
+
+
 # ---- values -----------------------------------------------------------------
 
 def _base_unit(dimension: str) -> str:
@@ -296,20 +331,126 @@ def _representable(*values: Decimal) -> bool:
     return all(abs(float(value)) != float("inf") for value in values)
 
 
+# Value types. A parameter's declared type is one of the param_type words:
+# `string`, `int`, `bool`, or a quantity dimension. A bare-interval literal
+# has the type ("interval", dimension): it is never a parameter value.
+
+def _literal_type(token):
+    kind = token.type
+    if kind == "STRING":
+        return "string"
+    if kind == "INTEGER":
+        return "int"
+    if str(token) in ("true", "false"):
+        return "bool"
+    parsed = quantities.parse_quantity(str(token))
+    if parsed.nominal is None:
+        return ("interval", parsed.dimension)
+    return parsed.dimension
+
+
+def _article(word: str) -> str:
+    return ("an " if word[0] in "aeiou" else "a ") + word
+
+
+def _describe(kind) -> str:
+    if isinstance(kind, tuple):
+        return _article(f"{kind[1]} interval")
+    return _article(kind)
+
+
+def _assignable(found, expected) -> bool:
+    """Whether a value of type `found` may stand where `expected` is
+    declared. A bare interval of the right dimension is not a type error:
+    RHO2016 (no nominal) is the precise report for it."""
+    if found == expected:
+        return True
+    return isinstance(found, tuple) and found[1] == expected
+
+
+def _comparable(value):
+    """A value as (kind, payload) for an exact comparison, or None."""
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, int):
+        return ("int", value)
+    if isinstance(value, str):
+        return ("string", value)
+    if isinstance(value, Quantity):
+        dimension = quantities.UNITS[value.unit][0]
+        return (dimension, quantities.to_base(value.value, value.unit))
+    return None
+
+
+def _compare(op: str, left, right):
+    a, b = _comparable(left), _comparable(right)
+    if a is None or b is None or a[0] != b[0]:
+        return None
+    x, y = a[1], b[1]
+    if op == "==":
+        return x == y
+    if op == "!=":
+        return x != y
+    if a[0] in ("bool", "string"):
+        return None
+    return {"<": x < y, "<=": x <= y, ">": x > y, ">=": x >= y}[op]
+
+
+def _env_key(values: dict) -> tuple:
+    return tuple((name, type(value).__name__, value)
+                 for name, value in sorted(values.items()))
+
+
+@dataclass(frozen=True)
+class _Env:
+    """A definition's parameter environment: every declared parameter's
+    resolved value (UNKNOWN when an error was reported for it)."""
+
+    values: tuple  # ((name, value), ...) in declaration order
+
+    @property
+    def key(self) -> tuple:
+        return _env_key(dict(self.values))
+
+    def get(self, name, default=None):
+        for key, value in self.values:
+            if key == name:
+                return value
+        return default
+
+
+EMPTY_ENV = _Env(())
+
+
 # ---- per-definition working state ------------------------------------------
 
 @dataclass
-class _ModuleDef:
+class _Param:
+    name: str
+    type: str
+    span: Span
+    has_default: bool = False
+    default_ref: str | None = None  # a default naming an earlier parameter
+    default_value: object = UNKNOWN  # a literal default, evaluated once
+
+
+@dataclass
+class _Definition:
     name: str
     result: object  # the ParseResult of its file
     tree: object
     header: Span
     definition: str
     order: int
+    kind: str = "module"  # "module" | "component"
+    params: list | None = None  # _Param, source order; None: no list
     ports: list = field(default_factory=list)  # Port, source order
     roles: dict = field(default_factory=dict)  # port name -> role
     edges: list = field(default_factory=list)  # (member, target, span)
     paths: list = field(default_factory=list)  # its instance paths
+    pin_spans: dict = field(default_factory=dict)  # component pin -> span
+    quiet_ports: set = field(default_factory=set)  # misplaced port names
+    quiet_members: set = field(default_factory=set)  # misplaced members
 
 
 @dataclass
@@ -317,7 +458,7 @@ class _Member:
     name: str
     kind: str
     definition: str
-    target: _ModuleDef | None
+    target: _Definition | None
     parameters: dict
     roles: dict  # port name -> role, for endpoint resolution
     ports: tuple = ()
@@ -326,14 +467,16 @@ class _Member:
     part: Part | None = None
     span: Span | None = None
     broken: bool = False  # failed to resolve; endpoints on it stay quiet
+    env: _Env = EMPTY_ENV  # a module member's parameter environment
 
 
 @dataclass
 class _Endpoint:
     member: str | None  # None: one of the module's own ports
     port: str
-    text: str
+    text: str  # as evaluated: `leds[2].a`
     span: Span
+    written: str = ""  # as written: `leds[i].a`
 
 
 @dataclass
@@ -343,6 +486,7 @@ class _Connect:
     span: Span
     label: str | None = None
     attributes: dict = field(default_factory=dict)
+    node: object = None  # the statement, so a loop's label is one label
 
 
 @dataclass
@@ -356,11 +500,42 @@ class _Check:
 
 
 @dataclass
+class _Findings:
+    """Diagnostics held back until the design's instance paths are known,
+    deduplicated: the same defect reached twice (two loop iterations, two
+    passes) is one finding. `about` is the member name the IR entity is
+    built from, or None."""
+
+    order: list = field(default_factory=list)  # keys, first-seen order
+    items: dict = field(default_factory=dict)  # key -> [code, params, kw, about]
+
+    def add(self, code, params, kwargs, about):
+        key = (code, json.dumps(params, sort_keys=True),
+               kwargs.get("primary"), tuple(kwargs.get("secondary", ())),
+               tuple(kwargs.get("fixits", ())))
+        if key in self.items:
+            if self.items[key][3] != about:
+                self.items[key][3] = None
+            return
+        self.order.append(key)
+        self.items[key] = [code, params, kwargs, about]
+
+
+@dataclass
 class _Model:
-    members: dict = field(default_factory=dict)
+    """One module body evaluated under one parameter environment."""
+
+    env: _Env
+    members: dict = field(default_factory=dict)  # IR segment -> _Member
+    arrays: dict = field(default_factory=dict)  # name -> size or None
+    quiet: set = field(default_factory=set)  # names skipped after an error
     connects: list = field(default_factory=list)
     labels: dict = field(default_factory=dict)  # label -> _Connect
     checks: list = field(default_factory=list)
+    findings: _Findings = field(default_factory=_Findings)
+    units: int = 0  # loop iterations + array members expanded here
+    sites: list = field(default_factory=list)  # (span, units, construct)
+    paths: list = field(default_factory=list)  # instance paths using it
 
 
 class _UnionFind:
@@ -399,6 +574,19 @@ def elaborate(results, *, root: str | None = None,
             if result.diagnostics is not sink:
                 sink.extend(result.diagnostics)
         return Elaboration(None, sink)
+    # INTERIM: imports parse, but resolving them is the package layer's job
+    # (wave 2b). Each `import` is refused once and nothing else is
+    # reported: a check run without them would blame every name they bind.
+    imports = [result.span_of(node) for result in results
+               for node in result.tree.children
+               if _is_tree(node) and node.data == "import_stmt"]
+    if imports:
+        for span in imports:
+            sink.add("RHO2033",
+                     {"construct": "an `import` statement",
+                      "tool": "elaborator"},
+                     primary=span)
+        return Elaboration(None, sink)
     design = _Elaborator(results, sink).run(root)
     if sink.has_errors:
         design = None
@@ -419,25 +607,85 @@ class _Elaborator:
     def __init__(self, results, sink: Diagnostics):
         self.results = results
         self.sink = sink
-        self.defs: list[_ModuleDef] = []
-        self.visible: dict[str, dict[str, _ModuleDef]] = {}
-        self.models: dict[int, _Model] = {}
+        self.defs: list[_Definition] = []
+        self.visible: dict[str, dict[str, _Definition]] = {}
+        self.models: dict = {}  # (id(defn), env key) -> _Model
+        self.model_order: dict = {}  # id(defn) -> [_Model], first-use order
+        self.static: dict = {}  # id(defn) -> _Findings
         self.mentioned: set[int] = set()
-        self.unresolved = False
+        self.bucket: _Findings | None = None
+        self.bad: set[int] = set()  # node ids an error was reported for
+        self.misplaced: set[int] = set()  # statements refused by placement
+        self.current_env = EMPTY_ENV  # the body being evaluated
+        self.limit_reported = False
+        self.elaborated: set[str] = set()  # instance paths the walk built
+        self.spare_roots: list = []  # root candidates, when several
 
     # -- reporting
 
-    def report(self, code, params, primary, *, entity=None, **kwargs):
+    def report(self, code, params, primary, *, about=None, entity=None,
+               **kwargs):
+        """Report now (design-level diagnostics), or hold the finding in
+        the current definition's bucket until its paths are known."""
+        if self.bucket is not None:
+            self.bucket.add(code, params, dict(kwargs, primary=primary),
+                            about)
+            return
         self.sink.add(code, params, primary=primary, entity=entity,
                       **kwargs)
 
-    @staticmethod
-    def entity(defn: _ModuleDef, suffix: str | None) -> str | None:
-        """The IR identity a body diagnostic is about, when it is unique:
-        a module elaborated at exactly one path."""
-        if suffix is None or len(defn.paths) != 1:
-            return None
-        return child_path(defn.paths[0], suffix)
+    def publish(self) -> None:
+        """Emit every held finding, now that instance paths are known.
+
+        A static finding, or a body finding present under every
+        environment the design gives its definition, is reported once and
+        carries an entity only when the definition has exactly one
+        instance path (a static finding only when the member it is about
+        was elaborated: it may stand in a branch not taken). A body
+        finding present under some environments only is reported once
+        per instance path whose environment shows it, in path order,
+        carrying that instance's entity (the member it is about, or the
+        module instance itself)."""
+        for defn in self.defs:
+            once = []
+            findings = self.static.get(id(defn))
+            if findings is not None:
+                once += [(findings.items[key], True)
+                         for key in findings.order]
+            models = self.model_order.get(id(defn), [])
+            everywhere = None
+            for model in models:
+                keys = set(model.findings.items)
+                everywhere = keys if everywhere is None else everywhere & keys
+            per_instance = []
+            seen = set()
+            for model in models:
+                for key in model.findings.order:
+                    item = model.findings.items[key]
+                    if key in everywhere:
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        abouts = {m.findings.items[key][3] for m in models}
+                        merged = list(item)
+                        merged[3] = item[3] if len(abouts) == 1 else None
+                        once.append((merged, False))
+                    else:
+                        per_instance += [(item, path)
+                                         for path in model.paths]
+            for (code, params, kwargs, about), static in once:
+                entity = None
+                if about is not None and len(defn.paths) == 1:
+                    entity = child_path(defn.paths[0], about)
+                    if static and entity not in self.elaborated:
+                        entity = None
+                self.sink.add(code, params, entity=entity, **kwargs)
+            # Stable: copies of one diagnostic tie in the sink's canonical
+            # order, so inserting them by path is what orders them.
+            per_instance.sort(key=lambda entry: entry[1])
+            for (code, params, kwargs, about), path in per_instance:
+                entity = child_path(path, about) if about else path
+                self.sink.add(code, params, entity=entity, **kwargs)
 
     # -- driver
 
@@ -445,53 +693,145 @@ class _Elaborator:
         for result in self.results:
             self.collect_definitions(result)
         for defn in self.defs:
-            self.collect_ports(defn)
+            self.within(defn, self.collect_params, defn)
         for defn in self.defs:
-            self.collect_edges(defn)
+            self.within(defn, self.collect_ports, defn)
+        for defn in self.defs:
+            if defn.kind == "module":
+                self.collect_edges(defn)
+        for defn in self.defs:
+            if defn.kind == "module":
+                self.within(defn, self.check_static, defn)
         cyclic = self.report_cycles()
         root_def = None
         if not cyclic:
             root_def = self.select_root(root)
-            if root_def is not None:
-                self.assign_paths(root_def)
+        walked = None
+        if root_def is not None:
+            walked = self.walk(root_def)
         for defn in self.defs:
-            self.models[id(defn)] = self.check_body(defn)
-        if root_def is None:
+            if defn.kind == "module" and id(defn) not in self.model_order:
+                # Not reached by the walk: still checked, once, under its
+                # defaults, so its defects are not hidden by another one.
+                self.model(defn, self.bind_defaults(defn))
+        self.report_spare_roots()
+        self.publish()
+        if walked is None:
             return None
-        return self.flatten(root_def)
+        return self.flatten(root_def, *walked)
 
-    # -- pass A: definitions
+    def within(self, defn, method, *args):
+        """Run a per-definition pass with its findings held back."""
+        saved = self.bucket
+        self.bucket = self.static.setdefault(id(defn), _Findings())
+        try:
+            return method(*args)
+        finally:
+            self.bucket = saved
+
+    # -- pass A: definitions and their parameter lists
 
     def collect_definitions(self, result) -> None:
         mpath = module_path(result.file)
         table = self.visible.setdefault(result.file, {})
         for node in result.tree.children:
-            if not (_is_tree(node) and node.data == "module_def"):
+            if not (_is_tree(node)
+                    and node.data in ("module_def", "component_def")):
                 continue
+            kind = "module" if node.data == "module_def" else "component"
             keyword, name_token = node.children[0], node.children[1]
             name = str(name_token)
+            params = _tree(node, "params")
+            after = result.span_of(params or name_token).byte_end
             header = _span_through(
-                result, result.span_of(keyword).byte_start,
-                result.span_of(name_token).byte_end, b":")
+                result, result.span_of(keyword).byte_start, after, b":")
             if name in table:
-                self.report(
-                    "RHO2001", {"name": name}, header,
-                    secondary=((table[name].header, "first defined here"),))
+                first = table[name]
+                if first.kind == "module" and kind == "module":
+                    self.report(
+                        "RHO2001", {"name": name}, header,
+                        secondary=((first.header, "first defined here"),))
+                else:
+                    self.report(
+                        "RHO2034",
+                        {"name": name, "first": first.kind, "second": kind},
+                        header,
+                        secondary=((first.header, "first defined here"),))
                 continue
-            defn = _ModuleDef(name=name, result=result, tree=node,
-                              header=header,
-                              definition=f"{mpath}.{name}",
-                              order=len(self.defs))
+            defn = _Definition(name=name, result=result, tree=node,
+                               header=header,
+                               definition=f"{mpath}.{name}",
+                               order=len(self.defs), kind=kind)
             table[name] = defn
             self.defs.append(defn)
 
-    def statements(self, defn: _ModuleDef):
+    def collect_params(self, defn: _Definition) -> None:
+        node = _tree(defn.tree, "params")
+        if node is None:
+            return
+        result = defn.result
+        defn.params = []
+        declared: dict[str, _Param] = {}
+        for param in _trees(node, "param"):
+            name = str(_tokens(param, "FREE_NAME")[0])
+            kind = str(_tokens(param, "NAME")[0])
+            span = result.span_of(param)
+            if name in declared:
+                self.report(
+                    "RHO2007",
+                    {"kind": "parameter", "name": name,
+                     "scope": f"{defn.kind} `{defn.name}`"},
+                    span, secondary=((declared[name].span,
+                                      "first declared here"),))
+                continue
+            entry = _Param(name, kind, span)
+            value = _tree(param, "value")
+            if value is not None:
+                entry.has_default = True
+                token = value.children[0]
+                context = f"the default of `{name}`"
+                if token.type == "FREE_NAME":
+                    ref = str(token)
+                    if ref not in declared:
+                        tspan = result.span_of(token)
+                        self.report(
+                            "RHO2039",
+                            {"name": ref, "definition": defn.name},
+                            tspan, fixits=_did_you_mean(ref, declared,
+                                                        tspan))
+                    elif declared[ref].type != kind:
+                        self.mismatch(defn, value, declared[ref].type,
+                                      context, kind)
+                    else:
+                        entry.default_ref = ref
+                elif not _assignable(_literal_type(token), kind):
+                    self.mismatch(defn, value, _literal_type(token),
+                                  context, kind)
+                else:
+                    evaluated = self.value(defn, value, name, EMPTY_ENV)
+                    entry.default_value = evaluated
+            declared[name] = entry
+            defn.params.append(entry)
+
+    def mismatch(self, defn, node, found, context, expected) -> None:
+        self.bad.add(id(node))
+        self.report(
+            "RHO2038",
+            {"value": _text_of(defn.result, node),
+             "found": _describe(found), "context": context,
+             "expected": _describe(expected)},
+            defn.result.span_of(node))
+
+    def statements(self, defn: _Definition):
         return [_unwrap(c) for c in defn.tree.children
                 if _is_tree(c) and c.data == "statement"]
 
-    # -- pass B: own ports
+    # -- pass B: own ports, component pins
 
-    def collect_ports(self, defn: _ModuleDef) -> None:
+    def collect_ports(self, defn: _Definition) -> None:
+        if defn.kind == "component":
+            self.collect_pins(defn)
+            return
         spans = {}
         for stmt in self.statements(defn):
             if stmt.data != "port_decl":
@@ -510,47 +850,84 @@ class _Elaborator:
             defn.ports.append(Port(name, role))
             defn.roles[name] = role
 
+    def collect_pins(self, defn: _Definition) -> None:
+        result = defn.result
+        for pin_node in _trees(defn.tree, "pin_decl"):
+            pin, role = (str(t) for t in _tokens(pin_node, "NAME")[:2])
+            span = result.span_of(pin_node)
+            if pin in defn.pin_spans:
+                self.report(
+                    "RHO2007",
+                    {"kind": "pin", "name": pin,
+                     "scope": f"component `{defn.name}`"},
+                    span, secondary=((defn.pin_spans[pin],
+                                      "first declared here"),))
+                continue
+            defn.pin_spans[pin] = span
+            designators = []
+            for designator in _trees(pin_node, "designator"):
+                text = str(designator.children[0])
+                if text in designators:
+                    self.report(
+                        "RHO2007",
+                        {"kind": "designator", "name": text,
+                         "scope": f"pin `{pin}` of component "
+                                  f"`{defn.name}`"},
+                        result.span_of(designator))
+                    continue
+                designators.append(text)
+            defn.ports.append(Port(pin, role, tuple(sorted(designators))))
+            defn.roles[pin] = role
+
     # -- pass C: the instantiation graph
 
-    def resolve(self, defn: _ModuleDef, qualified):
+    def resolve(self, defn: _Definition, qualified):
         """(kind, target, definition) for a qualified_name tree, or None
         when a single-word name is not visible. The one place definitions
-        resolve, so imports and a bundled library land here."""
+        resolve, so imports and a bundled library land here. `target` is
+        the module or component definition, or None for a dotted name."""
         words = _words(qualified)
         if len(words) == 1:
             target = self.visible[defn.result.file].get(words[0])
             if target is None:
                 return None
-            return "module", target, target.definition
+            return target.kind, target, target.definition
         return "component", None, ".".join(words)
 
-    def collect_edges(self, defn: _ModuleDef) -> None:
+    def collect_edges(self, defn: _Definition) -> None:
+        """Every instantiation of a module anywhere in the body, taken or
+        not: whether a module may contain itself, and which module is the
+        root, do not depend on parameter values."""
         seen = set()
-        for stmt in self.statements(defn):
-            if stmt.data == "instance_decl":
+        work = [(stmt, True) for stmt in reversed(self.statements(defn))]
+        while work:
+            stmt, top = work.pop()
+            if stmt.data in ("if_stmt", "for_stmt"):
+                for block in reversed(_trees(stmt, "block")):
+                    work += [(s, False)
+                             for s in reversed(_block_statements(block))]
+            elif stmt.data == "instance_decl":
                 name = str(stmt.children[0])
-                if name in seen:
-                    continue
-                seen.add(name)
+                if top:
+                    if name in seen:
+                        continue
+                    seen.add(name)
                 resolved = self.resolve(defn, _tree(stmt, "qualified_name"))
-                if resolved is None:
-                    self.unresolved = True
-                elif resolved[0] == "module":
+                if resolved is not None and resolved[0] == "module":
                     defn.edges.append(
                         (name, resolved[1], defn.result.span_of(stmt)))
             elif stmt.data == "table_decl":
-                for row in _trees(stmt, "table_row"):
-                    seen.add(str(row.children[0]))
+                if top:
+                    for row in _trees(stmt, "table_row"):
+                        seen.add(str(row.children[0]))
                 # A table over a module is an error of its own (RHO2006);
                 # counting the module as used keeps that one defect from
                 # also making the module a second root candidate.
                 resolved = self.resolve(defn, _tree(stmt, "qualified_name"))
-                if resolved is None:
-                    self.unresolved = True
-                elif resolved[0] == "module":
+                if resolved is not None and resolved[0] == "module":
                     self.mentioned.add(id(resolved[1]))
 
-    # -- pass D: cycles, root, paths
+    # -- pass D: cycles, root
 
     def report_cycles(self) -> bool:
         """Report every instantiation cycle once per strongly connected
@@ -609,61 +986,581 @@ class _Elaborator:
                                 for _o, _b, span in closing[1:]))
         return cyclic
 
-    def select_root(self, root: str | None) -> _ModuleDef | None:
+    def select_root(self, root: str | None) -> _Definition | None:
         entry = self.results[0]
-        local = [d for d in self.defs if d.result is entry]
+        local = [d for d in self.defs
+                 if d.result is entry and d.kind == "module"]
         names = [d.name for d in local]
         if root is not None:
             chosen = self.visible[entry.file].get(root)
-            if chosen is None:
+            if chosen is None or chosen.kind != "module":
                 self.report("RHO2003", {"name": root, "candidates": names},
                             span_from_bytes(entry.file, entry.data, 0, 0))
+                return None
             return chosen
+        if not local:
+            # A module dropped as a duplicate (RHO2001/RHO2034) is still
+            # written; reporting "no module" for it would echo that error.
+            if not any(_is_tree(node) and node.data == "module_def"
+                       for node in entry.tree.children):
+                self.report("RHO2047", {"file": entry.file},
+                            span_from_bytes(entry.file, entry.data, 0, 0))
+            return None
         targets = {id(target) for d in self.defs
                    for _n, target, _s in d.edges} | self.mentioned
         candidates = [d for d in local if id(d) not in targets]
         if len(candidates) == 1:
             return candidates[0]
-        # An unresolved single-word definition (RHO2005, reported with the
-        # body) is the likelier cause of a spare candidate: `new Divder`
-        # leaves Divider instantiated by nothing. Naming it as a possible
-        # root would send the author to the wrong line, so that defect is
-        # reported alone.
-        if len(candidates) > 1 and not self.unresolved:
-            self.report(
-                "RHO2002", {"candidates": [d.name for d in candidates]},
-                candidates[1].header,
-                secondary=tuple((d.header, "also instantiated by nothing")
-                                for d in candidates[:1] + candidates[2:]))
+        if len(candidates) > 1:
+            self.spare_roots = candidates  # judged by report_spare_roots
         return None
 
-    def assign_paths(self, root_def: _ModuleDef) -> None:
-        work = [(root_def, "/")]
+    def report_spare_roots(self) -> None:
+        """RHO2002, once the bodies are checked. An unresolved single-word
+        definition (RHO2005) is the likelier cause of a spare candidate:
+        `new Divder` leaves Divider instantiated by nothing, and naming it
+        as a possible root would send the author to the wrong line, so that
+        defect is reported alone. Only a REPORTED one counts: a typo in a
+        branch no instance takes draws no RHO2005, and suppressing RHO2002
+        for it would leave the file failing with nothing said."""
+        candidates = self.spare_roots
+        if not candidates:
+            return
+        held = [self.static.values(),
+                (model.findings for model in self.models.values())]
+        if any(d.code == "RHO2005" for d in self.sink) or any(
+                item[0] == "RHO2005" for buckets in held
+                for bucket in buckets for item in bucket.items.values()):
+            return
+        self.report(
+            "RHO2002", {"candidates": [d.name for d in candidates]},
+            candidates[1].header,
+            secondary=tuple((d.header, "also instantiated by nothing")
+                            for d in candidates[:1] + candidates[2:]))
+
+    # -- pass E: what needs no parameter value, once per definition
+
+    def check_static(self, defn: _Definition) -> None:
+        """Names, types and placement over the WHOLE body, taken branches
+        or not: none of it depends on a parameter's value, so it is
+        checked once per definition. Each statement is visited with the
+        loop variables in scope, the innermost enclosing `if`/`for`, and
+        the nearest enclosing `for`."""
+        params = {p.name: p.type for p in defn.params or ()}
+        work = [(stmt, {}, None, None)
+                for stmt in reversed(self.statements(defn))]
         while work:
-            defn, path = work.pop()
+            stmt, loops, inner, loop = work.pop()
+            scope = dict(params, **loops)
+            data = stmt.data
+            if data == "port_decl" and inner is not None:
+                defn.quiet_ports.add(str(_tokens(stmt, "FREE_NAME")[0]))
+                self.misplace(defn, stmt, "a `port` declaration", inner,
+                              "a definition's ports do not depend on its "
+                              "parameters")
+            elif data in ("instance_decl", "table_decl") and loop is not None:
+                if data == "instance_decl":
+                    defn.quiet_members.add(str(stmt.children[0]))
+                else:
+                    defn.quiet_members.update(
+                        str(row.children[0])
+                        for row in _trees(stmt, "table_row"))
+                self.misplace(
+                    defn, stmt,
+                    "an instance declaration" if data == "instance_decl"
+                    else "a table", loop,
+                    "arrays, not loops, replicate instances")
+            elif data == "assertion" and loop is not None:
+                self.misplace(defn, stmt, "an assertion", loop,
+                              "every iteration would declare the same "
+                              "assertion path")
+            elif data == "instance_decl":
+                self.check_instance(defn, stmt, params)
+            elif data == "table_decl":
+                self.check_table(defn, stmt, params)
+            elif data in ("net_decl", "chain", "isolated_decl"):
+                for node in _trees(stmt, "endpoint") + _trees(
+                        stmt, "chain_head"):
+                    index = _tree(node, "index")
+                    if index is not None:
+                        self.check_int(defn, index, index.children[0],
+                                       scope, "an index")
+            elif data == "if_stmt":
+                self.check_condition(defn, _tree(stmt, "condition"), scope)
+                for block in reversed(_trees(stmt, "block")):
+                    work += [(s, loops, "an `if` statement", loop)
+                             for s in reversed(_block_statements(block))]
+            elif data == "for_stmt":
+                variable = _tokens(stmt, "FREE_NAME")[0]
+                name = str(variable)
+                shadowed = None
+                if name in loops:
+                    shadowed = "an enclosing loop variable"
+                elif name in params:
+                    shadowed = f"a parameter of `{defn.name}`"
+                if shadowed is not None:
+                    self.bad.add(id(stmt))
+                    self.report("RHO2041", {"name": name,
+                                            "shadowed": shadowed},
+                                defn.result.span_of(variable))
+                for bound in _trees(stmt, "bound_arg"):
+                    self.check_int(defn, bound, bound.children[0], scope,
+                                   "a `range` bound")
+                inner_loops = dict(loops, **{name: "int"})
+                for block in reversed(_trees(stmt, "block")):
+                    work += [(s, inner_loops, "a `for` loop", "a `for` loop")
+                             for s in reversed(_block_statements(block))]
+
+    def misplace(self, defn, stmt, statement, construct, reason) -> None:
+        self.misplaced.add(id(stmt))
+        self.report("RHO2040", {"statement": statement,
+                                "construct": construct, "reason": reason},
+                    defn.result.span_of(stmt))
+
+    def reference(self, defn, token, scope):
+        """The declared type a FREE_NAME refers to, or None (reported)."""
+        name = str(token)
+        if name in scope:
+            return scope[name]
+        span = defn.result.span_of(token)
+        self.report("RHO2039", {"name": name, "definition": defn.name},
+                    span, fixits=_did_you_mean(name, scope, span))
+        return None
+
+    def check_int(self, defn, node, token, scope, context) -> None:
+        """An index, `range` bound or array size: an INTEGER, or a name in
+        scope whose type is int."""
+        if token.type != "FREE_NAME":
+            return
+        found = self.reference(defn, token, scope)
+        if found is None:
+            self.bad.add(id(node))
+        elif found != "int":
+            self.mismatch(defn, token, found, context, "int")
+            self.bad.add(id(node))
+
+    def check_value(self, defn, node, scope, expected, context) -> None:
+        """A `value`: a reference must name a parameter in scope, and with
+        a declared `expected` type its type must match."""
+        token = node.children[0]
+        if token.type == "FREE_NAME":
+            found = self.reference(defn, token, scope)
+            if found is None:
+                self.bad.add(id(node))
+                return
+        else:
+            found = _literal_type(token)
+        if expected is not None and not _assignable(found, expected):
+            self.mismatch(defn, node, found, context, expected)
+
+    def check_arguments(self, defn, target, pairs, instance, anchor,
+                        params) -> None:
+        """Arguments (or table columns) against a definition with a
+        parameter list: `pairs` is [(name token, value node or None)]."""
+        declared = {p.name: p for p in target.params}
+        given = set()
+        for token, value in pairs:
+            name = str(token)
+            if name not in declared:
+                span = defn.result.span_of(token)
+                self.bad.add(id(token))
+                self.report(
+                    "RHO2036",
+                    {"name": name, "definition": target.name,
+                     "parameters": [p.name for p in target.params]},
+                    span, about=instance,
+                    fixits=_did_you_mean(name, declared, span))
+                continue
+            given.add(name)
+            if value is not None:
+                self.check_value(
+                    defn, value, params, declared[name].type,
+                    f"parameter `{name}` of `{target.name}`")
+        for param in target.params:
+            if param.name not in given and not param.has_default:
+                self.report(
+                    "RHO2037",
+                    {"instance": instance or anchor[1],
+                     "parameter": param.name, "definition": target.name},
+                    anchor[0], about=instance,
+                    secondary=((param.span, "declared here"),))
+
+    def check_instance(self, defn, stmt, params) -> None:
+        result = defn.result
+        name = str(stmt.children[0])
+        size = _tree(stmt, "array_size")
+        if size is not None:
+            self.check_int(defn, size, size.children[0], params,
+                           "an array size")
+        qualified = _tree(stmt, "qualified_name")
+        resolved = self.resolve(defn, qualified)
+        target = resolved[1] if resolved is not None else None
+        arguments = _tree(stmt, "arguments")
+        nodes = _trees(arguments, "argument") if arguments else []
+        if target is not None and target.params is not None:
+            about = name if size is None else None
+            self.check_arguments(
+                defn, target,
+                [(_tokens(a, "NAME")[0], _tree(a, "value")) for a in nodes],
+                about, (result.span_of(qualified), name), params)
+        else:
+            for argument in nodes:
+                self.check_value(defn, _tree(argument, "value"), params,
+                                 None, None)
+        body = _tree(stmt, "instance_body")
+        for fact in (_unwrap(c) for c in body.children) if body else ():
+            if fact.data == "part_decl":
+                for constraint in _trees(fact, "constraint"):
+                    self.check_value(defn, _tree(constraint, "value"),
+                                     params, None, None)
+
+    def check_table(self, defn, stmt, params) -> None:
+        result = defn.result
+        qualified = _tree(stmt, "qualified_name")
+        resolved = self.resolve(defn, qualified)
+        target = resolved[1] if resolved is not None else None
+        column_list = _tree(stmt, "column_list")
+        columns = _trees(column_list, "column") if column_list else []
+        typed = target is not None and target.kind == "component" \
+            and target.params is not None
+        types = [None] * len(columns)
+        if typed:
+            plain = [(i, c) for i, c in enumerate(columns)
+                     if len(c.children) == 1]
+            self.check_arguments(
+                defn, target, [(c.children[0], None) for _i, c in plain],
+                None, (result.span_of(qualified), target.name), params)
+            declared = {p.name: p.type for p in target.params}
+            for i, column in plain:
+                types[i] = declared.get(str(column.children[0]))
+        for row in _trees(stmt, "table_row"):
+            values = _trees(row, "value")
+            for i, value in enumerate(values):
+                expected = types[i] if len(values) == len(columns) else None
+                context = None
+                if expected is not None:
+                    context = (f"parameter `{columns[i].children[0]}` of "
+                               f"`{target.name}`")
+                self.check_value(defn, value, params, expected, context)
+
+    def check_condition(self, defn, cond, scope) -> None:
+        name_token = cond.children[0]
+        name = str(name_token)
+        left = self.reference(defn, name_token, scope)
+        if left is None:
+            self.bad.add(id(cond))
+            return
+        compare = _tokens(cond, "COMPARE")
+        if not compare:
+            if left != "bool":
+                self.mismatch(defn, name_token, left, "an `if` condition",
+                              "bool")
+                self.bad.add(id(cond))
+            return
+        op = str(compare[0])
+        value = _tree(cond, "value")
+        token = value.children[0]
+        if left in ("string", "bool") and op not in _EQUALITY:
+            self.report(
+                "RHO2038",
+                {"value": name, "found": _describe(left),
+                 "context": f"`{op}`", "expected": "an int or a quantity"},
+                defn.result.span_of(name_token))
+            self.bad.add(id(cond))
+            return
+        if token.type == "FREE_NAME":
+            right = self.reference(defn, token, scope)
+            if right is None:
+                self.bad.add(id(cond))
+                return
+        else:
+            right = _literal_type(token)
+            if token.type in ("QUANTITY", "QUANTITY_INTERVAL") \
+                    and right == left \
+                    and quantities.parse_quantity(str(token)).form != "exact":
+                self.report(
+                    "RHO2038",
+                    {"value": str(token),
+                     "found": _article(f"toleranced {left}"),
+                     "context": f"a comparison with `{name}`",
+                     "expected": _article(f"exact {left}")},
+                    defn.result.span_of(token))
+                self.bad.add(id(cond))
+                return
+        if right != left:
+            self.mismatch(defn, value, right, f"a comparison with `{name}`",
+                          left)
+            self.bad.add(id(cond))
+
+    # -- pass F: the walk, and each body under its environment
+
+    def bind_values(self, target: _Definition, given: dict) -> _Env:
+        """A definition's environment: each declared parameter's argument,
+        else its default (a reference resolving to the earlier parameter's
+        value), else UNKNOWN (reported where the argument is missing)."""
+        values = {}
+        for param in target.params:
+            if param.name in given:
+                value = given[param.name]
+            elif param.default_ref is not None:
+                value = values.get(param.default_ref, UNKNOWN)
+            elif param.has_default:
+                value = param.default_value
+            else:
+                value = UNKNOWN
+            values[param.name] = value
+        return _Env(tuple(values.items()))
+
+    def bind_defaults(self, defn: _Definition) -> _Env:
+        if defn.params is None:
+            return EMPTY_ENV
+        return self.bind_values(defn, {})
+
+    def root_env(self, root_def: _Definition) -> _Env:
+        for param in root_def.params or ():
+            if not param.has_default:
+                self.report(
+                    "RHO2037",
+                    {"instance": "/", "parameter": param.name,
+                     "definition": root_def.name},
+                    param.span, entity="/")
+        return self.bind_defaults(root_def)
+
+    def walk(self, root_def: _Definition):
+        """Build the instance tree from the root, evaluating each module
+        body once per distinct (definition, environment). Returns
+        (instances, visits), or None when the design's replication budget
+        is exhausted (reported)."""
+        env = self.root_env(root_def)
+        parameters = dict(env.values) if root_def.params is not None else {}
+        instances = [Instance(
+            path="/", kind="module", definition=root_def.definition,
+            parameters=parameters, ports=tuple(root_def.ports), dnp=False,
+            exclude_from_bom=False, board_only=False, hardware_kind=None,
+            part=None, declaration=root_def.header, trace=())]
+        visits = []
+        total = 0
+        work = [(root_def, env, "/", 0, (), dict.fromkeys(FLAGS, False))]
+        while work:
+            defn, env, path, depth, trace, inherited = work.pop()
+            model = self.model(defn, env)
+            model.paths.append(path)
             defn.paths.append(path)
-            for name, target, _span in reversed(defn.edges):
-                work.append((target, child_path(path, name)))
+            if total + model.units > EXPANSION_LIMIT:
+                self.over_limit(model, total)
+                return None
+            total += model.units
+            for member in model.members.values():
+                if member.broken:
+                    continue
+                ipath = child_path(path, member.name)
+                flags = {flag: member.flags.get(flag, False)
+                         or inherited[flag] for flag in FLAGS}
+                itrace = (member.span,) + trace
+                self.elaborated.add(ipath)
+                instances.append(Instance(
+                    path=ipath, kind=member.kind,
+                    definition=member.definition,
+                    parameters=dict(member.parameters),
+                    ports=tuple(member.ports),
+                    hardware_kind=member.hardware_kind, part=member.part,
+                    declaration=member.span, trace=itrace, **flags))
+                if member.kind == "module":
+                    work.append((member.target, member.env, ipath,
+                                 depth + 1, itrace, flags))
+            visits.append((model, path, depth, trace))
+        return instances, visits
 
-    # -- pass E: module bodies, once per definition
+    def over_limit(self, model: _Model, total: int) -> None:
+        """The design crossed its replication budget inside `model`'s
+        expansion: report once, at the statement that crossed it."""
+        if self.limit_reported:
+            return
+        self.limit_reported = True
+        running = total
+        for span, units, construct in model.sites:
+            running += units
+            if running > EXPANSION_LIMIT:
+                self.report("RHO2046", {"construct": construct,
+                                        "limit": EXPANSION_LIMIT}, span)
+                return
 
-    def check_body(self, defn: _ModuleDef) -> _Model:
-        model = _Model()
+    def spend(self, model: _Model, span: Span, count: int,
+              construct: str) -> bool:
+        """Charge `count` replicated units to the body being evaluated;
+        False when that alone passes the design's budget. Reported once
+        per design, like over_limit: after the first crossing every later
+        charge also fails, and blaming it would name statements (an array
+        charged after the loops that spent the budget) that are not why."""
+        if count <= 0:
+            return True
+        if model.units + count > EXPANSION_LIMIT:
+            if not self.limit_reported:
+                self.limit_reported = True
+                self.report("RHO2046", {"construct": construct,
+                                        "limit": EXPANSION_LIMIT}, span)
+            return False
+        model.units += count
+        model.sites.append((span, count, construct))
+        return True
+
+    def model(self, defn: _Definition, env: _Env) -> _Model:
+        key = (id(defn), env.key)
+        model = self.models.get(key)
+        if model is None:
+            model = _Model(env)
+            self.models[key] = model
+            self.model_order.setdefault(id(defn), []).append(model)
+            saved = self.bucket, self.current_env
+            self.bucket, self.current_env = model.findings, env
+            try:
+                self.check_body(defn, model)
+            finally:
+                self.bucket, self.current_env = saved
+        return model
+
+    def lookup(self, model: _Model, name: str, loops: dict):
+        if name in loops:
+            return loops[name]
+        return model.env.get(name, UNKNOWN)
+
+    def integer(self, model, node, loops):
+        """An index base, bound or size as an int, or None (an error was
+        reported for it already)."""
+        if id(node) in self.bad:
+            return None
+        token = node.children[0]
+        if token.type == "INTEGER":
+            return int(str(token))
+        value = self.lookup(model, str(token), loops)
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None
+        return value
+
+    def literal(self, token):
+        """A condition's literal operand, silently (pass E checked it)."""
+        text = str(token)
+        if token.type == "STRING":
+            return text[1:-1]
+        if text in ("true", "false"):
+            return text == "true"
+        if token.type == "INTEGER":
+            return int(text)
+        parsed = quantities.parse_quantity(text)
+        if parsed.nominal is None:
+            return UNKNOWN
+        unit, multiplier = _unit_for(parsed.nominal, parsed.dimension)
+        return Quantity(_in_unit(parsed.nominal, multiplier), unit)
+
+    def decide(self, model, stmt, loops):
+        """Which branch an `if` takes: True, False, or None when its
+        condition cannot be evaluated (already reported)."""
+        cond = _tree(stmt, "condition")
+        if id(cond) in self.bad:
+            return None
+        left = self.lookup(model, str(cond.children[0]), loops)
+        compare = _tokens(cond, "COMPARE")
+        if not compare:
+            return left if isinstance(left, bool) else None
+        token = _tree(cond, "value").children[0]
+        right = self.lookup(model, str(token), loops) \
+            if token.type == "FREE_NAME" else self.literal(token)
+        return _compare(str(compare[0]), left, right)
+
+    def loop_range(self, defn, model, stmt, loops):
+        if id(stmt) in self.bad:
+            return None
+        bounds = [self.integer(model, b, loops)
+                  for b in _trees(stmt, "bound_arg")]
+        if any(b is None for b in bounds):
+            return None
+        low, high = (0, bounds[0]) if len(bounds) == 1 else bounds
+        result = defn.result
+        last = _trees(stmt, "bound_arg")[-1]
+        span = _span_through(
+            result, result.span_of(stmt.children[0]).byte_start,
+            result.span_of(last).byte_end, b")")
+        if not self.spend(model, span, high - low, "a `for` loop"):
+            return None
+        return low, high
+
+    def quieten(self, model, blocks) -> None:
+        """Names declared in a region not evaluated because of an error:
+        endpoints naming them stay quiet rather than echo that error."""
+        work = list(blocks)
+        while work:
+            node = work.pop()
+            if not _is_tree(node):
+                continue
+            if node.data == "instance_decl":
+                model.quiet.add(str(node.children[0]))
+            elif node.data == "table_row":
+                model.quiet.add(str(node.children[0]))
+            else:
+                work += node.children
+
+    def expand(self, defn: _Definition, model: _Model) -> list:
+        """The live statements of the body, in source order, each with its
+        loop variables: `if` takes one branch, `for` unrolls. Iterative,
+        so nesting depth costs no interpreter stack."""
+        def each(statements, loops):
+            for stmt in statements:
+                yield stmt, loops
+
+        def unroll(statements, name, low, high, loops):
+            for value in range(low, high):
+                inner = dict(loops)
+                inner[name] = value
+                for stmt in statements:
+                    yield stmt, inner
+
+        live = []
+        stack = [each(self.statements(defn), {})]
+        while stack:
+            pair = next(stack[-1], None)
+            if pair is None:
+                stack.pop()
+                continue
+            stmt, loops = pair
+            if id(stmt) in self.misplaced:
+                continue
+            if stmt.data == "if_stmt":
+                blocks = _trees(stmt, "block")
+                choice = self.decide(model, stmt, loops)
+                if choice is None:
+                    self.quieten(model, blocks)
+                elif choice:
+                    stack.append(each(_block_statements(blocks[0]), loops))
+                elif len(blocks) > 1:
+                    stack.append(each(_block_statements(blocks[1]), loops))
+            elif stmt.data == "for_stmt":
+                block = _tree(stmt, "block")
+                bounds = self.loop_range(defn, model, stmt, loops)
+                if bounds is None:
+                    self.quieten(model, [block])
+                    continue
+                name = str(_tokens(stmt, "FREE_NAME")[0])
+                stack.append(unroll(_block_statements(block), name,
+                                    bounds[0], bounds[1], loops))
+            else:
+                live.append((stmt, loops))
+        return live
+
+    def check_body(self, defn: _Definition, model: _Model) -> None:
+        live = self.expand(defn, model)
         first_seen: dict[str, Span] = {}
-        statements = self.statements(defn)
-        for stmt in statements:
+        for stmt, _loops in live:
             if stmt.data == "instance_decl":
                 self.instance(defn, model, stmt, first_seen)
             elif stmt.data == "table_decl":
                 self.table(defn, model, stmt, first_seen)
-        for stmt in statements:
+        for stmt, loops in live:
             if stmt.data in ("net_decl", "chain", "isolated_decl"):
-                self.connect(defn, model, stmt)
+                self.connect(defn, model, stmt, loops)
         names: dict[str, Span] = {}
-        for stmt in statements:
+        for stmt, _loops in live:
             if stmt.data == "assertion":
                 self.assertion(defn, model, stmt, names)
-        return model
 
     def declare(self, defn, model, name, span, first_seen) -> bool:
         """Claim a member name in the module; False (reported) if taken."""
@@ -672,11 +1569,26 @@ class _Elaborator:
                 "RHO2007",
                 {"kind": "instance", "name": name,
                  "scope": f"module `{defn.name}`"},
-                span, entity=self.entity(defn, name),
+                span, about=None if name in model.arrays else name,
                 secondary=((first_seen[name], "first declared here"),))
             return False
         first_seen[name] = span
         return True
+
+    def array_size(self, defn, model, node, name, qualified):
+        result = defn.result
+        size = self.integer(model, node, {})
+        if size is None:
+            return None
+        span = span_from_bytes(result.file, result.data,
+                               result.span_of(qualified).byte_start,
+                               result.span_of(node).byte_end)
+        if size < 1:
+            self.report("RHO2042", {"array": name, "size": size}, span)
+            return None
+        if not self.spend(model, span, size, "an array"):
+            return None
+        return size
 
     def instance(self, defn, model, stmt, first_seen) -> None:
         result = defn.result
@@ -684,8 +1596,15 @@ class _Elaborator:
         span = result.span_of(stmt)
         if not self.declare(defn, model, name, span, first_seen):
             return
-        entity = self.entity(defn, name)
         qualified = _tree(stmt, "qualified_name")
+        size_node = _tree(stmt, "array_size")
+        size = None
+        if size_node is not None:
+            size = self.array_size(defn, model, size_node, name, qualified)
+            if size is None:
+                model.arrays[name] = None
+                return
+        about = name if size is None else None
         resolved = self.resolve(defn, qualified)
         if resolved is None:
             word = _words(qualified)[0]
@@ -693,27 +1612,49 @@ class _Elaborator:
             self.report("RHO2005", {"name": word}, qspan,
                         fixits=_did_you_mean(
                             word, self.visible[result.file], qspan))
-            model.members[name] = _Member(
-                name, "component", word, None, {}, {}, span=span,
-                broken=True)
+            if size is None:
+                model.members[name] = _Member(
+                    name, "component", word, None, {}, {}, span=span,
+                    broken=True)
+            else:
+                model.arrays[name] = None
             return
         kind, target, definition = resolved
-        parameters = self.arguments(defn, _tree(stmt, "arguments"), name)
+        parameters, env = self.bind(defn, model, target,
+                                    _tree(stmt, "arguments"), name)
         body = _tree(stmt, "instance_body")
         facts = [_unwrap(c) for c in body.children] if body is not None \
             else []
         if kind == "module":
             member = _Member(name, kind, definition, target, parameters,
                              dict(target.roles), tuple(target.ports),
-                             span=span)
-            self.module_facts(defn, member, facts, entity)
+                             span=span, env=env)
+            self.module_facts(defn, member, facts, about)
         else:
-            member = _Member(name, kind, definition, None, parameters, {},
-                             span=span)
-            self.component_facts(defn, member, facts, entity)
-        model.members[name] = member
+            member = _Member(name, kind, definition, target, parameters,
+                             {}, span=span)
+            self.component_facts(defn, member, facts, about, qualified)
+        if size is None:
+            model.members[name] = member
+            return
+        model.arrays[name] = size
+        for index in range(size):
+            segment = f"{name}[{index}]"
+            model.members[segment] = replace(member, name=segment)
 
-    def flags(self, defn, member, facts, entity) -> dict:
+    def bind(self, defn, model, target, node, instance):
+        """(IR parameters, environment) for an instantiation. With a
+        parameter list the parameters are the definition's whole
+        environment; without one, the arguments as given (v0.1)."""
+        given = self.arguments(defn, model, node, instance)
+        if target is None or target.params is None:
+            return given, EMPTY_ENV
+        declared = {param.name for param in target.params}
+        env = self.bind_values(
+            target, {k: v for k, v in given.items() if k in declared})
+        return dict(env.values), env
+
+    def flags(self, defn, member, facts, about) -> dict:
         """The flags an instance body states, warning on repeats; returns
         {flag: span} and {flag: span} for the `no` forms."""
         stated, denied = {}, {}
@@ -729,13 +1670,13 @@ class _Elaborator:
             if word in table:
                 self.report("RHO2011",
                             {"flag": shown or word, "instance": member.name},
-                            span, entity=entity)
+                            span, about=about)
                 continue
             table[word] = span
         return stated, denied
 
-    def module_facts(self, defn, member, facts, entity) -> None:
-        stated, denied = self.flags(defn, member, facts, entity)
+    def module_facts(self, defn, member, facts, about) -> None:
+        stated, denied = self.flags(defn, member, facts, about)
         for fact in facts:
             if fact.data in ("pin_decl", "part_decl", "hardware_decl"):
                 word = fact.data.split("_")[0]
@@ -747,10 +1688,10 @@ class _Elaborator:
                 "RHO2009",
                 {"fact": word, "instance": member.name,
                  "module": member.target.name},
-                defn.result.span_of(fact), entity=entity)
+                defn.result.span_of(fact), about=about)
         member.flags = {flag: True for flag in stated}
 
-    def component_facts(self, defn, member, facts, entity) -> None:
+    def component_facts(self, defn, member, facts, about, qualified) -> None:
         result = defn.result
         ports, pin_spans = [], {}
         hardware = hardware_span = None
@@ -764,7 +1705,7 @@ class _Elaborator:
                         "RHO2007",
                         {"kind": "pin", "name": pin,
                          "scope": f"instance `{member.name}`"},
-                        span, entity=entity,
+                        span, about=about,
                         secondary=((pin_spans[pin], "first declared here"),))
                     continue
                 pin_spans[pin] = span
@@ -777,7 +1718,7 @@ class _Elaborator:
                             {"kind": "designator", "name": text,
                              "scope": f"pin `{pin}` of instance "
                                       f"`{member.name}`"},
-                            result.span_of(designator), entity=entity)
+                            result.span_of(designator), about=about)
                         continue
                     designators.append(text)
                 ports.append(Port(pin, role, tuple(sorted(designators))))
@@ -785,32 +1726,71 @@ class _Elaborator:
                 if part_seen:
                     self.report("RHO2010",
                                 {"fact": "part", "instance": member.name},
-                                span, entity=entity)
+                                span, about=about)
                     continue
                 part_seen = True
-                member.part = self.part(defn, member.name, fact, span, entity)
+                member.part = self.part(defn, member.name, fact, span, about)
             elif fact.data == "hardware_decl":
                 if hardware is not None:
                     self.report("RHO2010",
                                 {"fact": "hardware", "instance": member.name},
-                                span, entity=entity)
+                                span, about=about)
                     continue
                 hardware = str(_tokens(fact, "NAME")[0])
                 hardware_span = span
-        stated, denied = self.flags(defn, member, facts, entity)
+        stated, denied = self.flags(defn, member, facts, about)
         for flag in sorted(set(stated) & set(denied)):
             later = max(stated[flag], denied[flag],
                         key=lambda s: s.byte_start)
             self.report("RHO2012", {"flag": flag, "instance": member.name},
-                        later, entity=entity)
+                        later, about=about)
+        if member.target is not None:
+            # A component definition: its pins are the ports. Pins the
+            # instance states anyway must restate them exactly.
+            if ports:
+                self.agree(defn, member, ports, pin_spans, qualified, about)
+            ports = list(member.target.ports)
         member.flags = {flag: True for flag in stated}
         member.ports = tuple(ports)
         member.roles = {port.name: port.role for port in ports}
         member.hardware_kind = hardware
         if hardware is not None:
-            self.hardware_arity(member, hardware, hardware_span, entity)
+            self.hardware_arity(member, hardware, hardware_span, about)
 
-    def hardware_arity(self, member, hardware, span, entity) -> None:
+    def agree(self, defn, member, ports, pin_spans, qualified, about) -> None:
+        target = member.target
+
+        def spell(port):
+            words = ["pin", port.name, port.role, *port.pin_numbers]
+            return "`" + " ".join(words) + "`"
+
+        defined = {port.name: port for port in target.ports}
+        stated = {port.name for port in ports}
+        for port in ports:
+            want = defined.get(port.name)
+            if want == port:
+                continue
+            secondary = ()
+            if want is not None:
+                secondary = ((target.pin_spans[port.name], "defined here"),)
+            self.report(
+                "RHO2035",
+                {"instance": member.name, "pin": port.name,
+                 "component": target.name, "found": spell(port),
+                 "expected": spell(want) if want else "no such pin"},
+                pin_spans[port.name], about=about, secondary=secondary)
+        for port in target.ports:
+            if port.name in stated:
+                continue
+            self.report(
+                "RHO2035",
+                {"instance": member.name, "pin": port.name,
+                 "component": target.name, "found": "no such pin",
+                 "expected": spell(port)},
+                defn.result.span_of(qualified), about=about,
+                secondary=((target.pin_spans[port.name], "defined here"),))
+
+    def hardware_arity(self, member, hardware, span, about) -> None:
         ports = member.ports
         if hardware in PINLESS_HARDWARE and ports:
             requirement, found = "no pins", f"{len(ports)} pin(s)"
@@ -829,33 +1809,34 @@ class _Elaborator:
             "RHO2013",
             {"instance": member.name, "kind": hardware,
              "requirement": requirement, "found": found},
-            span, entity=entity)
+            span, about=about)
 
-    def part(self, defn, instance, fact, span, entity) -> Part:
+    def part(self, defn, instance, fact, span, about) -> Part:
         binding = fact.children[1]
         statements = _trees(fact, "constraint")
         constraints = self.pairs(defn, statements, "constraint",
-                                 f"instance `{instance}`")
+                                 f"instance `{instance}`",
+                                 self.current_env)
         if getattr(binding, "type", None) == "STRING":
             key = str(binding)[1:-1]
             if not key:
                 self.report("RHO2015", {"instance": instance}, span,
-                            entity=entity)
+                            about=about)
             return Part("resolved", key, constraints)
         if not statements:
             self.report("RHO2014", {"instance": instance}, span,
-                        entity=entity)
+                        about=about)
         return Part("abstract", None, constraints)
 
     # -- values
 
-    def arguments(self, defn, node, instance) -> dict:
+    def arguments(self, defn, model, node, instance) -> dict:
         if node is None:
             return {}
         return self.pairs(defn, _trees(node, "argument"), "argument",
-                          f"instance `{instance}`")
+                          f"instance `{instance}`", model.env)
 
-    def pairs(self, defn, statements, kind, scope) -> dict:
+    def pairs(self, defn, statements, kind, scope, env) -> dict:
         """`name = value` statements to a dict, refusing repeats."""
         out, spans = {}, {}
         for stmt in statements:
@@ -867,17 +1848,20 @@ class _Elaborator:
                     span, secondary=((spans[name], "first given here"),))
                 continue
             spans[name] = span
-            value = self.value(defn, _tree(stmt, "value"), name)
-            if value is not None:
-                out[name] = value
+            out[name] = self.value(defn, _tree(stmt, "value"), name, env)
         return out
 
-    def value(self, defn, node, name):
-        """One `value` tree to its elaborated value, or None (reported).
-        The single evaluation point: a parameter reference lands here."""
+    def value(self, defn, node, name, env):
+        """One `value` tree to its elaborated value, or UNKNOWN (reported).
+        The single evaluation point: a parameter reference resolves in
+        `env`, the instantiating definition's environment."""
+        if id(node) in self.bad:
+            return UNKNOWN
         token = node.children[0]
         text = str(token)
         span = defn.result.span_of(token)
+        if token.type == "FREE_NAME":
+            return env.get(text, UNKNOWN)
         if token.type == "STRING":
             return text[1:-1]
         if text in ("true", "false"):
@@ -886,12 +1870,12 @@ class _Elaborator:
             number = int(text)
             if abs(number) > MAX_IR_INTEGER:
                 self.report("RHO2017", {"literal": text}, span)
-                return None
+                return UNKNOWN
             return number
         parsed = quantities.parse_quantity(text)
         if parsed.nominal is None:
             self.report("RHO2016", {"literal": text, "name": name}, span)
-            return None
+            return UNKNOWN
         unit, multiplier = _unit_for(parsed.nominal, parsed.dimension)
         tolerance = None
         if parsed.form != "exact":
@@ -901,7 +1885,7 @@ class _Elaborator:
                             tolerance)
         if not _representable(quantity.value, *(tolerance or ())):
             self.report("RHO2017", {"literal": text}, span)
-            return None
+            return UNKNOWN
         return quantity
 
     # -- tables
@@ -912,6 +1896,8 @@ class _Elaborator:
         qname = ".".join(_words(qualified))
         resolved = self.resolve(defn, qualified)
         broken = False
+        target = None
+        definition = qname
         if resolved is None:
             qspan = result.span_of(qualified)
             self.report("RHO2005", {"name": qname}, qspan,
@@ -922,6 +1908,9 @@ class _Elaborator:
             self.report("RHO2006", {"name": qname},
                         result.span_of(qualified))
             broken = True
+        else:
+            target, definition = resolved[1], resolved[2]
+        typed = target is not None and target.params is not None
         binding = _tree(stmt, "table_binding")
         column_list = _tree(stmt, "column_list")
         columns = _trees(column_list, "column") if column_list else []
@@ -953,6 +1942,9 @@ class _Elaborator:
                 plan.append(None)
                 continue
             seen[slot] = cspan
+            if slot[0] == "parameter" and id(column.children[0]) in self.bad:
+                plan.append(None)  # not a parameter of the definition
+                continue
             plan.append(slot)
         key = None
         if binding is not None:
@@ -963,93 +1955,165 @@ class _Elaborator:
                     self.report("RHO2015", {"instance": qname}, bspan)
             elif not any(s and s[0] == "constraint" for s in plan):
                 self.report("RHO2014", {"instance": qname}, bspan)
+        ports = tuple(target.ports) if target is not None else ()
         for row in _trees(stmt, "table_row"):
             name = str(row.children[0])
             span = result.span_of(row)
             if not self.declare(defn, model, name, span, first_seen):
                 continue
             values = _trees(row, "value")
-            member = _Member(name, "component", qname, None, {}, {},
-                             span=span, broken=broken)
+            member = _Member(name, "component", definition, target, {},
+                             {port.name: port.role for port in ports},
+                             ports, span=span, broken=broken)
             model.members[name] = member
             if len(values) != len(columns):
                 self.report(
                     "RHO2018",
                     {"row": name, "values": len(values),
                      "columns": len(columns)},
-                    header, entity=self.entity(defn, name),
+                    header, about=name,
                     secondary=((span, "this row"),))
                 member.broken = True
                 continue
-            constraints = {}
+            given, constraints = {}, {}
             for slot, node in zip(plan, values):
                 if slot is None:
                     continue
-                value = self.value(defn, node, slot[1])
-                if value is None:
+                value = self.value(defn, node, slot[1], model.env)
+                if value is UNKNOWN and not typed:
                     continue
-                target = member.parameters if slot[0] == "parameter" \
+                target_dict = given if slot[0] == "parameter" \
                     else constraints
-                target[slot[1]] = value
+                target_dict[slot[1]] = value
+            member.parameters = dict(self.bind_values(target, given).values) \
+                if typed else given
             if binding is not None:
                 member.part = Part("resolved" if key is not None
                                    else "abstract", key, constraints)
 
     # -- connections
 
-    def endpoint(self, defn, model, node):
+    def endpoint(self, defn, model, node, loops):
         """Resolve one endpoint, or None (reported, or quiet when it names
-        an instance that already failed to resolve)."""
+        something that already failed to resolve)."""
         result = defn.result
         tokens = [c for c in node.children if not _is_tree(c)]
-        text = ".".join(str(t) for t in tokens)
+        index = _tree(node, "index")
         span = result.span_of(node)
+        head = str(tokens[0])
+        written_head = head
+        if index is not None:
+            written_head = head + _text_of(result, index)
         if len(tokens) == 1:
-            name = str(tokens[0])
-            role = defn.roles.get(name)
+            if index is not None:
+                self.report("RHO2023", {"name": written_head,
+                                        "module": defn.name}, span)
+                return None
+            role = defn.roles.get(head)
             if role is None:
-                self.report("RHO2023", {"name": name, "module": defn.name},
-                            span, fixits=_did_you_mean(name, defn.roles,
+                if head in defn.quiet_ports:
+                    return None
+                self.report("RHO2023", {"name": head, "module": defn.name},
+                            span, fixits=_did_you_mean(head, defn.roles,
                                                        span))
                 return None
             if role == "nc":
-                self.report("RHO2024", {"endpoint": text}, span)
+                self.report("RHO2024", {"endpoint": head}, span)
                 return None
-            return _Endpoint(None, name, text, span)
-        owner, port = str(tokens[0]), str(tokens[1])
+            return _Endpoint(None, head, head, span, head)
+        port = str(tokens[1])
+        written = f"{written_head}.{port}"
+        hspan = result.span_of(tokens[0])
+        quiet = head in model.quiet or head in defn.quiet_members
+        if index is None:
+            if head in model.arrays:
+                size = model.arrays[head]
+                if size is not None:
+                    self.report("RHO2044", {"array": head, "size": size},
+                                hspan)
+                return None
+            owner = head
+        else:
+            if head in model.members:
+                if model.members[head].broken:
+                    return None
+                self.report("RHO2045", {"instance": head},
+                            span_from_bytes(result.file, result.data,
+                                            hspan.byte_start,
+                                            result.span_of(index).byte_end),
+                            about=head)
+                return None
+            if head not in model.arrays:
+                if not quiet:
+                    self.report("RHO2021",
+                                {"instance": head, "module": defn.name},
+                                hspan, fixits=_did_you_mean(
+                                    head, self.member_names(model), hspan))
+                return None
+            size = model.arrays[head]
+            position = self.position(model, index, loops)
+            if size is None or position is None:
+                return None
+            if not 0 <= position < size:
+                self.report(
+                    "RHO2043",
+                    {"endpoint": f"{head}[{position}].{port}",
+                     "index": position, "array": head, "last": size - 1},
+                    span)
+                return None
+            owner = f"{head}[{position}]"
         member = model.members.get(owner)
         if member is None:
-            ospan = result.span_of(tokens[0])
-            self.report("RHO2021", {"instance": owner, "module": defn.name},
-                        ospan, fixits=_did_you_mean(owner, model.members,
-                                                    ospan))
+            if not quiet:
+                self.report("RHO2021", {"instance": owner,
+                                        "module": defn.name},
+                            hspan, fixits=_did_you_mean(
+                                owner, self.member_names(model), hspan))
             return None
         if member.broken:
             return None
+        text = f"{owner}.{port}"
         role = member.roles.get(port)
         if role is None:
             pspan = result.span_of(tokens[1])
             self.report(
                 "RHO2022",
-                {"instance": owner, "definition": member.definition,
+                {"instance": written_head, "definition": member.definition,
                  "port": port},
-                pspan, entity=self.entity(defn, owner),
+                pspan, about=owner,
                 fixits=_did_you_mean(port, member.roles, pspan))
             return None
         if role == "nc":
-            self.report("RHO2024", {"endpoint": text}, span,
-                        entity=self.entity(defn, owner))
+            self.report("RHO2024", {"endpoint": written}, span, about=owner)
             return None
-        return _Endpoint(owner, port, text, span)
+        return _Endpoint(owner, port, text, span, written)
 
-    def connect(self, defn, model, stmt) -> None:
+    @staticmethod
+    def member_names(model) -> list:
+        return [name for name in model.members if "[" not in name] \
+            + list(model.arrays)
+
+    def position(self, model, index, loops):
+        """An index expression's value: NAME, INTEGER, or either plus or
+        minus an INTEGER. None when it cannot be evaluated (reported)."""
+        base = self.integer(model, index, loops)
+        if base is None:
+            return None
+        tokens = [c for c in index.children if not _is_tree(c)]
+        if len(tokens) == 3:
+            offset = int(str(tokens[2]))
+            base = base + offset if str(tokens[1]) == "+" else base - offset
+        return base
+
+    def connect(self, defn, model, stmt, loops) -> None:
         result = defn.result
         span = result.span_of(stmt)
         label, attributes = None, {}
         if stmt.data == "net_decl":
             kind, nodes = "net", _trees(stmt, "endpoint")
             label = str(_tokens(stmt, "FREE_NAME")[0])
-            if label in model.labels:
+            if label in model.labels and model.labels[label].node \
+                    is not stmt:
                 self.report(
                     "RHO2007",
                     {"kind": "net", "name": label,
@@ -1065,19 +2129,19 @@ class _Elaborator:
             kind, nodes = "isolated", _trees(stmt, "endpoint")
         endpoints, seen = [], set()
         for node in nodes:
-            endpoint = self.endpoint(defn, model, node)
+            endpoint = self.endpoint(defn, model, node, loops)
             if endpoint is None:
                 continue
             key = (endpoint.member, endpoint.port)
             if key in seen:
-                self.report("RHO2025", {"endpoint": endpoint.text},
+                self.report("RHO2025", {"endpoint": endpoint.written},
                             endpoint.span)
                 continue
             seen.add(key)
             endpoints.append(endpoint)
-        connect = _Connect(kind, endpoints, span, label, attributes)
+        connect = _Connect(kind, endpoints, span, label, attributes, stmt)
         model.connects.append(connect)
-        if label is not None:
+        if label is not None and label not in model.labels:
             model.labels[label] = connect
 
     def net_attributes(self, defn, stmt, label) -> dict:
@@ -1113,13 +2177,12 @@ class _Elaborator:
         name, tier = str(words[1]), str(words[2])
         measurement, subject = str(words[3]), str(words[4])
         span = result.span_of(stmt)
-        entity = self.entity(defn, name)
         if name in names:
             self.report(
                 "RHO2007",
                 {"kind": "assertion", "name": name,
                  "scope": f"module `{defn.name}`"},
-                span, entity=entity,
+                span, about=name,
                 secondary=((names[name], "first declared here"),))
             return
         names[name] = span
@@ -1129,11 +2192,11 @@ class _Elaborator:
                                           "the instance"),))
         if tier == "static" and measurement not in STATIC_MEASUREMENTS:
             self.report("RHO2030", {"name": name, "measurement": measurement},
-                        result.span_of(words[3]), entity=entity)
+                        result.span_of(words[3]), about=name)
         if subject not in model.labels:
             sspan = result.span_of(words[4])
             self.report("RHO2029", {"subject": subject, "module": defn.name},
-                        sspan, entity=entity,
+                        sspan, about=name,
                         fixits=_did_you_mean(subject, model.labels, sspan))
         bounds = self.bounds(defn, _tree(stmt, "bound"))
         model.checks.append(
@@ -1178,40 +2241,60 @@ class _Elaborator:
             return None
         return Bounds(unit, low, high)
 
-    # -- pass F: flattening
+    # -- pass H: flattening
 
-    def flatten(self, root_def: _ModuleDef) -> ElaboratedDesign:
+    def report_net_defects(self, defects, visits) -> None:
+        """Spec 04's reporting rule, applied to flattened-net defects as
+        publish() applies it to body findings: a defect that instances
+        under every environment of its module show is reported once, with
+        the least params and an entity only when every copy names the same
+        one; a defect only some environments show depends on the values
+        and is reported per instance that shows it, in path order, with
+        its net as the entity, else the instance. Copies that come out
+        the same diagnostic are said once."""
+        model_at = {path: model for model, path, _depth, _trace in visits}
+        owner = {id(model): id(defn) for defn in self.defs
+                 for model in self.model_order.get(id(defn), ())}
+        environments = {}  # id(defn) -> ids of its models the walk used
+        for model, _path, _depth, _trace in visits:
+            environments.setdefault(owner[id(model)], set()).add(id(model))
+
+        def one(copies):
+            params = min(params for _path, params, _entity in copies)
+            entities = {entity for _path, _params, entity in copies}
+            return dict(params), (entities.pop() if len(entities) == 1
+                                  else None)
+
+        for (code, primary, secondary, _detail), copies in defects.items():
+            shown = {id(model_at[path]) for path, _params, _e in copies}
+            everywhere = shown == environments[owner[next(iter(shown))]]
+            if everywhere:
+                groups = [copies]
+            else:
+                by_path = {}
+                for copy in copies:
+                    by_path.setdefault(copy[0], []).append(copy)
+                groups = [by_path[path] for path in sorted(by_path)]
+            said = set()
+            for group in groups:
+                params, entity = one(group)
+                if not everywhere and entity is None:
+                    entity = group[0][0]  # the instance, as publish() does
+                key = (json.dumps(params, sort_keys=True), entity)
+                if key in said:
+                    continue
+                said.add(key)
+                self.report(code, params, primary, entity=entity,
+                            secondary=secondary)
+
+    def flatten(self, root_def, instances, visits) -> ElaboratedDesign:
         entry = self.results[0]
         pragma = next(c for c in entry.tree.children
                       if not _is_tree(c) and c.type == "PRAGMA")
-        instances = [Instance(
-            path="/", kind="module", definition=root_def.definition,
-            parameters={}, ports=tuple(root_def.ports), dnp=False,
-            exclude_from_bom=False, board_only=False, hardware_kind=None,
-            part=None, declaration=root_def.header, trace=())]
         found = _UnionFind()
         labels, statements, isolated, checks = [], [], [], []
-        work = [(root_def, "/", 0, (), dict.fromkeys(FLAGS, False))]
-        while work:
-            defn, path, depth, trace, inherited = work.pop()
-            model = self.models[id(defn)]
-            for member in model.members.values():
-                if member.broken:
-                    continue
-                ipath = child_path(path, member.name)
-                flags = {flag: member.flags.get(flag, False)
-                         or inherited[flag] for flag in FLAGS}
-                itrace = (member.span,) + trace
-                instances.append(Instance(
-                    path=ipath, kind=member.kind,
-                    definition=member.definition,
-                    parameters=dict(member.parameters),
-                    ports=tuple(member.ports),
-                    hardware_kind=member.hardware_kind, part=member.part,
-                    declaration=member.span, trace=itrace, **flags))
-                if member.kind == "module":
-                    work.append((member.target, ipath, depth + 1, itrace,
-                                 flags))
+        for model, path, depth, trace in visits:
+            labelled = {}  # label -> a node of its net, in this instance
             for connect in model.connects:
                 nodes = [(path if ep.member is None
                           else child_path(path, ep.member), ep.port)
@@ -1221,6 +2304,11 @@ class _Elaborator:
                 found.find(nodes[0])
                 for node in nodes[1:]:
                     found.union(nodes[0], node)
+                if connect.label is not None:
+                    # A net block a loop runs more than once declares one
+                    # label: every iteration joins the one net.
+                    found.union(labelled.setdefault(connect.label,
+                                                    nodes[0]), nodes[0])
                 site = (depth, path, connect.span,
                         (connect.span,) + trace)
                 statements.append((nodes[0], site))
@@ -1230,7 +2318,7 @@ class _Elaborator:
                                    connect.attributes))
                 if connect.kind == "isolated":
                     isolated.append((nodes[0], connect.endpoints[0],
-                                     connect.span))
+                                     connect.span, path))
             for check in model.checks:
                 connect = model.labels.get(check.subject)
                 if connect is None or not connect.endpoints \
@@ -1257,15 +2345,15 @@ class _Elaborator:
 
         # A net defect is found once per flattened net, so a module used
         # several times would repeat it once per copy. Copies share their
-        # code and spans (and, for RHO2028, the attribute); spec 04 reports
-        # them once, with the least params and an entity only when every
-        # copy names the same one.
+        # code and spans (and a detail: RHO2028's attribute, RHO2026's
+        # evaluated endpoint, which differs per loop iteration); `path` is
+        # the instance whose body holds the statement they point at.
         defects = {}
 
-        def defect(code, params, primary, detail=None, *, entity=None,
-                   secondary=()):
+        def defect(code, params, primary, path, detail=None, *,
+                   entity=None, secondary=()):
             defects.setdefault((code, primary, secondary, detail), []).append(
-                (tuple(sorted(params.items())), entity))
+                (path, tuple(sorted(params.items())), entity))
 
         nets, names = [], {}
         for key, members in groups.items():
@@ -1282,6 +2370,7 @@ class _Elaborator:
                     clash = next(c for c in top if c[1] != top[0][1])
                     defect(
                         "RHO2027", {"labels": distinct}, clash[0][2],
+                        clash[0][1],
                         secondary=((top[0][0][2], "the other label"),))
                 site = next(c[0] for c in top if c[1] == name)
                 setters = {}
@@ -1296,7 +2385,7 @@ class _Elaborator:
                                 {"net": name, "attribute": attribute,
                                  "first": domains[attribute],
                                  "second": value},
-                                csite[2], attribute, entity=name,
+                                csite[2], csite[1], attribute, entity=name,
                                 secondary=((setters[attribute],
                                             "first set here"),))
             else:
@@ -1309,7 +2398,7 @@ class _Elaborator:
                             domains["voltage_domain"], members, site[2],
                             site[3]))
 
-        for node, endpoint, span in isolated:
+        for node, endpoint, span, path in isolated:
             key = found.find(node)
             others = sorted(member_spelling(p, port)
                             for p, port in set(groups[key]) if
@@ -1318,15 +2407,9 @@ class _Elaborator:
                 defect(
                     "RHO2026",
                     {"endpoint": endpoint.text, "other": others[0]},
-                    span, entity=names[key])
+                    span, path, endpoint.text, entity=names[key])
 
-        for (code, primary, secondary, _detail), copies in defects.items():
-            params = min(params for params, _entity in copies)
-            entities = {entity for _params, entity in copies}
-            self.report(code, dict(params), primary,
-                        entity=entities.pop() if len(entities) == 1
-                        else None,
-                        secondary=secondary)
+        self.report_net_defects(defects, visits)
 
         assertions = [
             Assertion(apath, check.tier, check.measurement,

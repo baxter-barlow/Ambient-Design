@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+module Ladder:
+    taps = new rhoform.lib.passive.Resistor[8]
+    for i in range(0, 8, 2):
+        isolated taps[i].a
+    port p passive

@@ -23,11 +23,13 @@ GRAMMAR_PATH = Path(__file__).resolve().parent / "rhoform.lark"
 # Lark's Indenter needs the terminal names its postlex step manufactures, plus
 # the bracket terminals that suspend indentation. Implicit line joining inside
 # `(` is what lets a long parameter list wrap, which is the one construct in
-# the language that outgrows a line.
+# the language that outgrows a line. `[` `]` are tokens since syntax 0.2 but
+# are deliberately NOT listed (decision S-5): an index never wraps, and an
+# unclosed `[` must not join the rest of the file into one logical line.
 _INDENTER = dict(
     NL_type="_NEWLINE",
-    OPEN_PAREN_types=["LPAR", "LSQB"],
-    CLOSE_PAREN_types=["RPAR", "RSQB"],
+    OPEN_PAREN_types=["LPAR"],
+    CLOSE_PAREN_types=["RPAR"],
     INDENT_type="_INDENT",
     DEDENT_type="_DEDENT",
     tab_len=4,

@@ -1,0 +1,7 @@
+# A file of component definitions alone has no module to be the root of a
+# design.
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2

@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.2
+module Ladder:
+    taps = new rhoform.lib.passive.Resistor[4]
+    for i in rnage(3):
+        taps[i].b ~ taps[i + 1].a

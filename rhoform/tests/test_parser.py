@@ -17,7 +17,11 @@ try:
 except ImportError:  # pragma: no cover - exercised by absence
     HAVE_LARK = False
 
+# Most cases below are 0.1 files on purpose: 0.2 only adds, so every one of
+# them must keep behaving exactly as it did when 0.1 was the only version.
 PRAGMA = "#pragma rhoform-syntax 0.1"
+# The CURRENT version: what new files and every pragma fix-it use.
+PRAGMA_0_2 = "#pragma rhoform-syntax 0.2"
 
 
 def _parse(source, **kwargs):
@@ -78,12 +82,20 @@ module Blinker:
         from rhoform import parser as production
 
         loaded = production._load()
-        self.assertEqual(loaded.pragma_text, PRAGMA)
+        self.assertEqual(loaded.pragma_text, PRAGMA_0_2)
+        # Both versions are headers the ARTIFACT's own terminal accepts.
+        for header in (PRAGMA, PRAGMA_0_2):
+            self.assertIsNotNone(loaded.pragma_re.fullmatch(header), header)
+        for header in ("#pragma rhoform-syntax 0.3",
+                       "#pragma rhoform-syntax 0.10",
+                       "#pragma rhoform-syntax 0"):
+            self.assertIsNone(loaded.pragma_re.fullmatch(header), header)
         self.assertIn("module", loaded.keyword_of.values())
+        self.assertIn("for", loaded.keyword_of.values())
         self.assertEqual(
             sorted(loaded.vocabularies),
-            ["hardware_kind", "measurement_kind", "net_attribute",
-             "pin_role"],
+            ["hardware_kind", "loop_iterator", "measurement_kind",
+             "net_attribute", "param_type", "pin_role"],
         )
 
 
@@ -148,11 +160,13 @@ class PragmaTest(unittest.TestCase):
         self.assertEqual(_codes(result), ["RHO1005", "RHO1009"])
         self.assertIsNotNone(result.tree)
         first = json.loads(result.diagnostics.render().splitlines()[0])
-        self.assertEqual(first["params"]["expected"], PRAGMA)
+        # A new header is the CURRENT version: 0.2 only adds, so it can
+        # never make a body that parses under 0.1 mean something else.
+        self.assertEqual(first["params"]["expected"], PRAGMA_0_2)
         fixit = first["fixits"][0]
         self.assertEqual(fixit["applicability"], "machine-applicable")
         self.assertEqual(fixit["edits"][0]["byte_start"], 0)
-        self.assertEqual(fixit["edits"][0]["replacement"], PRAGMA + "\n")
+        self.assertEqual(fixit["edits"][0]["replacement"], PRAGMA_0_2 + "\n")
 
     def test_wrong_version_is_one_diagnostic_with_a_replacement_fixit(self):
         result = _parse("#pragma rhoform-syntax 9.9\nmodule M:\n"
@@ -162,7 +176,7 @@ class PragmaTest(unittest.TestCase):
         diag = json.loads(result.diagnostics.render())
         self.assertIn("9.9", diag["params"]["found"])
         self.assertEqual(diag["fixits"][0]["edits"][0]["replacement"],
-                         PRAGMA)
+                         PRAGMA_0_2)
 
     def test_body_spans_are_untranslated_by_the_synthetic_header(self):
         # The parse runs over a shifted text; the report must not.
@@ -520,7 +534,10 @@ module N:
                         '    d = new lib.Led(color = red", i = 9mA (8mA to 10mA))\n'
                         "    port p passive\n")
         self.assertNotIn("RHO1015", _codes(closed))
-        self.assertIn("RHO1006", _codes(closed))
+        # Since 0.2 a bare word is a legal value (a parameter reference),
+        # so `red` no longer draws RHO1006 and the first thing the lexer
+        # refuses is the stray quote: the string defect, named as such.
+        self.assertEqual(_codes(closed), ["RHO1004"])
 
     def test_a_swallowed_closer_never_reaches_a_sibling_statements_opener(self):
         # Round 8's focused pass: the leftover `)` in the tail popped the
@@ -648,15 +665,29 @@ module N:
                         "    port p passive\n")
         self.assertIn("RHO1015", _codes(result))
 
-    def test_a_square_bracket_is_an_illegal_character_not_a_bracket(self):
-        # Review round 6: `[` was scanned as layout-suspending, but the
-        # frozen v0.1 grammar declares no LSQB terminal, so RHO1015's
-        # message ("everything after it joins one logical line") asserts
-        # a mechanism that cannot run. Its mirror `]` was already right.
-        opened = _parse(PRAGMA + "\nmodule M:\n    port p passive [\n")
-        closed = _parse(PRAGMA + "\nmodule M:\n    port p passive ]\n")
-        self.assertEqual(_codes(opened), ["RHO1011"])
+    def test_a_square_bracket_never_suspends_layout(self):
+        # Review round 6 pinned `[` as NOT layout-suspending while it was an
+        # illegal character. Since 0.2 it is a token (array sizes, indexes),
+        # and decision S-5 keeps the rule: `[` is no Indenter paren type, so
+        # a stray or unclosed one is ONE token error on its own line, never
+        # an RHO1015 claiming the rest of the file joined one logical line.
+        opened = _parse(PRAGMA_0_2 + "\nmodule M:\n    port p passive [\n")
+        closed = _parse(PRAGMA_0_2 + "\nmodule M:\n    port p passive ]\n")
+        self.assertEqual(_codes(opened), ["RHO1006"])
         self.assertEqual(_codes(opened), _codes(closed))
+        # An unclosed array size: the NEXT line is still its own statement.
+        result = _parse(PRAGMA_0_2 + "\nmodule M:\n    c = new lib.R[4\n"
+                        "    port q passive\n    port r passive\n")
+        self.assertEqual(_codes(result), ["RHO1006"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["spans"][0]["line_start"], 3)
+        self.assertIn("`]`", diag["params"]["expected"])
+        ports = [str(node.children[1])
+                 for node in result.tree.find_data("port_decl")]
+        self.assertEqual(ports, ["q", "r"])
+        from rhoform.parser import _INDENTER
+        self.assertEqual(_INDENTER["OPEN_PAREN_types"], ["LPAR"])
+        self.assertEqual(_INDENTER["CLOSE_PAREN_types"], ["RPAR"])
 
     def test_byte_level_prescan_does_not_scale_quadratically(self):
         # Review round 6: span_from_bytes rebuilt the whole-file newline
@@ -934,8 +965,8 @@ class TreeShapeTest(unittest.TestCase):
     def test_vocab_site_positions_match_the_generated_tree(self):
         from rhoform.parser import _VOCAB_SITES
 
-        source = PRAGMA + """
-module M:
+        source = PRAGMA_0_2 + """
+module M(n: int = 2):
     port p passive
     h = new lib.H:
         pin a passive 1
@@ -943,6 +974,8 @@ module M:
     net VCC (voltage_domain = "x"):
         h.a
     assert f static frequency (OUT) at least 1
+    for i in range(n):
+        isolated h.a
 """
         result = _parse(source)
         self.assertTrue(result.ok, _codes(result))
@@ -957,6 +990,508 @@ module M:
             self.assertGreater(len(names), index, node.data)
             seen.add(node.data)
         self.assertEqual(seen, set(_VOCAB_SITES))
+
+
+# The 0.1 parse trees, frozen. Each digest is sha256 of repr(tree) for an
+# accept case, recorded with the v0.1 grammar before syntax 0.2 existed
+# (repr carries rule names, token TYPES and values). 0.2 is additive only
+# if every one of these is unchanged, which is the claim decision S-1 makes
+# and the reason the 0.2 rules sit after the 0.1 rules in the source of
+# truth: Lark numbers anonymous keyword terminals in order of appearance.
+V0_1_ACCEPT_TREE_DIGESTS = {
+    "a01_minimal_module.rhoform":
+        "618ba114c68366573bc73a232c56a3e98118216031feb6a22ac8415889b3618a",
+    "a02_full_surface.rhoform":
+        "bb6f6d341a8f6462a58036ab592d30cb266179f4c6258e37c60b517a2223ae06",
+    "a03_keywords_in_nonbinding_positions.rhoform":
+        "43ef95f82c9b54fdc4ae2b00192477141cee6630aee4d3c0a45af281882850b0",
+    "a04_vocabulary_words_as_names.rhoform":
+        "3eb993f0bf9997f242d25c839b17d02d0deebe474be47807a273ac924a9ca7f2",
+    "a05_comments_and_pragmatic.rhoform":
+        "d022e92761009419f4086bf6b65af6b5a422f683a8f8087fb25ac2dfe9a849f6",
+    "a06_dimensionless_bounds.rhoform":
+        "14ee9a541a672e31af7ff9faf17221ae8685643a0133b9e649015de989267ed1",
+    "a07_wrapped_parameter_list.rhoform":
+        "ff6b689454ef4d0508003b2fd4d0fe75c1caaf63d1ac18beb0ff7669b1ff0a4e",
+    "a08_no_final_newline.rhoform":
+        "4c37ce980656fd73b726f64f5aafde94490546f1ee1def4a30efdcfc9d5e273f",
+}
+
+# The seven words syntax 0.2 promoted from reserved to keyword.
+PROMOTED = ("component", "else", "for", "from", "if", "import", "in")
+
+# A 0.2 file exercising every new production at least once.
+FULL_0_2 = PRAGMA_0_2 + """
+import Divider, Led from "lib/parts.rhoform"
+
+component Res(r: resistance = 1kohm, tol: string = "1%"):
+    pin a passive 1
+    pin b passive 2
+
+module Bank(n: int = 4, fast: bool, v: voltage = 3.3V, label: string):
+    port p passive
+    c = new Res[n](r = 10kohm)
+    d = new Res[8]
+    if fast:
+        c[0].a ~ p
+    else:
+        if n >= 2:
+            isolated c[1].b
+    for i in range(n):
+        c[i].b ~ c[i + 1].a
+        net N:
+            c[i - 1].a
+    for j in range(1, 8):
+        d[j] ~ d[0].a
+    r = new Res(r = v)
+
+module Top():
+    b = new Bank(fast = true, label = "x")
+"""
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class Syntax02Test(unittest.TestCase):
+    """Every S-5 production, at tree level."""
+
+    def _tree(self, source):
+        result = _parse(source)
+        self.assertTrue(result.ok, result.diagnostics.render())
+        return result.tree
+
+    def _ok(self, body, header=PRAGMA_0_2):
+        return _parse(header + "\n" + body).ok
+
+    def test_a_file_using_every_new_production_parses_clean(self):
+        tree = self._tree(FULL_0_2)
+        rules = {node.data for node in tree.iter_subtrees()}
+        for rule in ("import_stmt", "component_def", "params", "param",
+                     "if_stmt", "condition", "for_stmt", "bound_arg",
+                     "block", "array_size", "index"):
+            self.assertIn(rule, rules)
+
+    def test_an_if_keeps_its_two_branches_apart(self):
+        # Without a `block` rule both branches' statements would be one
+        # flat list under if_stmt and nobody could tell them apart.
+        tree = self._tree(FULL_0_2)
+        outer = min(tree.find_data("if_stmt"), key=lambda n: n.meta.line)
+        blocks = [c for c in outer.children
+                  if getattr(c, "data", None) == "block"]
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(len(list(blocks[1].find_data("if_stmt"))), 1)
+
+    def test_operators_stay_in_the_tree(self):
+        # Anonymous string literals are dropped by Lark; COMPARE and
+        # INDEX_OP are named so `==`/`!=` and `+`/`-` stay distinguishable.
+        for op in ("==", "!=", "<", "<=", ">", ">="):
+            tree = self._tree(PRAGMA_0_2 + "\nmodule M(n: int):\n"
+                              f"    if n {op} 3:\n        port p passive\n")
+            cond = next(tree.find_data("condition"))
+            self.assertEqual([t.type for t in cond.children[1:2]],
+                             ["COMPARE"])
+            self.assertEqual(str(cond.children[1]), op)
+        for op in ("+", "-"):
+            for spacing in (f" {op} ", op):
+                tree = self._tree(PRAGMA_0_2 + "\nmodule M:\n"
+                                  f"    for i in range(4):\n"
+                                  f"        c[i{spacing}1].a ~ c[i].b\n")
+                index = next(tree.find_data("index"))
+                self.assertEqual(
+                    [(t.type, str(t)) for t in index.children],
+                    [("FREE_NAME", "i"), ("INDEX_OP", op), ("INTEGER", "1")])
+
+    def test_a_bare_condition_is_a_bool_parameter(self):
+        tree = self._tree(PRAGMA_0_2 + "\nmodule M(fast: bool):\n"
+                          "    if fast:\n        port p passive\n")
+        cond = next(tree.find_data("condition"))
+        self.assertEqual([t.type for t in cond.children], ["FREE_NAME"])
+
+    def test_a_parameter_reference_is_a_value(self):
+        tree = self._tree(PRAGMA_0_2 + "\nmodule M(v: voltage):\n"
+                          "    r = new lib.R(x = v)\n")
+        value = next(tree.find_data("value"))
+        self.assertEqual([(t.type, str(t)) for t in value.children],
+                         [("FREE_NAME", "v")])
+
+    def test_parameter_lists_may_be_empty_wrap_and_default(self):
+        for header in ("module M():", "component C():",
+                       "module M(\n        n: int = 4,\n        v: voltage):"):
+            body = ("    pin a passive\n" if "component" in header
+                    else "    port p passive\n")
+            with self.subTest(header=header.split("(")[0]):
+                self.assertTrue(self._ok(header + "\n" + body), header)
+
+    def test_range_takes_one_or_two_bounds_of_int_or_name(self):
+        for args, ok in (("4", True), ("n", True), ("1, 4", True),
+                         ("n, 8", True), ("", False), ("1, 2, 3", False),
+                         ("1.5", False), ("4V", False), ('"4"', False)):
+            with self.subTest(args=args):
+                self.assertEqual(self._ok(
+                    "module M(n: int):\n"
+                    f"    for i in range({args}):\n"
+                    "        isolated x[i]\n"), ok)
+
+    def test_array_sizes_and_indexes_take_the_s5_shapes_only(self):
+        cases = {
+            "c = new lib.R[4]": True,
+            "c = new lib.R[n](x = 1)": True,
+            "c = new lib.R[n]:\n        pin a passive": True,
+            "c = new lib.R[]": False,
+            "c = new lib.R[n + 1]": False,
+            "c = new lib.R[4][2]": False,
+            "c[0].a ~ c[n].a": True,
+            "c[n + 2].a ~ c[3 - 1].a": True,
+            "c[0][1].a ~ x": False,
+            "c[n * 2].a ~ x": False,
+            "c[n + m].a ~ x": False,
+            "c[].a ~ x": False,
+            "isolated c[2].b": True,
+        }
+        for statement, ok in cases.items():
+            with self.subTest(statement=statement):
+                self.assertEqual(self._ok(
+                    f"module M(n: int):\n    {statement}\n"), ok)
+
+    def test_net_members_may_be_indexed(self):
+        self.assertTrue(self._ok("module M:\n    net N:\n        c[0].a\n"
+                                 "        c[1]\n"))
+
+    def test_conditions_have_no_boolean_connectives(self):
+        # `and`/`or`/`not` are not reserved words, so adding them would be
+        # breaking; nesting is the conjunction (decision S-4).
+        for cond in ("a and b", "not a", "a or b", "n == 1 == 2", "n = 1",
+                     "3 == n", ""):
+            with self.subTest(cond=cond):
+                self.assertFalse(self._ok(
+                    "module M(a: bool, b: bool, n: int):\n"
+                    f"    if {cond}:\n        port p passive\n"))
+
+    def test_an_offset_operator_is_reported_as_written(self):
+        # `range(n - 1)` is realistic input, and it used to read
+        # "unexpected `+` or `-`": the terminal's prose started with a
+        # backtick, so it stood in for the token and the author was never
+        # told which operator the parser refused.
+        found = _parse(PRAGMA_0_2 + "\nmodule M(n: int):\n"
+                       "    for i in range(n - 1):\n        port p passive\n")
+        (diag,) = [json.loads(line)
+                   for line in found.diagnostics.render().splitlines()]
+        self.assertEqual(diag["code"], "RHO1006")
+        self.assertEqual(diag["params"]["found"],
+                         "`-` (an index offset operator)")
+        expected = _parse(PRAGMA_0_2 + "\nmodule M:\n    c[0.a ~ x\n")
+        (diag,) = [json.loads(line)
+                   for line in expected.diagnostics.render().splitlines()]
+        self.assertEqual(diag["params"]["expected"],
+                         "`]`, an index offset operator")
+
+    def test_else_needs_an_if(self):
+        self.assertFalse(self._ok("module M:\n    port p passive\n"
+                                  "    else:\n        port q passive\n"))
+        self.assertTrue(self._ok("module M(a: bool):\n    if a:\n"
+                                 "        port p passive\n    else:\n"
+                                 "        port q passive\n"))
+
+    def test_a_component_body_is_pins_only(self):
+        for line, ok in (("pin a passive 1", True),
+                         ("hardware test_point", False),
+                         ("dnp", False), ("port p passive", False),
+                         ('part "X"', False)):
+            with self.subTest(line=line):
+                self.assertEqual(self._ok(f"component C:\n    {line}\n"), ok)
+
+    def test_imports_come_before_every_definition(self):
+        self.assertTrue(self._ok('import A, B from "x.rhoform"\n'
+                                 "module M:\n    port p passive\n"))
+        self.assertFalse(self._ok("module M:\n    port p passive\n"
+                                  'import A from "x.rhoform"\n'))
+        self.assertFalse(self._ok('import A from x\n'
+                                  "module M:\n    port p passive\n"))
+        self.assertFalse(self._ok('import from "x.rhoform"\n'
+                                  "module M:\n    port p passive\n"))
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class PromotedKeywordTest(unittest.TestCase):
+    """The seven promoted words: rejected wherever a name is BOUND, accepted
+    in every NAME position exactly as they were while merely reserved."""
+
+    BINDING = {
+        "module name": "module {w}:\n    port p passive\n",
+        "component name": "component {w}:\n    pin a passive\n",
+        "port": "module M:\n    port {w} passive\n",
+        "net": "module M:\n    net {w}:\n        p\n",
+        "instance": "module M:\n    {w} = new lib.R\n",
+        "table row": "module M:\n    table lib.R (x):\n        {w} 1\n",
+        "chain head": "module M:\n    {w}.a ~ x\n",
+        "parameter": "module M({w}: int):\n    port p passive\n",
+        "loop variable": "module M:\n    for {w} in range(2):\n"
+                         "        isolated x\n",
+        "imported name": 'import {w} from "x.rhoform"\n'
+                         "module M:\n    port p passive\n",
+    }
+    NON_BINDING = {
+        "pin name": "module M:\n    r = new lib.R:\n        pin {w} passive\n",
+        "constraint name": "module M:\n    r = new lib.R:\n"
+                           "        part abstract:\n            {w} = 1\n",
+        "argument name": "module M:\n    r = new lib.R({w} = 1)\n",
+        "after a dot": "module M:\n    x ~ r.{w}\n",
+        "chain endpoint": "module M:\n    x ~ {w}\n",
+        "net member": "module M:\n    net N:\n        {w}\n",
+        "isolated endpoint": "module M:\n    isolated {w}.a\n",
+        "column name": "module M:\n    table lib.R ({w}):\n        r1 1\n",
+        "qualified name": "module M:\n    r = new lib.{w}.R\n",
+        "assertion subject": "module M:\n    assert a static frequency"
+                             " ({w}) at least 1Hz\n",
+    }
+
+    def test_promoted_words_never_bind(self):
+        for word in PROMOTED:
+            for site, template in self.BINDING.items():
+                with self.subTest(word=word, site=site):
+                    result = _parse(PRAGMA_0_2 + "\n"
+                                    + template.format(w=word))
+                    self.assertFalse(result.ok)
+
+    def test_promoted_words_still_fill_every_name_position(self):
+        # Under BOTH pragmas: these were legal 0.1 source while the words
+        # were only reserved, and promotion must not take that away.
+        for header in (PRAGMA, PRAGMA_0_2):
+            for word in PROMOTED:
+                for site, template in self.NON_BINDING.items():
+                    with self.subTest(header=header[-3:], word=word,
+                                      site=site):
+                        result = _parse(header + "\n"
+                                        + template.format(w=word))
+                        self.assertTrue(result.ok,
+                                        result.diagnostics.render())
+
+    def test_binding_templates_accept_an_ordinary_name(self):
+        # The partner control: each binding template parses with a plain
+        # word, so a rejection above is about the keyword, not the template.
+        for site, template in self.BINDING.items():
+            with self.subTest(site=site):
+                result = _parse(PRAGMA_0_2 + "\n" + template.format(w="ok"))
+                self.assertTrue(result.ok, result.diagnostics.render())
+
+    def test_interface_stays_reserved_not_a_keyword(self):
+        from rhoform import parser as production
+
+        self.assertNotIn("interface",
+                         production._load().keyword_of.values())
+        self.assertFalse(_parse(PRAGMA_0_2 + "\ninterface I:\n"
+                                "    pin a passive\n").ok)
+        self.assertFalse(_parse(PRAGMA_0_2 + "\nmodule M:\n"
+                                "    interface = new lib.R\n").ok)
+        self.assertTrue(_parse(PRAGMA_0_2 + "\nmodule M:\n"
+                               "    x ~ r.interface\n").ok)
+
+    def test_range_is_a_name_not_a_keyword(self):
+        self.assertTrue(_parse(PRAGMA + "\nmodule M:\n"
+                               "    range = new lib.R\n").ok)
+        self.assertTrue(_parse(PRAGMA_0_2 + "\nmodule M:\n"
+                               "    range = new lib.R\n"
+                               "    for i in range(2):\n"
+                               "        isolated range.a\n").ok)
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class PragmaVersionTest(unittest.TestCase):
+    def test_both_versions_are_accepted(self):
+        for header in (PRAGMA, PRAGMA_0_2):
+            with self.subTest(header=header):
+                result = _parse(header + "\nmodule M:\n    port p passive\n")
+                self.assertTrue(result.ok, result.diagnostics.render())
+
+    def test_any_other_version_is_rho1005_rewritten_to_the_current_one(self):
+        for found in ("0.3", "0.10", "1.0", "0", "0.2.0"):
+            source = (f"#pragma rhoform-syntax {found}\nmodule M:\n"
+                      "    port p passive\n")
+            with self.subTest(found=found):
+                result = _parse(source)
+                self.assertEqual(_codes(result), ["RHO1005"])
+                diag = json.loads(result.diagnostics.render())
+                edit = diag["fixits"][0]["edits"][0]
+                self.assertEqual(edit["replacement"], PRAGMA_0_2)
+                fixed = (source[:edit["byte_start"]] + edit["replacement"]
+                         + source[edit["byte_end"]:])
+                self.assertTrue(_parse(fixed).ok)
+
+    def test_a_file_with_no_pragma_is_checked_as_the_current_version(self):
+        # The fix-it writes 0.2, so the body is judged as 0.2: one RHO1005
+        # and no needs-newer-pragma on top of it.
+        result = _parse("module M(n: int):\n    port p passive\n")
+        self.assertEqual(_codes(result), ["RHO1005"])
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class VersionGateTest(unittest.TestCase):
+    """A 0.2 construct under a 0.1 pragma: ONE RHO1016 per file."""
+
+    CONSTRUCTS = {
+        'import A from "x.rhoform"\nmodule M:\n    port p passive':
+            ("an `import` statement", 1),
+        "component C:\n    pin a passive":
+            ("a `component` definition", 1),
+        "module M():\n    port p passive": ("a parameter list", 1),
+        "module M:\n    if fast:\n        port p passive":
+            ("an `if` statement", 1),
+        "module M:\n    for i in range(2):\n        isolated x":
+            ("a `for` loop", 1),
+        "module M:\n    c = new lib.R[2]": ("an array size", 1),
+        "module M:\n    c[0].a ~ x": ("an index", 1),
+        "module M:\n    x ~ c[1].a": ("an index", 1),
+        "module M:\n    r = new lib.R(x = n)": ("a parameter reference", 1),
+    }
+
+    def _gate(self, body):
+        source = PRAGMA + "\n" + body + "\n"
+        result = _parse(source)
+        diags = [json.loads(line)
+                 for line in result.diagnostics.render().splitlines()]
+        return source, result, diags
+
+    def test_each_construct_draws_one_diagnostic_naming_it(self):
+        for body, (construct, count) in self.CONSTRUCTS.items():
+            with self.subTest(construct=construct, body=body[:30]):
+                source, result, diags = self._gate(body)
+                self.assertIsNotNone(result.tree)
+                self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+                self.assertEqual(diags[0]["slug"],
+                                 "syntax-needs-newer-pragma")
+                self.assertEqual(diags[0]["params"], {
+                    "construct": construct, "count": count,
+                    "declared": "0.1", "required": "0.2"})
+                # The same body under 0.2 is clean: the grammar is one.
+                self.assertTrue(_parse(PRAGMA_0_2 + "\n" + body + "\n").ok)
+
+    def test_the_fixit_rewrites_only_the_version_and_clears_the_error(self):
+        source, _, diags = self._gate("module M():\n    port p passive")
+        fixit = diags[0]["fixits"][0]
+        self.assertEqual(fixit["applicability"], "machine-applicable")
+        (edit,) = fixit["edits"]
+        self.assertEqual(source[edit["byte_start"]:edit["byte_end"]], "0.1")
+        self.assertEqual((edit["line_start"], edit["replacement"]), (1, "0.2"))
+        fixed = (source[:edit["byte_start"]] + edit["replacement"]
+                 + source[edit["byte_end"]:])
+        self.assertTrue(fixed.startswith(PRAGMA_0_2 + "\n"))
+        self.assertTrue(_parse(fixed).ok)
+
+    def test_the_fixit_finds_a_pragma_below_a_banner(self):
+        source = ("# SPDX-License-Identifier: Apache-2.0\n\n" + PRAGMA
+                  + "\nmodule M():\n    port p passive\n")
+        diag = json.loads(_parse(source).diagnostics.render())
+        edit = diag["fixits"][0]["edits"][0]
+        self.assertEqual(source[edit["byte_start"]:edit["byte_end"]], "0.1")
+        self.assertEqual(edit["line_start"], 3)
+
+    def test_many_constructs_are_one_diagnostic_at_the_first_with_a_count(self):
+        body = FULL_0_2.split("\n", 1)[1]
+        source, result, diags = self._gate(body)
+        self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+        self.assertEqual(diags[0]["params"]["construct"],
+                         "an `import` statement")
+        span = diags[0]["spans"][0]
+        self.assertEqual(source[span["byte_start"]:span["byte_end"]],
+                         'import Divider, Led from "lib/parts.rhoform"')
+        # Every node counted: 1 import, 1 component, 3 parameter lists,
+        # 2 ifs, 2 fors, 2 array sizes, 7 indexes, 1 parameter reference
+        # (`fast` in a condition and `n` in a range bound are parts of their
+        # statements, not values, and are not counted again).
+        self.assertEqual(diags[0]["params"]["count"], 19)
+
+    def test_a_block_constructs_span_ends_at_its_own_last_token(self):
+        # A block's tree node ends on a DEDENT whose position is borrowed
+        # from the NEXT content line, across any comments in between; the
+        # span must name only the construct's own bytes.
+        for tail in ("", "  # a note", "  # a note\n    # own line\n"):
+            source, _, diags = self._gate(
+                "module M:\n    if fast:\n        port p passive" + tail
+                + "\n    port q passive")
+            span = diags[0]["spans"][0]
+            with self.subTest(tail=tail):
+                self.assertEqual(source[span["byte_start"]:span["byte_end"]],
+                                 "if fast:\n        port p passive")
+        source, _, diags = self._gate("module M():\n    port p passive")
+        span = diags[0]["spans"][0]
+        self.assertEqual(source[span["byte_start"]:span["byte_end"]], "()")
+
+    def test_a_01_file_without_02_constructs_draws_nothing(self):
+        result = _parse(CleanParseTest.GOOD)
+        self.assertEqual(_codes(result), [])
+
+    def test_other_diagnostics_still_report_beside_it(self):
+        _, _, diags = self._gate("module M():\n    port p pasive")
+        self.assertEqual(sorted(d["code"] for d in diags),
+                         ["RHO1009", "RHO1016"])
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class NewVocabularyTest(unittest.TestCase):
+    def test_param_type_is_checked_with_a_did_you_mean(self):
+        result = _parse(PRAGMA_0_2 + "\nmodule M(r: resistence):\n"
+                        "    port p passive\n")
+        self.assertEqual(_codes(result), ["RHO1009"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["params"],
+                         {"vocabulary": "param_type", "word": "resistence"})
+        self.assertEqual(diag["fixits"][0]["edits"][0]["replacement"],
+                         "resistance")
+
+    def test_every_param_type_is_accepted_on_modules_and_components(self):
+        from rhoform import parser as production
+
+        for word in production._load().vocabularies["param_type"]:
+            for header in (f"module M(x: {word}):\n    port p passive\n",
+                           f"component C(x: {word}):\n    pin a passive\n"):
+                with self.subTest(type=word, definition=header[:6]):
+                    self.assertTrue(_parse(PRAGMA_0_2 + "\n" + header).ok)
+
+    def test_param_types_are_string_int_bool_and_every_dimension(self):
+        # The source of truth transcribes the dimensions by hand (it may
+        # not import this package); this is the check on the transcription.
+        from rhoform import parser as production
+        from rhoform.quantities import UNITS
+
+        dimensions = []
+        for dimension, _ in UNITS.values():
+            if dimension not in dimensions:
+                dimensions.append(dimension)
+        self.assertEqual(production._load().vocabularies["param_type"],
+                         ("string", "int", "bool", *dimensions))
+
+    def test_only_range_may_head_a_for(self):
+        result = _parse(PRAGMA_0_2 + "\nmodule M:\n"
+                        "    for i in rnage(4):\n        isolated x\n")
+        self.assertEqual(_codes(result), ["RHO1009"])
+        diag = json.loads(result.diagnostics.render())
+        self.assertEqual(diag["params"],
+                         {"vocabulary": "loop_iterator", "word": "rnage"})
+        fixit = diag["fixits"][0]
+        self.assertEqual(fixit["edits"][0]["replacement"], "range")
+        self.assertEqual(fixit["applicability"], "needs-review")
+        # Not a misspelling: still rejected, with no guess offered.
+        far = _parse(PRAGMA_0_2 + "\nmodule M:\n"
+                     "    for i in items(4):\n        isolated x\n")
+        self.assertEqual(_codes(far), ["RHO1009"])
+        self.assertEqual(json.loads(far.diagnostics.render())["fixits"], [])
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class V01TreeFreezeTest(unittest.TestCase):
+    def test_every_accept_case_parses_to_its_v0_1_tree(self):
+        import hashlib
+        from pathlib import Path
+
+        accept = (Path(__file__).resolve().parents[2] / "spec"
+                  / "conformance" / "parse" / "accept")
+        for name, digest in V0_1_ACCEPT_TREE_DIGESTS.items():
+            with self.subTest(case=name):
+                result = _parse((accept / name).read_text(encoding="utf-8"),
+                                file=name)
+                self.assertTrue(result.ok, result.diagnostics.render())
+                self.assertEqual(
+                    hashlib.sha256(repr(result.tree).encode()).hexdigest(),
+                    digest, "a 0.1 tree changed shape: 0.2 must only add")
 
 
 @unittest.skipUnless(HAVE_LARK, "lark required")

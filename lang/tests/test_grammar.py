@@ -39,10 +39,14 @@ from grammar.rhoform_syntax import (  # noqa: E402
     CLOSED_VOCABULARIES,
     KEYWORDS,
     LEXER_QUANTITY,
+    PRAGMA_PREFIX,
     PRAGMA_TEXT,
+    PRAGMA_TEXTS,
+    PROMOTED_IN_0_2,
     RESERVED_FUTURE,
     RULES,
     SYNTAX_VERSION,
+    SYNTAX_VERSIONS,
     TERMINALS,
     Alt,
     Lit,
@@ -52,6 +56,11 @@ from grammar.rhoform_syntax import (  # noqa: E402
 )
 
 CORPUS = load_corpus()
+
+# The differential tests below ask the bake-off prototype too, and it only
+# knows syntax 0.1, so they are written as 0.1 files. That is also the point:
+# 0.2 only adds, so every 0.1 behaviour pinned here must survive it as-is.
+PRAGMA_0_1 = PRAGMA_PREFIX + "0.1"
 
 
 def _literals(node) -> set[str]:
@@ -198,7 +207,10 @@ class Anchoring(unittest.TestCase):
     """The frozen grammar against the prototype it was frozen from."""
 
     def test_the_pragma_is_the_one_the_prototype_emits(self):
-        self.assertEqual(PRAGMA_TEXT, PRAGMA)
+        """The prototype emits 0.1, which stays a legal header forever: 0.2
+        is a superset (decision S-1), not a replacement."""
+        self.assertEqual(PRAGMA_0_1, PRAGMA)
+        self.assertIn(PRAGMA, PRAGMA_TEXTS)
 
     def test_terminal_patterns_match_the_layout_tokenizer(self):
         """The grammar restates the lexer's patterns; they must still agree.
@@ -261,8 +273,22 @@ class Anchoring(unittest.TestCase):
         self.assertEqual(found, set(KEYWORDS))
 
     def test_keywords_are_a_subset_of_what_the_prototype_reserves(self):
-        """A keyword the parser lets you use as a name is a hole in the freeze."""
-        self.assertEqual(set(KEYWORDS) - RESERVED, set())
+        """A keyword the parser lets you use as a name is a hole in the freeze.
+
+        AMENDED for syntax 0.2. The relationship that holds now is: the
+        keywords are exactly the prototype's reserved words (minus `signal`,
+        below) plus the seven words 0.2 promoted from RESERVED_FUTURE. The
+        prototype never reserved those seven — the grammar reserved them
+        BEYOND it in v0.1, deliberately, so that promoting them now is
+        additive — and the prototype cannot learn them, because a
+        fingerprint over lang/bakeoff/ gates the published token
+        measurements. So the test names the exception exactly instead of
+        dropping the anchor: any other keyword the prototype does not
+        reserve is still a failure.
+        """
+        self.assertEqual(set(KEYWORDS) - RESERVED, set(PROMOTED_IN_0_2))
+        self.assertEqual(set(PROMOTED_IN_0_2) & RESERVED, set())
+        self.assertTrue(set(PROMOTED_IN_0_2) <= set(KEYWORDS))
 
     def test_the_freeze_drops_signal_and_nothing_else(self):
         """`signal` is candidate A's net declaration and lost the bake-off.
@@ -316,10 +342,21 @@ class Anchoring(unittest.TestCase):
         language's pragma, and the constants were read only to interpolate a
         comment.
         """
+        pragma = re.compile(rhoform_syntax.TERMINALS["PRAGMA"])
+        # Exactly the declared set: each listed version, nothing else.
         self.assertEqual(
-            rhoform_syntax.TERMINALS["PRAGMA"], re.escape(PRAGMA_TEXT)
-        )
-        self.assertIn(SYNTAX_VERSION, PRAGMA_TEXT)
+            PRAGMA_TEXTS,
+            tuple(PRAGMA_PREFIX + version for version in SYNTAX_VERSIONS))
+        for text in PRAGMA_TEXTS:
+            self.assertIsNotNone(pragma.fullmatch(text), text)
+        for text in (PRAGMA_PREFIX + "0.3", PRAGMA_PREFIX + "0.10",
+                     PRAGMA_PREFIX + "0", PRAGMA_PREFIX + "0.1.0",
+                     PRAGMA_PREFIX.strip(), "#pragma rhoform-syntax  0.1"):
+            self.assertIsNone(pragma.fullmatch(text), text)
+        # One CURRENT version, which new files and fix-its use.
+        self.assertIn(SYNTAX_VERSION, SYNTAX_VERSIONS)
+        self.assertEqual(SYNTAX_VERSION, SYNTAX_VERSIONS[-1])
+        self.assertEqual(PRAGMA_TEXT, PRAGMA_PREFIX + SYNTAX_VERSION)
 
 
 @unittest.skipIf(
@@ -346,7 +383,7 @@ class Conformance(unittest.TestCase):
 
     def _design(self, body: str) -> str:
         """A whole file around a module body, so cases stay one-liners."""
-        return f"{PRAGMA_TEXT}\n\nmodule M:\n" + body
+        return f"{PRAGMA_0_1}\n\nmodule M:\n" + body
 
     def _both(self, source: str) -> tuple[bool, bool]:
         """(grammar accepts, prototype accepts) — the differential itself.
@@ -397,7 +434,7 @@ class Conformance(unittest.TestCase):
         because no corpus design happens to name an instance `input`.
         """
         source = (
-            f"{PRAGMA_TEXT}\n"
+            f"{PRAGMA_0_1}\n"
             "\n"
             "module M:\n"
             "    input = new rhoform.lib.passive.Resistor(resistance = 1kohm)\n"
@@ -472,7 +509,7 @@ class Conformance(unittest.TestCase):
                 f"    {word} = new {self.RESISTOR}(resistance = 1kohm)\n",
             ):
                 source = (
-                    f"{PRAGMA_TEXT}\n\n{body}"
+                    f"{PRAGMA_0_1}\n\n{body}"
                     if body.startswith("module")
                     else self._design(body)
                 )
@@ -498,7 +535,7 @@ class Conformance(unittest.TestCase):
                 f"    {word} = new {self.RESISTOR}(resistance = 1kohm)\n",
             ):
                 source = (
-                    f"{PRAGMA_TEXT}\n\n{body}"
+                    f"{PRAGMA_0_1}\n\n{body}"
                     if body.startswith("module")
                     else self._design(body)
                 )
@@ -549,7 +586,9 @@ class Conformance(unittest.TestCase):
         rather than opening one.
         """
         for pragma, legal in (
-            (PRAGMA_TEXT, True),
+            (PRAGMA_0_1, True),
+            (PRAGMA_PREFIX + "0.2", True),
+            ("#pragma rhoform-syntax 0.3", False),
             ("#pragma rhoform-syntax 9.9", False),
             ("#pragma rhoform-syntax 0.10", False),
             ("#pragma verilog 1.0", False),
@@ -700,9 +739,9 @@ class Conformance(unittest.TestCase):
         """L5 says ASCII with indentation blocks; the tokenizer makes a tab a
         lexical error. A grammar that ignored `[ \\t]+` would accept two files
         that differ by a tab as the same program."""
-        self.assertFalse(self._accepts(f"{PRAGMA_TEXT}\n\nmodule M:\n\tport p passive\n"))
+        self.assertFalse(self._accepts(f"{PRAGMA_0_1}\n\nmodule M:\n\tport p passive\n"))
         self.assertFalse(
-            self._accepts(f"{PRAGMA_TEXT}\r\n\r\nmodule M:\r\n    port p passive\r\n")
+            self._accepts(f"{PRAGMA_0_1}\r\n\r\nmodule M:\r\n    port p passive\r\n")
         )
 
     def test_an_empty_net_attribute_list_parses(self):
@@ -790,12 +829,12 @@ class Conformance(unittest.TestCase):
             # The pragma line was the last lexeme still admitting a tab or a
             # non-ASCII character, which left L5's ASCII rule holding
             # everywhere except the one line every file must carry.
-            "pragma, tab": f"{PRAGMA_TEXT}\t\n\nmodule M:\n    port p passive\n",
+            "pragma, tab": f"{PRAGMA_0_1}\t\n\nmodule M:\n    port p passive\n",
             "pragma, non-ascii": (
-                f"{PRAGMA_TEXT} \u03a9\n\nmodule M:\n    port p passive\n"
+                f"{PRAGMA_0_1} \u03a9\n\nmodule M:\n    port p passive\n"
             ),
             "pragma, DEL": (
-                f"{PRAGMA_TEXT}\x7f\n\nmodule M:\n    port p passive\n"
+                f"{PRAGMA_0_1}\x7f\n\nmodule M:\n    port p passive\n"
             ),
         }
         for label, source in cases.items():
@@ -838,7 +877,7 @@ class Conformance(unittest.TestCase):
         """The counterpart: `module M:` and `net N:` both need a body, and
         `statement*` or `member*` would be a loosening no corpus design can
         catch."""
-        self.assertFalse(self._accepts(f"{PRAGMA_TEXT}\n\nmodule M:\n"))
+        self.assertFalse(self._accepts(f"{PRAGMA_0_1}\n\nmodule M:\n"))
         self.assertFalse(
             self._accepts(self._design("    port p passive\n    net N:\n"))
         )
@@ -862,6 +901,167 @@ class Conformance(unittest.TestCase):
                 continue
             with self.subTest(defect=name):
                 self.assertTrue(self._accepts(mutated[0]))
+
+    # ---- syntax 0.2 (decision S-5) --------------------------------------
+
+    FULL_0_2 = (
+        PRAGMA_PREFIX + "0.2\n\n"
+        'import Divider, Led from "lib/parts.rhoform"\n\n'
+        "component Res(r: resistance = 1kohm):\n"
+        "    pin a passive 1\n    pin b passive 2\n\n"
+        "module Bank(n: int = 4, fast: bool, v: voltage):\n"
+        "    c = new Res[n](r = 10kohm)\n"
+        "    if fast:\n        c[0].a ~ c[1].a\n"
+        "    else:\n        if n != 2:\n            isolated c[1].b\n"
+        "    for i in range(1, n):\n"
+        "        c[i - 1].b ~ c[i].a\n"
+        "        net N:\n            c[i + 0].a\n"
+        "    r = new Res(r = v)\n"
+    )
+
+    def test_every_02_production_parses(self):
+        self.assertTrue(self._accepts(self.FULL_0_2))
+
+    def test_one_grammar_serves_both_versions(self):
+        """The grammar does not know which version a file declares: a 0.2
+        construct under a 0.1 header is a well-formed sentence here, and
+        refusing it is the production parser's job (RHO1016), with a
+        fix-it. Two grammars would be two artifacts nobody diffs."""
+        self.assertTrue(self._accepts(
+            self.FULL_0_2.replace(PRAGMA_PREFIX + "0.2", PRAGMA_0_1)))
+
+    def test_promoted_words_are_never_bindable(self):
+        """All seven promoted words x every binding site, the 0.2 sites
+        included. They were unbindable while reserved; they stay so."""
+        sites = (
+            "module {w}:\n    port p passive\n",
+            "component {w}:\n    pin a passive\n",
+            "module M({w}: int):\n    port p passive\n",
+            'import {w} from "x.rhoform"\nmodule M:\n    port p passive\n',
+            "module M:\n    port {w} passive\n",
+            "module M:\n    net {w}:\n        p\n",
+            f"module M:\n    {{w}} = new {self.RESISTOR}\n",
+            "module M:\n    {w}.a ~ x\n",
+            f"module M:\n    table {self.RESISTOR} (x):\n        {{w}} 1\n",
+            "module M:\n    for {w} in range(2):\n        isolated x\n",
+            "module M:\n    r = new lib.R(x = {w})\n",
+        )
+        header = PRAGMA_PREFIX + "0.2\n\n"
+        for site in sites:
+            with self.subTest(site=site.split("\n")[0]):
+                self.assertTrue(self._accepts(header + site.format(w="ok")),
+                                "the partner with an ordinary name must "
+                                "parse, or this site proves nothing")
+            for word in PROMOTED_IN_0_2:
+                with self.subTest(word=word, site=site.split("\n")[0]):
+                    self.assertFalse(self._accepts(header + site.format(w=word)))
+
+    def test_promoted_words_still_fill_every_name_position(self):
+        """Exactly as before promotion: in every NAME position, in a 0.1
+        file, the grammar accepts each promoted word, and the differential
+        against the prototype (which never reserved them) reads exactly as
+        it does for an ordinary name in the same position. (Some sites name
+        an undeclared endpoint, which the prototype refuses whatever the
+        word; the partner carries that, so only the WORD is compared.)"""
+        sites = (
+            f"    r = new {self.RESISTOR}:\n        pin {{w}} passive\n",
+            f"    r = new {self.RESISTOR}:\n        part abstract:\n"
+            "            {w} = 1\n",
+            f"    r = new {self.RESISTOR}({{w}} = 1)\n",
+            "    x ~ r.{w}\n",
+            "    x ~ {w}\n",
+            "    net N:\n        {w}\n",
+            "    isolated {w}.a\n",
+            f"    table {self.RESISTOR} ({{w}}):\n        r1 1\n        r2 2\n"
+            "        r3 3\n",
+            "    assert a static frequency({w}) at least 1Hz\n",
+        )
+        for site in sites:
+            ordinary = self._both(self._design(site.format(w="ok")))
+            self.assertTrue(ordinary[0], site)
+            for word in PROMOTED_IN_0_2:
+                with self.subTest(word=word, site=site.strip()[:24]):
+                    self.assertEqual(
+                        self._both(self._design(site.format(w=word))),
+                        ordinary)
+
+    def test_a_square_bracket_never_joins_lines(self):
+        """`[` `]` are tokens but not Indenter paren types (S-5): an index
+        or array size cannot wrap, so an unclosed `[` cannot swallow the
+        file into one logical line the way an unclosed `(` would."""
+        header = PRAGMA_PREFIX + "0.2\n\nmodule M:\n"
+        self.assertTrue(self._accepts(header + "    c = new lib.R[4]\n"))
+        self.assertFalse(self._accepts(header + "    c = new lib.R[\n        4]\n"))
+        self.assertFalse(self._accepts(header + "    c[\n        0].a ~ x\n"))
+        # The `(` rule is unchanged: a wrapped argument list still parses.
+        self.assertTrue(self._accepts(header + "    c = new lib.R[4](\n"
+                                      "        x = 1)\n"))
+
+    # sha256 of repr(tree) for each 0.1 accept case and rendering, recorded
+    # with the v0.1 grammar BEFORE syntax 0.2 existed. repr carries rule
+    # names, token types and values, so this is "the same tree", not "still
+    # parses". The 0.2 rules sit after every 0.1 rule in the source of truth
+    # because Lark numbers anonymous keyword terminals in order of first
+    # appearance; moving them would rename `module`'s terminal and fail here.
+    V0_1_TREE_DIGESTS = {
+        "a01_minimal_module.rhoform":
+            "618ba114c68366573bc73a232c56a3e98118216031feb6a22ac8415889b3618a",
+        "a02_full_surface.rhoform":
+            "bb6f6d341a8f6462a58036ab592d30cb266179f4c6258e37c60b517a2223ae06",
+        "a03_keywords_in_nonbinding_positions.rhoform":
+            "43ef95f82c9b54fdc4ae2b00192477141cee6630aee4d3c0a45af281882850b0",
+        "a04_vocabulary_words_as_names.rhoform":
+            "3eb993f0bf9997f242d25c839b17d02d0deebe474be47807a273ac924a9ca7f2",
+        "a05_comments_and_pragmatic.rhoform":
+            "d022e92761009419f4086bf6b65af6b5a422f683a8f8087fb25ac2dfe9a849f6",
+        "a06_dimensionless_bounds.rhoform":
+            "14ee9a541a672e31af7ff9faf17221ae8685643a0133b9e649015de989267ed1",
+        "a07_wrapped_parameter_list.rhoform":
+            "ff6b689454ef4d0508003b2fd4d0fe75c1caaf63d1ac18beb0ff7669b1ff0a4e",
+        "a08_no_final_newline.rhoform":
+            "4c37ce980656fd73b726f64f5aafde94490546f1ee1def4a30efdcfc9d5e273f",
+        "blinker-555/explicit":
+            "c0d2a1eda4f4eb431c2162292a7baf756c6e6215ab117b3e94b92daf8f27204a",
+        "blinker-555/inferred":
+            "63e4705dc89a6499429bd9621651a7477dec07d5fb8090ba224ec558a40d60df",
+        "blinker-555/inferred+columnar":
+            "cb4a7f8e59ea762091a0d2bea52d2e8697ccf98dfa0a6c27f1a3e88c44a303de",
+        "coverage-probe/explicit":
+            "7c74e0436fd4e83351053e8204d3e170ef474bd2e83c03f8ebfd3d95dcc27490",
+        "coverage-probe/inferred":
+            "dd1017f26361315edf14e6456238b4f17bcb9f03da010b5a140b5aea889a5368",
+        "coverage-probe/inferred+columnar":
+            "dd1017f26361315edf14e6456238b4f17bcb9f03da010b5a140b5aea889a5368",
+        "esp32s3-devboard/explicit":
+            "7594173502912151ba00a8c807f510b24f3577d9220640f74867b9d48789ae3e",
+        "esp32s3-devboard/inferred":
+            "0e7931bdf46b1425dc0824ca95d1c2600e2edd5b867517083d97bb9ab8e40316",
+        "esp32s3-devboard/inferred+columnar":
+            "b7373a54b3c776e2d10609a85b6f9a4596f356e69da5a81312e8b88747fec3c5",
+    }
+
+    def test_every_v0_1_source_parses_to_its_v0_1_tree(self):
+        """Additive growth, proven rather than asserted: the eight accept
+        cases and the nine bake-off renderings parse to byte-identical
+        trees under the 0.2 grammar."""
+        import hashlib
+
+        sources = {}
+        accept = LANG.parent / "spec" / "conformance" / "parse" / "accept"
+        for name in self.V0_1_TREE_DIGESTS:
+            if name.endswith(".rhoform"):
+                sources[name] = (accept / name).read_text(encoding="utf-8")
+        for design_id, model in sorted(CORPUS.items()):
+            for variant in VARIANTS:
+                sources[f"{design_id}/{variant}"] = candidate_b.render(
+                    model, variant)
+        self.assertEqual(set(sources), set(self.V0_1_TREE_DIGESTS))
+        for name, source in sorted(sources.items()):
+            with self.subTest(source=name):
+                tree = self.parser.parse(conformance.normalize(source))
+                self.assertEqual(
+                    hashlib.sha256(repr(tree).encode()).hexdigest(),
+                    self.V0_1_TREE_DIGESTS[name])
 
 
 def _every_literal(node) -> set[str]:
@@ -999,9 +1199,11 @@ class ReservedSetDocumentation(unittest.TestCase):
     went unmentioned, so a reader auditing the freeze against the README
     found an 8-word discrepancy and no explanation."""
 
+    # `words?`: since 0.2 promoted seven of the eight, ONE word is reserved,
+    # and the README says so in grammatical English.
     SENTENCE = re.compile(
         r"cannot be any of (\d+) words: the (\d+) keywords the grammar "
-        r"actually uses plus (\d+) words reserved for v1 \(([^)]*)\)")
+        r"actually uses plus (\d+) words? reserved for v1 \(([^)]*)\)")
 
     def test_the_readme_states_the_full_free_name_exclusion(self):
         collapsed = re.sub(r"\s+", " ",

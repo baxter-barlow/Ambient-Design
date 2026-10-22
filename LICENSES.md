@@ -42,8 +42,9 @@ Rhoform's surface syntax adopts constructs from
 [atopile](https://github.com/atopile/atopile), which is MIT-licensed. What was
 adopted is the shape of the surface, not text:
 
-- the definition nouns `module`, `component` and `interface` (the last two
-  are reserved words whose definitions arrive in later syntax versions);
+- the definition nouns `module`, `component` and `interface` (syntax 0.2
+  defines `component`; `interface` remains a reserved word whose definition
+  arrives in a later syntax version);
 - the `new` keyword;
 - the `~` connection operator.
 

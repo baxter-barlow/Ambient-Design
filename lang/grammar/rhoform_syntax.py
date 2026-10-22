@@ -18,9 +18,9 @@ its surface, over the layout-tokenized INDENT/DEDENT stream L5 fixes. The
 grammar is context-free over that stream: indentation is resolved by the
 lexer, so no rule here is sensitive to column position.
 
-WHAT IS DELIBERATELY NOT IN THE GRAMMAR. Four closed vocabularies — pin roles
-(T2), hardware kinds (L9), measurement kinds (V2) and net attributes (T5) — are
-NOT keywords. They are ordinary names checked against a list after parsing,
+WHAT IS DELIBERATELY NOT IN THE GRAMMAR. Six closed vocabularies — pin roles
+(T2), hardware kinds (L9), measurement kinds (V2), net attributes (T5), and
+since syntax 0.2 parameter types and the loop iterator — are NOT keywords. They are ordinary names checked against a list after parsing,
 exactly as the prototype checks them, and the reason is load-bearing: `input`
 and `output` are pin roles, and a grammar that made them keywords would reject
 `input = new ...`, which is a legal design today. They are published below as
@@ -44,8 +44,23 @@ from pathlib import Path
 # The L8 syntax-version pragma, spelled as the §8-Q2 naming decision fixed it.
 # `<major.minor>`, not a quoted semver string: the pragma gates syntax, and a
 # patch component would imply a syntax difference that cannot exist.
-PRAGMA_TEXT = "#pragma rhoform-syntax 0.1"
-SYNTAX_VERSION = "0.1"
+#
+# A SET OF VERSIONS, ONE GRAMMAR (decision S-1/S-2). 0.2 is a strict superset
+# of 0.1: it adds imports, component definitions, parameters, `if`, `for` and
+# arrays, and every valid 0.1 file is a valid 0.2 file with the same tree.
+# One grammar therefore parses both, and the PRAGMA terminal accepts exactly
+# the versions listed here. What 0.1 forbids is enforced AFTER parsing, by the
+# production parser, as one diagnostic per file with a fix-it that rewrites
+# the pragma — a second grammar per version would be two artifacts nobody
+# diffs, which is the failure this module exists to prevent.
+#
+# SYNTAX_VERSION is the CURRENT version: what a new file is written with and
+# what every fix-it inserts. PRAGMA_TEXT is its header line.
+PRAGMA_PREFIX = "#pragma rhoform-syntax "
+SYNTAX_VERSIONS = ("0.1", "0.2")
+SYNTAX_VERSION = "0.2"
+PRAGMA_TEXTS = tuple(PRAGMA_PREFIX + version for version in SYNTAX_VERSIONS)
+PRAGMA_TEXT = PRAGMA_PREFIX + SYNTAX_VERSION
 
 # Terminal patterns, as Python regex source. These MIRROR the layout tokenizer
 # rather than importing it (see the module docstring); `test_grammar.py` asserts
@@ -90,8 +105,8 @@ LEXER_QUANTITY = (
 )
 
 
-# Every word the frozen grammar spells as a literal — the keywords of the
-# language, and nothing else. A test holds this to be a SUBSET of the
+# Every word the grammar spells as a literal — the keywords of the language,
+# and nothing else. A test holds the 0.1 ones to be a SUBSET of the
 # prototype's shared `RESERVED` set: a word the grammar treats as a keyword
 # while the parser still lets you name a net with it is a hole.
 #
@@ -100,6 +115,10 @@ LEXER_QUANTITY = (
 # reserves `signal`, which is candidate A's net declaration and has no meaning
 # in the frozen grammar. Carrying A's vocabulary into B's freeze would reserve
 # a useful identifier for a language that no longer exists, so v0 does not.
+#
+# The seven 0.2 words at the end were RESERVED_FUTURE until 0.2 gave them
+# productions. The prototype never reserved them (see RESERVED_FUTURE's
+# history below), so they are the one stated exception to the subset rule.
 KEYWORDS = (
     "abstract",
     "assert",
@@ -125,10 +144,24 @@ KEYWORDS = (
     "to",
     "true",
     "within",
+    # Syntax 0.2 (decision S-5), promoted from RESERVED_FUTURE.
+    "component",
+    "else",
+    "for",
+    "from",
+    "if",
+    "import",
+    "in",
 )
 
-# Words v0.1 does not use and v1 will. Reserved now, because reserving a word
-# later is a BREAKING syntax change and E1 forbids those without a
+# The keywords syntax 0.2 promoted out of RESERVED_FUTURE. Published so the
+# anchor against the prototype can state the relationship that now holds
+# exactly — every keyword is a prototype reserved word OR one of these —
+# rather than weakening it to nothing.
+PROMOTED_IN_0_2 = ("component", "else", "for", "from", "if", "import", "in")
+
+# Words the grammar does not use and v1 will. Reserved now, because reserving a
+# word later is a BREAKING syntax change and E1 forbids those without a
 # deterministic auto-migrator that does not exist.
 #
 # The distinction from KEYWORDS is the point: these are not literals in any
@@ -138,8 +171,9 @@ KEYWORDS = (
 # names — which costs nothing while the only v0.1 sources are this repo's own
 # examples, and costs a migrator once anyone else has written a design.
 #
-# WHY THESE EIGHT, and not a guess at the language's future. Each is required
-# by an approved M·core requirement that a later milestone implements:
+# WHY THESE, and not a guess at the language's future. v0.1 reserved eight
+# words, each required by an approved M·core requirement a later milestone
+# implements:
 #
 #   interface, component  L2 core nouns, alongside `module`, which IS a
 #                         keyword here. AMB-44 adds them.
@@ -147,6 +181,12 @@ KEYWORDS = (
 #                         comprehensions. AMB-44.
 #   import, from          L4/X2 imports, spelled `import X from "path"` in the
 #                         package-identity spec's own worked example. AMB-45.
+#
+# Syntax 0.2 gave seven of them productions and moved them to KEYWORDS, which
+# is additive precisely because they were reserved: no 0.1 file could bind
+# one, and every NAME position still accepts them. `interface` stays here,
+# because T1 interface semantics are R19 (M2) and a production with no
+# meaning behind it would be syntax nobody can use correctly.
 #
 # This is a DELIBERATE divergence from the prototype, which accepts all eight
 # as names — unlike the two fixes either side of it, which close gaps where
@@ -156,16 +196,7 @@ KEYWORDS = (
 # `signal` is deliberately NOT here. It is candidate A's dead net keyword, not
 # a word v1 needs; see KEYWORDS above and
 # `test_the_freeze_drops_signal_and_nothing_else`.
-RESERVED_FUTURE = (
-    "component",
-    "else",
-    "for",
-    "from",
-    "if",
-    "import",
-    "in",
-    "interface",
-)
+RESERVED_FUTURE = ("interface",)
 
 
 def _free_name_pattern() -> str:
@@ -185,12 +216,16 @@ def _free_name_pattern() -> str:
 
 
 def _pragma_pattern() -> str:
-    """The one pragma line this artifact defines, escaped from PRAGMA_TEXT."""
-    return re.escape(PRAGMA_TEXT)
+    """The pragma lines this artifact defines: PRAGMA_PREFIX and exactly one
+    of SYNTAX_VERSIONS, each escaped. No other version, and no prefix of
+    one, can lex as the header."""
+    versions = "|".join(re.escape(version) for version in SYNTAX_VERSIONS)
+    return f"{re.escape(PRAGMA_PREFIX)}(?:{versions})"
 
 
 TERMINALS: dict[str, str] = {
-    # EXACTLY the one pragma this artifact defines, generated from PRAGMA_TEXT.
+    # EXACTLY the pragmas this artifact defines, generated from PRAGMA_PREFIX
+    # and SYNTAX_VERSIONS (one per version, since 0.2).
     #
     # It used to be `\#pragma[ -~]*` — any printable text after the word — which
     # made L8's version header decorative: `#pragma rhoform-syntax 9.9` and
@@ -199,9 +234,10 @@ TERMINALS: dict[str, str] = {
     # validates cannot do its one job, which is to refuse a file written for a
     # syntax version this artifact does not define.
     #
-    # Generating it from PRAGMA_TEXT is what makes SYNTAX_VERSION load-bearing:
-    # it was previously read only to interpolate a comment, so the constant
-    # could have said anything without a test noticing.
+    # Generating it from the version tuple is what makes SYNTAX_VERSIONS
+    # load-bearing: the version was previously read only to interpolate a
+    # comment, so the constant could have said anything without a test
+    # noticing.
     #
     # This does NOT change the two recorded pragma/comment asymmetries: the
     # exclusion on COMMENT still ends at a word boundary, so `#pragmatic` is
@@ -246,6 +282,27 @@ TERMINALS: dict[str, str] = {
     # about a file, and L5's ASCII rule would hold between tokens and nowhere
     # else.
     "STRING": r'"[ !#-~]*"',
+    # Syntax 0.2. Two OPERATOR terminals, named rather than written as
+    # quoted literals, because Lark drops anonymous string tokens from the
+    # tree: `if n == 3` and `if n != 3` would parse to the same tree, and so
+    # would `c[i + 1]` and `c[i - 1]`. A named terminal keeps the operator
+    # in the tree for the elaborator to read.
+    #
+    # COMPARE is an `if` condition's operator. Two-character spellings come
+    # first so `<=` is never read as `<` followed by junk.
+    "COMPARE": r"==|!=|<=|>=|<|>",
+    # INDEX_OP is the offset operator inside an index, `[i + 1]`. It is only
+    # viable inside `[...]` after the index base, so the contextual lexer
+    # never confuses it with a signed INTEGER there.
+    #
+    # It must never claim the `+` of the `+/-` tolerance operator, hence the
+    # lookahead. Lark's contextual lexer, on a character the current state
+    # cannot lex, re-lexes with EVERY terminal to choose its error: a bare
+    # `[+-]` turned each malformed tolerance (`100kohm  +/- 5%`, `2V +/-`)
+    # from an unlexable character, which the parser diagnoses as one
+    # RHO1010/RHO1012 naming the literal, into an "unexpected `+`" token
+    # error that skips that recovery entirely.
+    "INDEX_OP": r"[+-](?!/)",
 }
 
 # Lark lexer priorities. A terminal absent from this map is emitted unranked.
@@ -312,6 +369,32 @@ CLOSED_VOCABULARIES: dict[str, tuple[str, ...]] = {
         "power_rms",
         "efficiency",
     ),
+    # Syntax 0.2: a declared parameter's type (decision S-4). `string`, `int`
+    # and `bool`, then every quantity DIMENSION, in the order the dimensions
+    # first appear in `rhoform.quantities.UNITS`. Transcribed by hand, not
+    # imported: this module must not import the production package. A test
+    # in rhoform/tests holds the transcription to the live table, so a
+    # dimension added there without this list fails loudly.
+    "param_type": (
+        "string",
+        "int",
+        "bool",
+        "resistance",
+        "capacitance",
+        "inductance",
+        "voltage",
+        "current",
+        "power",
+        "frequency",
+        "time",
+        "length",
+        "temperature",
+    ),
+    # Syntax 0.2: the one callable a `for` header may name. A closed
+    # vocabulary of one word rather than a keyword, for the reason every
+    # list here exists: `range` was never reserved, so making it a keyword
+    # would stop `range = new ...` parsing — a breaking change E1 forbids.
+    "loop_iterator": ("range",),
 }
 
 
@@ -491,17 +574,32 @@ def _block(*body: Node) -> Seq:
 RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "start",
-        "A file is the L8 pragma and then modules, nothing else at file scope.",
-        Seq(Opt(NEWLINE), Term("PRAGMA"), NEWLINE, Rep(Ref("module_def"), 1)),
+        "A file is the L8 pragma, then imports (0.2), then definitions: "
+        "modules, and (0.2) components. Nothing else at file scope. The "
+        "definitions are an inline choice rather than a `definition` rule so "
+        "a 0.1 file's tree is exactly what it was under 0.1.",
+        Seq(
+            Opt(NEWLINE),
+            Term("PRAGMA"),
+            NEWLINE,
+            Rep(Ref("import_stmt")),
+            Rep(Alt(Ref("module_def"), Ref("component_def")), 1),
+        ),
     ),
     (
         "module_def",
-        "A module groups instances, nets and assertions.",
-        Seq(Lit("module"), FREE_NAME, _block(Rep(Ref("statement"), 1))),
+        "A module groups instances, nets and assertions. A parameter list "
+        "is 0.2.",
+        Seq(
+            Lit("module"),
+            FREE_NAME,
+            Opt(Ref("params")),
+            _block(Rep(Ref("statement"), 1)),
+        ),
     ),
     (
         "statement",
-        "Everything a module body can carry.",
+        "Everything a module body can carry. `if` and `for` are 0.2.",
         Alt(
             Ref("port_decl"),
             Ref("isolated_decl"),
@@ -510,6 +608,8 @@ RULES: tuple[tuple[str, str, Node], ...] = (
             Ref("table_decl"),
             Ref("chain"),
             Ref("instance_decl"),
+            Ref("if_stmt"),
+            Ref("for_stmt"),
         ),
     ),
     (
@@ -559,17 +659,20 @@ RULES: tuple[tuple[str, str, Node], ...] = (
         "not: the parser reserved-checks the token that starts a statement "
         "and does not check the ones after `~`, so `net.a ~ x` is rejected "
         "while `x ~ net.a` is accepted. Writing that asymmetry down is also "
-        "what keeps the statement head unambiguous for a one-token lexer.",
-        Seq(FREE_NAME, Opt(Seq(Lit("."), NAME))),
+        "what keeps the statement head unambiguous for a one-token lexer. "
+        "An index is 0.2.",
+        Seq(FREE_NAME, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
     ),
     (
         "instance_decl",
-        "Instantiation. Facts about the instance live in its optional body.",
+        "Instantiation. Facts about the instance live in its optional body. "
+        "An array size is 0.2.",
         Seq(
             FREE_NAME,
             Lit("="),
             Lit("new"),
             Ref("qualified_name"),
+            Opt(Ref("array_size")),
             Opt(Ref("arguments")),
             Alt(Ref("instance_body"), NEWLINE),
         ),
@@ -720,18 +823,137 @@ RULES: tuple[tuple[str, str, Node], ...] = (
         "value",
         "T3/T4 literals. A bare decimal is not a value: it is either a "
         "quantity missing its unit or a count that should be whole — hence "
-        "INTEGER here and NUMBER in `bound`.",
-        Alt(QUANTITY, QUANTITY_INTERVAL, STRING, INTEGER, Lit("true"), Lit("false")),
+        "INTEGER here and NUMBER in `bound`. A bare name is a parameter "
+        "reference (0.2); what it refers to is the elaborator's question.",
+        Alt(
+            QUANTITY,
+            QUANTITY_INTERVAL,
+            STRING,
+            INTEGER,
+            Lit("true"),
+            Lit("false"),
+            FREE_NAME,
+        ),
     ),
     (
         "endpoint",
-        "A connectable point: this module's port, or an instance pin.",
-        Seq(NAME, Opt(Seq(Lit("."), NAME))),
+        "A connectable point: this module's port, or an instance pin. An "
+        "index selects an array member (0.2).",
+        Seq(NAME, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
     ),
     (
         "qualified_name",
         "A dotted definition path, e.g. `rhoform.lib.passive.Resistor`.",
         Seq(NAME, Rep(Seq(Lit("."), NAME))),
+    ),
+    # ----------------------------------------------------------------------
+    # Syntax 0.2 (decision S-5). Every rule below is new in 0.2, and they sit
+    # AFTER every 0.1 rule on purpose: Lark numbers anonymous keyword
+    # terminals in order of first appearance, so appending keeps each 0.1
+    # keyword's terminal name — and with it every 0.1 file's tree — exactly
+    # what it was. The production parser rejects each construct below under
+    # a 0.1 pragma, with a fix-it that rewrites the pragma; the grammar
+    # itself is one grammar for both versions.
+    # ----------------------------------------------------------------------
+    (
+        "import_stmt",
+        "Names imported from another file. The names are BOUND here, so each "
+        "is a FREE_NAME; resolving the path is the package layer's job.",
+        Seq(
+            Lit("import"),
+            FREE_NAME,
+            Rep(Seq(Lit(","), FREE_NAME)),
+            Lit("from"),
+            STRING,
+            NEWLINE,
+        ),
+    ),
+    (
+        "component_def",
+        "A component definition: its pins and nothing else. Defaults such "
+        "as `hardware` or flags are deliberately not definable here.",
+        Seq(
+            Lit("component"),
+            FREE_NAME,
+            Opt(Ref("params")),
+            _block(Rep(Ref("pin_decl"), 1)),
+        ),
+    ),
+    (
+        "params",
+        "A definition's parameter list. It may be empty, and like an "
+        "argument list it may wrap, because `(` suspends layout.",
+        Seq(
+            Lit("("),
+            Opt(Seq(Ref("param"), Rep(Seq(Lit(","), Ref("param"))))),
+            Lit(")"),
+        ),
+    ),
+    (
+        "param",
+        "One declared parameter: a bound name, a param_type name, and an "
+        "optional default.",
+        Seq(FREE_NAME, Lit(":"), _vocab("param_type"), Opt(Seq(Lit("="), Ref("value")))),
+    ),
+    (
+        "if_stmt",
+        "Statement-level conditional. The first block is the `if` branch and "
+        "an optional second block the `else` branch; nesting gives "
+        "conjunction, since there is no `and`.",
+        Seq(
+            Lit("if"),
+            Ref("condition"),
+            Ref("block"),
+            Opt(Seq(Lit("else"), Ref("block"))),
+        ),
+    ),
+    (
+        "condition",
+        "A bool parameter, or a parameter compared with a value.",
+        Seq(FREE_NAME, Opt(Seq(Term("COMPARE"), Ref("value")))),
+    ),
+    (
+        "for_stmt",
+        "A bounded loop over compile-time integers. The callable is a "
+        "loop_iterator name, checked after parsing; `range` is the only one.",
+        Seq(
+            Lit("for"),
+            FREE_NAME,
+            Lit("in"),
+            _vocab("loop_iterator"),
+            Lit("("),
+            Ref("bound_arg"),
+            Opt(Seq(Lit(","), Ref("bound_arg"))),
+            Lit(")"),
+            Ref("block"),
+        ),
+    ),
+    (
+        "bound_arg",
+        "A loop bound: an integer, or an int parameter.",
+        Alt(INTEGER, FREE_NAME),
+    ),
+    (
+        "block",
+        "The body of an `if`, `else` or `for`. A rule of its own so the two "
+        "branches of an `if` stay two subtrees.",
+        _block(Rep(Ref("statement"), 1)),
+    ),
+    (
+        "array_size",
+        "An array of instances, `name[0]` to `name[N-1]`. `[` does NOT "
+        "suspend layout: an index never wraps.",
+        Seq(Lit("["), Alt(INTEGER, FREE_NAME), Lit("]")),
+    ),
+    (
+        "index",
+        "An array member. A loop variable may be offset by a whole number.",
+        Seq(
+            Lit("["),
+            Alt(FREE_NAME, INTEGER),
+            Opt(Seq(Term("INDEX_OP"), INTEGER)),
+            Lit("]"),
+        ),
     ),
 )
 
@@ -739,6 +961,8 @@ RULES: tuple[tuple[str, str, Node], ...] = (
 # --------------------------------------------------------------------------
 # Emitters
 # --------------------------------------------------------------------------
+
+_VERSION_LIST = ", ".join(SYNTAX_VERSIONS)
 
 _HEADER = f"""\
 Rhoform syntax v{SYNTAX_VERSION} — {{title}}
@@ -749,13 +973,16 @@ that this file matches its source, and fails if it does not.
 
 The grammar is context-free over the layout-tokenized stream L5 fixes, so
 INDENT, DEDENT and NEWLINE arrive as terminals and no rule below is sensitive
-to column position. Every file opens with the L8 pragma `{PRAGMA_TEXT}`.
+to column position. Every file opens with the L8 pragma, naming one of the
+versions {_VERSION_LIST}; new files use `{PRAGMA_TEXT}`. One grammar
+serves every version: 0.2 only adds, and the constructs it adds are refused
+under a 0.1 pragma after parsing, not by a second grammar.
 
-Pin roles, hardware kinds, measurement kinds and net attributes are NOT
-keywords here: they are plain names checked against a closed list after
-parsing, because `input` and `output` are pin roles and a design may
-legitimately name an instance `input`. The four lists are published in the
-source module as CLOSED_VOCABULARIES.
+Pin roles, hardware kinds, measurement kinds, net attributes, parameter types
+and the loop iterator are NOT keywords here: they are plain names checked
+against a closed list after parsing, because `input` and `output` are pin
+roles and a design may legitimately name an instance `input`. The lists are
+published in the source module as CLOSED_VOCABULARIES.
 """
 
 
@@ -836,7 +1063,10 @@ LEXICAL = (
         "INDENT",
         None,
         "Manufactured by the layout pass from the leading spaces of each "
-        "line, suspended inside brackets so a parameter list may wrap.",
+        "line, suspended inside `(` `)` so a parameter list may wrap. `[` "
+        "`]` do NOT suspend it: an index or array size never wraps, and an "
+        "unclosed `[` is one error on its own line rather than a file "
+        "swallowed into one logical line.",
     ),
     (
         "DEDENT",

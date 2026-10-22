@@ -10,7 +10,9 @@ as the formatter's prototype, so its measured renderings stay fixed points
 REFUSAL. Only a clean parse is formatted (`ParseResult.ok`). A recovered
 tree is "the file with its broken statements removed", and formatting it
 would delete the author's broken lines; a refused file returns the parse
-diagnostics and no bytes.
+diagnostics and no bytes. Both syntax versions format: 0.2 under a 0.1
+pragma is already a parse error, the formatter never adds a construct,
+and the pragma line is written as authored, so a 0.1 file stays 0.1.
 
 COMMENTS ARE NOT IN THE TREE. The grammar's `_NEWLINE` swallows comment
 lines and the Indenter drops newline runs inside parentheses, so comments
@@ -33,15 +35,19 @@ ATTACHMENT (F-10), in one place, `_attach_comments`:
     statement's indent - unless it is indented deeper than that statement,
     in which case it trails the innermost block that closed in between
     whose indent it reaches (the outermost such block when it reaches
-    none), emitted at that block's indent after its last line;
+    none), emitted at that block's indent after its last line. An
+    `else:` line counts as a statement here (a unit of its own, owned by
+    its `if`), so a comment above it leads it or trails the `if` block;
   - after the last statement at column 0: a file trailer.
 
 DISPATCH PER PRODUCTION. Every grammar production a statement can be is a
 row in three tables: how its header renders (`_HEADS`), which child
 subtrees form its block and how that block orders (`_BLOCKS`), and its sort
-key (`_KEYS`). Growing the grammar (the 0.2 surface: imports, component
-definitions, parameter lists, `if`/`for`, arrays) adds rows rather than
-rewriting the walk.
+key (`_KEYS`). The 0.2 surface (imports, component definitions, parameter
+lists, `if`/`else`/`for`, arrays and indexes) is rows in the same tables;
+the only structural addition is the `else` clause, a unit hung off its
+`if` rather than a member of the enclosing block, so it is never sorted
+away from it.
 
 THE SELF-CHECK (F-11). Before bytes are returned: the output re-parses
 clean, its normalized AST (F-12) equals the input's, formatting it again is
@@ -156,9 +162,20 @@ def _text(token) -> str:
 
 
 def _dotted(node) -> str:
-    """`endpoint`, `chain_head`, `qualified_name`, `column`: names joined
-    by dots."""
+    """`qualified_name`, `column`: names joined by dots."""
     return ".".join(str(t) for t in _tokens(node))
+
+
+def _endpoint(node) -> str:
+    """`endpoint`, `chain_head`: `r1`, `r1.a`, and (0.2) `r[i + 1].a`. The
+    index is its tokens verbatim, single-spaced around the operator."""
+    text = ""
+    for child in node.children:
+        if _is_tree(child):  # the index
+            text += "[" + " ".join(str(t) for t in child.children) + "]"
+        else:
+            text += ("." if text else "") + str(child)
+    return text
 
 
 def _unwrap(node):
@@ -188,8 +205,56 @@ def _arguments(node) -> str:
     return "(" + ", ".join(f"{n} = {v}" for n, v in pairs) + ")"
 
 
+def _params(node) -> str:
+    """A definition's parameter list, in author order (like table columns,
+    it is a declaration, not a set). F-7: an empty `()` is dropped."""
+    params = _subtree(node, "params")
+    if params is None or not params.children:
+        return ""
+    entries = []
+    for param in params.children:
+        name, kind, *default = param.children
+        entry = f"{name}: {kind}"
+        if default:
+            entry += f" = {_value(default[0])}"
+        entries.append(entry)
+    return "(" + ", ".join(entries) + ")"
+
+
 def _head_module(node) -> str:
-    return f"module {node.children[1]}"
+    return f"module {node.children[1]}{_params(node)}"
+
+
+def _head_component(node) -> str:
+    return f"component {node.children[1]}{_params(node)}"
+
+
+def _import_names(node) -> list[str]:
+    # `import` NAME ("," NAME)* `from` STRING
+    return sorted((str(t) for t in node.children[1:-2]), key=natural_key)
+
+
+def _head_import(node) -> str:
+    return f"import {', '.join(_import_names(node))} from {node.children[-1]}"
+
+
+def _head_if(node) -> str:
+    condition = _subtree(node, "condition")
+    words = [str(condition.children[0])]
+    if len(condition.children) > 1:
+        words += [str(condition.children[1]), _value(condition.children[2])]
+    return "if " + " ".join(words)
+
+
+def _head_else(node) -> str:
+    return "else"
+
+
+def _head_for(node) -> str:
+    _, variable, _, iterator = _direct_tokens(node)
+    bounds = ", ".join(str(b.children[0])
+                       for b in _subtrees(node, "bound_arg"))
+    return f"for {variable} in {iterator}({bounds})"
 
 
 def _head_port(node) -> str:
@@ -198,7 +263,7 @@ def _head_port(node) -> str:
 
 
 def _head_isolated(node) -> str:
-    return f"isolated {_dotted(node.children[1])}"
+    return f"isolated {_endpoint(node.children[1])}"
 
 
 def _head_net(node) -> str:
@@ -215,13 +280,15 @@ def _head_net(node) -> str:
 
 def _head_chain(node) -> str:
     # F-4: chain endpoints keep source order.
-    return " ~ ".join(_dotted(child) for child in node.children)
+    return " ~ ".join(_endpoint(child) for child in node.children)
 
 
 def _head_instance(node) -> str:
     name = node.children[0]
     definition = _dotted(_subtree(node, "qualified_name"))
-    return f"{name} = new {definition}{_arguments(node)}"
+    size = _subtree(node, "array_size")
+    array = "" if size is None else f"[{size.children[0]}]"
+    return f"{name} = new {definition}{array}{_arguments(node)}"
 
 
 def _head_pin(node) -> str:
@@ -254,7 +321,7 @@ def _head_constraint(node) -> str:
 
 
 def _head_endpoint(node) -> str:
-    return _dotted(node)
+    return _endpoint(node)
 
 
 def _head_table(node) -> str:
@@ -283,7 +350,12 @@ def _head_assertion(node) -> str:
 
 
 _HEADS = {
+    "import_stmt": _head_import,
     "module_def": _head_module,
+    "component_def": _head_component,
+    "if_stmt": _head_if,
+    "else_clause": _head_else,
+    "for_stmt": _head_for,
     "port_decl": _head_port,
     "isolated_decl": _head_isolated,
     "net_decl": _head_net,
@@ -309,9 +381,14 @@ _HEADS = {
 # production -> (ordering mode, data name of the direct child that holds
 # the block). "paragraph": sorted only inside runs delimited by a blank
 # line or an own-line comment (F-1). "sorted": always sorted (F-3, F-5).
-# "table": always sorted, rendered as an aligned grid.
+# "table": always sorted, rendered as an aligned grid. An `if` holds its
+# first `block`; its `else` branch is an "else_clause" unit of its own.
 _BLOCKS = {
     "module_def": ("paragraph", "statement"),
+    "component_def": ("sorted", "pin_decl"),
+    "if_stmt": ("paragraph", "block"),
+    "else_clause": ("paragraph", "block"),
+    "for_stmt": ("paragraph", "block"),
     "instance_decl": ("sorted", "instance_body"),
     "part_decl": ("sorted", "constraint"),
     "net_decl": ("sorted", "endpoint"),
@@ -325,17 +402,36 @@ def _block_children(node) -> list:
         return []
     _, child = spec
     found = _subtrees(node, child)
-    if node.data == "instance_decl":
+    if child in ("instance_body", "block"):
         found = found[0].children if found else []
     return [_unwrap(c) for c in found]
+
+
+@dataclass(eq=False)
+class _Clause:
+    """A synthetic tree node for an `if`'s `else` branch: the `else` token
+    and the branch's block, shaped like a parse-tree node."""
+
+    data: str
+    children: list
+
+
+def _else_clause(node) -> "_Clause | None":
+    if node.data != "if_stmt":
+        return None
+    blocks = _subtrees(node, "block")
+    if len(blocks) < 2:
+        return None
+    return _Clause("else_clause", [_direct_tokens(node)[-1], blocks[1]])
 
 
 def _name_key(token) -> tuple:
     return natural_key(str(token))
 
 
-# F-1: a module body's kind ranks, by grammar production. Chains and
-# `isolated` share rank 4 and keep source order. Spec 07 restates this
+# F-1: a statement block's kind ranks (a module body, and an `if`,
+# `else` or `for` body), by grammar production. Chains, `isolated`, `if`
+# and `for` share rank 4 and keep source order. Spec 07 restates this
 # table and the conformance gate reconciles the two.
 STATEMENT_RANKS = {
     "port_decl": 0,
@@ -344,6 +440,8 @@ STATEMENT_RANKS = {
     "net_decl": 3,
     "isolated_decl": 4,
     "chain": 4,
+    "if_stmt": 4,
+    "for_stmt": 4,
     "assertion": 5,
 }
 
@@ -380,6 +478,8 @@ _KEYS = {
     "net_decl": _ranked("net_decl", lambda n: n.children[1]),
     "isolated_decl": _ranked("isolated_decl"),
     "chain": _ranked("chain"),
+    "if_stmt": _ranked("if_stmt"),
+    "for_stmt": _ranked("for_stmt"),
     "assertion": _ranked("assertion", lambda n: n.children[1]),
     # instance body (F-5), ranks from BODY_RANKS
     "pin_decl": lambda n: (BODY_RANKS["pin"], _name_key(_direct_tokens(n)[1])),
@@ -389,10 +489,14 @@ _KEYS = {
     "negated_flag": lambda n: (BODY_RANKS[str(n.children[1])],),
     # intra-statement lists (F-3)
     "constraint": lambda n: (0, _name_key(n.children[0])),
-    "endpoint": lambda n: (0, natural_key(_dotted(n))),
+    "endpoint": lambda n: (0, natural_key(_endpoint(n))),
     "table_row": lambda n: (0, _name_key(n.children[0])),
-    # modules keep source order
+    # imports: by path, then by their (sorted) names
+    "import_stmt": lambda n: (natural_key(str(n.children[-1])),
+                              tuple(map(natural_key, _import_names(n)))),
+    # definitions keep source order
     "module_def": lambda n: (0,),
+    "component_def": lambda n: (0,),
 }
 
 
@@ -497,6 +601,7 @@ class _Unit:
     index: int                # position among its siblings in the source
     parent: _Block
     block: _Block | None = None
+    orelse: "_Unit | None" = None  # an `if`'s `else` clause
     leading: list = field(default_factory=list)   # (line, text)
     trailing: str | None = None
     blank_before: bool = False
@@ -519,20 +624,33 @@ def _build(source: str, tree) -> _Document:
     root = _Block(owner=None, mode="file")
     units: list[_Unit] = []
 
-    def add(node, parent: _Block, index: int) -> None:
+    # Pre-order with an explicit stack, not recursion: blocks nest as deep
+    # as the parser accepts, and a frame per level would run out first.
+    # An entry's `owner` is the `if` whose `else` clause it is.
+    top = [c for c in tree.children if _is_tree(c)]
+    work = [(node, root, position, None)
+            for position, node in reversed(list(enumerate(top)))]
+    while work:
+        node, parent, index, owner = work.pop()
         token = _first_token(node)
         unit = _Unit(node, token.line - 1, token.column - 1, index, parent)
-        parent.children.append(unit)
         units.append(unit)
+        if owner is not None:
+            # A sibling for comment attachment, never for sorting: it is
+            # not in its parent's children, so it cannot leave its `if`.
+            owner.orelse = unit
+        else:
+            if not parent.children and parent.owner is not None:
+                parent.column = unit.column
+            parent.children.append(unit)
+        clause = _else_clause(node)
+        if clause is not None:
+            work.append((clause, parent, index, unit))
         children = _block_children(node)
         if children:
             unit.block = _Block(owner=unit, mode=_BLOCKS[node.data][0])
-            for position, child in enumerate(children):
-                add(child, unit.block, position)
-            unit.block.column = unit.block.children[0].column
-
-    for position, module in enumerate(_subtrees(tree, "module_def")):
-        add(module, root, position)
+            work.extend((child, unit.block, position, None) for position, child
+                        in reversed(list(enumerate(children))))
     units.sort(key=lambda u: u.line)
 
     header, gap = [], False
@@ -626,10 +744,14 @@ def _runs(block: _Block) -> list[tuple[list, list]]:
     delimit a run belong to the RUN: they stay at its top while its
     statements sort beneath them, which is what keeps a section-header
     comment over its section. Every other block keeps comments on their
-    statements, which carry them wherever sorting puts them; a "file" block
-    keeps source order (modules are not sorted)."""
+    statements, which carry them wherever sorting puts them. A "file"
+    block is two runs: its imports, always sorted, and its definitions
+    (modules and components) in source order, never sorted."""
     if block.mode == "file":
-        return [([], list(block.children))]
+        imports = [u for u in block.children if u.node.data == "import_stmt"]
+        definitions = [u for u in block.children
+                       if u.node.data != "import_stmt"]
+        return [([], _sorted(imports)), ([], definitions)]
     if block.mode != "paragraph":
         return [([], _sorted(block.children))]
     runs: list[tuple[list, list]] = []
@@ -651,19 +773,35 @@ def _with_trailing(line: str, comment: str | None) -> str:
 
 def _render_unit(unit: _Unit, depth: int, out: list, head: str | None = None,
                  leading: bool = True) -> None:
-    indent = INDENT * depth
-    if leading:
-        out.extend(indent + text for _, text in unit.leading)
-    if head is None:
-        head = _HEADS[unit.node.data](unit.node)
-    if unit.block is not None:
-        head += ":"
-    out.append(_with_trailing(indent + head, unit.trailing))
-    if unit.block is not None:
-        _render_block(unit.block, depth + 1, out)
+    """Render a unit, its block and its `else`, depth first with an
+    explicit stack of tasks (a task is a unit, a block, or lines to emit
+    as they are), for the same reason _build uses one."""
+    work: list = [("unit", unit, depth, head, leading)]
+    while work:
+        task = work.pop()
+        if task[0] == "lines":
+            out.extend(task[1])
+        elif task[0] == "block":
+            work.extend(reversed(_block_tasks(task[1], task[2])))
+        else:
+            _, unit, depth, head, leading = task
+            indent = INDENT * depth
+            if leading:
+                out.extend(indent + text for _, text in unit.leading)
+            if head is None:
+                head = _HEADS[unit.node.data](unit.node)
+            if unit.block is not None:
+                head += ":"
+            out.append(_with_trailing(indent + head, unit.trailing))
+            if unit.orelse is not None:
+                work.append(("unit", unit.orelse, depth, None, True))
+            if unit.block is not None:
+                work.append(("block", unit.block, depth + 1))
 
 
-def _render_block(block: _Block, depth: int, out: list) -> None:
+def _block_tasks(block: _Block, depth: int) -> list:
+    """What rendering `block` emits, in order, as _render_unit's tasks."""
+    tasks: list = []
     runs = _runs(block)
     if block.mode == "table":
         # Cells padded to their column's width, two-space gutters, as the
@@ -679,16 +817,17 @@ def _render_block(block: _Block, depth: int, out: list) -> None:
                 widths[column] = max(widths[column], len(cell))
         for unit, cells in zip(rows, grid):
             line = "  ".join(c.ljust(w) for c, w in zip(cells, widths))
-            _render_unit(unit, depth, out, head=line.rstrip())
+            tasks.append(("unit", unit, depth, line.rstrip(), True))
     else:
         paragraph = block.mode == "paragraph"
         for number, (comments, units) in enumerate(runs):
             if number:
-                out.append("")
-            out.extend(INDENT * depth + text for text in comments)
-            for unit in units:
-                _render_unit(unit, depth, out, leading=not paragraph)
-    out.extend(INDENT * depth + text for text in block.trailer)
+                tasks.append(("lines", [""]))
+            tasks.append(("lines", [INDENT * depth + text for text in comments]))
+            tasks.extend(("unit", unit, depth, None, not paragraph)
+                         for unit in units)
+    tasks.append(("lines", [INDENT * depth + text for text in block.trailer]))
+    return tasks
 
 
 def _render(document: _Document) -> str:
@@ -700,9 +839,14 @@ def _render(document: _Document) -> str:
     if document.header and document.header_gap:
         out.append("")
     out.append(document.pragma)
-    for module in document.root.children:
+    (_, imports), (_, definitions) = _runs(document.root)
+    if imports:
         out.append("")
-        _render_unit(module, 0, out)
+        for unit in imports:
+            _render_unit(unit, 0, out)
+    for definition in definitions:
+        out.append("")
+        _render_unit(definition, 0, out)
     if document.root.trailer:
         out.append("")
         out.extend(document.root.trailer)
@@ -714,8 +858,10 @@ def _render(document: _Document) -> str:
 # --------------------------------------------------------------------------
 
 # Lists whose order carries no meaning, sorted by their entries' first
-# token; F-7's empty `()` is dropped.
+# token; F-7's empty `()` is dropped from them and from a parameter list,
+# whose order does carry meaning.
 _UNORDERED = frozenset({"arguments", "net_attributes"})
+_EMPTY_DROPPED = _UNORDERED | {"params"}
 
 
 def _canon(node, skip: str | None = None):
@@ -726,11 +872,14 @@ def _canon(node, skip: str | None = None):
         return _text(node)
     children = [c for c in node.children
                 if not (skip and _is_tree(c) and c.data == skip)]
+    if node.data in _EMPTY_DROPPED and not children:
+        return None
     if node.data in _UNORDERED:
-        if not children:
-            return None
         children = sorted(children,
                           key=lambda c: natural_key(str(c.children[0])))
+    if node.data == "import_stmt":
+        names = sorted((str(c) for c in children[1:-2]), key=natural_key)
+        return ("import_stmt", tuple(names), str(children[-1]))
     if node.data == "pin_decl":
         fixed = [_text(c) for c in children if not _is_tree(c)]
         designators = sorted((str(c.children[0]) for c in children
@@ -740,33 +889,50 @@ def _canon(node, skip: str | None = None):
     return (str(node.data), walked)
 
 
-def _ast_unit(unit: _Unit, leading: bool = True) -> tuple:
-    skip = _BLOCKS.get(unit.node.data, (None, None))[1]
-    return (
-        _canon(unit.node, skip),
-        tuple(text for _, text in unit.leading) if leading else (),
-        unit.trailing,
-        None if unit.block is None else _ast_block(unit.block),
-    )
-
-
-def _ast_block(block: _Block) -> tuple:
-    return (
-        tuple(
-            (tuple(comments),
-             tuple(_ast_unit(u, block.mode != "paragraph") for u in units))
-            for comments, units in _runs(block)
-        ),
-        tuple(block.trailer),
-    )
+def _ast_events(block: _Block) -> tuple:
+    """The block tree as a flat pre-order sequence, so neither building it
+    nor comparing two of them recurses once per nesting level. Each event
+    says how many children follow it (runs in a block, units in a run, and
+    whether a unit has a block and an `else`), which makes the sequence a
+    prefix code: two sequences are equal exactly when the trees are."""
+    events: list = []
+    work: list = [("block", block)]
+    while work:
+        kind, item, *rest = work.pop()
+        if kind == "block":
+            runs = _runs(item)
+            leading = item.mode != "paragraph"
+            events.append(("block", tuple(item.trailer), len(runs)))
+            for comments, units in reversed(runs):
+                work.extend(("unit", u, leading) for u in reversed(units))
+                work.append(("run", (tuple(comments), len(units))))
+        elif kind == "run":
+            events.append(("run",) + item)
+        else:
+            unit, leading = item, rest[0]
+            skip = _BLOCKS.get(unit.node.data, (None, None))[1]
+            events.append((
+                "unit",
+                _canon(unit.node, skip),
+                tuple(text for _, text in unit.leading) if leading else (),
+                unit.trailing,
+                unit.block is not None,
+                unit.orelse is not None,
+            ))
+            if unit.orelse is not None:
+                work.append(("unit", unit.orelse, True))
+            if unit.block is not None:
+                work.append(("block", unit.block))
+    return tuple(events)
 
 
 def normalized_ast(document: _Document) -> tuple:
     """F-12's AST: the parse tree with quantities normalized, sortable
-    lists in canonical order and empty `()` removed, plus the attached
-    comments and the paragraph runs. Equal ASTs format to equal bytes."""
+    lists in canonical order (imports among them) and empty `()` removed,
+    plus the attached comments and the paragraph runs, its blocks flattened
+    by _ast_events. Equal ASTs format to equal bytes."""
     return (tuple(document.header), document.header_gap, document.pragma,
-            _ast_block(document.root))
+            _ast_events(document.root))
 
 
 def _format_clean(source: str, tree) -> tuple[str, _Document]:

@@ -1,0 +1,12 @@
+# A bare name in a value names a parameter in scope, or (in a condition,
+# bound or index) a loop variable.
+#pragma rhoform-syntax 0.2
+
+component Resistor(resistance: resistance):
+    pin a passive 1
+    pin b passive 2
+
+module Panel(r_value: resistance = 1kohm):
+    port vin power_in
+    r1 = new Resistor(resistance = r_valeu)
+    vin ~ r1.a

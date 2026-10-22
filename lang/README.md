@@ -52,14 +52,20 @@ of both candidates' keywords because the bake-off needed one, and carrying the
 loser's vocabulary into the frozen language would reserve a useful identifier
 for a syntax that no longer exists.
 
-A name, then, cannot be any of 32 words: the 24 keywords the grammar actually
-uses plus 8 words reserved for v1 (`component`, `else`, `for`, `from`, `if`,
-`import`, `in`, `interface`). Reserving a word later is a breaking syntax
-change and E1 forbids those, so they are blocked from `FREE_NAME` now despite
-appearing in no rule. Earlier revisions of this section described only the
-keywords, so a reader counting what `FREE_NAME` rejects got 24 where the
-grammar enforces 32; a test now reconciles all three counts and the listed
-words against the grammar source.
+A name, then, cannot be any of 32 words: the 31 keywords the grammar actually
+uses plus 1 word reserved for v1 (`interface`). Reserving a word later is a
+breaking syntax change and E1 forbids those, so it is blocked from `FREE_NAME`
+now despite appearing in no rule. v0.1 reserved eight such words; syntax 0.2
+(`#pragma rhoform-syntax 0.2`, which adds imports, `component` definitions,
+parameters, `if`, `for` and arrays) gave seven of them productions —
+`component`, `else`, `for`, `from`, `if`, `import`, `in` — which is additive
+precisely because no 0.1 file could bind them, and they stay legal in every
+non-binding name position. One grammar parses both versions; the production
+parser refuses a 0.2 construct under a 0.1 pragma with a fix-it that rewrites
+the pragma. Earlier revisions of this section described only the keywords, so
+a reader counting what `FREE_NAME` rejects got 24 where the grammar enforced
+32; a test now reconciles all three counts and the listed words against the
+grammar source.
 
 ## The bake-off that decided it
 
@@ -69,7 +75,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 171 tests (29 need lark)
+python3 -m unittest discover -s tests -t .  # 177 tests (35 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the

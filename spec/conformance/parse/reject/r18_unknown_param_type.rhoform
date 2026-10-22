@@ -1,0 +1,3 @@
+#pragma rhoform-syntax 0.2
+module Divider(stages: integer = 2):
+    port top passive

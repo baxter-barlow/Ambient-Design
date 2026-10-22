@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.2
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Bank(n: int = 4):
+    port vin power_in
+    port gnd passive
+    caps = new rhoform.lib.passive.Capacitor[n](capacitance = 100nF)
+    leds = new Led[3]
+    pull = new rhoform.lib.passive.Resistor[2](resistance = 10kohm):
+        part abstract:
+            package = "0402"
+    net VIN:
+        vin
+        caps[0].a
+        caps[1].a
+    caps[2].b ~ gnd ~ caps[3].b
+    leds[0].a ~ leds[1].k
+    isolated leds[2].k
+    pull[1].a ~ pull[0].b

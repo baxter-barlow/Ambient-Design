@@ -1,0 +1,39 @@
+# Parameters: a parameter list checks arguments, a default may name an
+# earlier parameter, a reference resolves in the instance's environment,
+# and an instance's IR parameters are its whole environment.
+#pragma rhoform-syntax 0.2
+
+component Resistor(resistance: resistance, package: string = "0402"):
+    pin a passive 1
+    pin b passive 2
+
+module Divider(r_top: resistance = 10kohm, r_bottom: resistance = r_top, pkg: string = "0603"):
+    port bottom passive
+    port mid passive
+    port top passive
+    r1 = new Resistor(package = pkg, resistance = r_top)
+    r2 = new Resistor(resistance = r_bottom):
+        part abstract:
+            package = pkg
+    top ~ r1.a
+    r1.b ~ mid
+    r2.a ~ mid
+    r2.b ~ bottom
+
+module Top:
+    port gnd passive
+    port half_out output
+    port third_out output
+    port vin power_in
+    half = new Divider
+    third = new Divider(r_bottom = 4.7kohm, r_top = 10kohm +/- 1%)
+    net GND:
+        gnd
+        half.bottom
+        third.bottom
+    net VIN:
+        half.top
+        third.top
+        vin
+    half.mid ~ half_out
+    third.mid ~ third_out

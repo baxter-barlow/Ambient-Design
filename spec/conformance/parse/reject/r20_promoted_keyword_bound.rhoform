@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.2
+module Amp:
+    port in input
+    port out output

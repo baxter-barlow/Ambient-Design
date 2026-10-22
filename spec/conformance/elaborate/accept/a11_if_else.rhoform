@@ -1,0 +1,49 @@
+# `if`/`else`: each module instance elaborates the branch its environment
+# selects, so one body gives three different instances. Conditions are a
+# bool parameter or an exact comparison; nesting gives conjunction.
+#pragma rhoform-syntax 0.2
+
+component Cap:
+    pin a passive 1
+    pin b passive 2
+
+module Rail(bulk: bool = false, grade: string = "commercial", stages: int = 1, vout: voltage = 3.3V):
+    port gnd passive
+    port out passive
+    c1 = new Cap
+    out ~ c1.a
+    c1.b ~ gnd
+
+    if bulk:
+        c2 = new Cap
+        out ~ c2.a
+        c2.b ~ gnd
+    if grade != "commercial":
+        if vout >= 5V:
+            tvs = new Cap
+            out ~ tvs.a
+            tvs.b ~ gnd
+        else:
+            net CLAMP:
+                out
+    if stages == 2:
+        c3 = new Cap
+        out ~ c3.a
+        c3.b ~ gnd
+
+module Top:
+    port gnd passive
+    port v5 passive
+    port v33 passive
+    port vaux passive
+    aux = new Rail(grade = "industrial", stages = 2)
+    core = new Rail
+    io = new Rail(bulk = true, grade = "industrial", vout = 5V)
+    net GND:
+        aux.gnd
+        core.gnd
+        gnd
+        io.gnd
+    aux.out ~ vaux
+    core.out ~ v33
+    io.out ~ v5

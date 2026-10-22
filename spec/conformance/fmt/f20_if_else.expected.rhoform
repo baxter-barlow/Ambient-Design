@@ -1,0 +1,23 @@
+#pragma rhoform-syntax 0.2
+
+module Supply(fast: bool = false, n: int = 2, rail: voltage = 3.3V):
+    port out power_out
+    r1 = new L
+    r1 ~ out
+    if fast:
+        port q passive
+        r1 = new L
+        r1.a ~ out
+    else:
+        isolated r1.a
+    if n > 2:
+        if rail >= 3.3V:
+            net VOUT:
+                out
+                r1.b
+            isolated r1.b
+        else:
+            r1.b ~ gnd
+    isolated out
+    if n != 2:
+        r1.b ~ out
