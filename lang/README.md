@@ -171,12 +171,17 @@ which `bakeoff measure` uses to exclude it from every number. A token count
 over a design nobody would build is a token count over nothing. It is in the
 corpus for the gate's sake, not the measurement's.
 
-**Benchmark (b), the buck converter, is deliberately absent.** Its BOM leaves
-the compensation network as "standard E96 R, C0G C — chosen at layout time"
-and never enumerates the LM25145's pin-level netlist, so expressing it at
-component level would require design decisions this issue has no business
-making. AMB-50/R53 owns the living benchmark sources. Inventing a netlist and
-calling it benchmark (b) would have put a fiction into the measurement.
+**Benchmark (b), the buck converter, is deliberately absent.** When this
+corpus was built its BOM left the compensation network as
+"standard E96 R, C0G C — chosen at layout time" and never enumerated the
+LM25145's pin-level netlist, so expressing it at component level would have
+required design decisions this issue had no business making, and inventing a
+netlist and calling it benchmark (b) would have put a fiction into the
+measurement. Those decisions were later made where they belong: AMB-128
+derived and EE-reviewed the support parts, compensation values and pin map
+(`benchmarks/buck-3v3/design.md` sections 10-12), and the living source is
+`benchmarks/buck-3v3/buck-3v3.rhoform` under AMB-50/R53. The corpus and the
+measurements below do not include it.
 
 Also absent, and for the same reason: **footprint pin designators on (c)**. The
 WROOM-1, USB-C and regulator pin maps are datasheet facts no document in this

@@ -17,18 +17,21 @@
 # Worse, the assertion checker added in the same issue compares `measured:` to
 # three significant figures -- so the gate had been made to ENFORCE the
 # numerical error, and refining the timestep would have failed `make sim`.
-# The deck now runs at 2 ns (4.881 s wall, inside the 60 s budget) and every
-# `measured:` below is from that run.
+# The deck now runs at 2 ns, inside the 60 s budget, and every `measured:`
+# below is from that run.
 # Windows are the task defaults; none were widened. Measured values are from
 # the canonical `ngspice -b netlist.cir` run recorded in validation.log
-# (ngspice-46, 4.881 s wall at the shipped 2 ns timestep).
+# (ngspice-46, 6.621 s wall at the shipped 2 ns timestep). AMB-128 (EE
+# review, 2026-10-22) added the R10 current-sense shunt to the deck's
+# low-side path (RSNS), so every value below was re-recorded from a fresh
+# run of that deck; no window moved and every margin stays wide.
 
 benchmark: bench-buck
 fidelity_class: behavioral
 sim_rung: 0
 deck: netlist.cir
 runtime_budget_s: 60
-measured_runtime_s: 4.881
+measured_runtime_s: 6.621
 
 assertions:
   - name: vout_mean
@@ -47,35 +50,36 @@ assertions:
     expected:
       max: 0.050
       unit: V
-    measured: 0.00359
+    measured: 0.00366
     status: pass
 
   - name: efficiency
     kind: meas_ratio          # avg(-v(in)*i(V3)) vs avg(v(out)*i(Vsl)), 2.0m-2.5m
     informational_at_rung_0: >-
       Gin injects PFIX/V(in), so eff is a closed form in the hand-entered
-      PFIX = 0.40 W and cannot fail for any PFIX <= 1.056 W. It pins the loss
+      PFIX = 0.40 W and cannot fail for any PFIX <= 0.998 W (1.056 W before
+      the R10 shunt's conduction loss joined the deck). It pins the loss
       BUDGET, not switching behaviour, which rung 0 does not model. See
       design.md.
     meas_id: eff
     expected:
       min: 0.85
       unit: ratio
-    measured: 0.92864
-    status: pass              # conduction losses explicit (DCR 20.4 mOhm max);
-                              # 0.40 W fixed-loss budget
+    measured: 0.92114
+    status: pass              # conduction losses explicit (DCR 20.4 mOhm max,
+                              # 20 mOhm R10 shunt); 0.40 W fixed-loss budget
 
   - name: startup_overshoot
     kind: meas_derived        # (max v(out) 0-1.4m / avg v(out) 1.3m-1.5m - 1)*100
     informational_at_rung_0: >-
       Measures the steady-state ripple envelope, not overshoot: the same
-      expression over a transient-free window returns the same value, and true
-      overshoot here is 0.022 mV. See design.md.
+      expression over a transient-free window returns nearly the same value,
+      and true overshoot here is 0.043 mV. See design.md.
     meas_id: overshoot_pct
     expected:
       max: 5.0
       unit: percent
-    measured: 0.0466
+    measured: 0.0476
     status: pass              # 500 us soft-start ramp on the reference
 
   - name: load_step_settling
@@ -84,13 +88,13 @@ assertions:
     expected:
       max: 500.0
       unit: us
-    measured: 16.86
+    measured: 17.01
     status: pass
 
 cross_checks:                 # informational, not gating
   - name: inductor_ripple_pp
     meas_id: il_pp
     predicted: 0.479          # Vout*(1-D)/(L*fsw) at Vin=12, ideal D=0.275
-    measured: 0.4844
+    measured: 0.4868
     note: measured duty exceeds ideal D=Vout/Vin to cover modeled IR drops
-      (Ron + DCR ~= 26 mOhm)
+      (Ron, the R10 shunt in the off-time and DCR ~= 40 mOhm at 12 V)

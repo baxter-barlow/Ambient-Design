@@ -12,17 +12,17 @@ that can be re-derived, not numbers in a file.
 # rerun: V3 in 0 PWL(0 0 20u 0 220u 12 1 12) -> V3 in 0 PWL(0 0 20u 0 220u 9 1 9)
 --- V3 = 9 V ---
 vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.08403e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  4.21457e-01 from=  2.40000e-03 to=  2.50000e-03
-eff                 =  9.28649e-01
-overshoot_pct       =  4.29034e-02
-t_settle_us         =  4.53920e+01
+vout_pp             =  3.09518e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  4.24440e-01 from=  2.40000e-03 to=  2.50000e-03
+eff                 =  9.22132e-01
+overshoot_pct       =  4.33153e-02
+t_settle_us         =  4.38440e+01
 
 # rerun: V3 in 0 PWL(0 0 20u 0 220u 12 1 12) -> V3 in 0 PWL(0 0 20u 0 220u 14 1 14)
 --- V3 = 14 V ---
 vout_avg            =  3.29600e+00 from=  2.00000e-03 to=  2.50000e-03
-vout_pp             =  3.81167e-03 from=  2.40000e-03 to=  2.50000e-03
-il_pp               =  5.11869e-01 from=  2.40000e-03 to=  2.50000e-03
-eff                 =  9.28625e-01
-overshoot_pct       =  4.89802e-02
-t_settle_us         =  1.55280e+01
+vout_pp             =  3.97600e-03 from=  2.40000e-03 to=  2.50000e-03
+il_pp               =  5.16398e-01 from=  2.40000e-03 to=  2.50000e-03
+eff                 =  9.20704e-01
+overshoot_pct       =  5.34192e-02
+t_settle_us         =  1.60022e+01

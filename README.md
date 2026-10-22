@@ -48,7 +48,7 @@ Public contributors can start with a GitHub issue. Before implementation begins,
 
 ## Repository layout
 
-- `benchmarks/` — the three v1 reference designs. Each carries a design rationale, a part list, and its assertion set; the two analog benchmarks also carry an ngspice deck (`benchmarks/<name>/netlist.cir`) whose `.meas` assertions gate simulation behavior in CI. All three are also living Rhoform sources (`benchmarks/<name>/<name>.rhoform`), each beside the IR and source map the elaborator makes of it; the buck's component-level source and the support parts it adds to its part list are a proposal pending EE review (AMB-128).
+- `benchmarks/` — the three v1 reference designs. Each carries a design rationale, a part list, and its assertion set; the two analog benchmarks also carry an ngspice deck (`benchmarks/<name>/netlist.cir`) whose `.meas` assertions gate simulation behavior in CI. All three are also living Rhoform sources (`benchmarks/<name>/<name>.rhoform`), each beside the IR and source map the elaborator makes of it; the buck's component-level source and the support parts it adds to its part list were EE-reviewed on 2026-10-22 (AMB-128).
 - `corpus/` — the seeded-bug corpus: externally documented, diagnosed electronics design failures that the static checks are measured against.
 - `ir/` — JSON Schemas for the typed netlist IR (`*.schema.json`) with validated examples and expected-invalid controls under `ir/examples/`.
 - `parts/` — the D3 part-data schema: the typed, provenance-carrying contract describing a physical component, with real example records and a linter for the cross-reference invariants JSON Schema cannot express.
