@@ -11,8 +11,8 @@ module Probe:
     r1.a ~ tip
 
 module Top:
+    p = new Probe
     r9 = new rhoform.lib.passive.Resistor:
         pin a passive
         pin b passive
-    p = new Probe
     p.tip ~ r9.a

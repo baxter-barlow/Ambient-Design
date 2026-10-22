@@ -3,5 +3,5 @@
 
 module Top:
     table rhoform.lib.passive.Resistor (resistance, power_rating):
-        r1  1kohm  0.25W
+        r1  1kohm  250mW
         r2  2kohm
