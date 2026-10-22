@@ -296,9 +296,14 @@ class BlinkerOracleTest(unittest.TestCase):
         # `blinker_555` is spelled by nothing in any source.
         self.assertEqual(self.oracle["header"]["design_name"], "blinker_555")
         self.assertEqual(self.golden["header"]["design_name"], "Blinker555")
-        for key in ("ir_version", "language_version", "canonical_form"):
+        for key in ("language_version", "canonical_form"):
             self.assertEqual(self.golden["header"][key],
                              self.oracle["header"][key])
+        # The example is a hand-written IR v0 document, which v0's schema
+        # still validates; the compiler writes v1 (ir/README.md,
+        # "Versioning policy").
+        self.assertEqual(self.oracle["header"]["ir_version"], 0)
+        self.assertEqual(self.golden["header"]["ir_version"], 1)
 
     def test_same_instances_ports_flags_and_values(self):
         oracle = {i["path"]: i for i in self.oracle["instances"]}

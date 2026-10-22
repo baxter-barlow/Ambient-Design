@@ -1,0 +1,14 @@
+# a_b/divider.rhoform and a-b/divider.rhoform both have the module path
+# a_b.divider, so their two Dividers would share one IR definition name.
+# The second file read is refused at the import that brings it in.
+#pragma rhoform-syntax 0.2
+
+import Divider from "./a_b/divider"
+import Probe from "./probe"
+
+module Panel:
+    port top passive
+    d = new Divider
+    p = new Probe
+    top ~ d.top
+    top ~ p.top

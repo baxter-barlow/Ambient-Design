@@ -6,11 +6,17 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
     JSON and be a well-formed JSON Schema under its own declared metaschema;
   - example JSON lives FLAT under <root>/examples/ and is routed to its
     schema by an explicit suffix mapping declared per root:
-        ir/    *.ir.json        -> netlist-ir.schema.json
-               *.sourcemap.json -> source-map.schema.json
+        ir/    *.ir.json        -> by header.ir_version: 0 netlist-ir.schema.json,
+                                   1 netlist-ir.v1.schema.json
+               *.sourcemap.json -> by sourcemap_version: 0 source-map.schema.json,
+                                   1 source-map.v1.schema.json
         parts/ *.part.json      -> part-data.schema.json
         eval/  *.run.json       -> run-result.schema.json
         lang/  *.design.json    -> design-model.schema.json
+  - a versioned document goes to the schema of the version IT declares
+    (ir/README.md: one immutable schema file per version), and one that
+    declares no version, or a version no schema describes, is refused
+    rather than validated against a neighbouring version's schema;
   - files under <root>/examples/negative/ are expected-INVALID controls:
     each must parse as JSON and then FAIL schema validation; a negative
     control that validates is an error;
@@ -54,15 +60,27 @@ from pathlib import Path
 
 DEFAULT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# The IR and its source map are versioned, and a schema file is immutable
+# per version (ir/README.md, "Versioning policy"): a version bump adds a
+# file rather than editing one. So these suffixes route by the version a
+# document declares, as (where it is declared, version -> schema file).
+# A version missing here is one no backend may accept either, so it is
+# refused; add the row in the same change that adds the schema file.
+IR_VERSIONS = (("header", "ir_version"),
+               {0: "netlist-ir.schema.json", 1: "netlist-ir.v1.schema.json"})
+SOURCEMAP_VERSIONS = (("sourcemap_version",),
+                      {0: "source-map.schema.json",
+                       1: "source-map.v1.schema.json"})
+
 # Declared schema roots: top-level directory -> example-filename suffixes
-# it recognises and the schema each routes to. Extend this table in the
-# same change that introduces a new schema or example suffix; unmatched
-# JSON under any examples/ directory fails the gate rather than being
-# skipped.
+# it recognises and the schema each routes to (a file name, or a version
+# table as above). Extend this table in the same change that introduces a
+# new schema or example suffix; unmatched JSON under any examples/
+# directory fails the gate rather than being skipped.
 SCHEMA_ROOTS = {
     "ir": (
-        (".ir.json", "netlist-ir.schema.json"),
-        (".sourcemap.json", "source-map.schema.json"),
+        (".ir.json", IR_VERSIONS),
+        (".sourcemap.json", SOURCEMAP_VERSIONS),
     ),
     "parts": ((".part.json", "part-data.schema.json"),),
     "eval": ((".run.json", "run-result.schema.json"),),
@@ -170,6 +188,20 @@ def declared_locations(example):
     return {loc.strip() for loc in match.group("locs").split("+") if loc.strip()}
 
 
+def declared_version(document, pointer):
+    """(the integer version `document` declares at `pointer` or None, what
+    it declares there in words)."""
+    where = ".".join(pointer)
+    value = document
+    for key in pointer:
+        if not isinstance(value, dict) or key not in value:
+            return None, f"declares no {where}"
+        value = value[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None, f"declares {where} {value!r}"
+    return value, f"declares {where} {value}"
+
+
 def load_json(path, rel, failures):
     try:
         with open(path, encoding="utf-8") as handle:
@@ -235,11 +267,11 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
         expect_invalid = not is_golden and NEGATIVE_DIR_NAME in \
             example_path.relative_to(examples_dir).parts[:-1]
 
-        schema_name = next(
+        route = next(
             (s for suffix, s in suffix_map if example_path.name.endswith(suffix)),
             None,
         )
-        if schema_name is None:
+        if route is None:
             known = ", ".join(suffix for suffix, _ in suffix_map)
             failures.append(
                 f"{rel}: matched by no example-to-schema mapping rule for root "
@@ -251,16 +283,32 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
             )
             continue
 
+        example = load_json(example_path, rel, failures)
+        if example is None:
+            continue
+
+        schema_name = route
+        if not isinstance(route, str):
+            pointer, versions = route
+            version, declared = declared_version(example, pointer)
+            schema_name = versions.get(version)
+            if schema_name is None:
+                failures.append(
+                    f"{rel}: {declared}, and the schemas of {root_name}/ "
+                    f"describe versions "
+                    f"{', '.join(str(v) for v in sorted(versions))} only. A "
+                    "document is validated against the schema of the version "
+                    "it declares and no other, and a backend refuses a "
+                    "version it does not know, so this gate refuses it too."
+                )
+                continue
+
         validator = validators.get(schema_name)
         if validator is None:
             failures.append(
                 f"{rel}: cannot validate: mapped schema {schema_name} is "
                 "missing or malformed."
             )
-            continue
-
-        example = load_json(example_path, rel, failures)
-        if example is None:
             continue
 
         errors = sorted(validator.iter_errors(example), key=str)
@@ -466,12 +514,30 @@ def self_test() -> int:
     # which sits outside every examples/ directory by design. Before they
     # were routed here the stray rule failed them; routed wrongly, they
     # would pass unvalidated.
+    # The ir root's schemas are versioned: one immutable file per version,
+    # each pinning its own version, and a document is routed by the version
+    # it declares. The planted schemas pin theirs the same way.
+    def _versioned_schema(version):
+        return dict(SCHEMA, properties=dict(
+            SCHEMA["properties"],
+            header={"type": "object",
+                    "properties": {"ir_version": {"const": version}}},
+            sourcemap_version={"const": version}))
+
     def _ir_root(root):
         (root / "ir" / "examples" / "negative").mkdir(parents=True)
-        for name in ("netlist-ir.schema.json", "source-map.schema.json"):
-            (root / "ir" / name).write_text(_json.dumps(SCHEMA))
+        for name, version in (("netlist-ir.schema.json", 0),
+                              ("netlist-ir.v1.schema.json", 1),
+                              ("source-map.schema.json", 0),
+                              ("source-map.v1.schema.json", 1)):
+            (root / "ir" / name).write_text(
+                _json.dumps(_versioned_schema(version)))
         (root / "ir" / "examples" / "negative" / "n1.ir.json").write_text(
-            _json.dumps(control))
+            _json.dumps(dict(control, header={"ir_version": 0})))
+
+    ir_good = dict(good, header={"ir_version": 1})
+    map_good = dict(good, sourcemap_version=1)
+    ir_bad = dict(ir_good, stability="stable")
 
     def _golden(root, name, body):
         (root / "benchmarks" / "x").mkdir(parents=True, exist_ok=True)
@@ -479,25 +545,27 @@ def self_test() -> int:
 
     def _good_goldens(root):
         _ir_root(root)
-        _golden(root, "x.ir.json", good)
-        _golden(root, "x.sourcemap.json", good)
+        _golden(root, "x.ir.json", ir_good)
+        _golden(root, "x.sourcemap.json", map_good)
     code, text = run_raw(_good_goldens)
     cases.append(("valid goldens are validated and counted as goldens",
                   code == 0
-                  and "benchmarks/x/x.ir.json: valid against" in text
-                  and "benchmarks/x/x.sourcemap.json: valid against" in text
+                  and "benchmarks/x/x.ir.json: valid against "
+                  "netlist-ir.v1.schema.json" in text
+                  and "benchmarks/x/x.sourcemap.json: valid against "
+                  "source-map.v1.schema.json" in text
                   and "0 valid example(s), 2 valid golden(s)" in text))
 
     def _bad_golden(root):
         _ir_root(root)
-        _golden(root, "x.ir.json", {"stability": "stable"})
+        _golden(root, "x.ir.json", ir_bad)
     code, text = run_raw(_bad_golden)
     cases.append(("an invalid golden is caught",
                   code == 1 and "benchmarks/x/x.ir.json: at stability" in text))
 
     def _misnamed_golden(root):
         _ir_root(root)
-        _golden(root, "y.ir.json", good)
+        _golden(root, "y.ir.json", ir_good)
     code, text = run_raw(_misnamed_golden)
     cases.append(("a file not named after its benchmark is a stray, not a golden",
                   code == 1 and "benchmarks/x/y.ir.json: carries a mapped" in text))
@@ -506,7 +574,7 @@ def self_test() -> int:
         # No ir/ directory at all: the goldens alone must bring the root
         # into the run, or they would be excused from the stray rule and
         # validated by nothing.
-        _golden(root, "x.ir.json", good)
+        _golden(root, "x.ir.json", ir_good)
     code, text = run_raw(_orphan_goldens)
     cases.append(("goldens whose schema root is gone are caught, not skipped",
                   code == 1 and "1 example or golden file(s)" in text
@@ -514,22 +582,61 @@ def self_test() -> int:
 
     # An elaboration conformance case's expected IR is a golden of the ir
     # root, validated rather than reported as a stray.
-    def _expected_ir(body):
+    def _expected_ir(*bodies):
         def plant(root):
             _ir_root(root)
             accept = root / "spec" / "conformance" / "elaborate" / "accept"
             accept.mkdir(parents=True)
-            (accept / "a01_x.expected.ir.json").write_text(_json.dumps(body))
+            for number, body in enumerate(bodies, 1):
+                (accept / f"a0{number}_x.expected.ir.json").write_text(
+                    _json.dumps(body))
         return plant
-    code, text = run_raw(_expected_ir(good))
+    code, text = run_raw(_expected_ir(ir_good))
     cases.append(("a conformance case's expected IR is validated as a golden",
                   code == 0
                   and "elaborate/accept/a01_x.expected.ir.json: valid against"
                   in text and "1 valid golden(s)" in text))
-    code, text = run_raw(_expected_ir({"stability": "stable"}))
+    code, text = run_raw(_expected_ir(ir_bad))
     cases.append(("an invalid conformance expected IR is caught",
                   code == 1
                   and "a01_x.expected.ir.json: at stability" in text))
+
+    # VERSIONS. Each schema pins its own version, so a document validated
+    # against any schema but its own fails on the version alone: both
+    # passing proves each went to the schema of the version IT declares.
+    code, text = run_raw(_expected_ir(dict(good, header={"ir_version": 0}),
+                                      ir_good))
+    cases.append(("each document is validated against its own version's schema",
+                  code == 0
+                  and "a01_x.expected.ir.json: valid against "
+                  "netlist-ir.schema.json" in text
+                  and "a02_x.expected.ir.json: valid against "
+                  "netlist-ir.v1.schema.json" in text))
+    code, text = run_raw(_expected_ir(dict(good, header={"ir_version": 7})))
+    cases.append(("a document of a version no schema describes is refused",
+                  code == 1
+                  and "a01_x.expected.ir.json: declares header.ir_version 7, "
+                  "and the schemas of ir/ describe versions 0, 1 only" in text))
+    code, text = run_raw(_expected_ir(good))
+    cases.append(("a document declaring no version is refused",
+                  code == 1
+                  and "a01_x.expected.ir.json: declares no "
+                  "header.ir_version" in text))
+    code, text = run_raw(_expected_ir(dict(good, header={"ir_version": True})))
+    cases.append(("a version that is not an integer is refused",
+                  code == 1
+                  and "declares header.ir_version True, and the schemas"
+                  in text))
+
+    def _unknown_map(root):
+        _ir_root(root)
+        _golden(root, "x.ir.json", ir_good)
+        _golden(root, "x.sourcemap.json", dict(good, sourcemap_version=2))
+    code, text = run_raw(_unknown_map)
+    cases.append(("a source map is routed by its own sourcemap_version",
+                  code == 1
+                  and "x.sourcemap.json: declares sourcemap_version 2, "
+                  "and the schemas of ir/ describe" in text))
 
     # A package case keeps its expected IR inside its own directory.
     def _package_ir(body):
@@ -540,12 +647,12 @@ def self_test() -> int:
             case.mkdir(parents=True)
             (case / "expected.ir.json").write_text(_json.dumps(body))
         return plant
-    code, text = run_raw(_package_ir(good))
+    code, text = run_raw(_package_ir(ir_good))
     cases.append(("a package case's expected IR is validated as a golden",
                   code == 0
                   and "packages/accept/a01_x/expected.ir.json: valid "
                   "against" in text and "1 valid golden(s)" in text))
-    code, text = run_raw(_package_ir({"stability": "stable"}))
+    code, text = run_raw(_package_ir(ir_bad))
     cases.append(("an invalid package expected IR is caught",
                   code == 1
                   and "a01_x/expected.ir.json: at stability" in text))

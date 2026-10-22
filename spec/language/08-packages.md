@@ -172,10 +172,17 @@ path is in, so neither form of import can leave its package, or the
 compile root, through one (RHO2061). A path naming a file whose module
 path falls under the reserved prefix `rhoform.lib.` is RHO2068, and so
 is such a file as the entry
-([04](04-elaboration.md#the-standard-library)). A path that is empty, absolute,
-holds an empty segment, ends in `.` or `..`, or is not `./`-relative
-and whose first two segments are not a package name or name no module,
-is RHO2062.
+([04](04-elaboration.md#the-standard-library)). No two files of a
+compilation may have one module path
+([04](04-elaboration.md#definitions-and-the-root)), since their
+definitions would share IR names: a path naming a file whose module path
+a file read earlier already has — `./a-b/x` after `a_b/x.rhoform`, both
+`a_b.x` — is RHO2069, and the file is not read. Files are read from the
+entry breadth first, each file's imports in source order, so the file
+refused is always the second of the two that order reaches. A path that
+is empty, absolute, holds an empty segment, ends in `.` or `..`, or is
+not `./`-relative and whose first two segments are not a package name or
+name no module, is RHO2062.
 
 The imports of a compilation MUST NOT form a cycle (RHO2064). A cycle is
 reported once, naming its files in path order, at the first of its

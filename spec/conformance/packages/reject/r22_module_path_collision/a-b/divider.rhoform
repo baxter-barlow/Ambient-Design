@@ -1,0 +1,9 @@
+#pragma rhoform-syntax 0.2
+
+module Divider:
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor
+    r2 = new rhoform.lib.passive.Resistor
+    top ~ r1.a
+    r1.b ~ r2.a
+    isolated r2.b

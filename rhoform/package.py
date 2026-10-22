@@ -730,7 +730,9 @@ class Resolver:
     `spelling(key)` (how the disk spells a file `key` misses only by
     letter case, else None) are the only questions it asks of the file
     system, so `link` can run it over files already in hand and `load`
-    over the disk."""
+    over the disk. It also remembers each file's module path, in the order
+    the compilation reaches them, so a second file with one (RHO2069) is
+    refused at the import that brings it in."""
 
     def __init__(self, sink, exists, owner, package_of, real=None,
                  spelling=None):
@@ -741,6 +743,14 @@ class Resolver:
         self.real = real if real is not None else (lambda key: key)
         self.spelling = spelling if spelling is not None \
             else (lambda key: None)
+        self.modules: dict[str, str] = {}  # module path -> the file key
+
+    def claim(self, key: str) -> str:
+        """Record `key`'s module path for it unless a file reached earlier
+        already has it; returns the file that has it."""
+        from .elaborate import module_path
+
+        return self.modules.setdefault(module_path(key), key)
 
     def resolve(self, importer: str, text: str, span: Span) -> str | None:
         package = self.package_of(self.owner(importer))
@@ -791,6 +801,17 @@ class Resolver:
                 or self.owner(real) != real_root:
             self.sink.add("RHO2061", {"path": text, "boundary": boundary},
                           primary=span)
+            return None
+        # Definitions are named by their file's module path, which maps
+        # several file paths to one (`a-b/x` and `a_b/x` are both `a_b.x`):
+        # two such files would give two definitions one IR name.
+        first = self.claim(target)
+        if first != target:
+            from .elaborate import module_path
+
+            self.sink.add("RHO2069", {"file": target,
+                                      "module": module_path(target),
+                                      "first": first}, primary=span)
             return None
         return target
 
@@ -930,6 +951,7 @@ def link(results, sink: Diagnostics) -> dict:
     loose = Package(root="", manifest=None)
     resolver = Resolver(sink, keys.__contains__, lambda _key: "",
                         lambda _root: loose)
+    resolver.claim(results[0].file)
     imports = {}
     for result in results:
         imports[result.file] = [
@@ -1162,6 +1184,7 @@ class _Loader:
         before = self.sink.counts()["error"]
         resolver = Resolver(self.sink, self.is_file, self.owner,
                             self.packages.get, self.real_key, self.spelling)
+        resolver.claim(entry)
         results, imports, order, queued = [], {}, [], {entry}
         work = [entry]
         refused = False

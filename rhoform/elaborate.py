@@ -3,7 +3,7 @@
 LAYERING. This module turns `ok` parse trees into an in-memory
 `ElaboratedDesign` that keeps every value as an exact `Decimal` and every
 entity's source span. It knows nothing about JSON: `rhoform/ir.py` turns
-the design into IR v0 and its source map, owns the canonical encoder, and
+the design into IR v1 and its source map, owns the canonical encoder, and
 computes both hashes. Elaboration runs only on `ok` trees — a recovered
 tree is the file with its broken lines removed, and elaborating it would
 report the consequences of text the author never wrote.
@@ -1676,14 +1676,19 @@ class _Elaborator:
         False when that alone passes the design's budget. Reported once
         per design, like over_limit: after the first crossing every later
         charge also fails, and blaming it would name statements (an array
-        charged after the loops that spent the budget) that are not why."""
+        charged after the loops that spent the budget) that are not why.
+        Straight to the sink, not into the body's findings: those are
+        published once per instance path when other environments of the
+        module do not show them, and the design draws one RHO2046 however
+        many instances share the body that crossed."""
         if count <= 0:
             return True
         if model.units + count > EXPANSION_LIMIT:
             if not self.limit_reported:
                 self.limit_reported = True
-                self.report("RHO2046", {"construct": construct,
-                                        "limit": EXPANSION_LIMIT}, span)
+                self.sink.add("RHO2046", {"construct": construct,
+                                          "limit": EXPANSION_LIMIT},
+                              primary=span, entity=None)
             return False
         model.units += count
         model.sites.append((span, count, construct))

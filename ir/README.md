@@ -1,4 +1,4 @@
-# Rhoform Netlist IR v0
+# Rhoform Netlist IR
 
 The IR is the single, versioned JSON artifact between the Rhoform language and **all** backends
 (requirement I4). The compiler elaborates DSL source into one `*.ir.json` document plus one
@@ -8,8 +8,10 @@ Files here:
 
 | File | Purpose |
 | --- | --- |
-| `netlist-ir.schema.json` | JSON Schema (draft 2020-12) for the elaborated design |
-| `source-map.schema.json` | JSON Schema for the I9 source-map sidecar |
+| `netlist-ir.v1.schema.json` | JSON Schema (draft 2020-12) for the elaborated design, IR version 1: what the compiler writes |
+| `source-map.v1.schema.json` | JSON Schema for the I9 source-map sidecar of an IR version 1 document (source-map version 1) |
+| `netlist-ir.schema.json` | IR version 0's schema, kept unedited: the hand-written examples are version 0 |
+| `source-map.schema.json` | Source-map version 0's schema, kept unedited for the same reason |
 | `examples/blinker.ir.json` | Hand-written elaboration of the 555 blinker benchmark |
 | `examples/blinker.sourcemap.json` | Matching source map |
 | `examples/negative/` | Negative controls: each file must be **rejected** by its schema |
@@ -112,6 +114,20 @@ integer beyond 2^53 is a compile error rather than a rounding (spec 04,
   artifact boundary.
 - Schema files are immutable per version: `netlist-ir.schema.json` here *is* version 0. A bump
   adds a new schema file; old ones are never edited in place.
+- **Version 1** is `netlist-ir.v1.schema.json`, paired with `source-map.v1.schema.json`
+  (source-map version 1). It widens one pattern: a `Net.name` may carry an elaboration index after
+  any segment (`cells[2]/OUT`, `N_leds[0].a`), not only at its end. A net named from an array
+  member's path has its index mid-name, so under version 0 the first design with an array
+  produced IR its own schema refused. Nothing else changed: a version 1 document is the version 0
+  document of the same design with `ir_version` 1 and, because `ir_version` is hashed, a new
+  `design_hash`. The version 1 source map pins `sourcemap_version` and `ir_version` 1 and says
+  that a standard library module's `files` path is its library path. The compiler writes version
+  1 only.
+- Version 0's two files stay, byte for byte as version 0 published them, for the hand-written
+  documents under `examples/`, which are version 0 and validate against them. The syntax 0.2 line
+  first widened version 0's `Net.name` pattern and its source-map path description in place,
+  which is exactly the edit this policy forbids; both changes moved into the version 1 files and
+  version 0 was restored.
 - **No external stability promise in v1.0 (P7).** The IR is inspectable — plain JSON, every field
   described in-schema — but it is an *internal* contract between Rhoform's own language front end and
   Rhoform's own backends. Third-party tools that parse it do so at their own risk until a future
@@ -145,7 +161,7 @@ integer beyond 2^53 is a compile error rather than a rounding (spec 04,
 
 ## Source maps (I9)
 
-`source-map.schema.json` defines the sidecar: a file table (paths relative to the compile root,
+`source-map.v1.schema.json` (version 0: `source-map.schema.json`) defines the sidecar: a file table (paths relative to the compile root,
 plus content hashes), spans (byte offsets authoritative, line/col denormalized), and a `nodes` map
 from IR identity → declaration span + instantiation trace, innermost first. Because elaboration
 expands one source line into many instances, replicated entities share a declaration span but
@@ -230,7 +246,11 @@ Two case kinds run. The two examples, every benchmark golden
 (`benchmarks/<id>/<id>.ir.json` and `.sourcemap.json`), and every elaboration or package conformance
 expectation (`spec/conformance/elaborate/accept/<case>.expected.ir.json`,
 `spec/conformance/packages/accept/<case>/expected.ir.json`) must **validate**; every file in
-`examples/negative/` must be **rejected**. A negative control that validates fails the run, which is what stops the schema from
+`examples/negative/` must be **rejected**. Each document is validated against the schema of the
+version it declares (`header.ir_version`, or a source map's `sourcemap_version`) and no other: the
+examples and the negative controls against version 0, the goldens and expectations against
+version 1. A document that declares no version, or one no schema here describes, fails the run,
+as a backend refuses it. A negative control that validates fails the run, which is what stops the schema from
 quietly losing a constraint it advertises. Each fixture is a minimal complete document carrying
 exactly one defect, described in its own `x_negative_control` member:
 
@@ -246,8 +266,8 @@ exactly one defect, described in its own `x_negative_control` member:
 | `n08_retired_measurement_kind.ir.json` | a measurement kind outside the V2 v1 vocabulary |
 | `n09_span_missing_byte_offset.sourcemap.json` | source-map span with no authoritative byte offset |
 
-`*.ir.json` files are checked against the IR schema, `*.sourcemap.json` against the source-map
-schema, and an empty fixture directory is itself a failure. The duplicate-path and dangling-net
+`*.ir.json` files are checked against the IR schema of their version, `*.sourcemap.json` against
+the source-map schema of theirs, and an empty fixture directory is itself a failure. The duplicate-path and dangling-net
 cases you might expect here are deliberately absent: they belong to the compiler-enforced list
 above, because JSON Schema cannot detect either one.
 

@@ -218,7 +218,7 @@ class EmissionTest(unittest.TestCase):
 
     def test_header(self):
         header = self.document["header"]
-        self.assertEqual(header["ir_version"], 0)
+        self.assertEqual(header["ir_version"], 1)
         self.assertEqual(header["language_version"], "0.1.0")
         self.assertEqual(header["design_name"], "Blinker")
         self.assertEqual(header["canonical_form"], "rhoform-canonical-json/1")
@@ -246,8 +246,11 @@ class EmissionTest(unittest.TestCase):
 
     @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
     def test_documents_validate_against_their_schemas(self):
-        for name, document in (("netlist-ir.schema.json", self.document),
-                               ("source-map.schema.json", self.source_map)):
+        self.assertEqual(self.source_map["sourcemap_version"], 1)
+        self.assertEqual(self.source_map["ir_version"], 1)
+        for name, document in (("netlist-ir.v1.schema.json", self.document),
+                               ("source-map.v1.schema.json",
+                                self.source_map)):
             with self.subTest(schema=name):
                 schema = json.loads((ROOT / "ir" / name).read_text())
                 jsonschema.Draft202012Validator(schema).validate(document)
