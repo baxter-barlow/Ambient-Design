@@ -2,20 +2,26 @@
 # MPNs are examples establishing that the design is buildable with real,
 # in-production parts at the stated margins; the benchmark itself is
 # exercised through the behavioral deck (netlist.cir). MPN existence is a
-# distributor fact no offline gate can hold true: each MPN was verified
-# against live distributor stock in the AMB-123 audit (last full pass round
-# 18, 2026-08-19, after a fabricated R1 part number shipped for two rounds).
+# distributor fact no offline gate can hold true: the MPNs of the U1 through
+# R2 lines were verified against live distributor stock in the AMB-123 audit
+# (last full pass round 18, 2026-08-19, after a fabricated R1 part number
+# shipped for two rounds).
 #
-# WHAT THIS BOM DOES NOT YET CARRY, stated because the header above claims
-# buildability (round 20): three support components the design's own prose
-# relies on have no line here -- the HB-SW bootstrap capacitor, without
-# which the LM25145's integrated high-side driver cannot switch; the RT
-# resistor that U1's notes say programs fsw to 500 kHz; and the SS capacitor
-# that design.md attributes the 500 us soft-start ramp (and therefore the
-# gated startup_overshoot figure) to. The behavioral deck models their
-# EFFECT -- the PWL reference ramp and the fixed switching period -- not the
-# parts, so no gate here notices their absence. Specifying them is
-# benchmark-(b) BOM completeness, AMB-128.
+# CONTROLLER SUPPORT PARTS (AMB-128). Round 20 recorded that this BOM had no
+# line for the HB-SW bootstrap capacitor, the RT resistor or the SS
+# capacitor, although the design's own prose relies on all three, and that
+# the compensation network's values were "chosen at layout time". R3-R9 and
+# C6-C12 below close that gap. They are a PROPOSAL pending EE review: values
+# are derived and cited in design.md section 10, pins in section 11, and NONE
+# of their MPNs has been checked against distributor stock -- each only
+# follows the manufacturer's ordering-code pattern for its value and series.
+# The behavioral deck models their EFFECT (the PWL reference ramp, the fixed
+# switching period, the PID compensator), not the parts, and no gate reads
+# these lines: the deck-parameter rules pin only L1, Q1, Q2, C2, R1 and R2.
+#
+# Refdes: C1 and C2 are qty 2, placed as C1/C4 and C2/C5. The Type-III
+# network that used to be one CN1 line ("0402 x5") is R3, R4, C6, C7 and C8,
+# so each physical part has exactly one line.
 
 parts:
   - ref: U1
@@ -23,9 +29,10 @@ parts:
     value: sync buck controller, 6-42 V input, voltage-mode, 0.8 V ref
     package: VQFN-20 (RGY, 3.5x4.5 mm, wettable flanks)
     mpn: TI LM25145RGYR
-    notes: fsw programmed to 500 kHz (RT); internal 7.5 V gate driver;
-      Type-III compensation network on COMP maps to the PID in the
-      behavioral deck; soft-start set to ~0.5 ms via SS cap.
+    notes: fsw programmed to 500 kHz (RT, R5); internal 7.5 V gate driver;
+      the Type-III compensation network on COMP (R3, R4, C6-C8) shares the
+      behavioral deck PID's crossover but not its zero placement (design.md
+      sec. 7); soft-start ~0.5 ms via the SS cap (C9, 544 us nominal).
 
   - ref: Q1
     role: high_side_fet
@@ -70,7 +77,7 @@ parts:
       across two parts (~0.49 A each); per-part
       rms handling to be confirmed against Murata temperature-rise data at
       500 kHz. Murata lists this part NRND -- in-production alternative
-      GRM31CR71E106KA12L (1206).
+      GRM31CR71E106KA12L (1206). Refdes C1 and C4.
 
   - ref: C2
     role: output_capacitor
@@ -79,7 +86,7 @@ parts:
     mpn: Murata GRM32ER61C226KE20L
     qty: 2
     notes: ~36 uF effective at 3.3 Vdc bias (deck uses the derated value);
-      net ESR ~2 mOhm.
+      net ESR ~2 mOhm. Refdes C2 and C5.
 
   - ref: C3
     role: input_bypass
@@ -113,11 +120,148 @@ parts:
     mpn: Yageo RC0402FR-0710KL
     notes: divider current 80 uA -- stiff against FB pin bias current.
 
-  - ref: CN1
+  - ref: R3
     role: compensation_network
-    value: Type-III RC set on U1 COMP/FB (values per LM25145 design procedure
-      for fc ~= 30 kHz, double zero at the 8.4 kHz LC resonance)
-    package: 0402 x5
-    mpn: (standard E96 R, C0G C -- chosen at layout time)
-    notes: behavioral equivalent in the deck is KP=2.46, KI=6.47e4,
-      KD=2.33e-5 with a 159 kHz derivative-path pole.
+    value: 7.50 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-077K5L
+    notes: >-
+      proposal, EE review required. CN1 R_C1 (LM25145 Table 3), COMP to C6.
+      Kmid = (fc/f0)/kFF = (30k/8.388k)/15 = 0.2384; R_C1 = Kmid x R1 =
+      7.44 k -> E96 7.50 k (fc 30.2 kHz by eq. 15, 31.5 kHz numerically).
+      The deck's behavioral stand-in for CN1 is the PID KP=2.46, KI=6.47e4,
+      KD=2.33e-5 with a 159 kHz derivative-path pole: the same crossover,
+      but a double zero at the LC resonance where CN1 puts its zeros at
+      f0/2 and f0.
+
+  - ref: R4
+    role: compensation_network
+    value: 1.13 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-071K13L
+    notes: >-
+      proposal, EE review required. CN1 R_C2, VOUT to C8. Places the second
+      high-frequency pole at fsw/2 (251.5 kHz with C8 = 560 pF); the ESR zero
+      at 2.2 MHz lies above fsw/2, so there is nothing for it to cancel.
+
+  - ref: C6
+    role: compensation_network
+    value: 5.6 nF +/-5%, 50 V, C0G
+    package: "0402"
+    mpn: Murata GRM1555C1H562JA01D
+    notes: >-
+      proposal, EE review required. CN1 C_C1, in series with R3 to FB. First
+      zero 1/(2 pi 7.5k 5.6n) = 3.79 kHz, about half the 8.39 kHz LC
+      resonance: the datasheet premise wz1 = 0.5 w0 (p. 33) gives C_C1 =
+      2/(w0 R_C1) = 5.10 nF -> E12 5.6 nF. Phase margin 59.9 deg nominal and
+      54.9-60.5 deg over load and L/C corners at the same ~31.5 kHz
+      crossover; a double zero at the resonance (2.7 nF) gave 47.6-54.4 deg,
+      below the datasheet's 50-70 deg target.
+
+  - ref: C7
+    role: compensation_network
+    value: 82 pF +/-5%, 50 V, C0G
+    package: "0402"
+    mpn: Murata GRM1555C1H820JA01D
+    notes: >-
+      proposal, EE review required. CN1 C_C2, COMP to FB. High-frequency pole
+      262.6 kHz (about fsw/2).
+
+  - ref: C8
+    role: compensation_network
+    value: 560 pF +/-5%, 50 V, C0G
+    package: "0402"
+    mpn: Murata GRM1555C1H561JA01D
+    notes: >-
+      proposal, EE review required. CN1 C_C3, in series with R4 across R1.
+      Second zero 1/(2 pi (R1+R4) C8) = 8.79 kHz.
+
+  - ref: R5
+    role: frequency_set
+    value: 20.0 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0720KL
+    notes: >-
+      proposal, EE review required. U1 RT to GND. R_RT[kOhm] = 1e4/fsw[kHz]
+      = 20.0 k for 500 kHz (LM25145 eq. 3 and Table 1, p. 20).
+
+  - ref: C9
+    role: soft_start
+    value: 6.8 nF +/-5%, 50 V, C0G
+    package: "0402"
+    mpn: Murata GRM1555C1H682JA01D
+    notes: >-
+      proposal, EE review required. U1 SS/TRK to GND. C_SS[nF] = 12.5 x
+      t_SS[ms] = 6.25 nF for 500 us (eq. 5, p. 21) -> E12 6.8 nF, t_SS = 544
+      us nominal, 431-672 us over I_SS 8.5-12 uA and C +/-5%.
+
+  - ref: C10
+    role: bootstrap_capacitor
+    value: 100 nF +/-10%, 25 V, X7R
+    package: "0402"
+    mpn: Murata GRM155R71E104KE14D
+    notes: >-
+      proposal, EE review required. U1 BST to SW (net HB). Datasheet: "0.1-uF
+      or larger" (p. 23); droop about 72 mV per cycle at Qg(7.5 V) about 7 nC.
+
+  - ref: C11
+    role: vcc_decoupling
+    value: 2.2 uF +/-10%, 25 V, X7R
+    package: "0603"
+    mpn: TDK C1608X7R1E225K080AC
+    notes: >-
+      proposal, EE review required. U1 VCC to GND; datasheet range 1-5 uF
+      (p. 17). Effective capacitance at 7.5 V DC bias must stay >= 1 uF --
+      confirm on the TDK bias curve, else move to 0805. The LM25145 has no
+      VDDA pin; this is the only bias-rail capacitor it needs.
+
+  - ref: R6
+    role: uvlo_divider_top
+    value: 100 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-07100KL
+    notes: >-
+      proposal, EE review required. VIN to EN/UVLO. R_UV1 = (Von - Voff)/I_HYS
+      = 1.0 V / 10 uA (eq. 1, p. 18).
+
+  - ref: R7
+    role: uvlo_divider_bottom
+    value: 16.5 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0716K5L
+    notes: >-
+      proposal, EE review required. EN/UVLO to GND. R_UV2 = R_UV1 x 1.2 /
+      (8.5 - 1.2) = 16.44 k (eq. 2) -> 16.5 k: on 8.47 V, off 7.47 V nominal,
+      both below the 9 V minimum input.
+
+  - ref: R8
+    role: current_limit_set
+    value: 66.5 Ohm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0766R5L
+    notes: >-
+      proposal, EE review required. U1 ILIM to SW (Q2 drain), RDS(on) mode.
+      R_ILIM = (3.0 A - 0.24 A)/200 uA x 4.8 mOhm (eq. 6, p. 24) = 66.3 ->
+      66.5. With the ILIM comparator offset the worst-case trip spans roughly
+      1.0-4.9 A valley -- an open EE-review question in AMB-128, with the
+      shunt-mode alternative in design.md section 10.7.
+
+  - ref: C12
+    role: current_limit_filter
+    value: 82 pF +/-5%, 50 V, C0G
+    package: "0402"
+    mpn: Murata GRM1555C1H820JA01D
+    notes: >-
+      proposal, EE review required. U1 ILIM to GND (PGND). R_ILIM x C_ILIM
+      about 6 ns (p. 24): 6 ns / 66.5 Ohm = 90 pF -> 82 pF (5.5 ns). Sees VIN
+      swings, hence 50 V.
+
+  - ref: R9
+    role: pgood_pullup
+    value: 49.9 kOhm, 1%
+    package: "0402"
+    mpn: Yageo RC0402FR-0749K9L
+    notes: >-
+      proposal, EE review required. PGOOD to VOUT; open drain needs a pull-up
+      to <= 13 V, typically 10-100 k (p. 19). Optional: nothing in the
+      benchmark consumes PGOOD.

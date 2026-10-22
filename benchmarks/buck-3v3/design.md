@@ -153,6 +153,8 @@ voltage-mode, 0.8 V +/-1% reference, integrated 7.5 V drivers, RT-programmed
 to 500 kHz). Chosen because its control law -- voltage-mode PWM with Type-III
 compensation -- is exactly what the behavioral deck implements, keeping the
 benchmark's model and the buildable hardware in one-to-one correspondence.
+The correspondence is the control law and the crossover, not the zero
+placement: sec. 7 says where the two differ.
 
 ## 6. Loss budget and efficiency
 
@@ -213,9 +215,14 @@ Plant: duty-to-Vout gain Vin with the LC double pole at
     f0 = 1 / (2 pi sqrt(L x C_eff)) = 1 / (2 pi sqrt(10u x 36u)) = 8.4 kHz
 
 ESR zero at 1/(2 pi x C x ESR) = 2.2 MHz -- too high to help, hence Type-III.
-Design: place a double zero on the LC resonance, crossover fc = 30 kHz
-(about fsw/17; a previous revision printed "fsw/16", which is 31.25 kHz --
-every downstream number is computed from 30 kHz and is unaffected).
+Design: crossover fc = 30 kHz (about fsw/17; a previous revision printed
+"fsw/16", which is 31.25 kHz -- every downstream number is computed from
+30 kHz and is unaffected). The deck's PID below places a double zero on the
+LC resonance. The LM25145's Type-III network (sec. 10.8) does not: it takes
+the datasheet's placement, first zero at f0/2 and second at f0, which keeps
+the estimated phase margin at 54.9-60.5 deg over every load and L/C corner,
+inside the datasheet's 50-70 deg target; the double zero fell to 47.6 deg.
+Both cross over at about 30 kHz.
 Required compensator gain at fc, with divider gain h = 0.8/3.3 =
 0.242 and |P(fc)| ~= (f0/fc)^2 = 0.078:
 
@@ -230,7 +237,8 @@ via Kd(s + w0)^2 = Kd s^2 + Kp s + Ki:
 
 plus a derivative-path pole at 159 kHz (1k/1n RC) standing in for Type-III's
 high-frequency poles and taming switching-ripple feedthrough. Soft start:
-the reference ramps 0 -> 0.8 V over 500 us (SS pin cap on the LM25145),
+the reference ramps 0 -> 0.8 V over 500 us (the deck's idealisation of the
+LM25145's SS pin; its 6.8 nF capacitor gives 544 us nominal, sec. 10.2),
 which is why measured startup overshoot is 0.0466% against the 5% budget.
 
 ## 8. Behavioral model (fidelity class: behavioral, rung 0)
@@ -421,3 +429,463 @@ divider; the round-18 part correction improved the shipped stack.)
 
 The simulation never showed this: it runs at nominal, where both dividers are
 comfortably inside. This is a tolerance defect, and the deck has no tolerance.
+
+## 10. Component-level design (PROPOSAL, EE review required, AMB-128)
+
+Sections 1-9 size the power stage and the deck. This section derives, with a
+citation for every value, the parts the BOM used to leave unstated: the
+bootstrap capacitor, the RT resistor, the SS capacitor, the Type-III network's
+values (once "chosen at layout time"), and what the LM25145 pin map (sec. 11)
+turns out to need. Every part here is a proposal awaiting EE review in AMB-128;
+none of the numbers the gates pin (netlist.cir, assertions.yaml, the validation
+logs, the tables in sections 1-9) depends on it. The living source
+`buck-3v3.rhoform` declares these parts, pins and nets.
+
+### 10.0 Sources and fixed inputs
+
+**LM25145 datasheet.** https://www.ti.com/lit/ds/symlink/lm25145.pdf, revision "*"
+(June 2017, p. 2), 62 pages. It is cited as "DS p. N, eq. N / Table N / section".
+
+**BSC059N04LS6 datasheet.** Infineon, rev. 2.1 (2020-07-22),
+https://www.infineon.com/assets/row/public/documents/24/49/infineon-bsc059n04ls6-datasheet-en.pdf.
+It is cited as "IFX p. N, Table/Diagram N". Page mapping:
+- p. 1: key parameters and pinout
+- p. 4: static, dynamic and gate-charge tables
+- p. 7: Diagrams 5-8
+- p. 8: Diagrams 9-12
+- p. 9: Diagrams 13-15
+
+**XGL6060 datasheet.** Coilcraft,
+https://www.coilcraft.com/getmedia/329fe97c-7311-4726-9bf3-37718f42b168/xgl6060.pdf.
+It is cited as "CC p. 2" (the part table). The extracted text carries no document
+number or revision, so the "Document 1621-2 rev 02/19/26" that sec. 3 and
+parts.yaml cite was not confirmed from it.
+
+**Fixed by sections 1-9 and parts.yaml (not changed here):**
+- Vin 9-14 V (12 V nominal), Vout 3.3 V at 2 A, fsw = 500 kHz.
+- L = 10 uH, effective Cout 36 uF, net ESR 2 mOhm, DCR 20.4 mOhm max.
+- f0 = 8.4 kHz, fc target about 30 kHz, soft-start about 500 us.
+- R1 = 31.2 k (R_FB1 below), R2 = 10.0 k (R_FB2).
+- the MPNs of U1, Q1, Q2, L1, C1, C2, C3, R1, R2.
+
+Datasheet text was read through a PDF-to-text extraction. Table rows on DS pp. 8-9
+come out with shifted columns in places; where that matters it is said so below.
+
+### 10.1 RT: switching frequency
+
+DS p. 20, eq. 3: `R_RT[kOhm] = 10^4 / F_SW[kHz]`. The 500 kHz row of DS Table 1
+(p. 20) is 20 kOhm.
+
+    R_RT = 10^4 / 500 = 20.0 kOhm   -> E96 20.0 k, 1 %, 0402 (R5)
+
+The datasheet gives oscillator accuracy only at R_RT = 25 k: 380 kHz min and 400 kHz
+typ (DS p. 8; the maximum did not survive extraction). Assuming the same relative
+spread at 20 k, fsw is roughly 475-525 kHz. That moves f0/fc ratios by nothing
+(f0 does not depend on fsw) and the inductor ripple by +/-5 %.
+
+### 10.2 Soft-start capacitor
+
+DS p. 21, eq. 4 and eq. 5:
+
+    t_SS = C_SS * V_REF / I_SS;    C_SS[nF] = 12.5 * t_SS[ms]
+
+For the about 500 us that sec. 7 states:
+
+    C_SS = 12.5 * 0.5 = 6.25 nF   -> E12 6.8 nF C0G, 0402 (C9)
+    t_SS = 6.8 nF * 0.8 V / 10 uA = 544 us
+
+E12 neighbour 5.6 nF gives 448 us. 6.8 nF is the nearer of the two: 44 us against
+52 us.
+
+Spread, with I_SS 8.5-12 uA (DS p. 8) and C at +/-5 %: 431-672 us. That is above the
+DS minimum of 2.2 nF (DS p. 4) and the more than 2 nF the SS clamp needs (DS p. 21).
+C0G is chosen for a ramp that does not move with bias or temperature; X7R would also
+work.
+
+**The deck's ramp is an idealisation of this.** Its PWL reference rises over
+100-600 us. With the UVLO divider of sec. 10.5 and the fixture's 0-12 V input
+ramp, EN would rise at about 162 us and SS complete at about 706 us. The
+startup_overshoot windows (0-1.4 ms and 1.3-1.5 ms) contain either ramp, and the
+deck is not changed.
+
+### 10.3 Bootstrap capacitor (BST to SW)
+
+DS p. 23 (8.3.9): "Connect a 0.1-uF or larger ceramic capacitor close to the BST and
+SW pins." Check:
+
+- **Charge per cycle.** Q_g at V_GS = 7.5 V is about 7 nC (IFX p. 9, Diagram 14:
+  7.5 V is reached between about 6.4 nC at V_DD = 8 V and about 7.4 nC at
+  V_DD = 20 V). Add I_Q-BST of 80 uA x 2 us = 0.16 nC (DS p. 9).
+
+      dV_BST = 7.2 nC / 100 nF = 72 mV per cycle
+
+- **Headroom.** dV_BST is far inside the headroom between VCC minus the boot-diode
+  drop (7.5 - 0.9 V max, DS p. 9) and the 3.4 V BST-SW UV threshold (DS p. 9).
+- **Rating.** BST-SW stays at or below 14 V absolute (DS p. 6), so the capacitor is
+  rated 25 V.
+
+Pick: 100 nF, X7R, 25 V, 0402 (C10).
+
+### 10.4 VCC decoupling and VIN bypass
+
+DS p. 17 (8.3.3): "Connect a ceramic decoupling capacitor between 1 uF and 5 uF from
+VCC to AGND". DS p. 5 (pin 14) says to decouple to PGND; the two grounds are one net
+here. All three DS application circuits use 2.2 uF: Figure 46 on p. 36, Figure 32 on
+p. 18.
+
+    C_VCC = 2.2 uF, X7R, 25 V, 0603 (C11)
+
+- **Rating.** VCC is 7.5 V nominal and 14 V absolute (DS pp. 6, 7).
+- **Ratio to C10.** C11/C10 = 22.
+- **DC bias.** A 0603 2.2 uF X7R loses a large fraction of its capacitance at 7.5 V
+  DC. The effective value must stay at or above 1 uF, and the EE should check that
+  on the TDK DC-bias curve. If it does not hold, use 0805.
+
+**There is no VDDA pin on the LM25145.** See sec. 11, decision 2.
+
+VIN pin bypass: parts.yaml already carries C3, 100 nF at U1 VIN. DS Figure 32
+(p. 18) and Figure 46 (p. 36) show C_VIN = 0.1 uF. The DS's optional 4.7 Ohm series
+filter for high-voltage use (p. 17) is not needed at 14 V maximum.
+
+### 10.5 EN/UVLO divider
+
+**Is it needed?** Not for function. DS p. 18 lists EN tied to VIN as "the simplest
+way". It is proposed for three reasons:
+
+1. VCC regulation (7.3-7.7 V) is specified only for 9 V <= VIN <= 42 V (DS p. 7).
+   Below about 7.75 V the LDO drops out and the gate drive falls (DS p. 18,
+   8.3.3).
+2. Starting at about 5 V input (the VCC UV point, 4.93 V, DS p. 7) would let the
+   converter draw about 1.2 A at 6 V input. That is outside the 9-14 V range the
+   benchmark specifies.
+3. A defined UVLO is buildability hygiene.
+
+DS p. 18, eqs. 1-2, with I_HYS = 10 uA and V_EN = 1.2 V (DS p. 8). Targets: on 8.5 V,
+off 7.5 V, both below the 9 V minimum. Off is set where VCC is still about 7.25 V.
+
+    R_UV1 = (V_on - V_off) / I_HYS = 1.0 V / 10 uA = 100 kOhm    -> E96 100 k (R6)
+    R_UV2 = R_UV1 * V_EN / (V_on - V_EN) = 100k * 1.2 / 7.3 = 16.44 k -> E96 16.5 k (R7)
+    V_on  = 1.2 * (1 + 100/16.5) = 8.47 V;   V_off = V_on - 10 uA * 100 k = 7.47 V
+
+Tolerance: V_EN 1.164-1.236 V and I_HYS 9-11 uA (DS p. 8, columns shifted in the
+extraction), with resistors at 1 %:
+- V_on is 8.08-8.88 V and V_off is 6.97-7.99 V. Both stay below 9 V.
+- EN at 14 V input is 2.12 V. The absolute maximum is 45 V (DS p. 6).
+- The divider draws 103 uA at 12 V.
+
+### 10.6 Gate drive and bias budget (check, no part)
+
+- **VCC current.** I_VCC is about 2 x 7 nC x 500 kHz + 1.8 mA (I_Q, DS p. 7), which is
+  8.8 mA. The VCC current limit is 40 mA minimum (DS p. 18).
+- **LDO dissipation at 14 V.** (14 - 7.5) x 8.8 mA = 57 mW, which is about 2 C rise at
+  36.8 C/W (DS p. 7).
+- **On-resistance at 7.5 V drive.** The FETs are driven at 7.5 V, not the 10 V their
+  R_DS(on) max is specified at. Typical at 7.5 V, 25 C is 4.8 mOhm (IFX p. 7,
+  Diagram 8), against 4.7 typ / 5.9 max at 10 V (IFX p. 4, Table 4). No maximum is
+  given at 7.5 V. Scaling max/typ gives about 6.0 mOhm, which equals the deck's
+  RON = 6 m to within 0.5 %. This is an open EE-review question (AMB-128).
+- **Timing.**
+  - Minimum on-time at 14 V: 0.236 x 2 us = 472 ns, against 60 ns max as
+    extracted (DS p. 9; sec. 2 quotes 40 ns, and T_ON(MIN) is one of the rows the
+    extraction shifts, sec. 10.11 item 3).
+  - Minimum off-time at 9 V: about 0.6 x 2 us = 1.2 us, against 200 ns max.
+
+### 10.7 Current limit (ILIM, R_DS(on) sensing on Q2)
+
+DS p. 23-24, eq. 6, in R_DS(on) mode:
+
+    R_ILIM = (I_OUT(OCP) - dI_L/2) / I_RDSON * R_DS(on)Q2
+
+- **I_RDSON.** 200 uA at 27 C (DS p. 23), 180-220 uA at 25 C (DS p. 9), with a
+  +4500 ppm/C tempco.
+- **R_DS(on) value.** The DS examples use "typical at TJ = 25 C and VGS = 7.5 V"
+  (DS p. 37, p. 41). That is 4.8 mOhm (IFX p. 7, Diagram 8).
+- **Ripple.** dI_L at 12 V is 0.479 A (sec. 3).
+- **Setpoint.** I_OUT(OCP) = 3.0 A, 1.5 x rated. The DS examples sit at 1.3-1.4 x
+  (26 A for 20 A, p. 37; 11 A for 8 A, p. 41). More is used here to clear the
+  2.534 A load-step peak that sec. 3 measures. At this setpoint the
+  nominal peak inductor current at the limit is about 2.77 + 0.50 = 3.27 A at 14 V.
+  That is below the strictest Isat of 3.6 A at 10 % drop (CC p. 2).
+
+        R_ILIM = (3.0 - 0.24) / 200e-6 * 4.8e-3 = 66.3 Ohm   -> E96 66.5 Ohm, 1 % (R8)
+        valley trip (eq. 6 form) = 200 uA * 66.5 / 4.8 mOhm = 2.77 A
+
+- **C_ILIM.** DS p. 24: "Choose this capacitance such that the time constant
+  R_ILIM * C_ILIM is approximately 6 ns." 6 ns / 66.5 Ohm = 90 pF, so E12 82 pF C0G
+  50 V (C12), giving 5.5 ns. C_ILIM goes from ILIM to PGND; R_ILIM goes from ILIM to
+  SW (DS p. 50, layout item 4). C12 sees up to VIN plus ringing, hence 50 V.
+
+**Tolerance stack (the reason this section needs EE attention).** Eq. 6 omits the
+ILIM comparator threshold. DS p. 9 gives V_ILIM-TH as -8 / -2 / 3.5 mV
+(min/typ/max as extracted). At this design's sense level (2.77 A x 4.8 mOhm, which is
+13 mV) that offset is the same order as the signal. The trip is
+I = (I_RDSON x R_ILIM - V_TH) / R_DS(on):
+
+| Case | I_RDSON | R_DS(on) | V_TH | Valley trip |
+|---|---|---|---|---|
+| eq. 6 nominal | 200 uA | 4.8 m | 0 | 2.77 A |
+| typical incl. V_TH typ | 200 uA | 4.8 m | -2 mV | 3.19 A |
+| low corner, 25 C | 180 uA | 6.0 m (est. max) | +3.5 mV | 1.41 A |
+| low corner, -40 C | 180 uA x 0.71 | 6.0 m x 0.85 | +3.5 mV | 0.98 A |
+| high corner, 25 C | 220 uA | 4.8 m | -8 mV | 4.71 A |
+| high corner, 125 C | 220 uA x 1.45 | 4.8 m x 1.26 | -8 mV | 4.85 A |
+
+- **Temperature factors.** The R_DS(on) factors come from IFX p. 8, Diagram 9. The
+  I_RDSON factors are the +4500 ppm/C tempco.
+- **Normal-operation valley currents.** Up to 1.83 A in steady state (9 V input,
+  L +20 %). About 2.06 A in the 1 A to 2 A load-step cycle (2.534 A peak minus one
+  off-time ramp of 0.479 A).
+- **The stack.** Stacked worst case, the low corner can trip in normal operation. The
+  high corner lets the peak reach about 5.4-5.5 A, which is the 20 %-drop Isat.
+- **Choice of R8.** No E96 value satisfies both corners at once. Raising R8 to
+  90.9 Ohm puts the 25 C low corner at 2.1 A, but the high corner then reaches
+  about 6.5 A peak.
+- **Alternative.** The datasheet itself points to shunt sensing at low output
+  current (DS p. 24: "typically implemented at lower output current levels to provide
+  accurate overcurrent protection"). R_SENSE mode uses I_RS 100 uA +/-10 %, zero
+  tempco (DS p. 9).
+
+The proposal follows the DS procedure: R_DS(on) mode at 66.5 Ohm. Whether to move
+to shunt sensing is the first open EE-review question (AMB-128).
+
+**Temperature mismatch.** I_RDSON's +4500 ppm/C over-compensates this FET. Its
+R_DS(on) rises about +2500 ppm/C (IFX p. 8, Diagram 9: 0.97 at 20 C to 1.22 at
+120 C), so the trip current climbs about 13 % by 100 C.
+
+### 10.8 Type-III compensation (CN1: R3, R4, C6, C7, C8)
+
+**Topology.** DS Table 3 (p. 31):
+- R_C1 in series with C_C1, from COMP to FB.
+- C_C2 from COMP to FB.
+- R_C2 in series with C_C3, from VOUT to FB, in parallel with R_FB1.
+
+**Transfer functions.** DS Table 4 (p. 32), with the modulator line-feedforward gain
+V_IN/V_RAMP = k_FF = 15 (DS p. 22, p. 31; k_FF row DS p. 9). Because of
+feedforward, loop gain does not depend on V_IN.
+
+**Design equations.** DS eq. 15-16 (p. 33) and Table 5 (p. 33):
+
+    K_mid = (f_c / f_0) * (1 / k_FF) = R_C1 / R_FB1
+    R_C1 = K_mid * R_FB1;  C_C1 = 2/(w_z1 R_C1);  C_C2 = 1/(w_p2 R_C1)
+    C_C3 = 1/(w_z2 R_FB1); R_C2 = 1/(w_p1 C_C3)
+
+**Plant.** Sections 4 and 7:
+
+    f_0   = 1 / (2 pi sqrt(10 uH * 36 uF)) = 8388 Hz
+    f_ESR = 1 / (2 pi * 2 mOhm * 36 uF)    = 2.21 MHz
+
+**Placement.** The DS premise (p. 33) is w_z1 = 0.5 w_0, w_z2 = w_0,
+w_p1 = w_ESR, w_p2 = w_SW/2. This design follows it for both zeros, so the first
+zero sits at half the LC resonance and the second on it, and departs from it in
+one place:
+- **w_p1 at fsw/2.** The ESR zero (2.21 MHz) is above fsw/2, so placing w_p1 on it
+  cancels nothing. w_p1 is placed at fsw/2 = 250 kHz, beside w_p2.
+
+The deck's PID places a double zero on the LC resonance instead (sec. 7). An
+earlier draft of this network did the same (C_C1 = 1/(w_0 R_C1), 2.7 nF); it is
+not used, because its phase margin fell below the DS's 50-70 deg target at light
+load and at the L +20 %, C +22 % corner (loop estimate below).
+
+**Ideal values and E-series picks:**
+
+    K_mid = (30e3 / 8388) / 15 = 0.2384
+    R_C1  = 0.2384 * 31.2 k = 7.44 k              -> E96 7.50 k (R3)
+    C_C1  = 2 / (2 pi 8388 * 7.44 k) = 5.10 nF    -> E12 5.6 nF C0G (C6)
+    C_C2  = 1 / (2 pi 250e3 * 7.44 k) = 85.6 pF   -> E12 82 pF C0G (C7)
+    C_C3  = 1 / (2 pi 8388 * 31.2 k) = 608 pF     -> E12 560 pF C0G (C8)
+    R_C2  = 1 / (2 pi 250e3 * 560 pF) = 1137 Ohm  -> E96 1.13 k (R4)
+
+Why these neighbours:
+- **C_C1.** 4.7 nF is fractionally nearer the ideal by ratio (8.5 % against 9.8 %) and
+  would also hold the phase-margin window (53.7-59.4 deg by the same estimate).
+  5.6 nF errs toward a lower z1, which adds about 1 deg at every corner.
+- **C_C3.** The exact expression includes R_C2: w_z2 = 1/((R_FB1 + R_C2) C_C3) (DS
+  Table 3), so the ideal is 586 pF. 560 pF lands 4.8 % above f_0; 680 pF would land
+  13 % below.
+
+**Resulting singularities:**
+- f_z1 = 1/(2 pi 7.5k 5.6n) = 3.79 kHz
+- f_z2 = 1/(2 pi 32.33k 560p) = 8.79 kHz
+- f_p1 = 1/(2 pi 1.13k 560p) = 251.5 kHz
+- f_p2 = 1/(2 pi 7.5k (5.6n series 82p)) = 262.6 kHz
+- K_mid = 7.5/31.2 = 0.2404. Eq. 15 gives f_c = f_0 K_mid k_FF = 30.2 kHz.
+
+**Loop estimate.** The loop was evaluated numerically with a small model that is
+not committed; what it contains is stated here so it can be rebuilt:
+- the exact op-amp network impedances, including R_FB2;
+- finite error-amplifier gain (94 dB, 6.5 MHz GBW, DS p. 8);
+- the LC with R_DAMP = R_DS(on) + DCR = 26.3 mOhm (DS Table 3 footnote 2), ESR, and
+  a resistive load;
+- k_FF = 15.
+
+It does not model PWM sampling or propagation delay, which typically cost a few
+degrees at f_c/f_sw = 0.06.
+
+| Condition | f_c | Phase margin | Gain margin |
+|---|---|---|---|
+| nominal, 2 A | 31.5 kHz | 59.9 deg | 23.5 dB at 231 kHz |
+| 1 A | 31.6 kHz | 57.3 deg | 23.4 dB |
+| 0.1 A | 31.6 kHz | 54.9 deg | 23.3 dB |
+| L -20 % | 38.2 kHz | 59.8 deg | 21.5 dB |
+| L +20 % | 27.0 kHz | 59.2 deg | 25.1 dB |
+| Ceff 30 uF | 36.8 kHz | 60.5 deg | 21.7 dB |
+| Ceff 44 uF | 26.6 kHz | 58.3 deg | 25.6 dB |
+| L -20 %, Ceff 30 uF | 44.8 kHz | 59.4 deg | 19.7 dB |
+| L +20 %, Ceff 44 uF | 22.9 kHz | 56.7 deg | 27.2 dB |
+
+Crossover lands at about 30 kHz as sec. 7 intends: 31.5 kHz nominal, 23-45 kHz
+over the L and C corners. Phase margin is 59.9 deg nominal and 54.9-60.5 deg over
+every row, inside the DS target of 50-70 deg (p. 33). The double zero at f_0
+(2.7 nF, all else equal) gave 52.8 deg nominal and 47.6-54.4 deg over the same
+rows, at the same crossover.
+
+**Cross-check against sec. 7.**
+- Sec. 7's |Gc(fc)| = 4.4 is defined against the error V_REF - V_FB, with a deck
+  modulator gain of 12 (V_IN over a 1 V ramp). The equivalent for the LM25145,
+  K_mid (f_c/f_0) / h = 0.24 x 3.6 / 0.242 = 3.5 at k_FF = 15, gives the same product
+  (4.4 x 12 = 53 against 3.5 x 15 = 53).
+- So the network reproduces the deck's crossover. It is not the deck's PID: the
+  deck's KP, KI and KD are unchanged and are not derived from these parts.
+
+### 10.9 PGOOD
+
+PGOOD is open drain and needs a pull-up of at most 13 V, typically 10-100 k
+(DS p. 19). Pick: 49.9 k to VOUT (R9), the value DS Figure 46 uses (p. 36). It draws
+66 uA with PGOOD low. PGOOD-low voltage is at most 150 mV at 2 mA (DS p. 8).
+
+Thresholds (DS p. 19) in VOUT terms, with the 3.296 V set point:
+- rising 94 %: 3.10 V
+- falling 92 %: 3.03 V
+- over-voltage 108 %: 3.56 V, recovery 105 %: 3.46 V
+- deglitch: 25 us
+
+Nothing in the benchmark consumes PGOOD. It is included so the open-drain pin is
+terminated and observable. Dropping R9 is acceptable; PGOOD then becomes
+`isolated`.
+
+### 10.10 SYNCIN and SYNCOUT
+
+- **SYNCIN** is tied to VCC: forced PWM (DS p. 26, 8.4.4). The deck's switch node is
+  an always-synchronous pair that conducts negative inductor current. Forced PWM is
+  the hardware mode it models, and the deck's 1 A minimum load keeps it in CCM
+  regardless. SYNCIN input resistance is 20 k (DS p. 8), so it costs 375 uA from VCC.
+- **SYNCOUT** is unused.
+
+### 10.11 Assumptions, stated once
+
+1. The 36 uF effective output capacitance, 2 mOhm ESR and 20.4 mOhm DCR are the
+   numbers of sections 3 and 4. They are not re-derived here.
+2. Q2 R_DS(on) for eq. 6 is 4.8 mOhm, read from a typical-curve plot (IFX Diagram 8)
+   at I_D = 50 A, not 2-3 A. Its maximum at 7.5 V gate drive is an estimate, scaled by
+   5.9/4.7 from the 10 V row.
+3. **Extraction alignment.** DS EC-table values from pp. 8-9 were read through a text
+   extraction whose columns shift. The affected rows are V_EN, I_EN-HYS, V_ILIM-TH,
+   FSW2 and T_ON(MIN). The min/typ/max assignment of V_ILIM-TH (-8/-2/3.5 mV) is the
+   one most worth confirming against the PDF.
+4. **Tolerances from MPN codes.**
+   - Capacitor tolerance for C2 and C3 (+/-10 %) comes from the Murata MPN code "K".
+     parts.yaml states no tolerance for them.
+   - C0G parts are +/-5 % (code "J").
+5. **Catalog checks.** Every new MPN follows the manufacturer's published ordering-code
+   pattern for that value, and every value is a member of the series the line is sold
+   in. NONE was checked against a distributor: the only network access this
+   derivation had was the three datasheets. parts.yaml's history (a fabricated R1
+   MPN shipped for two audit rounds) is the reason this matters.
+6. **Ground and layout.** There is one ground net. Layout (loop areas, the snubber
+   footprint the DS suggests on p. 49, an optional 2-10 Ohm resistor in series with
+   C10, p. 49) is out of scope: the DSL carries no placement in v1.
+
+## 11. LM25145 pin map (PROPOSAL, EE review required, AMB-128)
+
+Source: TI, "LM25145 6-V to 42-V Synchronous Buck DC-DC Controller With Wide
+Duty Cycle Range", https://www.ti.com/lit/ds/symlink/lm25145.pdf, 62 pages, revision
+history "June 2017, *, Initial release" (p. 2), read 2026-10-22. Page numbers below
+are that PDF's printed page numbers. Pin numbers, names and types come from section 6,
+"Pin Configuration and Functions" (pp. 4-5). The PDF-to-text extraction used to read
+it was checked against the table of contents page by page.
+
+Type column (datasheet footnote, p. 4): P = power, G = ground, I = input, O = output.
+"Role" is the T2 lattice role `buck-3v3.rhoform` declares
+(`lang/grammar/rhoform_syntax.py` CLOSED_VOCABULARIES pin_role). "Rhoform pin" is the
+datasheet name with `/` written `_`, because a pin name must be an identifier.
+
+| Pin | Datasheet name | Type | Function (datasheet, condensed) | Rhoform pin | Role | Connection in this design | Net |
+|---|---|---|---|---|---|---|---|
+| 1 | EN/UVLO | I | Enable and UVLO programming. Below 0.4 V shutdown; 0.4-1.2 V standby; above 1.2 V switching. A 10 uA source turns on above 1.2 V for hysteresis (p. 4) | EN_UVLO | input | Midpoint of R6 (100 k, to VIN) and R7 (16.5 k, to GND): on at about 8.47 V, off at about 7.47 V | EN |
+| 2 | RT | I | Oscillator frequency resistor to AGND. Required even when SYNCIN is clocked (p. 4) | RT | input | R5 20.0 k to GND (500 kHz) | RT |
+| 3 | SS/TRK | I | Soft-start capacitor, charged by 10 uA; tracking input. Minimum 2.2 nF to AGND (p. 4) | SS_TRK | input | C9 6.8 nF C0G to GND (about 544 us) | SS |
+| 4 | COMP | O | Error amplifier output. The compensation network goes between COMP and FB (p. 4) | COMP | output | CN1: R3 (7.50 k) in series with C6 (5.6 nF) to FB, and C7 (82 pF) to FB | COMP |
+| 5 | FB | I | Inverting error amplifier input, regulates to 0.8 V (p. 4) | FB | input | R1/R2 divider midpoint; C6, C7, and C8 (560 pF, in series with R4 1.13 k from VOUT) | FB |
+| 6 | AGND | P | Analog ground, return for the 0.8 V reference (p. 5) | AGND | power_in | Ground plane (single GND net) | GND |
+| 7 | SYNCOUT | O | Clock output 180 degrees out of phase with HO (p. 5) | SYNCOUT | output | Unused. Declared `isolated u1.SYNCOUT` | (isolated) |
+| 8 | SYNCIN | I | Clock input; logic low or floating enables diode emulation, logic high forces PWM (pp. 5, 26) | SYNCIN | input | Tied directly to VCC: forced PWM, matching the deck's always-synchronous switch model (p. 26: "tie SYNCIN to VCC either directly or using a pullup resistor") | VCC |
+| 9 | NC | - | No electrical connection (p. 5) | NC9 | nc | Not connected in the netlist | - |
+| 10 | PGOOD | O | Open-drain power-good output; pull-up to at most 13 V, typically 10-100 k (pp. 5, 19) | PGOOD | open_drain | R9 49.9 k pull-up to VOUT | PGOOD |
+| 11 | ILIM | I | Valley current-limit resistor; in RDS(on) mode the other end goes to the low-side FET drain (SW) (p. 5) | ILIM | input | R8 66.5 ohm to SW; C12 82 pF to GND (PGND) | ILIM |
+| 12 | PGND | P | Low-side driver power ground; connect directly to the low-side FET source (p. 5) | PGND | power_in | Ground plane (single GND net) | GND |
+| 13 | LO | P | Low-side gate drive output (p. 5) | LO | output | Q2 gate | LO |
+| 14 | VCC | O | 7.5 V bias regulator output; decouple locally to PGND (p. 5) | VCC | power_out | C11 2.2 uF to GND; also feeds SYNCIN | VCC |
+| 15 | EP | - | Pin internally connected to the exposed pad; electrically isolated (p. 5) | EP (with pad 21) | passive | Ground plane | GND |
+| 16 | NC | - | No electrical connection (p. 5) | NC16 | nc | Not connected in the netlist | - |
+| 17 | BST | O | Bootstrap supply for the high-side driver; connect to the bootstrap capacitor (p. 5) | BST | power_out | C10 100 nF to SW | HB |
+| 18 | HO | P | High-side gate drive output (p. 5) | HO | output | Q1 gate | HO |
+| 19 | SW | P | Switch node; bootstrap capacitor, high-side source, low-side drain (p. 5) | SW | passive | Q1 source, Q2 drain, L1, C10, R8 | SW |
+| 20 | VIN | P | Supply input for the VCC LDO (p. 5) | VIN | power_in | Input rail; C3 100 nF local bypass | VIN |
+| pad | Exposed pad | - | "Electrically isolated. Solder to the system ground plane to reduce thermal resistance." (p. 5); p. 4: "Connect Exposed Pad on bottom to AGND and PGND on the PCB." | EP (designator 21) | passive | Ground plane | GND |
+
+### Decisions and assumptions in this map
+
+1. **The datasheet calls the bootstrap pin BST, not HB.** The bootstrap net is
+   named `HB`, and it joins `u1.BST` to C10.
+2. **There is no VDDA pin on the LM25145.** Its 20 pins are listed above; the only bias
+   rail is VCC, so "VCC/VDDA decoupling" reduces to the VCC capacitor (C11). A VDDA
+   pin exists on other TI controllers, not on this one.
+3. **Exposed-pad designator 21.** The datasheet does not number the exposed pad; it is
+   row "-" in the pin table (p. 5). Pin 15 (EP) is "internally connected to exposed pad",
+   so the source declares one port `EP` with designators `15 21`. The number 21 is an
+   assumption: it is the common footprint convention for a 20-pin package plus one
+   exposed pad. The KiCad footprint that R30 eventually binds must agree.
+4. **Two NC pins, two ports.** Pins 9 and 16 are separate pads with no internal
+   connection, so they are separate `nc` ports (`NC9`, `NC16`). One port carrying
+   both designators would claim the two pads are one node. The layout guidance
+   (11.1.4, p. 50) suggests tying them to the thermal land with copper for heat
+   spreading; that is a layout decision and is not in the netlist.
+5. **Roles where the datasheet type is P.**
+   - AGND and PGND are `power_in`, matching the bake-off library's ground pins.
+   - LO and HO are `output`: they drive gates, and the gates are declared `input`.
+   - SW is `passive`, not `power_in`. Its net has no power source of its own; it is
+     driven by the FETs, which are passive. `power_in` there would make a T2 driver
+     check demand a `power_out` that no part provides.
+   - VIN is `power_in`.
+   - BST is `power_out`. The datasheet types it O: the integrated diode charges C10
+     from it.
+   - EP is `passive`. It is electrically isolated from the die circuits and soldered
+     to ground.
+6. **AGND and PGND share one net.** The datasheet's layout guidance (11.1.5, p. 50)
+   puts PGND, and the exposed pad under it, on the system ground plane, and
+   p. 4 connects the exposed pad to both AGND and PGND. There is no split ground, so
+   no section 8-Q6 net tie is needed.
+7. **Unused functions.**
+   - SYNCOUT: driven, unused, declared `isolated`.
+   - Tracking: SS/TRK carries only the soft-start capacitor.
+   - External VCC bias (Figure 32, p. 18): not used. At 14 V maximum input the LDO
+     dissipates about 57 mW (sec. 10.6).
+
+### MOSFET pinout (Q1, Q2)
+
+Infineon BSC059N04LS6, datasheet rev. 2.1 (2020-07-22), p. 1 pin diagram:
+S = 1, 2, 3; G = 4; D = 5, 6, 7, 8. The package on p. 1 is "PG-TDSON-8 FL" (fused
+lead). parts.yaml writes "PG-TDSON-8 (SuperSO8 5x6)". The large drain pad is part of
+the drain leadframe and shares the D designators, which is an assumption about the
+footprint. Roles: d passive, s passive, g input.
+
+| Instance | d (5-8) | g (4) | s (1-3) |
+|---|---|---|---|
+| q1 (high side) | VIN | HO | SW |
+| q2 (low side) | SW | LO | GND |
+
+### Inductor
+
+Coilcraft XGL6060-103ME (datasheet p. 2 table), two terminals declared `a` (1) and
+`b` (2). l1.a is on SW and l1.b is on VOUT. The part is unpolarised, so the assignment
+is arbitrary.
