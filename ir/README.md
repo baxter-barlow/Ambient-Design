@@ -274,9 +274,9 @@ under the sentence forbidding raw-byte hashing -- and that digest matched
 neither the recipe's actual output nor the committed hash. It was residue of a
 half-deleted block, which also left the paragraph above starting mid-sentence.
 
-`source_hash`, the source-map file digests, and all byte/line offsets in the examples remain
-shape-valid placeholders: their sources were never committed, so there is nothing to hash or
-index. The examples also predate the unit rule (their resistances are in base `ohm`, where the
+`source_hash` (written before its serialization was pinned), the source-map file digests, and
+all byte/line offsets in the examples remain shape-valid placeholders: their sources were never
+committed, so there is nothing to hash or index. The examples also predate the unit rule (their resistances are in base `ohm`, where the
 elaborator writes value 100 in `kohm`) and the naming rules, so `blinker.ir.json` is a structural oracle
 for benchmark (a), not byte-exact compiler output. The compiler's own output, with honest hashes
 and offsets, is the benchmark goldens beside each living source in `benchmarks/<id>/`.

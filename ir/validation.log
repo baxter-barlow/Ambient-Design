@@ -33,7 +33,7 @@ exit=0
 Command: python3 tests/ir/check-hashes.py
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/blinker.rhoform does not exist yet
 ir-hashes: unverified: ir/examples/blinker.sourcemap.json: ir/examples/lib/indicator.rhoform does not exist yet
-ir-hashes: unverified: ir/examples/blinker.ir.json: source_hash is unverifiable — the IR spec pins no serialization for the (path, sha256) list it hashes
+ir-hashes: unverified: ir/examples/blinker.ir.json: source_hash is unverified — this hand-written example predates the pinned serialization and carries a placeholder
 ir-hashes: PASS: 3 document(s) hash to their committed design_hash, and every paired source map agrees.
 exit=0
 
