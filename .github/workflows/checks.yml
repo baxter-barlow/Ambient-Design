@@ -224,6 +224,11 @@ jobs:
         run: |
           python3 tests/conformance/check-conformance.py --self-test
           python3 tests/conformance/check-conformance.py
+      - name: Committed sources are in canonical form
+        # The Makefile's fmt-check target, verbatim. Parse cases and the
+        # formatter cases' inputs are deliberately non-canonical (F-13).
+        run: |
+          python3 -m rhoform fmt --check benchmarks/ spec/conformance/elaborate/ spec/conformance/fmt/*.expected.rhoform
 
   eval-harness:
     name: Measurement harness

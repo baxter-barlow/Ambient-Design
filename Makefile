@@ -3,7 +3,7 @@
 # (.github/workflows/checks.yml) execute identical logic. Tool versions
 # are pinned in toolchain/versions.yaml.
 
-.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance eval-tests gate-coverage sim golden
+.PHONY: all check policy structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance fmt-check eval-tests gate-coverage sim golden
 
 # gate-coverage MUTATES gate files in place (blank one report site, run the
 # self-test, restore). Under -j another target can execute a gate while its
@@ -25,7 +25,7 @@ all: check policy sim golden
 # Static repository gates: layout invariants, schema validation, the
 # cross-reference lint JSON Schema cannot express, and the measurement
 # harness's own tests.
-check: structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance eval-tests gate-coverage
+check: structure pins schemas lint ir-hashes corpus bakeoff grammar diagnostics conformance fmt-check eval-tests gate-coverage
 
 # Monorepo layout invariants (allowlisted top-level dirs, root Markdown
 # policy, required files, JSON well-formedness under ir/).
@@ -126,6 +126,15 @@ diagnostics:
 conformance:
 	python3 tests/conformance/check-conformance.py --self-test
 	python3 tests/conformance/check-conformance.py
+
+# The canonical form, enforced (R16/I1 through the R18 CLI): every committed
+# source the formatter owns is already what `rhoform fmt` writes. The parse
+# cases and the formatter cases' inputs are deliberately non-canonical and
+# stay out (F-13). A directory argument covers every *.rhoform under it, and
+# one with none exits 2, so this cannot pass by checking nothing. Needs the
+# lark pin; the CLI exits 2 without it.
+fmt-check:
+	python3 -m rhoform fmt --check benchmarks/ spec/conformance/elaborate/ spec/conformance/fmt/*.expected.rhoform
 
 # Measurement-harness tests (eval/). stdlib unittest only, so this needs no
 # dependency beyond the pinned interpreter; the harness's optional tiktoken
