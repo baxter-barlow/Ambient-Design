@@ -316,7 +316,10 @@ Elaboration reports in block 2 (`RHO2xxx`, see
 holds one reject case for every block-2 code a source can trigger.
 
 - A defect in a module's body is reported once per module, however many
-  times the module is instantiated.
+  times the module is instantiated. That includes a defect of a
+  flattened net (RHO2026 to RHO2028): the copies of it that each
+  instance of the module makes, alike but for instance paths, are one
+  diagnostic.
 - A diagnostic about an IR entity SHOULD carry that entity's identity
   in `entity`: an instance or assertion path when its module is
   elaborated at exactly one path, a net's final name for a defect of a
