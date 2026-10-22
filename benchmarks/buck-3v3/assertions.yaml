@@ -4,7 +4,8 @@
 # switching cycle and NOT converged for a 500 kHz PWM comparator with no event
 # detection. The figures in this paragraph are measurements of the RETIRED
 # 31.6k-divider deck of that era (design.md sec. 9 retires them; the shipped
-# 31.2k deck reads 6.435 mV / 0.5159 A / 0.0964 % at 40 ns) -- an earlier
+# 31.2k deck with R10 reads 6.855 mV / 0.5190 A / 0.1030 % at 40 ns, the
+# 40 ns row of design.md's Convergence table) -- an earlier
 # revision quoted them in the present tense with the divider unstated, so two
 # shipped documents disagreed on the same nominal quantities (round 18). On
 # that retired deck: vout_pp read 7.09 mV against a converged 3.64 mV, il_pp
