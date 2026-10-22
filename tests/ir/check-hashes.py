@@ -21,19 +21,17 @@ WHAT THIS CAN AND CANNOT CHECK, stated rather than blurred:
   design_hash          verifiable today, and verified here.
   source-map pairing   verifiable today: consumers must reject a pair whose
                        `design_hash` values disagree, so the two must match.
-  source_hash          NOT verifiable, and NOT because the sources are
-                       missing — the schema defines it as a sha256 over the
-                       sorted (path, sha256) pairs, and the source map
-                       carries those today. It is the SERIALIZATION of that
-                       list that no document pins: separator, encoding and
-                       line ending are all unstated, so there is no single
-                       byte string to hash. Pin it in the IR spec and this
-                       becomes checkable; until then the committed value is
-                       a placeholder and is reported as unverified rather
-                       than passed.
-  files[].sha256       checked the moment the file exists at its
-                       repository-relative path; reported unverified until
-                       then.
+  source_hash          its serialization is pinned (ir/README.md, spec 04):
+                       the rhoform-canonical-json/1 bytes of the [path,
+                       sha256] pairs, sorted by path, each path relative to
+                       the compile root. Verified for the benchmark goldens
+                       below. The hand-written ir/examples document predates
+                       that rule and carries a placeholder, so for it the
+                       value is reported as unverified rather than passed.
+  files[].sha256       checked the moment the file exists at its path;
+                       reported unverified until then. ir/examples has no
+                       compile root (its sources were never committed), so
+                       its paths are resolved against the repository root.
 
 BENCHMARK GOLDENS. Each benchmark's living source has the IR and source map
 the elaborator makes of it committed beside it, as
@@ -545,8 +543,8 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str],
                 "IR no longer names the sources its paired map describes.")
     elif header.get("source_hash"):
         notes.append(
-            f"{rel}: source_hash is unverifiable — the IR spec pins no "
-            "serialization for the (path, sha256) list it hashes"
+            f"{rel}: source_hash is unverified — this hand-written example "
+            "predates the pinned serialization and carries a placeholder"
         )
 
 

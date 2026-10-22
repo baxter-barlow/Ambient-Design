@@ -70,7 +70,7 @@
         "source_hash": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$",
-          "description": "Hash of the DSL source set: sha256 over the sorted list of (repo-relative path, file sha256) pairs. Binds this IR to the exact sources it was elaborated from; the source map's file table must be consistent with it."
+          "description": "Hash of the DSL source set: \"sha256:\" plus the sha256 of the rhoform-canonical-json/1 bytes of the list of [path, file sha256] pairs for every source file read, sorted by path. Each path is POSIX and relative to the compile root (spec/language/04-elaboration.md, ir/README.md). Binds this IR to the exact sources it was elaborated from; the source map's file table must be consistent with it."
         },
         "generator": {
           "type": "object",
