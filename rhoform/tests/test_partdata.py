@@ -614,15 +614,18 @@ def _hook(event, args):
                                  "smtplib", "ssl"):
         events.append(["network", event])
 sys.addaudithook(_hook)
-record = sys.argv[2]
+record, legacy = sys.argv[2], sys.argv[3]
 marks = {}
-marks["first"] = len(events); partdata.load(record)
-marks["second"] = len(events); doc = partdata.load(record).document
+marks["v1_first"] = len(events); partdata.load(record)
+marks["v1_second"] = len(events); doc = partdata.load(record).document
+marks["v0_first"] = len(events); partdata.load(legacy)
+marks["v0_second"] = len(events); old = partdata.load(legacy).document
 marks["pure"] = len(events)
 data = open(record, "rb").read()
 marks["after_read"] = len(events)
 partdata.parse(data); partdata.layout_problems(data); partdata.revision(data)
-partdata.lint_problems(doc, []); partdata.validate(doc)
+partdata.lint_problems(doc, []); partdata.validate(doc); partdata.validate(old)
+partdata.store_path(doc["part_id"])
 partdata.bind(doc, "rhoform.lib.timer.Ne555", [("vcc", "power_in", ("8",))])
 marks["end"] = len(events)
 print(json.dumps({"events": events, "marks": marks, "python": _python}))
@@ -631,11 +634,30 @@ print(json.dumps({"events": events, "marks": marks, "python": _python}))
 
 @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
 class HermeticTest(unittest.TestCase):
-    def test_load_opens_its_path_and_its_schema_and_nothing_else(self):
-        done = subprocess.run(
-            [sys.executable, "-c", _AUDIT, str(ROOT), str(NE555)],
-            capture_output=True, text=True, timeout=120,
-            env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    """partdata opens the path it is given and, once per process per
+    schema_version, the toolchain's own schema file for that version
+    (parts/part-data[.vN].schema.json); it lists nothing, starts no process,
+    and opens no network connection."""
+
+    def test_the_module_states_this_rule_word_for_word(self):
+        def words(text):
+            return " ".join(text.split())
+        self.assertIn("HERMETIC. " + words(HermeticTest.__doc__),
+                      words(partdata.__doc__))
+
+    def test_load_opens_its_path_and_its_versions_schema_once_only(self):
+        # A version 0 record too, so "once per schema_version" is held for
+        # each version and not only for the first one validated.
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = Path(tmp) / "v0.part.json"
+            legacy.write_bytes(partdata.canonical_layout(
+                (EXAMPLES / "ti-sn74hc00d.part.json").read_bytes()))
+            done = subprocess.run(
+                [sys.executable, "-c", _AUDIT, str(ROOT), str(NE555),
+                 str(legacy)],
+                capture_output=True, text=True, timeout=120,
+                env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+            legacy = os.path.realpath(legacy)
         self.assertEqual(done.returncode, 0, done.stderr)
         report = json.loads(done.stdout)
         real = os.path.realpath
@@ -653,14 +675,18 @@ class HermeticTest(unittest.TestCase):
                         for p in python)]
 
         events, marks = report["events"], report["marks"]
-        schema = real(ROOT / "parts" / "part-data.v1.schema.json")
+        v1_schema = real(ROOT / "parts" / "part-data.v1.schema.json")
+        v0_schema = real(ROOT / "parts" / "part-data.schema.json")
         record = real(NE555)
         self.assertFalse([e for e in events if e[0] in ("network", "spawn")])
-        self.assertEqual(ours(events[marks["first"]:marks["second"]]),
-                         [record, schema])
-        self.assertEqual(ours(events[marks["second"]:marks["pure"]]),
-                         [record])
-        self.assertEqual(ours(events[marks["after_read"]:marks["end"]]), [])
+        for start, end, want in (
+                ("v1_first", "v1_second", [record, v1_schema]),
+                ("v1_second", "v0_first", [record]),
+                ("v0_first", "v0_second", [legacy, v0_schema]),
+                ("v0_second", "pure", [legacy]),
+                ("after_read", "end", [])):
+            with self.subTest(window=start):
+                self.assertEqual(ours(events[marks[start]:marks[end]]), want)
 
 
 if __name__ == "__main__":
