@@ -205,8 +205,10 @@ def store_problems(path, data, doc, problems):
     for problem in partdata.layout_problems(data):
         problems.append(f"{path}: {problem.check}: {problem.message}")
     part_id = doc.get("part_id")
-    expected = partdata.store_path(part_id) if isinstance(part_id, str) \
-        and part_id.count("/") == 1 else None
+    try:
+        expected = partdata.store_path(part_id)
+    except partdata.PartDataError:
+        expected = None
     if expected is None or Path(path).resolve() != expected.resolve():
         problems.append(
             f"{path}: store: part_id {part_id!r} belongs at "
@@ -473,6 +475,10 @@ def self_test():
             ("a store record off its part_id's path is caught",
              lambda: store_problems(STORE / "acme" / "elsewhere.part.json",
                                     canonical, good, []), "belongs at rhoform/parts/acme/mcu.part.json"),
+            ("a store record whose part_id climbs out of the store is caught",
+             lambda: store_problems(STORE / "acme" / "mcu.part.json",
+                                    canonical, dict(good, part_id="../mcu"),
+                                    []), "belongs at <no valid path>"),
             ("a non-canonical store record is caught",
              lambda: store_problems(STORE / "acme" / "mcu.part.json",
                                     canonical.replace(b"\n", b"\r\n"), good,

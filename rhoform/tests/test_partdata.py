@@ -193,6 +193,36 @@ class IdentityTest(unittest.TestCase):
                 self.assertEqual(
                     partdata.store_path(_doc(path)["part_id"]), path)
 
+    def test_the_part_id_rule_is_the_schemas(self):
+        for name in ("part-data.schema.json", "part-data.v1.schema.json"):
+            with self.subTest(schema=name):
+                schema = json.loads((ROOT / "parts" / name).read_text(
+                    encoding="utf-8"))
+                self.assertEqual(partdata.PART_ID.pattern,
+                                 schema["properties"]["part_id"]["pattern"])
+
+    def test_an_id_that_is_not_a_part_id_is_refused_not_resolved(self):
+        # `../x` resolved to a file beside the store, and `a/../../b` died
+        # in the split with a bare ValueError.
+        for part_id in ("../x", "a/../../b", "ti/../../etc/passwd",
+                        "/etc/passwd", "/ti/ne555p", "ti/ne555p/",
+                        "ti\\ne555p", "ti/..\\..\\x", "..", "ti/..", "ti/.",
+                        "./ne555p", "", "ti", "ti/ne555p/x", "TI/NE555P",
+                        "ti/ne555p\n", None, 42, b"ti/ne555p"):
+            with self.subTest(part_id=part_id):
+                with self.assertRaises(partdata.PartDataError) as caught:
+                    partdata.store_path(part_id)
+                self.assertEqual(
+                    [p.check for p in caught.exception.problems], ["part_id"])
+
+    def test_every_id_it_admits_names_a_file_one_level_under_the_store(self):
+        for part_id in ("ti/ne555p", "a/b..c", "x-1/y.z_2"):
+            with self.subTest(part_id=part_id):
+                path = partdata.store_path(part_id)
+                self.assertEqual(path.parent.parent, partdata.STORE)
+                self.assertEqual(os.path.normpath(path), str(path))
+                self.assertTrue(path.name.endswith(partdata.RECORD_SUFFIX))
+
 
 @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
 class VersionTest(unittest.TestCase):
