@@ -575,9 +575,13 @@ class ViewTest(unittest.TestCase):
                          ["joint_download_boot", "spi_boot"])
 
 
-# Runs in a child before anything is called: every path opened and every
-# network attempt is recorded, and the interpreter's own install locations
-# are reported so they can be set aside (imports read them).
+# Runs in a child before anything is called: every path opened or listed,
+# every network attempt and every process started is recorded, and the
+# interpreter's own install locations are reported so they can be set aside
+# (imports read and list them). Listing is recorded because it is how a
+# reader would SEARCH the store, which has no index precisely so that
+# nothing does; an open-only hook let a load() that listed rhoform/parts
+# pass unchanged.
 _AUDIT = r'''
 import json, os, site, sys, sysconfig
 sys.path.insert(0, sys.argv[1])
@@ -587,10 +591,25 @@ _python = sorted(set(sysconfig.get_paths().values())
                  | set(site.getsitepackages())
                  | {site.getusersitepackages(), sys.prefix, sys.base_prefix,
                     sys.exec_prefix, sys.base_exec_prefix})
+_LIST = ("os.listdir", "os.scandir", "os.walk", "os.fwalk", "glob.glob",
+         "glob.glob/2", "pathlib.Path.glob", "pathlib.Path.rglob",
+         "pathlib.Path.walk")
+_SPAWN = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
+          "os.spawn", "os.fork", "os.forkpty", "os.startfile", "pty.spawn")
 events = []
+def _path(arg):
+    if isinstance(arg, (str, bytes, os.PathLike)):
+        return os.fsdecode(os.fspath(arg))
+    # os.scandir() with no argument lists the working directory, and an
+    # integer is a directory descriptor: both are listings all the same.
+    return os.getcwd() if arg is None else repr(arg)
 def _hook(event, args):
     if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
         events.append(["open", os.fsdecode(os.fspath(args[0]))])
+    elif event in _LIST:
+        events.append(["list", _path(args[0] if args else None)])
+    elif event in _SPAWN:
+        events.append(["spawn", event])
     elif event.split(".")[0] in ("socket", "http", "urllib", "ftplib",
                                  "smtplib", "ssl"):
         events.append(["network", event])
@@ -623,16 +642,20 @@ class HermeticTest(unittest.TestCase):
         python = [real(p) for p in report["python"]]
 
         def ours(events):
-            return [real(path) if kind == "open" else kind + ":" + path
+            # An open is shown as its path and a listing as `list:` and its
+            # path, both unless the interpreter's own files are the subject.
+            return [(real(path) if kind == "open"
+                     else kind + ":" + (real(path) if kind == "list"
+                                        else path))
                     for kind, path in events
-                    if kind != "open" or not any(
+                    if kind not in ("open", "list") or not any(
                         real(path) == p or real(path).startswith(p + os.sep)
                         for p in python)]
 
         events, marks = report["events"], report["marks"]
         schema = real(ROOT / "parts" / "part-data.v1.schema.json")
         record = real(NE555)
-        self.assertFalse([e for e in events if e[0] == "network"])
+        self.assertFalse([e for e in events if e[0] in ("network", "spawn")])
         self.assertEqual(ours(events[marks["first"]:marks["second"]]),
                          [record, schema])
         self.assertEqual(ours(events[marks["second"]:marks["pure"]]),
