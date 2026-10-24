@@ -591,7 +591,7 @@ module Board:
         self.assertEqual(self.codes(board()), [("RHO3110", "VCC")])
         self.assertEqual(self.codes(board("(capacitance = 100nF)")), [])
         stated = board(":\n        part abstract:\n"
-                       "            capacitance = 100nF")
+                       "            capacitance = 100nF +/- 10%")
         self.assertEqual(self.codes(stated), [])
         # A capacitor to a net that is not ground-typed does not count
         # (and leaves REF a net of one pin). The power input on GND is a
