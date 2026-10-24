@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.3
+component Ldo:
+    pin vin power_in 1
+    pin vout power_out 2
+    regualte vout from vin

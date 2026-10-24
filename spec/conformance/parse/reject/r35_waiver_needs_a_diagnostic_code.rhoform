@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.3
+module Rail:
+    port vin power_in
+    waive ERC vin "checked by hand"

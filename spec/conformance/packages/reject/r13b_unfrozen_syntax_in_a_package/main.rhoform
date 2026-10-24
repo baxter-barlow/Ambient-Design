@@ -1,0 +1,11 @@
+# OD8: syntax 0.3 is unfrozen, so the toolchain parses it but announces
+# only the frozen language versions; no package range can admit 0.3.0
+# until it is frozen, and a 0.3 file in a package is refused.
+#pragma rhoform-syntax 0.3
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    vin ~ r.a
+    r.b ~ gnd

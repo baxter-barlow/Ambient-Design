@@ -141,11 +141,14 @@ def range_admits(text: str, version: str) -> bool:
 
 
 def language_versions() -> tuple[str, ...]:
-    """The language versions this toolchain implements: each syntax
-    version the grammar lists, plus `.0` (decision S-3)."""
-    from .parser import syntax_versions
+    """The language versions this toolchain implements and announces: each
+    frozen syntax version the grammar lists, plus `.0` (decision S-3). An
+    unfrozen version (0.3, decision OD8) parses, but no manifest's range can
+    admit it: it may still change shape, and no release ships while it is
+    unfrozen."""
+    from .parser import frozen_syntax_versions
 
-    return tuple(version + ".0" for version in syntax_versions())
+    return tuple(version + ".0" for version in frozen_syntax_versions())
 
 
 def name_problem(name: str) -> str | None:

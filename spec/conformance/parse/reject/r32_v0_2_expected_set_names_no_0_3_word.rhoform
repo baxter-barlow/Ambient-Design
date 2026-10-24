@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.2
+module Rail:
+    port vin power_in
+    = vin

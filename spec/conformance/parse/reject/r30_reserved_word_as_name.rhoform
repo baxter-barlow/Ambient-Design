@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.3
+module Rail:
+    port supply power_in
+    variant = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    variant.a ~ supply

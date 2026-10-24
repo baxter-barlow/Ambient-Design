@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+module Rail:
+    port vin power_in
+    net VIN(ground_kind = "power"):
+        vin
+    supply vin within 4.5V to 5.5V

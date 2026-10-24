@@ -22,6 +22,8 @@ except ImportError:  # pragma: no cover - exercised by absence
 PRAGMA = "#pragma rhoform-syntax 0.1"
 # The CURRENT version: what new files and every pragma fix-it use.
 PRAGMA_0_2 = "#pragma rhoform-syntax 0.2"
+# The unfrozen working version (decision OD8): accepted, never current.
+PRAGMA_0_3 = "#pragma rhoform-syntax 0.3"
 
 
 def _parse(source, **kwargs):
@@ -83,10 +85,11 @@ module Blinker:
 
         loaded = production._load()
         self.assertEqual(loaded.pragma_text, PRAGMA_0_2)
-        # Both versions are headers the ARTIFACT's own terminal accepts.
-        for header in (PRAGMA, PRAGMA_0_2):
+        # Every version is a header the ARTIFACT's own terminal accepts,
+        # the unfrozen 0.3 included.
+        for header in (PRAGMA, PRAGMA_0_2, PRAGMA_0_3):
             self.assertIsNotNone(loaded.pragma_re.fullmatch(header), header)
-        for header in ("#pragma rhoform-syntax 0.3",
+        for header in ("#pragma rhoform-syntax 0.4",
                        "#pragma rhoform-syntax 0.10",
                        "#pragma rhoform-syntax 0"):
             self.assertIsNone(loaded.pragma_re.fullmatch(header), header)
@@ -94,8 +97,8 @@ module Blinker:
         self.assertIn("for", loaded.keyword_of.values())
         self.assertEqual(
             sorted(loaded.vocabularies),
-            ["hardware_kind", "loop_iterator", "measurement_kind",
-             "net_attribute", "param_type", "pin_role"],
+            ["ground_kind", "hardware_kind", "loop_iterator",
+             "measurement_kind", "net_attribute", "param_type", "pin_role"],
         )
 
 
@@ -235,7 +238,9 @@ module N:
     def test_an_unterminated_string_does_not_charge_per_word(self):
         result = _parse(PRAGMA + "\nmodule M:\n    r = new lib.R:\n"
                         '        part "axial 0207 through hole\n')
-        self.assertEqual(_codes(result), ["RHO1004", "RHO1006"])
+        # One diagnostic: what the string leaves of its line asks for
+        # nothing more, least of all "a string" (AMB-137 #3).
+        self.assertEqual(_codes(result), ["RHO1004"])
 
     def test_a_stray_character_heals_to_a_tree(self):
         result = _parse(PRAGMA + "\nmodule M:\n    port p passive @\n")
@@ -1323,14 +1328,14 @@ class PromotedKeywordTest(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_LARK, "lark required")
 class PragmaVersionTest(unittest.TestCase):
-    def test_both_versions_are_accepted(self):
-        for header in (PRAGMA, PRAGMA_0_2):
+    def test_every_version_is_accepted(self):
+        for header in (PRAGMA, PRAGMA_0_2, PRAGMA_0_3):
             with self.subTest(header=header):
                 result = _parse(header + "\nmodule M:\n    port p passive\n")
                 self.assertTrue(result.ok, result.diagnostics.render())
 
     def test_any_other_version_is_rho1005_rewritten_to_the_current_one(self):
-        for found in ("0.3", "0.10", "1.0", "0", "0.2.0"):
+        for found in ("0.4", "0.10", "1.0", "0", "0.2.0", "0.3.0"):
             source = (f"#pragma rhoform-syntax {found}\nmodule M:\n"
                       "    port p passive\n")
             with self.subTest(found=found):
@@ -1519,6 +1524,232 @@ class V01TreeFreezeTest(unittest.TestCase):
                 self.assertEqual(
                     hashlib.sha256(repr(result.tree).encode()).hexdigest(),
                     digest, "a 0.1 tree changed shape: 0.2 must only add")
+
+
+# The 0.2 accept cases' trees, as the parser that predates syntax 0.3 (base
+# 19313f2) built them. a18 binds every word 0.3 makes a soft keyword or
+# reserves, so its digest is the "same names, same tree" anchor.
+V0_2_ACCEPT_TREE_DIGESTS = {
+    "a09_imports.rhoform":
+        "dc1690b108d7e9ff7cfc44cfe945c87baf75ab6bba3b88c4aa3837a6491142bc",
+    "a10_component_definition.rhoform":
+        "cbe8c68c5eab4cb17bb209a2f6458884c4534a700ffd0de1b648226278f88ca9",
+    "a11_params_with_defaults.rhoform":
+        "f11b54e79be8c641a7936488fa5b53c45817337a77a0b69b546b05cc2cd9374f",
+    "a12_if_else.rhoform":
+        "af034861996f8308b4516f0f07051960f77255449bcd0b70bab5fae864eff21c",
+    "a13_for_range_forms.rhoform":
+        "80a950dc6759c2df1d03690e1e2c94aa475ead92103eb062f686dfef955a53e5",
+    "a14_arrays_and_indexed_endpoints.rhoform":
+        "833b08a556e41668d1e7c46b5831af32f99f2836c6a5db2af7d4c377615772db",
+    "a15_parameter_references.rhoform":
+        "b06d17bfd25d2884c5c33d5d65215c261e0b8bfc83c1a8f4dcb2a8432099f03b",
+    "a16_promoted_keywords_in_name_positions.rhoform":
+        "bc707e10cba95f1442f576c9a9d9ac4b014a3dbb89e83029e0a496a0e40dc70f",
+    "a17_component_without_pins.rhoform":
+        "ecb25bbfb53347d68dbe16d39741499bd15112dcfc560f125f520192cf571c8a",
+    "a18_0_3_words_as_names_under_0_2.rhoform":
+        "8a39191403ad572613105df39ca578dfebeb12a0268c450273a278fac089a5ea",
+}
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class V02TreeFreezeTest(unittest.TestCase):
+    def test_every_0_2_accept_case_parses_to_its_pre_0_3_tree(self):
+        import hashlib
+        from pathlib import Path
+
+        accept = (Path(__file__).resolve().parents[2] / "spec"
+                  / "conformance" / "parse" / "accept")
+        for name, digest in V0_2_ACCEPT_TREE_DIGESTS.items():
+            with self.subTest(case=name):
+                result = _parse((accept / name).read_text(encoding="utf-8"),
+                                file=name)
+                self.assertTrue(result.ok, result.diagnostics.render())
+                self.assertEqual(
+                    hashlib.sha256(repr(result.tree).encode()).hexdigest(),
+                    digest, "a 0.2 tree changed shape: 0.3 must only add")
+
+
+def _diags(source):
+    result = _parse(source)
+    return result, [json.loads(line)
+                    for line in result.diagnostics.render().splitlines()]
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class Syntax03Test(unittest.TestCase):
+    """Syntax 0.3, unfrozen: its version mechanics, soft keywords and new
+    file-local checks."""
+
+    COMPONENT = ("component Ldo:\n    pin in power_in 1\n"
+                 "    pin out power_out 2\n    pin gnd passive 3\n")
+
+    # One body per 0.3 construct, and what RHO1016 calls it.
+    CONSTRUCTS = {
+        "module M:\n    port p passive\n    supply p at most 1A":
+            "a `supply` statement",
+        "module M:\n    port p passive\n    draw p at most 1A":
+            "a `draw` statement",
+        'module M:\n    port p passive\n    waive RHO3001 p "why"':
+            "a `waive` statement",
+        "module M:\n    r = new R\n    rule r tie a b":
+            "a `rule` statement",
+        "component C:\n    pin a passive 1\n    pin b passive 2\n"
+        "    tie a b": "a component rule",
+        "component C:\n    pin a passive 1\n    side s: a":
+            "a `side` declaration",
+        'component C:\n    pin a passive "01"': "a quoted designator",
+        "module M:\n    assert x static operating_point(N) at most 1V "
+        "warning": "a `warning` severity",
+        'module M:\n    net N(ground_kind = "power"):\n        a':
+            "a `ground_kind` attribute",
+    }
+
+    def test_the_version_tables(self):
+        from rhoform import parser as production
+
+        self.assertEqual(production.syntax_versions(), ("0.1", "0.2", "0.3"))
+        self.assertEqual(production.frozen_syntax_versions(), ("0.1", "0.2"))
+        loaded = production._load()
+        self.assertEqual(loaded.current_version, "0.2")
+        # Every construct the source of truth versions has a name here.
+        self.assertEqual(set(production._CONSTRUCT_PROSE),
+                         set(loaded.construct_since))
+
+    def test_each_0_3_construct_under_0_2_is_one_rho1016_to_0_3(self):
+        for body, construct in self.CONSTRUCTS.items():
+            with self.subTest(construct=construct):
+                result, diags = _diags(PRAGMA_0_2 + "\n" + body + "\n")
+                self.assertIsNotNone(result.tree)
+                self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+                self.assertEqual(diags[0]["params"], {
+                    "construct": construct, "count": 1,
+                    "declared": "0.2", "required": "0.3"})
+                self.assertEqual(
+                    diags[0]["fixits"][0]["edits"][0]["replacement"], "0.3")
+                self.assertTrue(
+                    _parse(PRAGMA_0_3 + "\n" + body + "\n").ok)
+
+    def test_required_is_the_highest_version_and_the_primary_needs_it(self):
+        # A 0.2 array, then a 0.3 waiver whose target holds a 0.2 index:
+        # three constructs newer than 0.1, the second the first to need 0.3.
+        source = (PRAGMA + "\nmodule M:\n    caps = new C[2]\n"
+                  '    waive RHO3001 caps[0] "spare"\n')
+        _, diags = _diags(source)
+        self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+        self.assertEqual(diags[0]["params"], {
+            "construct": "a `waive` statement", "count": 3,
+            "declared": "0.1", "required": "0.3"})
+        span = diags[0]["spans"][0]
+        self.assertTrue(source[span["byte_start"]:].startswith("waive"))
+        edit = diags[0]["fixits"][0]["edits"][0]
+        fixed = (source[:edit["byte_start"]] + edit["replacement"]
+                 + source[edit["byte_end"]:])
+        self.assertTrue(_parse(fixed).ok)
+        # Only 0.2 constructs: required stays 0.2, as it always was.
+        _, diags = _diags(PRAGMA + "\nmodule M:\n    caps = new C[2]\n")
+        self.assertEqual(diags[0]["params"]["required"], "0.2")
+
+    def test_0_3_words_stay_names_under_0_2_and_keep_their_tree(self):
+        result = _parse(PRAGMA_0_2 + "\nmodule M:\n    port supply passive\n"
+                        "    supply = new R\n    draw = new R[2]\n"
+                        "    supply.a ~ draw[0].b\n    rule.a ~ waive\n")
+        self.assertTrue(result.ok, result.diagnostics.render())
+        heads = [token.type for token in result.tree.scan_values(
+            lambda t: str(t) in ("supply", "draw", "rule"))]
+        self.assertTrue(heads)
+        # Retyped where a statement starts: the 0.2 tree has FREE_NAME.
+        self.assertNotIn("SUPPLY", heads)
+        self.assertNotIn("DRAW", heads)
+        self.assertNotIn("RULE", heads)
+
+    def test_the_reserved_words_are_refused_as_names_under_0_3(self):
+        for word in ("supply", "draw", "waive", "rule", "variant"):
+            with self.subTest(word=word):
+                _, diags = _diags(PRAGMA_0_3 + f"\nmodule M:\n"
+                                  f"    {word} = new R\n")
+                self.assertEqual([d["code"] for d in diags], ["RHO1019"])
+                self.assertEqual(diags[0]["params"],
+                                 {"word": word, "version": "0.3"})
+        # `side` and `warning` are soft keywords but not reserved: neither
+        # opens a module statement.
+        self.assertTrue(_parse(PRAGMA_0_3 + "\nmodule M:\n    side = new R\n"
+                               "    warning = new R\n").ok)
+
+    def test_a_rule_names_a_pin_that_is_a_keyword(self):
+        result = _parse(PRAGMA_0_3 + "\n" + self.COMPONENT
+                        + "    regulate out from in = 3.3V\n"
+                        "    side primary: in gnd\n")
+        self.assertTrue(result.ok, result.diagnostics.render())
+        _, diags = _diags(PRAGMA_0_3 + "\n" + self.COMPONENT
+                          + "    regulate out from\n")
+        self.assertEqual(diags[0]["params"]["expected"], "a pin name")
+
+    def test_designators_run_together_under_0_3_draw_rho1018(self):
+        source = PRAGMA_0_3 + "\ncomponent H:\n    pin a passive 01\n"
+        _, diags = _diags(source)
+        self.assertEqual([d["code"] for d in diags], ["RHO1018"])
+        self.assertEqual(diags[0]["params"], {"text": "01"})
+        span = diags[0]["spans"][0]
+        self.assertEqual(source[span["byte_start"]:span["byte_end"]], "01")
+        fixits = diags[0]["fixits"]
+        self.assertEqual([f["applicability"] for f in fixits],
+                         ["needs-review", "needs-review"])
+        for fixit in fixits:
+            edit = fixit["edits"][0]
+            fixed = (source[:edit["byte_start"]] + edit["replacement"]
+                     + source[edit["byte_end"]:])
+            with self.subTest(replacement=edit["replacement"]):
+                self.assertTrue(_parse(fixed).ok, fixed)
+        # The 0.2 twin keeps its two designators (AMB-139).
+        self.assertTrue(_parse(PRAGMA_0_2 + "\ncomponent H:\n"
+                               "    pin a passive 01\n").ok)
+
+    def test_ground_kind_is_a_closed_vocabulary_inside_its_string(self):
+        source = (PRAGMA_0_3 + '\nmodule M:\n    net G(ground_kind = "pwer"):'
+                  "\n        a\n")
+        _, diags = _diags(source)
+        self.assertEqual([d["code"] for d in diags], ["RHO1009"])
+        self.assertEqual(diags[0]["params"],
+                         {"vocabulary": "ground_kind", "word": "pwer"})
+        self.assertEqual(diags[0]["fixits"][0]["edits"][0]["replacement"],
+                         '"power"')
+        for kind in ("unspecified", "signal", "power", "chassis", "earth"):
+            with self.subTest(kind=kind):
+                self.assertTrue(_parse(
+                    PRAGMA_0_3 + f'\nmodule M:\n    net G(ground_kind = '
+                    f'"{kind}"):\n        a\n').ok)
+
+    def test_expected_sets_name_no_token_newer_than_the_pragma(self):
+        body = "\nmodule M:\n    port p passive\n    = p\n"
+        expected = {}
+        for header in (PRAGMA, PRAGMA_0_2, PRAGMA_0_3):
+            _, diags = _diags(header + body)
+            expected[header] = diags[0]["params"]["expected"]
+        for word in ("`for`", "`if`"):
+            self.assertNotIn(word, expected[PRAGMA])
+            self.assertIn(word, expected[PRAGMA_0_2])
+        for word in ("`supply`", "`draw`", "`waive`", "`rule`"):
+            self.assertNotIn(word, expected[PRAGMA_0_2])
+            self.assertIn(word, expected[PRAGMA_0_3])
+
+    def test_an_unexpected_indentation_spans_the_indentation(self):
+        source = (PRAGMA + "\nmodule M:\n    port a passive\n"
+                  "        port b passive\n")
+        _, diags = _diags(source)
+        self.assertEqual(diags[0]["params"]["found"], "indentation")
+        span = diags[0]["spans"][0]
+        self.assertGreater(span["byte_end"], span["byte_start"])
+        self.assertEqual(source[span["byte_start"]:span["byte_end"]], " " * 8)
+
+    def test_a_waiver_needs_a_code_and_a_rule_a_rule_word(self):
+        _, diags = _diags(PRAGMA_0_3 + '\nmodule M:\n    port p passive\n'
+                          '    waive ERC p "why"\n')
+        self.assertIn("a diagnostic code", diags[0]["params"]["expected"])
+        _, diags = _diags(PRAGMA_0_3 + "\ncomponent C:\n    pin a passive 1\n"
+                          "    regualte a\n")
+        self.assertIn("a rule word", diags[0]["params"]["expected"])
 
 
 @unittest.skipUnless(HAVE_LARK, "lark required")

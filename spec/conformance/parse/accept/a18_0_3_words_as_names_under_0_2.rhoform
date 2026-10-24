@@ -1,0 +1,31 @@
+#pragma rhoform-syntax 0.2
+
+# Under 0.2 none of the words syntax 0.3 reserves (supply, draw, waive,
+# rule, variant) is reserved, and no 0.3 soft keyword (those four, side,
+# warning) is a keyword, so each still names what it always named. This
+# file parses to the tree it had before syntax 0.3 existed, which
+# rhoform/tests/test_parser.py pins by digest.
+import variant from "./parts"
+
+component side(warning: int = 1):
+    pin supply passive 1
+    pin draw passive 2
+
+module rule(waive: bool = false):
+    port supply power_in
+    port draw passive
+    supply = new side
+    draw = new side[2](warning = 2)
+    waive = new variant
+    rule = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    supply.supply ~ supply
+    draw[0].draw ~ rule.a
+    net warning:
+        draw
+        waive.a
+    if waive:
+        for side in range(2):
+            draw[side].supply ~ supply.draw
+    table rhoform.lib.passive.Capacitor part abstract (capacitance):
+        variant2  100nF
+    assert check static operating_point(warning) at most 3V

@@ -143,6 +143,22 @@ resolution through the map, so a reformat moves the diagnostic with the
 declaration. Pre-elaboration stages (the lexer and parser) have no IR to
 anchor to; their `entity` is null and their spans are raw.
 
+Two parse-level spans name layout rather than text:
+
+- An unexpected indentation (`RHO1006` with `found` "indentation")
+  spans the indentation itself, from the line's first byte to its first
+  content column, so `byte_end` exceeds `byte_start`: the spaces are what
+  the diagnostic is about (AMB-135 #1).
+- An unexpected end of block (`found` "end of block") keeps an
+  insertion point, a zero-width span where the block was owed: there are
+  no bytes to name, and the place to write the missing statement is the
+  repair.
+
+After an unterminated string (`RHO1004`), what is left of its line draws
+nothing more: the statement around the string cannot be complete, and
+asking for the token it lacks would ask for the string the line was
+writing (AMB-137 #3).
+
 ## Fix-its
 
 A fix-it is a message, an applicability level, and one or more edits
@@ -156,6 +172,12 @@ against the framework's constants by the conformance gate):
 - `has-placeholders` — the edits contain `<name>` markers the author
   must fill, every one declared in `placeholders`. This is how a fix-it
   inserts an entity with a synthesized name.
+
+A diagnostic MAY carry several fix-its when only the author knows which
+repair is meant, each `needs-review`. `RHO1018` (designators run
+together, syntax 0.3) is the first: `01` gets one fix-it that separates
+the designators (`0 1`) and one that quotes the one designator they
+spell (`"01"`).
 
 ## Canonical order and the cap
 

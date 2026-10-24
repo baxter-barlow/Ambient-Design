@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.1
+module Rail:
+    port vin power_in
+    caps = new rhoform.lib.passive.Capacitor[2](capacitance = 100nF)
+    waive RHO3001 caps[0] "a spare footprint"
