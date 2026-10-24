@@ -25,9 +25,9 @@ then the driver applies waivers (T6), raises the coverage summary and
 flushes the findings. A pass reads only the Analysis slots earlier passes
 set, and a defect is reported once, by the earliest pass that sees it;
 later passes treat what it touches as unknown and record a row with the
-reason `upstream-defect`. A pass that is not implemented yet still runs
-(the ground stub supplies interim ground typing) and its section records
-it as an actionable row, so an unimplemented check is never a silent pass.
+reason `upstream-defect`. A pass that is not implemented yet still runs,
+and its section records it as an actionable row, so an unimplemented
+check is never a silent pass.
 Until the assertions pass is implemented, the driver reports, in its
 place, every declared static-tier assertion as RHO3553: a declared
 assertion that cannot be measured gates (V1, amendment OD1).

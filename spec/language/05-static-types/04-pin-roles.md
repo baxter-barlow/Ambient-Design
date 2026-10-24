@@ -87,11 +87,15 @@ records a fit option, not a gap. This pass reads no part data, so it has
 no strap pins to report.
 
 **Ground-typed nets.** A net is ground-typed when the ground pass says
-it is (section 5). Until that pass lands, its interim rule types a net
-as ground exactly when an author labelled it with `ground_domain`, and
-this pass reads that rule unchanged; a design whose return net carries
-no label loses the ground exemptions below until the ground pass
-synthesizes its default ground (GA-16).
+it is ([5.3](05-ground.md#53-ground-typing-and-the-kind-meet)): an
+author gave it a `ground_domain` label or a `ground_kind`, or it holds
+a pin a fitted part's `ground` rule names, which is how a design with
+no annotation gets its default ground (GA-16). This pass reads that
+typing and computes none of its own. A return net that carries no
+annotation and that no part's `ground` rule names is not ground-typed,
+and loses the ground exemptions below; the standard library's parts
+declare no `ground` rule yet
+([5.10](05-ground.md#510-limitations)).
 
 ## 4.3 The pair table
 
@@ -295,8 +299,13 @@ decidable from the netlist alone:
   switch, jumper — it is a defect, and a correct design never has one.
   The one deliberate shape known is a two-contact connector whose
   contacts share a net on purpose; that takes a T6 waiver, which states
-  why. A net tie with both pins on one net is GA-9's (RHO4009) once ties
-  are typed (L2c).
+  why. A net-tie (GA-4) with both pins on one net is GA-9's: the ground
+  pass, which runs first, reports it as RHO4009, so this rule skips the
+  net-ties that pass hands on
+  ([5.8](05-ground.md#58-what-the-pass-hands-on)) and records an
+  inherent `upstream-defect` row on the instance naming RHO4009
+  (section 1). A DNP net-tie's `depends-on-dnp` row (4.2) names RHO4009
+  as its code if fitted.
 - **RHO3110** (BUG-0042, BUG-0056) fires on a net that is not
   ground-typed and holds a fitted `power_in` pin, when no fitted
   **capacitor** has one pin on the net and the other on a ground-typed
@@ -308,7 +317,7 @@ decidable from the netlist alone:
   decoupled on the far side of a ferrite or a series resistor, a module
   carrying its own decoupling, a `power_in` pin that senses a rail
   rather than drawing from it, a capacitor returning to a ground the
-  interim typing does not see. A warning annotates and gates nothing
+  ground pass does not type (4.2). A warning annotates and gates nothing
   (V1); it still tells each corpus entry's buggy design from its
   corrected one, which is what the AC2 classification asks of it.
 
@@ -345,7 +354,8 @@ closes it.
 
 The pass is implemented, so its section of the check report holds no
 `pass-not-implemented` row. It writes only these rows: `depends-on-dnp`
-(4.2), inherent, and `no-ground-typed-net` (4.8), actionable. Every
+(4.2) and `upstream-defect` (4.8), inherent, and `no-ground-typed-net`
+(4.8), actionable. Every
 verdict it reaches from roles it reaches exactly, so it has no
 undecided rows; what it cannot see — whether a role is transcribed
 right, whether a supply reaches a power input — is said in 4.1 and 4.6.

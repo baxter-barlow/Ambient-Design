@@ -48,7 +48,10 @@ def grammar_kinds() -> tuple:
 
 class _Interim:
     """The foundation's interim ground typing, rebuilt here as it was: a
-    net is ground exactly when an author labelled it `ground_domain`."""
+    net is ground exactly when an author labelled it `ground_domain`. It
+    typed no ties, so it handed ERC no net-ties."""
+
+    net_ties = ()
 
     def __init__(self, model):
         self._ground = frozenset(name for name, net in model.nets.items()
@@ -927,6 +930,69 @@ class ErcUnchangedTest(_Ground):
                      if net.ground_domain is not None])
                 count += 1
         self.assertGreaterEqual(count, 3 + 34)
+
+
+@unittest.skipUnless(HAVE_LARK, SKIP)
+class NetTieHandOffTest(_Ground):
+    """A net-tie with both pins on one net is GA-9's RHO4009 (spec 04
+    section 4.8). The ground pass sees it first, so it is reported once,
+    there: ERC's RHO3109 skips the pass's net_ties with an upstream-defect
+    row (spec 05 section 1). Run as the command line runs it, every pass."""
+
+    SHORTED = ("RHO3109", "RHO4009")
+
+    def test_a_redundant_tie_is_reported_once_on_the_full_run(self):
+        (root,) = AREA.glob("reject/c14_redundant_tie")
+        found, compiled = self.compile(root, through=None)
+        # Filtered to the codes about a part shorted onto one net: the full
+        # run also reaches c14's undecoupled supplies (RHO3110) and the
+        # coverage note, which are other rules' and not this test's.
+        self.assertEqual([(d["code"], d["entity"]) for d in found
+                          if d["code"] in self.SHORTED
+                          or d["entity"] == "/nt"],
+                         [("RHO4009", "/nt")])
+        self.assertIn({"entity": "/nt", "status": "no-data",
+                       "reason": "upstream-defect", "actionable": False,
+                       "detail": {"codes": ["RHO4009"]}},
+                      self.rows(compiled, "erc"))
+        (note,) = [d for d in found if d["code"] == "RHO3901"]
+        self.assertFalse([c for c in note["params"]["classes"]
+                          if c.startswith("upstream-defect")])
+
+    def test_only_a_net_tie_is_handed_on(self):
+        found, compiled = self.run_text(P + LOAD + TIE + """\
+component Strap:
+    pin a passive
+    pin b passive
+
+module Board:
+    port v power_in
+    load = new Load
+    nt = new NetTie:
+        dnp
+    s = new Strap
+    net GND:
+        load.gnd
+        nt.a
+        nt.b
+        s.a
+        s.b
+    net V:
+        load.vdd
+        v
+""", through=None)
+        # A plain two-terminal part on one net is still ERC's; a DNP tie is
+        # nothing's until fitted, and then the ground pass's.
+        self.assertEqual([(d["code"], d["entity"]) for d in found
+                          if d["code"] in self.SHORTED],
+                         [("RHO3109", "/s")])
+        self.assertEqual([r for r in self.rows(compiled, "erc")
+                          if r["entity"] == "/nt"],
+                         [{"entity": "/nt", "status": "pass",
+                           "reason": "depends-on-dnp", "actionable": False,
+                           "detail": {"codes": [], "codes_if_fitted":
+                                      ["RHO4009"], "dnp": ["/nt"]}}])
+        self.assertEqual(compiled.analysis.ground.net_ties, ("/nt",))
 
 
 _PROBE = r'''

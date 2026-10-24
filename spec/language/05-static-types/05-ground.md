@@ -324,7 +324,9 @@ the passes after it:
   that is not ground-typed has none here, its reference being T5's;
 - `isolation_domain(net)`, for every net;
 - `tie_graph`, the edges kept (tie, net, net), and `net_ties`, the
-  well-formed net-ties;
+  well-formed net-ties: a redundant one is this pass's RHO4009, so
+  ERC's RHO3109 skips them ([04](04-pin-roles.md#48-net-topology)) and
+  the defect is reported once (section 1);
 - `conduction_groups(component)` and `barriers()`, each barrier's sides.
 
 ## 5.9 Decisions
@@ -387,14 +389,6 @@ Stated, not hidden:
 - **The safety section of the check report** stays empty: its entry
   shape is stated with the waivers that GA-11 echoes there (L5a). The
   RHO4011 notes are in the stream.
-- **A redundant net-tie is reported twice.** It is also a two-terminal
-  part with both pins on one net, which ERC's RHO3109 reports too, as an
-  error, where GA-9 makes it this pass's warning (RHO4009). That breaks
-  section 1's rule that a defect is reported once, by the earliest pass
-  that sees it, and [04](04-pin-roles.md#48-net-topology)'s hand-off of
-  the case to RHO4009. The fix is ERC's: its RHO3109 rule skips the
-  components this pass hands on as `net_ties` (5.8). It is outside this
-  pass, and stands until ERC's owner lands it.
 
 ## 5.11 Coverage
 

@@ -114,6 +114,7 @@ FLOATING_WHEN_ISOLATED = ("input", "power_in")
 CAPACITOR = "rhoform.lib.passive.Capacitor"
 DNP_REASON = "depends-on-dnp"
 NO_GROUND_REASON = "no-ground-typed-net"
+UPSTREAM_REASON = "upstream-defect"
 
 
 def pair_matrix() -> tuple:
@@ -463,7 +464,11 @@ class _Rules:
             "needs-review", (Edit(where, text),)),)
 
     def shorted(self):
-        """RHO3109: a two-terminal component whose pins are one net."""
+        """RHO3109: a two-terminal component whose pins are one net. A
+        net-tie's is GA-9's RHO4009, which the ground pass reports first:
+        a defect is reported once, by the earliest pass (spec 05 section
+        1), so this rule skips it with an upstream-defect row."""
+        ties = frozenset(self.ground.net_ties)
         for path in self.model.components:
             instance = self.model.instances[path]
             if len(instance.ports) != 2:
@@ -473,10 +478,15 @@ class _Rules:
             if len(nets) != 1 or None in nets:
                 continue
             net = self.model.nets[nets.pop()]
+            code = "RHO4009" if path in ties else "RHO3109"
             if instance.dnp:
                 self.report.row(path, "pass", DNP_REASON,
                                 detail={"dnp": [path], "codes": [],
-                                        "codes_if_fitted": ["RHO3109"]})
+                                        "codes_if_fitted": [code]})
+                continue
+            if path in ties:
+                self.report.row(path, "no-data", UPSTREAM_REASON,
+                                detail={"codes": [code]})
                 continue
             pins = [m for m in self.model.physical_members[net.name]
                     if m.path == path]
