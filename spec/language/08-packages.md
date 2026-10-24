@@ -206,6 +206,8 @@ the report.
 
 Each imported name MUST be a module or `component` the imported file
 itself defines (RHO2065): a file's imports are not re-exported. An
+imported name may also be an interface the imported file defines
+([05 section 3](05-static-types/03-interfaces.md)). An
 imported name is bound in the importing file, so it MUST NOT also name
 a definition of that file or be imported twice (RHO2066). An imported
 name is used exactly as a definition of the file: a single word in a
