@@ -324,9 +324,13 @@ closes it.
   to RHO3104, RHO3109 and RHO3110 carry a secondary span per listed pin,
   where a statement joins it to the net.
 - **Once per definition.** Params spell a net and its pins as the module
-  whose body declares the net writes them (`Y`, `a.y`), and an instance
-  as the module declaring it writes it (`u`, `w[0]`), never by instance
-  path. The copies a module instantiated several times makes
+  whose body holds the net's statements writes them (`Y`, `a.y`), and an
+  instance as the module declaring it writes it (`u`, `w[0]`), never by
+  instance path. That module is the deepest instance every member of the
+  net is in, a module's own port counting as in it, and no deeper than
+  the net's site: a net a sub-module `s` labels `OUT` and its parent
+  extends is the parent's, spelled `s/OUT` with the pins `d.y` and
+  `s/a.y`. The copies a module instantiated several times makes
   of one defect therefore agree on code, params and spans, and are one
   finding (section 1), with an entity only when they are one net.
   Copies that differ — the pins or nets of one instance's defect are not
@@ -357,6 +361,7 @@ terminals and a DNP alternate regulator; each reports nothing. The
 reject cases give every code above at least one case, mirror the corpus
 entries the rules catch (BUG-0018, 0020, 0022, 0030, 0034, 0036, 0038,
 0042, 0046, 0056), and include open drains held low by a pull-down or a
-delay capacitor alone and a module reused twice whose defect is
-reported once. The three benchmarks produce no finding of this pass
-(test_benchmarks.py pins their streams).
+delay capacitor alone, a module reused twice whose defect is reported
+once, and a sub-module's labelled net that a reused parent extends,
+reported once as the parent spells it. The three benchmarks produce no
+finding of this pass (test_benchmarks.py pins their streams).

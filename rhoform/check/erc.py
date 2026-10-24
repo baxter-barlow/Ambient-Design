@@ -25,7 +25,9 @@ pads are still on the board. Ground typing is the ground pass's
 several supply returns may share it and an input on it is driven.
 
 ONE FINDING PER DEFINITION. Params spell nets and pins as the module
-whose body declares them writes them, never by instance path, so the
+whose body holds the net's statements writes them, never by instance
+path -- for a net a sub-module labels and its parent extends, the
+parent, which writes the label `s/OUT` -- so the
 copies one module instantiated twice makes of a defect agree on code,
 params and spans, and the reporter makes them one finding (spec 05
 section 1), keeping an entity only when the copies are one net.
@@ -241,30 +243,39 @@ class _Rules:
     # -- spelling: names as the declaring module writes them
 
     def scope(self, net) -> str:
-        """The module instance whose body holds the net's declaration: the
-        one whose trace the net's extends -- of the members of a module
-        array, which share one, the least the declaration's own statement
-        can name, as the elaborator picks a net's site."""
+        """The module instance whose body holds the net's statements. The
+        net's site is in the body whose trace the net's extends -- of the
+        members of a module array, which share one, the least the site's
+        own statement can name, as the elaborator picks it. A labelled
+        net is sited at its shallowest label, which a parent may extend,
+        so the scope is the deepest instance at or above the site that
+        every member is in, a module's own port counting as in it."""
+        scope = "/"
         trace = tuple(net.trace[1:])
-        if not trace:
-            return "/"
-        for path in sorted(self.bodies.get(trace, ())):
-            if any(member == path or _parent(member) == path
-                   for member, _port in net.members):
-                return path
-        return "/"  # pragma: no cover - every net is declared somewhere
+        if trace:
+            scope = next(
+                (path for path in sorted(self.bodies.get(trace, ()))
+                 if any(member == path or _parent(member) == path
+                        for member, _port in net.members)), "/")
+        homes = {path if self.model.instances[path].kind == "module"
+                 else _parent(path) for path, _port in net.members}
+        while not all(_within(home, scope) for home in homes):
+            scope = _parent(scope)
+        return scope
 
     @staticmethod
     def spelled(scope: str, path: str, port: str) -> str:
-        """`port`, `child.port` or `a/b.port` inside the scope; outside it
-        (a net declared in a module that its parent extends), the path."""
+        """`port`, `child.port` or `a/b.port`, as the scope's body writes
+        a pin or port within it."""
         if path == scope:
             return port
         if scope == "/":
             return f"{path[1:]}.{port}"
         if path.startswith(scope + "/"):
             return f"{path[len(scope) + 1:]}.{port}"
-        return f"{path}.{port}"
+        raise AssertionError(  # pragma: no cover - scope() contains them
+            f"{path}.{port} is outside {scope}: an instance path would "
+            "reach a finding's params")
 
     def net_name(self, scope: str, net) -> str:
         """The net's name without the scope's qualification: its label as
