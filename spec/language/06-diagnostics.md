@@ -33,20 +33,29 @@ the exit code before reading stdout.
 `python3 -m rhoform` is the reference command line (R18). It speaks the
 stream and the exit codes above, and its paths are those of
 [04 — Elaboration](04-elaboration.md#the-compile-root): every span's
-`file` is a POSIX path relative to its compilation's compile root.
+`file` is a POSIX path relative to its compilation's compile root (a
+standard library module's, its library path).
 
 `rhoform check PATH...` compiles each PATH as the entry file of its own
 compilation, with the files it imports
 ([08 — Packages and imports](08-packages.md#the-command-line); a
 directory stands for its `*.rhoform` files, in sorted order, less those
-another named file imports): the package layer's checks, parse,
-file-local checks, elaboration, and validation of the IR against
-`ir/netlist-ir.v1.schema.json`, the schema of the version it writes. IR that cannot be validated
-because the validator is missing exits `2`, and so does IR the schema
-rejects (an internal error). It writes nothing, except that
-`--emit-ir DIR` writes `<stem>.ir.json` and `<stem>.sourcemap.json` for
-each entry that elaborates. `--compile-root DIR` and
-`--root-module NAME` name the compile root and the root module.
+another named file imports, and a directory that cannot be listed exits
+`2` naming it rather than be skipped): the package layer's checks, parse,
+file-local checks, elaboration, validation of the IR against the IR
+schema of the version it writes ([04](04-elaboration.md)), and the check
+stage ([05 — Static types](05-static-types.md#1-the-checking-model)). IR
+that cannot be validated because the validator is missing exits `2`, and
+so does IR the schema rejects (an internal error). It writes nothing,
+except that `--emit-ir DIR` writes `<stem>.ir.json` and
+`<stem>.sourcemap.json` for each entry that elaborates, whatever the
+check stage finds, and `--emit-report DIR` writes `<stem>.check.json`,
+the check report, for each entry the check stage ran on, after
+validating it against its schema (a missing validator or a report the
+schema rejects exits `2`). Two entries whose stems differ only in letter
+case are refused, as one stem, before anything is written.
+`--compile-root DIR` and `--root-module NAME` name the compile root and
+the root module.
 
 `rhoform fmt PATH...` rewrites each file in its canonical form
 ([07 — Formatting](07-formatting.md)), atomically and only when its
@@ -65,10 +74,12 @@ TARGET alone and answers the same way.
 ## Codes are forever
 
 A diagnostic code is `RHO` plus four digits. The registry
-(`rhoform/codes.py`) is the only place a code may be declared; a code,
+(`rhoform/codes.py`, with the per-owner files it assembles under
+`rhoform/codeset/`) is the only place a code may be declared; a code,
 once published, keeps its meaning forever, and a retired code keeps its
-number and slug and is never reassigned. The leading digit is the
-code's block. This table is reconciled against the registry's block
+number and slug and is never reassigned. Each code lies in a range one
+owner holds ([05](05-static-types.md#code-ranges)). The leading digit is
+the code's block. This table is reconciled against the registry's block
 table by the conformance gate:
 
 | Block | Category | Owner |
@@ -98,9 +109,10 @@ constants by the conformance gate):
 
 Severity is fixed per code in the registry. Per-site waivers (T6), when
 they land, downgrade at the reporting layer and are surfaced in reports;
-they do not touch the registry. The `tier` field carries the V1
-assertion tier (`static` or `dynamic`) on assertion results and is null
-otherwise — V1 makes the tier visible in every diagnostic.
+they do not touch the registry, and only an error of blocks 3–5 may be
+waived. The `tier` field carries the V1 assertion tier on assertion
+results and is null otherwise — V1 makes the tier visible in every
+diagnostic. The assertion tiers are `static` and `dynamic`.
 
 ## Structured params, rendered messages
 
@@ -110,6 +122,15 @@ string is RENDERED from the registry's template and the params — a
 conforming emitter cannot say something in prose that the params do not
 carry, which is what "structured parameter fields separate from message
 strings" is for.
+
+A param's value is a JSON scalar — a string, a finite number, a boolean
+or null — or an array of scalars, never an object: structure a value
+carried would be structure the rendered message never shows. A quantity
+is carried as its normal-form string (`"3.6V"`,
+[03 — Literals](03-literals.md)), never as a JSON number, which would be
+a double; an interval as two such params, `<name>_min` and `<name>_max`.
+A value is fixed when the diagnostic is built, so the line on the wire
+and the message rendered from it always agree.
 
 ## Spans and the entity anchor
 

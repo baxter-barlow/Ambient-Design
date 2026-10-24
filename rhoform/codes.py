@@ -1,9 +1,11 @@
 """The diagnostic code registry: stable unique codes from the first commit.
 
 A1 requires codes that are STABLE — a code, once published, means one thing
-forever. This module is the single place a code may be declared, and the
-registry gate (tests/diagnostics/check-registry.py) holds the declarations to
-the rules below, so stability is enforced rather than promised:
+forever. This module and the per-owner files it assembles
+(rhoform/codeset/<owner>.py) are the only places a code may be declared, and
+the registry gate (tests/diagnostics/check-registry.py) holds the
+declarations to the rules below, so stability is enforced rather than
+promised:
 
   - a code is `RHO` + four digits; the first digit names its block in BLOCKS,
     and a code in an unassigned block is an error;
@@ -15,25 +17,31 @@ the rules below, so stability is enforced rather than promised:
     params are the machine-readable contract (A1: "structured parameter
     fields separate from message strings"), and a parameter the message never
     renders is a parameter no human review ever sees drift;
+  - every code lies in a range of RANGES that its declaring owner holds, the
+    ranges are disjoint and each inside one block, and each owner's codes
+    are in code order (see RANGES for why);
   - the ground-architecture block RHO40xx is transcribed from the GA spec's
     §6 catalog, whose slugs and structured-parameter shapes are stable from
     that document forward; the registry gate pins the transcription.
 
 WHY FOUR EXISTING NAMESPACES ARE NOT HERE. `RHOX*`/`RHOA*`/`RHOB*`/`RHOS*`
 are the bake-off prototypes' per-arm codes (lang/bakeoff/diagnostics.py) and
-retire with the prototypes; `RHO0201`/`RHO0410` appear only inside a
-synthetic eval fixture (eval/examples/negative/e02...) that demonstrates a
-harness defect, not a language diagnostic. Neither is a published contract.
-This registry is where the product's codes start.
+retire with the prototypes; `RHO0201`/`RHO0410` appear only in the eval
+harness's own files (its demo run record, its negative controls, the fixtures
+and the test that build them, all under eval/), which exercise the harness
+with a made-up diagnostic, not a language diagnostic. Neither is a published
+contract. This registry is where the product's codes start.
 
 Severity is fixed per code: `error` gates, `warning` annotates, `note`
 carries non-gating context (the GA spec's safety notes, the framework's own
 truncation marker). T6 waivers, when they land (AMB-56), downgrade at the
-reporting layer without touching the registry.
+reporting layer without touching the registry; `CodeDef.waivable` says which
+codes they may downgrade.
 """
 
-from dataclasses import dataclass
 import re
+
+from .codeset import CodeDef, OWNERS, owned
 
 CODE_RE = re.compile(r"^RHO[0-9]{4}$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -58,41 +66,45 @@ BLOCKS = {
     7: ("interop", "exports, artifact guard, KiCad boundary (M3)"),
 }
 
+# Who may number what: (first, last, owner), in code order. `core` is this
+# file, frozen at its M1 extent; every other owner is a file of
+# rhoform/codeset/. Two tracks taking "the next free number" in one block is
+# how RHO2048 came to be assigned twice in PR #18 (the library's code became
+# RHO2067 when the imports landed) and how not-canonical became RHO1017;
+# renumbering was legal only because neither had shipped. M2 lands its
+# checkers in parallel, so each owns a range, takes numbers inside it in
+# order, and may renumber inside it until M2 exits. A number in no range has
+# no owner and cannot be declared. Spec 05 section 1 restates this table, and
+# the conformance gate reconciles the two.
+RANGES: tuple[tuple[str, str, str], ...] = (
+    ("RHO0001", "RHO0001", "core"),
+    ("RHO0002", "RHO0009", "waivers"),
+    ("RHO1001", "RHO1017", "core"),
+    ("RHO1018", "RHO1029", "syntax"),
+    ("RHO1030", "RHO1039", "interfaces"),
+    ("RHO2001", "RHO2069", "core"),
+    ("RHO2070", "RHO2079", "lockfile"),
+    ("RHO2080", "RHO2089", "syntax"),
+    ("RHO2100", "RHO2119", "interfaces"),
+    ("RHO2120", "RHO2149", "elaboration"),
+    ("RHO3001", "RHO3099", "interfaces"),
+    ("RHO3101", "RHO3199", "erc"),
+    ("RHO3201", "RHO3299", "quantities"),
+    ("RHO3301", "RHO3399", "domains"),
+    ("RHO3401", "RHO3499", "budget"),
+    ("RHO3501", "RHO3549", "waivers"),
+    ("RHO3551", "RHO3599", "waivers"),
+    ("RHO3901", "RHO3999", "check"),
+    ("RHO4001", "RHO4011", "ground"),
+    ("RHO4012", "RHO4099", "ground"),
+    ("RHO6001", "RHO6049", "parts"),
+    ("RHO6050", "RHO6099", "parts"),
+)
 
-@dataclass(frozen=True)
-class CodeDef:
-    """One diagnostic code. `reserved=True` means the shape is published but
-    no pass emits it yet — the GA catalog's state until its checker lands."""
 
-    code: str
-    slug: str
-    severity: str
-    message: str
-    params: tuple[str, ...] = ()
-    rule: str | None = None  # traceability: a GA-* / requirement id
-    reserved: bool = False
-
-    @property
-    def category(self) -> str:
-        return BLOCKS[int(self.code[3])][0]
-
-    def render(self, values: dict) -> str:
-        """The human message, from the template and structured params.
-
-        Values render deterministically: strings verbatim, everything else
-        as key-sorted compact JSON, so a list-valued param (RHO4002's cycle)
-        cannot render differently between two runs over the same input.
-        """
-        import json
-
-        def show(value):
-            return value if isinstance(value, str) else json.dumps(
-                value, sort_keys=True, separators=(",", ":"))
-
-        return self.message.format(**{k: show(v) for k, v in values.items()})
-
-
-REGISTRY: tuple[CodeDef, ...] = (
+# The core blocks, as M1 left them: 0 the framework, 1 syntax 0.1 and 0.2,
+# 2 the elaborator and the package layer. New codes go to an owner file.
+CORE: tuple[CodeDef, ...] = (
     # ---- block 0: the framework itself -----------------------------------
     CodeDef(
         code="RHO0001",
@@ -276,6 +288,11 @@ REGISTRY: tuple[CodeDef, ...] = (
             "rewrites the file to its one canonical spelling (I1)."
         ),
         rule="I1",
+        source_triggered=False,
+        trigger_reason=(
+            "`rhoform fmt --check` reports it by comparing a file with its "
+            "canonical form; no parse, elaboration or check of a source "
+            "emits it, and the formatter cases pin that form instead"),
     ),
     # ---- block 2: elaboration (rhoform/elaborate.py, AMB-44/R13) --------
     # Every error the elaborator can raise on a parse-clean v0.1 file. The
@@ -308,6 +325,10 @@ REGISTRY: tuple[CodeDef, ...] = (
         ),
         params=("name", "candidates"),
         rule="L1",
+        source_triggered=False,
+        trigger_reason=(
+            "it fires only for a root module requested by name, which the "
+            "caller supplies and no source text can spell"),
     ),
     CodeDef(
         code="RHO2004", slug="instantiation-cycle", severity="error",
@@ -870,114 +891,6 @@ REGISTRY: tuple[CodeDef, ...] = (
         params=("file", "module", "first"),
         rule="L7",
     ),
-    # ---- block 4: ground architecture, transcribed from the GA spec §6 ---
-    # The GA spec published these as "placeholders in a reserved block;
-    # final numbers are assigned when the A1 registry lands". This is that
-    # registry landing: the numbers below are now FINAL and equal to the
-    # placeholders, so every existing citation (corpus classifications,
-    # spec prose) stays true. Slugs and param shapes are verbatim from the
-    # §6 table; the registry gate pins them.
-    CodeDef(
-        code="RHO4001", slug="ground-kind-conflict", severity="error",
-        message=(
-            "ground kinds conflict: `{net_a}` is {kind_a}, `{net_b}` is "
-            "{kind_b}."
-        ),
-        params=("net_a", "kind_a", "net_b", "kind_b"),
-        rule="GA-2", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4002", slug="ground-loop", severity="error",
-        message="ground loop: the tie graph must be acyclic; cycle: {cycle}.",
-        params=("cycle",),
-        rule="GA-6", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4003", slug="earth-as-reference", severity="error",
-        message=(
-            "`{net}` has kind earth and cannot be a reference or return "
-            "path; referenced by {referencing_entity}."
-        ),
-        params=("net", "referencing_entity"),
-        rule="GA-10", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4004", slug="undeclared-chassis-bridge", severity="error",
-        message=(
-            "`{component}` bridges `{net_a}` and `{net_b}` across a "
-            "{boundary} boundary and is not a declared SafetyCapacitor."
-        ),
-        params=("component", "net_a", "net_b", "boundary"),
-        rule="GA-12", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4005", slug="isolation-spanning-component", severity="error",
-        message=(
-            "`{component}` spans the isolation barrier of "
-            "`{barrier_component}` (isolation domains: {domain_a}, "
-            "{domain_b})."
-        ),
-        params=("component", "domain_a", "domain_b", "barrier_component"),
-        rule="GA-14", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4006", slug="isolation-spanning-interface", severity="error",
-        message=(
-            "connecting {interface_type} from {endpoint_a} to {endpoint_b} "
-            "crosses isolation domains {domain_a} and {domain_b} without a "
-            "declared isolator."
-        ),
-        params=("interface_type", "endpoint_a", "endpoint_b", "domain_a",
-                "domain_b"),
-        rule="GA-14", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4007", slug="disjoint-ground-domains", severity="warning",
-        message=(
-            "isolation domains {domain_ids} are related by no declared "
-            "isolation component; usually a forgotten connection."
-        ),
-        params=("domain_ids",),
-        rule="GA-15", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4008", slug="isolation-defeating-bond", severity="error",
-        message=(
-            "net-tie `{tie}` crosses the declared isolation barrier of "
-            "`{barrier_component}`, defeating the isolation."
-        ),
-        params=("tie", "barrier_component"),
-        rule="GA-14b", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4009", slug="redundant-net-tie", severity="warning",
-        message="both ports of `{tie}` are on `{net}`; the tie is redundant.",
-        params=("tie", "net"),
-        rule="GA-9", reserved=True,
-    ),
-    CodeDef(
-        code="RHO4010", slug="undeclared-ground-domain-crossing",
-        severity="error",
-        message=(
-            "`{entity}` straddles unrelated ground domains {domain_a} and "
-            "{domain_b}; no voltage comparison across it exists."
-        ),
-        params=("entity", "domain_a", "domain_b"),
-        rule="GA-14c", reserved=True,
-    ),
-    # GA-11's safety note had a category and no number in the GA spec —
-    # "the diagnostic stream MUST tag the bond with a `safety` category
-    # note" — and assigning it is exactly the job §6 delegates to this
-    # registry. It stays in the GA block because GA-11 owns it.
-    CodeDef(
-        code="RHO4011", slug="safety-relevant-bond", severity="note",
-        message=(
-            "`{bond}` bonds across a {boundary} boundary; safety-relevant, "
-            "surfaced in the report's safety section (GA-11)."
-        ),
-        params=("bond", "boundary"),
-        rule="GA-11", reserved=True,
-    ),
 )
 
 # A code, once retired, keeps its number and slug here forever, so neither
@@ -988,6 +901,16 @@ RETIRED: tuple[tuple[str, str, str], ...] = (
      "(R14b / AMB-45); imports have their semantics, so nothing emits it"),
 )
 
+# Who declared what: the core blocks, then each owner file's CODES.
+OWNED: tuple[tuple[str, tuple[CodeDef, ...]], ...] = (
+    (("core", CORE),) + owned())
+
+# The registry every emitter looks codes up in: all of OWNED, in code order,
+# so the next free number in a block is a fact a reader can see.
+REGISTRY: tuple[CodeDef, ...] = tuple(sorted(
+    (entry for _owner, entries in OWNED for entry in entries),
+    key=lambda entry: entry.code))
+
 _BY_CODE = {entry.code: entry for entry in REGISTRY}
 
 
@@ -997,8 +920,73 @@ def lookup(code: str) -> CodeDef:
     except KeyError:
         raise KeyError(
             f"{code!r} is not a registered diagnostic code; every code must "
-            "be declared in rhoform/codes.py before anything emits it."
+            "be declared in rhoform/codes.py or its owner's file under "
+            "rhoform/codeset/ before anything emits it."
         ) from None
+
+
+def owner_of(code: str, ranges=None) -> str | None:
+    """The owner of the range of RANGES holding `code`, or None."""
+    for first, last, owner in (RANGES if ranges is None else ranges):
+        if first <= code <= last:
+            return owner
+    return None
+
+
+def range_problems(owned=None, ranges=None) -> list[str]:
+    """Every violation of the range table's rules: each range is two codes
+    of one assigned block, held by `core` or an owner file, and disjoint
+    from the others; each owner declares codes only inside its own ranges,
+    in code order; a retired code still lies in a range, so its number
+    stays owned. Takes its tables as arguments so the gate's self-test can
+    plant each defect."""
+    owned = OWNED if owned is None else owned
+    ranges = RANGES if ranges is None else ranges
+    problems: list[str] = []
+    valid = []
+    for first, last, owner in ranges:
+        where = f"range {first}-{last} ({owner})"
+        if not (CODE_RE.match(first) and CODE_RE.match(last)) \
+                or first > last:
+            problems.append(f"{where}: is not two codes in ascending order")
+            continue
+        if first[3] != last[3] or int(first[3]) not in BLOCKS:
+            problems.append(
+                f"{where}: does not lie inside one block of BLOCKS")
+        if owner != "core" and owner not in OWNERS:
+            problems.append(
+                f"{where}: {owner!r} is neither core nor an owner file of "
+                "rhoform/codeset/")
+        for other in valid:
+            if first <= other[1] and other[0] <= last:
+                problems.append(
+                    f"{where}: overlaps range {other[0]}-{other[1]} "
+                    f"({other[2]}); every number has one owner")
+        valid.append((first, last, owner))
+    if [r[0] for r in valid] != sorted(r[0] for r in valid):
+        problems.append(
+            "RANGES is not in code order; a sorted table is what makes a "
+            "number's owner a fact a reader can see")
+    for owner, entries in owned:
+        codes = [entry.code for entry in entries]
+        if codes != sorted(codes):
+            problems.append(
+                f"{owner}: its codes are not in code order; an owner takes "
+                "the next free number of its range, in order")
+        for entry in entries:
+            holder = owner_of(entry.code, ranges)
+            if holder != owner:
+                problems.append(
+                    f"{entry.code} ({entry.slug}): declared by {owner} but "
+                    + (f"inside {holder}'s range" if holder is not None
+                       else "inside no range of RANGES")
+                    + "; an owner numbers only inside its own ranges")
+    for code, slug, _reason in RETIRED:
+        if owner_of(code, ranges) is None:
+            problems.append(
+                f"retired {code} ({slug}): inside no range of RANGES, so "
+                "its number would have no owner to keep it retired")
+    return problems
 
 
 def registry_problems() -> list[str]:
@@ -1039,6 +1027,22 @@ def registry_problems() -> list[str]:
             )
         seen_codes[entry.code] = where
         seen_slugs[entry.slug] = where
+        # T6 downgrades errors at the reporting layer; a waivable warning or
+        # note has nothing to downgrade, and a source, elaboration or part
+        # defect is not a judgment a design may overrule.
+        if entry.waivable and (entry.severity != "error"
+                               or entry.code[3] not in "345"):
+            problems.append(
+                f"{where}: marked waivable, but only an error of blocks "
+                "3-5 may be waived")
+        if entry.source_triggered and entry.trigger_reason:
+            problems.append(
+                f"{where}: gives a trigger_reason but is source_triggered")
+        if not entry.source_triggered and not entry.trigger_reason:
+            problems.append(
+                f"{where}: is not source_triggered and gives no "
+                "trigger_reason; an exemption from the conformance coverage "
+                "rule says why no source can reach the code")
 
         placeholders = set(PLACEHOLDER_RE.findall(entry.message))
         declared = set(entry.params)
@@ -1062,4 +1066,5 @@ def registry_problems() -> list[str]:
             "REGISTRY is not in code order; a sorted registry is what makes "
             "'the next free number in the block' a fact a reader can see"
         )
+    problems += range_problems()
     return problems

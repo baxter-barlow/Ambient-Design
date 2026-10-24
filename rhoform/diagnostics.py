@@ -12,7 +12,9 @@ requirement), carrying:
     exactly as ir/source-map.schema.json states;
   - structured params separate from the message string — the message is
     RENDERED from the registry template and the params, so it cannot say
-    something the params do not;
+    something the params do not. A param value is a JSON scalar or an array
+    of scalars, finite numbers only, and is frozen when the diagnostic is
+    built, so the wire line and its message always agree;
   - fix-its with applicability levels and structured byte-span edits;
   - an optional IR entity identity. The source-map schema's diagnostic-anchor
     rule says post-elaboration diagnostics reference an IR entity and
@@ -40,11 +42,17 @@ from bisect import bisect_right
 from dataclasses import dataclass
 import codecs
 import json
+import math
 import re
 
 from . import codes
 
 APPLICABILITY = ("machine-applicable", "needs-review", "has-placeholders")
+
+# The V1 assertion tiers a diagnostic's `tier` names; null on every
+# diagnostic that is not an assertion result. Spec 06 restates it, and a
+# unit test reconciles the two.
+TIERS = ("static", "dynamic")
 
 # One diagnostic line's schema discriminator, mirrored by
 # rhoform/diagnostic.schema.json which validates a single line-object.
@@ -66,7 +74,7 @@ class Span:
     """A contiguous region of one source file, byte offsets authoritative.
 
     Field names are the source-map schema's, so the two artifacts cannot
-    drift into synonyms; the one divergence is `file`, a repository-relative
+    drift into synonyms; the one divergence is `file`, a compile-root-relative
     path here where the source map holds an index into its own file table
     (a diagnostic line must stand alone; an NDJSON stream has no header to
     carry a table).
@@ -109,6 +117,9 @@ class Span:
 # yields the same list, so nothing observable depends on whether it hit.
 # The entry holds a strong reference, which is what makes the identity
 # test safe — the object cannot be freed and its id reused while cached.
+# Identity is a sound key only for an immutable object: every caller passes
+# `bytes`, and a `bytearray` edited in place between two calls would be
+# served the stale index and columns of its old content (AMB-135).
 _LINE_INDEX: tuple[bytes, list[int], dict[int, list[int] | None]] | None = None
 
 
@@ -295,6 +306,41 @@ class FixIt:
         }
 
 
+def frozen_value(value):
+    """A param value as a diagnostic keeps it: a JSON scalar (string,
+    finite number, boolean, null) as is, a list or tuple of scalars as a
+    tuple. Anything else raises ValueError: a nested object hides structure
+    a reader of the message never sees, a set has no order and so no one
+    serialization, and NaN or an infinity is not JSON. Freezing is what
+    keeps a caller's later edit of its own list out of a diagnostic whose
+    message was rendered from the list as it was."""
+    if isinstance(value, (list, tuple)):
+        items = tuple(value)
+        for item in items:
+            _check_scalar(item, value)
+        return items
+    _check_scalar(value, value)
+    return value
+
+
+def _check_scalar(item, value) -> None:
+    if item is None or isinstance(item, (str, bool, int)):
+        return
+    if isinstance(item, float):
+        if math.isfinite(item):
+            return
+        raise ValueError(
+            f"{item!r} in {value!r} is not a finite number; NaN and the "
+            "infinities are not JSON")
+    raise ValueError(
+        f"{item!r} ({type(item).__name__}) in {value!r} is not a JSON "
+        "scalar; a param value is a scalar or an array of scalars")
+
+
+def _thawed(value):
+    return list(value) if isinstance(value, tuple) else value
+
+
 @dataclass(frozen=True)
 class Diagnostic:
     """One emitted diagnostic. Construct through `new()`, which is where the
@@ -328,9 +374,14 @@ class Diagnostic:
                 f"got {sorted(given)}. The structured params ARE the "
                 "contract; a mismatch is a bug at the emission site."
             )
-        if tier not in (None, "static", "dynamic"):
-            raise ValueError(f"tier {tier!r} is not static/dynamic/None")
-        message = entry.render(given)  # raises on unserializable values
+        try:
+            given = {name: frozen_value(value)
+                     for name, value in given.items()}
+        except ValueError as exc:
+            raise ValueError(f"{code}: {exc}") from None
+        if tier is not None and tier not in TIERS:
+            raise ValueError(f"tier {tier!r} is not one of {TIERS} or None")
+        message = entry.render(given)
         return Diagnostic(
             code=code,
             slug=entry.slug,
@@ -359,7 +410,7 @@ class Diagnostic:
             "category": self.category,
             "tier": self.tier,
             "message": self.message,
-            "params": dict(self.params),
+            "params": {name: _thawed(value) for name, value in self.params},
             "entity": self.entity,
             "spans": spans,
             "fixits": [fixit.as_dict() for fixit in self.fixits],
@@ -372,7 +423,7 @@ class Diagnostic:
             self.primary.byte_end,
             self.code,
             self.message,
-            json.dumps(dict(self.params), sort_keys=True),
+            json.dumps(dict(self.params), sort_keys=True, allow_nan=False),
         )
 
 
@@ -408,9 +459,12 @@ class Diagnostics:
     """The collector every pass reports into, and the only emission path.
 
     `add` validates through Diagnostic.new; `render` applies the canonical
-    order and the stated cap and returns the NDJSON text. There is no
-    unsorted or uncapped emission method on purpose — a second path is how
-    determinism promises rot.
+    order and the stated cap and returns the NDJSON text, and is the one
+    emission method: there is no unsorted or uncapped one, on purpose — a
+    second path is how determinism promises rot. Iterating a collector is
+    inspection, not emission: it yields every diagnostic in canonical order
+    with no cap and no truncation note, for code that reads what a pass
+    reported, and nothing it yields reaches a stream.
     """
 
     def __init__(self, cap: int = OUTPUT_CAP):
@@ -432,10 +486,12 @@ class Diagnostics:
         compared as rendered. Two compilations of one run that share an
         imported file see its defects alike; the run reports each once.
         Repeats within `other` are its own business and are kept."""
-        seen = {json.dumps(d.as_dict(), sort_keys=True) for d in self._items}
+        seen = {json.dumps(d.as_dict(), sort_keys=True, allow_nan=False)
+                for d in self._items}
         self._items.extend(
             diagnostic for diagnostic in other._items
-            if json.dumps(diagnostic.as_dict(), sort_keys=True) not in seen)
+            if json.dumps(diagnostic.as_dict(), sort_keys=True,
+                          allow_nan=False) not in seen)
 
     def __len__(self) -> int:
         return len(self._items)
@@ -504,7 +560,8 @@ class Diagnostics:
     def render(self) -> str:
         """The NDJSON stream: one key-sorted compact object per line."""
         return "".join(
-            json.dumps(d.as_dict(), sort_keys=True, separators=(",", ":"))
+            json.dumps(d.as_dict(), sort_keys=True, separators=(",", ":"),
+                       allow_nan=False)
             + "\n"
             for d in self.capped()
         )

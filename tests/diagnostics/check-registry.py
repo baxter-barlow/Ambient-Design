@@ -5,9 +5,12 @@ Three legs, each of which failed somewhere before it was checked here:
 
   1. STRUCTURE. rhoform/codes.py's own rules (unique codes and slugs,
      assigned blocks, kebab slugs, params matching templates both ways,
-     retirement permanence, sorted order) — registry_problems() is the
-     shared engine, this gate is what makes violating it red rather than
-     a comment.
+     retirement permanence, sorted order, which codes T6 may waive, a
+     reason for every code exempt from the conformance coverage rule) and
+     its range table: every code inside a range its declaring owner file
+     holds, the ranges disjoint and each inside one block, each owner's
+     codes in order — registry_problems() is the shared engine, this gate
+     is what makes violating it red rather than a comment.
   2. THE GA TRANSCRIPTION. The ground-architecture spec published ten
      codes with slugs and structured-parameter shapes "stable from this
      document forward", and the AC2 corpus already cites them
@@ -224,9 +227,10 @@ def main() -> int:
     print(
         f"registry: PASS: {active + reserved} stable code(s) "
         f"({active} active, {reserved} reserved), "
-        f"{len(codes_module.RETIRED)} retired, GA catalog transcription "
-        "matched, wire schema vocabularies in sync, emission refusals "
-        "probed."
+        f"{len(codes_module.RETIRED)} retired, every code inside its "
+        f"owner's range of {len(codes_module.RANGES)}, GA catalog "
+        "transcription matched, wire schema vocabularies in sync, emission "
+        "refusals probed."
     )
     return 0
 
@@ -359,6 +363,60 @@ def self_test() -> int:
         codes_module.REGISTRY = registry
     cases.append(("registry problems are WIRED into main()",
                   wired == 1 and "already used" in err.getvalue()))
+
+    # THE RANGE TABLE (M2). Each defect its rules exist for, planted in the
+    # module's own tables so main() meets it the way a bad edit would land.
+    def planted(**changes):
+        saved = {name: getattr(codes_module, name) for name in changes}
+        for name, value in changes.items():
+            setattr(codes_module, name, value)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                return main(), err.getvalue()
+        finally:
+            for name, value in saved.items():
+                setattr(codes_module, name, value)
+
+    coverage_note = entry("RHO3901")
+    for name, changes, fragment in (
+        ("a code outside its owner's range",
+         {"OWNED": codes_module.OWNED + (("erc", (coverage_note,)),)},
+         "RHO3901 (static-coverage-degraded): declared by erc but inside "
+         "check's range"),
+        ("a code in no owner's range",
+         {"OWNED": codes_module.OWNED + (("check", (codes_module.CodeDef(
+             "RHO3600", "unowned", "note", "m"),)),)},
+         "inside no range of RANGES"),
+        ("overlapping ranges",
+         {"RANGES": codes_module.RANGES + (("RHO3950", "RHO3960", "erc"),)},
+         "range RHO3950-RHO3960 (erc): overlaps range RHO3901-RHO3999 "
+         "(check)"),
+        ("an unsorted range table",
+         {"RANGES": tuple(reversed(codes_module.RANGES))},
+         "RANGES is not in code order"),
+        ("a range outside BLOCKS",
+         {"RANGES": codes_module.RANGES + (("RHO9001", "RHO9009", "check"),)},
+         "range RHO9001-RHO9009 (check): does not lie inside one block"),
+        ("an unsorted assembled registry",
+         {"REGISTRY": (registry[1], registry[0]) + registry[2:]},
+         "REGISTRY is not in code order"),
+        ("a waivable non-error code",
+         {"REGISTRY": registry + (codes_module.CodeDef(
+             "RHO3998", "noted", "note", "m", waivable=True),)},
+         "RHO3998 (noted): marked waivable"),
+        ("a waivable code of block 2",
+         {"REGISTRY": registry + (codes_module.CodeDef(
+             "RHO2999", "late", "error", "m", waivable=True),)},
+         "RHO2999 (late): marked waivable"),
+        ("an exemption with no reason",
+         {"REGISTRY": registry + (codes_module.CodeDef(
+             "RHO2999", "unreached", "error", "m",
+             source_triggered=False),)},
+         "is not source_triggered and gives no trigger_reason"),
+    ):
+        code, text = planted(**changes)
+        cases.append((f"{name} is caught", code == 1 and fragment in text))
 
     with contextlib.redirect_stdout(io.StringIO()) as out:
         clean = main()

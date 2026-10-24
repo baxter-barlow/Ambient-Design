@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ambient.science/rhoform/schemas/diagnostic/0.schema.json",
   "title": "Rhoform Diagnostic v0",
-  "description": "ONE line of the A1 newline-delimited JSON diagnostic stream (requirement A1: stable codes, byte spans, structured params separate from message strings, fix-its with applicability levels, deterministic capped output). The stream itself is zero or more of these objects, one per line, in the canonical order rhoform/diagnostics.py defines; each line stands alone, which is why files are named by repository-relative path here rather than through a stream-level file table. Emitted only by rhoform.diagnostics; the registry in rhoform/codes.py is the sole source of codes, slugs, severities and categories, and the registry gate holds the two in step. The spec's diagnostics section (spec/language/06-diagnostics.md) is the normative prose for this format.",
+  "description": "ONE line of the A1 newline-delimited JSON diagnostic stream (requirement A1: stable codes, byte spans, structured params separate from message strings, fix-its with applicability levels, deterministic capped output). The stream itself is zero or more of these objects, one per line, in the canonical order rhoform/diagnostics.py defines; each line stands alone, which is why files are named by compile-root-relative path here rather than through a stream-level file table. Emitted only by rhoform.diagnostics; the registry in rhoform/codes.py is the sole source of codes, slugs, severities and categories, and the registry gate holds the two in step. The spec's diagnostics section (spec/language/06-diagnostics.md) is the normative prose for this format.",
   "type": "object",
   "additionalProperties": false,
   "patternProperties": {
@@ -47,7 +47,13 @@
     "params": {
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
-      "description": "The structured parameters, exactly the set the registry declares for the code (enforced at emission; a JSON Schema cannot express the per-code contract, the registry gate does). Values are JSON scalars or arrays of scalars."
+      "additionalProperties": {
+        "anyOf": [
+          { "$ref": "#/$defs/Scalar" },
+          { "type": "array", "items": { "$ref": "#/$defs/Scalar" } }
+        ]
+      },
+      "description": "The structured parameters, exactly the set the registry declares for the code (enforced at emission; a JSON Schema cannot express the per-code contract, the registry gate does). Values are JSON scalars or arrays of scalars: a nested object would carry structure the rendered message never shows, which is the rule the x_ members follow too. Emission also refuses non-finite numbers, which JSON cannot spell. A quantity travels as its normal-form string (\"3.6V\"), never as a number, and an interval as two such params, <name>_min and <name>_max."
     },
     "entity": {
       "type": ["string", "null"],
@@ -69,6 +75,10 @@
     }
   },
   "$defs": {
+    "Scalar": {
+      "type": ["string", "number", "boolean", "null"],
+      "description": "One JSON scalar: a param value, or an element of an array-valued one."
+    },
     "SpanFields": {
       "type": "object",
       "required": ["file", "byte_start", "byte_end", "line_start", "col_start", "line_end", "col_end"],
@@ -76,7 +86,7 @@
         "file": {
           "type": "string",
           "minLength": 1,
-          "description": "Repository-relative POSIX path of the source file. Never absolute, never host-specific (determinism contract)."
+          "description": "POSIX path of the source file, relative to its compilation's compile root (a standard library module, its library path rhoform/lib/<module>.rhoform). Never absolute, never host-specific (determinism contract)."
         },
         "byte_start": { "type": "integer", "minimum": 0, "description": "0-based byte offset of the first byte of the span." },
         "byte_end": { "type": "integer", "minimum": 0, "description": "0-based byte offset one past the last byte (end-exclusive); >= byte_start. Equal offsets are an insertion point." },
@@ -109,6 +119,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["message", "applicability", "placeholders", "edits"],
+      "if": {
+        "properties": { "applicability": { "const": "has-placeholders" } },
+        "required": ["applicability"]
+      },
+      "then": { "properties": { "placeholders": { "minItems": 1 } } },
+      "else": { "properties": { "placeholders": { "maxItems": 0 } } },
       "properties": {
         "message": { "type": "string", "minLength": 1 },
         "applicability": {

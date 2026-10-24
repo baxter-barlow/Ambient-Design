@@ -152,7 +152,7 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
 # same change that legitimately removes one. 49 -> 59 when the diagnostic
 # wire-format schema landed with its ten controls (AMB-48).
-MINIMUM_NEGATIVE_CONTROLS = 59
+MINIMUM_NEGATIVE_CONTROLS = 61
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
