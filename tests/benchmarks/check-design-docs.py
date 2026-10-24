@@ -808,7 +808,8 @@ def line_count_problems(problems):
 # check-hand-assertions.py gates through assertions.yaml.
 MODE_TABLE = {
     "benchmark": "esp32s3-devboard",
-    "record": "espressif-esp32-s3-wroom-1-n8r2.part.json",
+    # In the bundled part store, where the record's path is its part_id.
+    "record": "rhoform/parts/espressif/esp32-s3-wroom-1-n8r2.part.json",
     # design.md row label fragment -> mode id in the part record
     "rows": (
         ("802.11b 1 Mbps", "wifi_tx_802_11b_1mbps"),
@@ -833,7 +834,7 @@ def mode_table_problems(problems):
     """Hold benchmark (c)'s mode-current table to the part record."""
     import json
     doc = ROOT / "benchmarks" / MODE_TABLE["benchmark"] / "design.md"
-    record = ROOT / "parts" / "examples" / MODE_TABLE["record"]
+    record = ROOT / MODE_TABLE["record"]
     if not doc.is_file() or not record.is_file():
         problems.append(f"{MODE_TABLE['benchmark']}: design.md or its part record is missing")
         return 0
@@ -950,9 +951,9 @@ def _decomposed_mode_problems(form):
         text = text.replace("**355 mA**", form, 1)
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
-        (root / "parts" / "examples").mkdir(parents=True)
-        (root / "parts" / "examples" / MODE_TABLE["record"]).write_text(
-            (ROOT / "parts" / "examples" / MODE_TABLE["record"]).read_text(
+        (root / MODE_TABLE["record"]).parent.mkdir(parents=True)
+        (root / MODE_TABLE["record"]).write_text(
+            (ROOT / MODE_TABLE["record"]).read_text(
                 encoding="utf-8"), encoding="utf-8")
         case = root / "benchmarks" / MODE_TABLE["benchmark"]
         case.mkdir(parents=True)
@@ -977,7 +978,7 @@ def _planted_mode_problems():
     a leg written to close an ungated-document finding.
     """
     import json, tempfile
-    record = ROOT / "parts" / "examples" / MODE_TABLE["record"]
+    record = ROOT / MODE_TABLE["record"]
     document = json.loads(record.read_text(encoding="utf-8"))
     for mode in document.get("modes") or []:
         if mode.get("id") == "deep_sleep_rtc_mem_and_periph":
@@ -985,8 +986,8 @@ def _planted_mode_problems():
                 draw["current"]["typ"] = 999
     with tempfile.TemporaryDirectory() as tmp:
         root = pathlib.Path(tmp)
-        (root / "parts" / "examples").mkdir(parents=True)
-        (root / "parts" / "examples" / MODE_TABLE["record"]).write_text(
+        (root / MODE_TABLE["record"]).parent.mkdir(parents=True)
+        (root / MODE_TABLE["record"]).write_text(
             json.dumps(document, indent=2) + "\n", encoding="utf-8")
         case = root / "benchmarks" / MODE_TABLE["benchmark"]
         case.mkdir(parents=True)

@@ -10,7 +10,7 @@ threshold tolerance, which `design.md` itself names as a dominant term.
 
 The common cause is that every one was arithmetic done by hand against a
 datasheet the repository does not transcribe. So this derives the windows
-MECHANICALLY, from `parts/examples/ti-ne555p.part.json` — the values this
+MECHANICALLY, from `rhoform/parts/ti/ne555p.part.json` — the values this
 project actually stands behind — and prints both models, because the difference
 between them is the thing four revisions kept eliding.
 
@@ -71,7 +71,12 @@ from math import log
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-RECORD = ROOT / "parts" / "examples" / "ti-ne555p.part.json"
+RECORD = ROOT / "rhoform" / "parts" / "ti" / "ne555p.part.json"
+# The datasheet column the model reads. The record carries the comparator
+# levels at VCC = 5 V and at 15 V (a D3 v1 condition array); this has always
+# derived from the 5 V column, and choosing the other is a modelling change,
+# not something a record edit may make silently.
+RECORD_VCC = 5
 CASE = ROOT / "benchmarks" / "blinker-555"
 ASSERTIONS = CASE / "assertions.yaml"
 DECK = CASE / "netlist.cir"
@@ -205,11 +210,24 @@ def deck_read_problems():
             "gating a circuit that no longer exists"]
 
 
+def _column(measure, vcc=RECORD_VCC):
+    """The element of a characteristic stated at VCC = `vcc`: the measure
+    itself when the record states one operating point, else the matching
+    element of its condition array. Refuses rather than falling back to
+    another column."""
+    for item in measure if isinstance(measure, list) else [measure]:
+        stated = ((item.get("conditions") or {}).get("vcc") or {}).get("typ")
+        if stated is not None and float(stated) == vcc:
+            return item
+    raise ValueError(f"the record states no VCC = {vcc} V column for this "
+                     "characteristic, and the model reads only that one")
+
+
 def _record():
     doc = json.loads(RECORD.read_text(encoding="utf-8"))
     ch = {p["name"]: (p.get("characteristics") or {}) for p in doc["pins"]}
-    thr = ch["THRES"]["threshold_voltage_level"]
-    trg = ch["TRIG"]["trigger_voltage_level"]
+    thr = _column(ch["THRES"]["threshold_voltage_level"])
+    trg = _column(ch["TRIG"]["trigger_voltage_level"])
     spec_vcc = thr["conditions"]["vcc"]["typ"]
     # BOTH timing-node currents. TRIG and THRES are the same node in an
     # astable, so both load the capacitor; the model read only THRES and the
@@ -463,6 +481,17 @@ def self_test() -> int:
                       lambda: tolerance_from_bom("parts:\n", "CT"))))
     cases.append(("the shipped BOM's own tolerances are what the windows use",
                   _bom_tolerances() == (RA_TOL, RB_TOL, C_TOL)))
+
+    # THE COLUMN. The record states the comparator levels at two supplies;
+    # the model reads the 5 V one and must say so when it is gone, not drift
+    # to whatever element is first.
+    _levels = [{"min": 8.8, "conditions": {"vcc": {"unit": "V", "typ": 15}}},
+               {"min": 2.4, "conditions": {"vcc": {"unit": "V", "typ": 5}}}]
+    cases.append(("the 5 V column is read wherever it sits in the array",
+                  _column(_levels)["min"] == 2.4))
+    cases.append(("a record without the 5 V column refuses, not falls back",
+                  "no VCC = 5 V column" in _refusal(
+                      lambda: _column(_levels[:1]))))
 
     # THE FALLBACK REFUSAL. Round 17 hid RB behind a brace: the module fell
     # back to hard-coded constants while its comment claimed main() reported

@@ -111,7 +111,12 @@ INNER = os.environ.get("RHOFORM_GATE_COVERAGE_INNER") == "1"
 CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
-    "parts/lint-part-data.py": (32, 5),
+    # 32 -> 13 sites with D3 v1 (AMB-127): the lint core's per-clause report
+    # sites moved into rhoform/partdata.py, which the compiler shares and this
+    # census cannot mutate. They are not dropped: this gate's self-test has a
+    # case per clause, and a one-off mutation of partdata.py's 54 sites left
+    # none surviving both it and rhoform/tests/test_partdata.py.
+    "parts/lint-part-data.py": (13, 0),
     "tests/benchmarks/check-assertions.py": (33, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
     "tests/benchmarks/check-design-docs.py": (31, 21),
@@ -155,7 +160,9 @@ OWNERS = {
         {"problems"},
         {"token_lines", "t9_order", "sources", "published", "cases"}),
     "parts/lint-part-data.py": (
-        {"problems"}, {"unchecked", "files"}),
+        # `value` is the self-test's wiring plant marking the accumulator it
+        # was handed; it reports nothing.
+        {"problems"}, {"unchecked", "files", "value"}),
     "tests/benchmarks/check-assertions.py": (
         {"problems"}, {"cases"}),
     "tests/benchmarks/check-corners.py": (

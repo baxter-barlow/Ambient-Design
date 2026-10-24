@@ -1,5 +1,65 @@
 {
+  "absent": [
+    {
+      "note": "Table 6-1 Absolute Maximum Ratings has two rows, VDD33 and storage temperature. Espressif publishes no absolute-maximum window for an individual GPIO; the recommended-operation thresholds in the class's characteristics are what a domain check can use.",
+      "pointer": "/pin_classes/0/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "gpio"
+    },
+    {
+      "note": "Table 6-1 rates no voltage for EN either.",
+      "pointer": "/pins/1/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "EN"
+    }
+  ],
   "description": "2.4 GHz Wi-Fi (802.11 b/g/n) and Bluetooth LE 5 module, Xtensa dual-core 32-bit LX7, 8 MB flash, 2 MB quad SPI PSRAM, PCB antenna",
+  "implements": [
+    {
+      "definition": "rhoform.lib.module.Esp32S3Wroom1",
+      "pins": {
+        "en": "EN",
+        "gnd": "GND",
+        "io0": "IO0",
+        "io1": "IO1",
+        "io10": "IO10",
+        "io11": "IO11",
+        "io12": "IO12",
+        "io13": "IO13",
+        "io14": "IO14",
+        "io15": "IO15",
+        "io16": "IO16",
+        "io17": "IO17",
+        "io18": "IO18",
+        "io19": "IO19",
+        "io2": "IO2",
+        "io20": "IO20",
+        "io21": "IO21",
+        "io3": "IO3",
+        "io35": "IO35",
+        "io36": "IO36",
+        "io37": "IO37",
+        "io38": "IO38",
+        "io39": "IO39",
+        "io4": "IO4",
+        "io40": "IO40",
+        "io41": "IO41",
+        "io42": "IO42",
+        "io43": "TXD0",
+        "io44": "RXD0",
+        "io45": "IO45",
+        "io46": "IO46",
+        "io47": "IO47",
+        "io48": "IO48",
+        "io5": "IO5",
+        "io6": "IO6",
+        "io7": "IO7",
+        "io8": "IO8",
+        "io9": "IO9",
+        "p3v3": "3V3"
+      }
+    }
+  ],
   "license_class": "vendor-public",
   "lifecycle": "active",
   "manufacturer": "Espressif Systems",
@@ -285,7 +345,7 @@
     }
   ],
   "mpn": "ESP32-S3-WROOM-1-N8R2",
-  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nKNOWN v0 SCHEMA LIMITATION exercised by this record: the datasheet states GPIO DC characteristics (VIH/VIL/VOH/VOL, IOH 40 mA typ, IOL 28 mA typ, leakage, pull resistors) once, for the GPIO pins as a CLASS. This schema has no pin-class or inheritance mechanism, so those values must be repeated on every pin. Rather than duplicate a 12-line block 36 times, this record populates capability and characteristics on the pins that benchmark (c) actually drives or loads (IO0, IO19, IO20, IO48, TXD0) and on the strapping pins it uses, and leaves the remainder with identity and role only. A consumer must therefore NOT read the absence of a capability block as 'this pin has no drive capability'. Adding a pin-class mechanism is the leading candidate for the first schema_version bump; see the freeze memo.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead. The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in each pin's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it.",
+  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nGPIO DC CHARACTERISTICS ARE STATED ONCE, in the `gpio` pin class, because the datasheet states them once (Table 6-3) for the GPIO pins as a class; every GPIO, IO0-IO21, IO35-IO48 and TXD0/RXD0, is a member. Under schema v0, which had no class mechanism, this record carried them on IO0 and capability on five pins only, and a consumer could misread the bare pins as unable to drive. That limitation is what the v1 class closes.\n\nSTRAPPING PINS (AMB-127 item 1): IO0, IO3, IO45 and IO46 carry their reset default (Table 4-1) in `strap`, and the boot-mode table (Table 4-3) is the record's `straps`.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead, and recorded as such (absent: vendor-unpublished). The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in the gpio class's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it.",
   "package": {
     "footprint_ref": "rho:XCVR_ESP32-S3-WROOM-1",
     "name": "ESP32-S3-WROOM-1",
@@ -293,78 +353,7 @@
     "thermal_pad": true
   },
   "part_id": "espressif/esp32-s3-wroom-1-n8r2",
-  "pins": [
-    {
-      "abs_max": {
-        "voltage": {
-          "max": 3.6,
-          "min": -0.3,
-          "unit": "V"
-        }
-      },
-      "characteristics": {
-        "supply_current_capability_required": {
-          "conditions": {
-            "note": "IVDD, current the external supply must be able to deliver"
-          },
-          "min": 0.5,
-          "unit": "A"
-        }
-      },
-      "description": "Power supply (datasheet pin type P)",
-      "name": "3V3",
-      "numbers": [
-        "2"
-      ],
-      "recommended": {
-        "voltage": {
-          "max": 3.6,
-          "min": 3.0,
-          "typ": 3.3,
-          "unit": "V"
-        }
-      },
-      "role": "power_in"
-    },
-    {
-      "characteristics": {
-        "vih_nrst": {
-          "max": {
-            "offset": 0.3,
-            "reference": "3V3"
-          },
-          "min": {
-            "factor": 0.75,
-            "reference": "3V3"
-          },
-          "unit": "V"
-        },
-        "vil_nrst": {
-          "max": {
-            "factor": 0.25,
-            "reference": "3V3"
-          },
-          "min": -0.3,
-          "unit": "V"
-        }
-      },
-      "description": "Chip enable. High: on. Low: powers off. Must not be left floating.",
-      "name": "EN",
-      "numbers": [
-        "3"
-      ],
-      "role": "input"
-    },
-    {
-      "description": "Ground. Pins 1 and 40 plus the exposed thermal pad (pin 41, EPAD), all internally common.",
-      "name": "GND",
-      "numbers": [
-        "1",
-        "40",
-        "41"
-      ],
-      "role": "power_in"
-    },
+  "pin_classes": [
     {
       "capability": {
         "sink_current": {
@@ -453,14 +442,99 @@
           "unit": "V"
         }
       },
+      "description": "Every GPIO of the module (IO0-IO21, IO35-IO48, and TXD0/RXD0 = GPIO43/GPIO44). Table 6-3 states the GPIO DC characteristics once, for all of them.",
+      "id": "gpio",
+      "role": "bidirectional"
+    }
+  ],
+  "pins": [
+    {
+      "abs_max": {
+        "voltage": {
+          "max": 3.6,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "supply_current_capability_required": {
+          "conditions": {
+            "note": "IVDD, current the external supply must be able to deliver"
+          },
+          "min": 0.5,
+          "unit": "A"
+        }
+      },
+      "description": "Power supply (datasheet pin type P)",
+      "name": "3V3",
+      "numbers": [
+        "2"
+      ],
+      "recommended": {
+        "voltage": {
+          "max": 3.6,
+          "min": 3.0,
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "role": "power_in"
+    },
+    {
+      "characteristics": {
+        "vih_nrst": {
+          "max": {
+            "offset": 0.3,
+            "reference": "3V3"
+          },
+          "min": {
+            "factor": 0.75,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vil_nrst": {
+          "max": {
+            "factor": 0.25,
+            "reference": "3V3"
+          },
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "description": "Chip enable. High: on. Low: powers off. Must not be left floating.",
+      "name": "EN",
+      "numbers": [
+        "3"
+      ],
+      "role": "input"
+    },
+    {
+      "description": "Ground. Pins 1 and 40 plus the exposed thermal pad (pin 41, EPAD), all internally common.",
+      "name": "GND",
+      "numbers": [
+        "1",
+        "40",
+        "41"
+      ],
+      "role": "power_in"
+    },
+    {
+      "class": "gpio",
       "description": "RTC_GPIO0, GPIO0. Strapping pin: boot mode select.",
       "name": "IO0",
       "numbers": [
         "27"
       ],
-      "role": "bidirectional"
+      "role": "bidirectional",
+      "strap": {
+        "default": "pull_up",
+        "function": "Chip boot mode select, together with GPIO46",
+        "sampled_at": "system reset"
+      }
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO1, GPIO1, TOUCH1, ADC1_CH0",
       "name": "IO1",
       "numbers": [
@@ -469,6 +543,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO10, GPIO10, TOUCH10, ADC1_CH9, FSPICS0, FSPIIO4, SUBSPICS0",
       "name": "IO10",
       "numbers": [
@@ -477,6 +552,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO11, GPIO11, TOUCH11, ADC2_CH0, FSPID, FSPIIO5, SUBSPID",
       "name": "IO11",
       "numbers": [
@@ -485,6 +561,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO12, GPIO12, TOUCH12, ADC2_CH1, FSPICLK, FSPIIO6, SUBSPICLK",
       "name": "IO12",
       "numbers": [
@@ -493,6 +570,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO13, GPIO13, TOUCH13, ADC2_CH2, FSPIQ, FSPIIO7, SUBSPIQ",
       "name": "IO13",
       "numbers": [
@@ -501,6 +579,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO14, GPIO14, TOUCH14, ADC2_CH3, FSPIWP, FSPIDQS, SUBSPIWP",
       "name": "IO14",
       "numbers": [
@@ -509,6 +588,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO15, GPIO15, U0RTS, ADC2_CH4, XTAL_32K_P",
       "name": "IO15",
       "numbers": [
@@ -517,6 +597,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO16, GPIO16, U0CTS, ADC2_CH5, XTAL_32K_N",
       "name": "IO16",
       "numbers": [
@@ -525,6 +606,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO17, GPIO17, U1TXD, ADC2_CH6",
       "name": "IO17",
       "numbers": [
@@ -533,6 +615,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO18, GPIO18, U1RXD, ADC2_CH7, CLK_OUT3",
       "name": "IO18",
       "numbers": [
@@ -541,38 +624,7 @@
       "role": "bidirectional"
     },
     {
-      "capability": {
-        "sink_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "vol": {
-              "typ": 0.495,
-              "unit": "V"
-            }
-          },
-          "typ": 28,
-          "unit": "mA"
-        },
-        "source_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "voh": {
-              "min": 2.64,
-              "unit": "V"
-            }
-          },
-          "typ": 40,
-          "unit": "mA"
-        }
-      },
+      "class": "gpio",
       "description": "RTC_GPIO19, GPIO19, U1RTS, ADC2_CH8, CLK_OUT2, USB_D-",
       "name": "IO19",
       "numbers": [
@@ -581,6 +633,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO2, GPIO2, TOUCH2, ADC1_CH1",
       "name": "IO2",
       "numbers": [
@@ -589,38 +642,7 @@
       "role": "bidirectional"
     },
     {
-      "capability": {
-        "sink_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "vol": {
-              "typ": 0.495,
-              "unit": "V"
-            }
-          },
-          "typ": 28,
-          "unit": "mA"
-        },
-        "source_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "voh": {
-              "min": 2.64,
-              "unit": "V"
-            }
-          },
-          "typ": 40,
-          "unit": "mA"
-        }
-      },
+      "class": "gpio",
       "description": "RTC_GPIO20, GPIO20, U1CTS, ADC2_CH9, CLK_OUT1, USB_D+",
       "name": "IO20",
       "numbers": [
@@ -629,6 +651,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO21, GPIO21",
       "name": "IO21",
       "numbers": [
@@ -637,14 +660,25 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select.",
       "name": "IO3",
       "numbers": [
         "15"
       ],
-      "role": "bidirectional"
+      "role": "bidirectional",
+      "strap": {
+        "default": "floating",
+        "function": "JTAG signal source select; read only when EFUSE_STRAP_JTAG_SEL is 1, otherwise ignored",
+        "levels": {
+          "0": "JTAG from the JTAG pins (MTDI, MTCK, MTMS, MTDO)",
+          "1": "JTAG from the USB Serial/JTAG controller"
+        },
+        "sampled_at": "system reset"
+      }
     },
     {
+      "class": "gpio",
       "description": "SPIIO6, GPIO35, FSPID, SUBSPID. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants (R8, R16V). Default function of pins 28-30 is set by eFuse.",
       "name": "IO35",
       "numbers": [
@@ -653,6 +687,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "SPIIO7, GPIO36, FSPICLK, SUBSPICLK. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants.",
       "name": "IO36",
       "numbers": [
@@ -661,6 +696,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "SPIDQS, GPIO37, FSPIQ, SUBSPIQ. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants.",
       "name": "IO37",
       "numbers": [
@@ -669,6 +705,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "GPIO38, FSPIWP, SUBSPIWP",
       "name": "IO38",
       "numbers": [
@@ -677,6 +714,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "MTCK, GPIO39, CLK_OUT3, SUBSPICS1",
       "name": "IO39",
       "numbers": [
@@ -685,6 +723,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO4, GPIO4, TOUCH4, ADC1_CH3",
       "name": "IO4",
       "numbers": [
@@ -693,6 +732,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "MTDO, GPIO40, CLK_OUT2",
       "name": "IO40",
       "numbers": [
@@ -701,6 +741,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "MTDI, GPIO41, CLK_OUT1",
       "name": "IO41",
       "numbers": [
@@ -709,6 +750,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "MTMS, GPIO42",
       "name": "IO42",
       "numbers": [
@@ -717,22 +759,39 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "GPIO45. Strapping pin: VDD_SPI voltage select.",
       "name": "IO45",
       "numbers": [
         "26"
       ],
-      "role": "bidirectional"
+      "role": "bidirectional",
+      "strap": {
+        "default": "pull_down",
+        "function": "VDD_SPI voltage select; read only when EFUSE_VDD_SPI_FORCE is 0",
+        "levels": {
+          "0": "VDD_SPI at 3.3 V, from VDD3P3_RTC via RSPI",
+          "1": "VDD_SPI at 1.8 V, from the flash voltage regulator"
+        },
+        "sampled_at": "system reset"
+      }
     },
     {
+      "class": "gpio",
       "description": "GPIO46. Strapping pin: ROM message printing control.",
       "name": "IO46",
       "numbers": [
         "16"
       ],
-      "role": "bidirectional"
+      "role": "bidirectional",
+      "strap": {
+        "default": "pull_down",
+        "function": "Chip boot mode select, together with GPIO0; ROM message printing control",
+        "sampled_at": "system reset"
+      }
     },
     {
+      "class": "gpio",
       "description": "SPICLK_P_DIFF, GPIO47, SUBSPICLK_P_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
       "name": "IO47",
       "numbers": [
@@ -741,38 +800,7 @@
       "role": "bidirectional"
     },
     {
-      "capability": {
-        "sink_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "vol": {
-              "typ": 0.495,
-              "unit": "V"
-            }
-          },
-          "typ": 28,
-          "unit": "mA"
-        },
-        "source_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "voh": {
-              "min": 2.64,
-              "unit": "V"
-            }
-          },
-          "typ": 40,
-          "unit": "mA"
-        }
-      },
+      "class": "gpio",
       "description": "SPICLK_N_DIFF, GPIO48, SUBSPICLK_N_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
       "name": "IO48",
       "numbers": [
@@ -781,6 +809,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO5, GPIO5, TOUCH5, ADC1_CH4",
       "name": "IO5",
       "numbers": [
@@ -789,6 +818,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO6, GPIO6, TOUCH6, ADC1_CH5",
       "name": "IO6",
       "numbers": [
@@ -797,6 +827,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO7, GPIO7, TOUCH7, ADC1_CH6",
       "name": "IO7",
       "numbers": [
@@ -805,6 +836,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO8, GPIO8, TOUCH8, ADC1_CH7, SUBSPICS1",
       "name": "IO8",
       "numbers": [
@@ -813,6 +845,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "RTC_GPIO9, GPIO9, TOUCH9, ADC1_CH8, FSPIHD, SUBSPIHD",
       "name": "IO9",
       "numbers": [
@@ -821,6 +854,7 @@
       "role": "bidirectional"
     },
     {
+      "class": "gpio",
       "description": "U0RXD, GPIO44, CLK_OUT2",
       "name": "RXD0",
       "numbers": [
@@ -829,38 +863,7 @@
       "role": "bidirectional"
     },
     {
-      "capability": {
-        "sink_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "vol": {
-              "typ": 0.495,
-              "unit": "V"
-            }
-          },
-          "typ": 28,
-          "unit": "mA"
-        },
-        "source_current": {
-          "conditions": {
-            "pad_driver": "3",
-            "vdd": {
-              "typ": 3.3,
-              "unit": "V"
-            },
-            "voh": {
-              "min": 2.64,
-              "unit": "V"
-            }
-          },
-          "typ": 40,
-          "unit": "mA"
-        }
-      },
+      "class": "gpio",
       "description": "U0TXD, GPIO43, CLK_OUT1",
       "name": "TXD0",
       "numbers": [
@@ -952,12 +955,49 @@
       "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "wifi_tx_802_11n_ht20_mcs7"
     },
+    "/pin_classes": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C)",
+      "method": "manual",
+      "note": "Table 6-3 states each row once, against VDD, 'voltage from a power pin of a respective power domain' (its note 1). The module brings out one supply, 3V3, so the bounds are referenced to it. For the pins in the VDD_SPI domain (IO35-IO37, IO47, IO48) that holds while VDD_SPI is at its 3.3 V default (GPIO45 strapped 0, eFuses unburnt, Table 4-4), which is what the pin descriptions already state for this part. In v0 these values sat on IO0 alone and capability on five pins, because v0 had no class mechanism.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
+    },
     "/pins": {
       "confidence": "datasheet-stated",
       "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions); Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
       "method": "manual",
       "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it.",
       "source_id": "esp32-s3-wroom-1-ds-v1.8"
+    },
+    "/pins/18/strap": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 4-1 Default Configuration of Strapping Pins (GPIO3 row); Section 4.4 JTAG Signal Source Control and Table 4-5",
+      "method": "manual",
+      "note": "Table 4-1 gives GPIO3's default as Floating with no bit value, and Section 4.4 says the pin has no internal pull resistors, so the circuit must drive it whenever EFUSE_STRAP_JTAG_SEL is burnt. The levels are Table 4-5's rows with EFUSE_DIS_PAD_JTAG and EFUSE_DIS_USB_JTAG at their default 0.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO3"
+    },
+    "/pins/28/strap": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 4-1 Default Configuration of Strapping Pins (GPIO45 row); Section 4.2 VDD_SPI Voltage Control and Table 4-4",
+      "method": "manual",
+      "note": "The levels are Table 4-4's rows with EFUSE_VDD_SPI_FORCE at its default 0. The 3.3 V row is the table's marked default.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO45"
+    },
+    "/pins/29/strap": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 4-1 Default Configuration of Strapping Pins (GPIO46 row); Sections 4.1 and 4.3",
+      "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO46"
+    },
+    "/pins/3/strap": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 4-1 Default Configuration of Strapping Pins (GPIO0 row); Section 4.1 Chip Boot Mode Control",
+      "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO0"
     },
     "/ratings/abs_max": {
       "confidence": "datasheet-stated",
@@ -970,6 +1010,13 @@
       "locator": "Table 1-1 ESP32-S3-WROOM-1 Series Comparison, ESP32-S3-WROOM-1-N8R2 row (Ambient Temp. column), and the prose above it",
       "method": "manual",
       "note": "Taken from the PART-NUMBER table, not from Table 6-2. Table 6-2 lists the 65/85/105 C grades generically without saying which orderable part is which; reading a grade from there instead of Table 1-1 is how this record previously carried 65 C, which is the Octal-PSRAM band and wrong for N8R2.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
+    },
+    "/straps": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 4-3 Chip Boot Mode Control",
+      "method": "manual",
+      "note": "The table lists exactly these two combinations. The remaining one (GPIO0 = 0 with GPIO46 = 1) is not listed and is therefore not recorded, in either kind: this datasheet does not call it invalid, it only does not document it.",
       "source_id": "esp32-s3-wroom-1-ds-v1.8"
     }
   },
@@ -992,7 +1039,7 @@
       }
     }
   },
-  "schema_version": 0,
+  "schema_version": 1,
   "sources": [
     {
       "byte_sha256": "sha256:27d71971da07c280c6068d08c74720d1a25b8f20cf8494dc1765bdd28d40d435",
@@ -1009,5 +1056,25 @@
       "vendor": "espressif"
     }
   ],
-  "stability": "unstable"
+  "stability": "unstable",
+  "straps": [
+    {
+      "description": "Joint Download Boot: binaries are downloaded over UART0 or USB",
+      "id": "joint_download_boot",
+      "kind": "valid",
+      "when": {
+        "IO0": "0",
+        "IO46": "0"
+      }
+    },
+    {
+      "description": "SPI Boot, the default: the ROM bootloader loads and runs the program in SPI flash",
+      "id": "spi_boot",
+      "kind": "valid",
+      "when": {
+        "IO0": "1",
+        "IO46": "x"
+      }
+    }
+  ]
 }

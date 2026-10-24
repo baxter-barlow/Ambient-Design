@@ -51,29 +51,36 @@ corpus/bugs.yaml
     both at once (round 18).
 
 parts/examples/*.part.json
+rhoform/parts/*/*.part.json
 
-    Electrical values transcribed from manufacturer datasheets, with the
-    document and revision recorded per field in each record's `provenance`
-    block, and a table or section for nearly all of them. Provenance is keyed
-    by JSON-pointer prefix with a record-level default, and the count below is
-    of values whose governing entry names no table -- today that means falling
-    to a default, since every more specific entry carries one, but the gate
-    reads the locator field rather than trusting that to stay true: 5 of the
-    132 measured values across the five records, of which 4 are ratings.
+    Part records: the schema's teaching set under parts/examples/, and the
+    seed library the toolchain bundles under rhoform/parts/. Their electrical
+    values are transcribed from manufacturer datasheets, with the document
+    and revision recorded per field in each record's `provenance` block, and
+    a table or section for nearly all of them. Provenance is keyed by
+    JSON-pointer prefix with a record-level default, and the count below is
+    of values whose governing entry names no table -- today that means
+    falling to a default, since every more specific entry carries one, but
+    the gate reads the locator field rather than trusting that to stay true:
+    5 of the 131 measured values across the 5 records, of which 4 are
+    ratings.
 
-    Those three numbers are COMPUTED AND GATED by parts/lint-part-data.py, not
-    maintained by hand. Three successive revisions of this sentence were wrong
-    -- a table-per-field claim, a generalisation of one record's shape to all
-    five, and a count that was internally unsatisfiable -- and the third
-    carried a recount procedure that did not reproduce it. Change the records
-    and the gate will tell you the new numbers.
+    Those four numbers are COMPUTED AND GATED by parts/lint-part-data.py, not
+    maintained by hand, the record count included. Three successive
+    revisions of this sentence were wrong -- a table-per-field claim, a
+    generalisation of one record's shape to all of them, and a count that was
+    internally unsatisfiable -- and the third carried a recount procedure
+    that did not reproduce it. Change the records and the gate will tell you
+    the new numbers.
 
-    Individual numbers are facts and are not themselves
-    copyrightable; the datasheets they were read from are not redistributed and
-    are not included here. Each record declares a `license_class` describing
-    the terms the underlying document was published under -- a vocabulary
-    separate from this repository's own licence, defined in
-    parts/part-data.schema.json.
+    The record files in both directories are part of this repository and
+    are licensed under its default licence, Apache-2.0, like the rest of the
+    source tree. Individual numbers are facts and are not themselves
+    copyrightable; the datasheets they were read from are not redistributed
+    and are not included here. Each record declares a `license_class`
+    describing the terms the underlying document was published under -- a
+    vocabulary separate from this repository's own licence, defined in
+    parts/part-data.schema.json and parts/part-data.v1.schema.json.
 
 spec/
 
