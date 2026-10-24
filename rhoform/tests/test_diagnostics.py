@@ -1,14 +1,19 @@
 """The A1 contract, held as tests: registry discipline, span math, fix-it
 applicability, canonical order, the stated cap, and NDJSON determinism."""
 
+from decimal import Decimal
+from pathlib import Path
 import json
+import re
 import unittest
 
 from rhoform import codes
 from rhoform.diagnostics import (
-    Diagnostic, Diagnostics, Edit, FixIt, OUTPUT_CAP, Span, entity_spans,
-    span_from_bytes,
+    Diagnostic, Diagnostics, Edit, FixIt, OUTPUT_CAP, Span, TIERS,
+    entity_spans, span_from_bytes,
 )
+
+ROOT = Path(__file__).resolve().parents[2]
 
 DATA = b"#pragma rhoform-syntax 0.1\nmodule M:\n    port p passive\n"
 
@@ -30,15 +35,22 @@ class RegistryTest(unittest.TestCase):
             codes.lookup("RHO9999")
 
     def test_the_ga_block_carries_the_ten_spec_codes_plus_the_safety_note(self):
-        ga = [e for e in codes.REGISTRY if e.code.startswith("RHO40")]
+        from rhoform.codeset import ground
+
+        ga = [e for e in codes.REGISTRY if e.code.startswith("RHO4")]
         self.assertEqual(
-            [e.code for e in ga],
+            [e.code for e in ga][:11],
             [f"RHO40{n:02d}" for n in range(1, 12)],
         )
         # Slugs verbatim from the GA spec section 6 table; the registry
-        # gate pins the full (slug, severity, params) transcription — this
-        # test pins that they are all RESERVED until a checker emits them.
-        self.assertTrue(all(e.reserved for e in ga))
+        # gate pins the full (slug, severity, params) transcription. Which
+        # of them is still RESERVED is ground.py's to say: the landing that
+        # activates a code edits that file alone, and the registry carries
+        # exactly ground.py's block.
+        self.assertEqual(ga, list(ground.CODES))
+        self.assertEqual({e.code for e in ga if e.reserved},
+                         {e.code for e in ground.CODES if e.reserved})
+        self.assertEqual(dict(codes.OWNED)["ground"], ground.CODES)
 
     def test_render_is_deterministic_for_structured_values(self):
         entry = codes.lookup("RHO4002")
@@ -97,8 +109,67 @@ class RegistryTest(unittest.TestCase):
             self.assertTrue(
                 any("not in code order" in p for p in codes.registry_problems())
             )
+            # T6 may downgrade only an error of blocks 3-5, and an
+            # exemption from the coverage rule says why.
+            for planted, fragment in (
+                (codes.CodeDef("RHO1099", "s", "error", "m", waivable=True),
+                 "only an error of blocks 3-5"),
+                (codes.CodeDef("RHO3099", "s", "warning", "m",
+                               waivable=True), "only an error of blocks 3-5"),
+                (codes.CodeDef("RHO1099", "s", "error", "m",
+                               source_triggered=False),
+                 "gives no trigger_reason"),
+                (codes.CodeDef("RHO1099", "s", "error", "m",
+                               trigger_reason="why"),
+                 "but is source_triggered"),
+            ):
+                codes.REGISTRY = original + (planted,)
+                self.assertTrue(
+                    any(fragment in p for p in codes.registry_problems()),
+                    fragment)
         finally:
             codes.REGISTRY = original
+
+    def test_waivable_defaults_to_the_errors_of_the_checking_blocks(self):
+        self.assertTrue(codes.lookup("RHO3553").waivable)
+        for code in ("RHO1001", "RHO2001", "RHO3901", "RHO4007"):
+            self.assertFalse(codes.lookup(code).waivable, code)
+        self.assertTrue(codes.lookup("RHO4001").waivable)
+        owned = codes.CodeDef("RHO3099", "s", "error", "m", waivable=False)
+        self.assertFalse(owned.waivable)
+
+    def test_every_code_lies_in_its_owners_range(self):
+        self.assertEqual(codes.range_problems(), [])
+        self.assertEqual(codes.owner_of("RHO3901"), "check")
+        self.assertEqual(codes.owner_of("RHO2033"), "core")
+        self.assertIsNone(codes.owner_of("RHO5001"))
+        entry = codes.lookup("RHO3901")
+        cases = (
+            ("outside its owner's range", dict(owned=(("erc", (entry,)),)),
+             "declared by erc but inside check's range"),
+            ("in no range", dict(owned=(("check", (codes.CodeDef(
+                "RHO3600", "s", "note", "m"),)),)), "inside no range"),
+            ("out of order within an owner", dict(owned=(("check", (
+                codes.CodeDef("RHO3902", "t", "note", "m"), entry)),)),
+             "not in code order"),
+            ("overlapping ranges", dict(ranges=codes.RANGES + (
+                ("RHO3950", "RHO3960", "erc"),)), "overlaps range"),
+            ("an unsorted table", dict(ranges=tuple(reversed(
+                codes.RANGES))), "not in code order"),
+            ("a range across blocks", dict(ranges=(
+                ("RHO3990", "RHO4005", "check"),)), "inside one block"),
+            ("a range in an unassigned block", dict(ranges=(
+                ("RHO9001", "RHO9009", "check"),)), "inside one block"),
+            ("an unknown owner", dict(ranges=(
+                ("RHO3901", "RHO3999", "nobody"),)), "neither core nor"),
+            ("a malformed range", dict(ranges=(
+                ("RHO3999", "RHO3901", "check"),)), "ascending order"),
+        )
+        for name, kwargs, fragment in cases:
+            with self.subTest(name):
+                problems = codes.range_problems(**kwargs)
+                self.assertTrue(any(fragment in p for p in problems),
+                                problems)
 
 
 class SpanTest(unittest.TestCase):
@@ -192,6 +263,45 @@ class DiagnosticTest(unittest.TestCase):
     def test_tier_vocabulary_is_closed(self):
         with self.assertRaises(ValueError):
             Diagnostic.new("RHO1001", {}, primary=_span(0, 1), tier="soon")
+        for tier in TIERS + (None,):
+            self.assertEqual(Diagnostic.new("RHO1001", {}, primary=_span(
+                0, 1), tier=tier).tier, tier)
+
+    def test_spec_06_states_the_tier_vocabulary(self):
+        # AMB-134 item 4: the tiers spec 06 restates are TIERS, in order.
+        text = " ".join((ROOT / "spec" / "language" / "06-diagnostics.md")
+                        .read_text(encoding="utf-8").split())
+        match = re.search(r"The assertion tiers are ([^.]*)\.", text)
+        self.assertIsNotNone(match)
+        self.assertEqual(re.findall(r"`([a-z]+)`", match.group(1)),
+                         list(TIERS))
+
+    def test_param_values_are_json_scalars_or_arrays_of_them(self):
+        for bad in ({"a": 1}, {1, 2}, frozenset(), float("nan"),
+                    float("inf"), -float("inf"), [{"a": 1}], [float("nan")],
+                    [[1]], Decimal("1"), b"x"):
+            with self.subTest(value=bad), self.assertRaises(ValueError):
+                Diagnostic.new("RHO1010", {"literal": bad, "reason": "r"},
+                               primary=_span(0, 1))
+        good = Diagnostic.new(
+            "RHO2002", {"candidates": ("A", 1, 1.5, True, None)},
+            primary=_span(0, 1))
+        self.assertEqual(good.as_dict()["params"],
+                         {"candidates": ["A", 1, 1.5, True, None]})
+
+    def test_a_callers_list_cannot_change_a_built_diagnostic(self):
+        names = ["A", "B"]
+        sink = Diagnostics()
+        diag = sink.add("RHO2002", {"candidates": names},
+                        primary=_span(0, 1))
+        names.append("C")
+        self.assertEqual(diag.as_dict()["params"], {"candidates": ["A", "B"]})
+        self.assertIn('["A","B"]', diag.message)
+        self.assertNotIn('"C"', sink.render())
+
+    def test_non_finite_numbers_never_reach_the_wire(self):
+        with self.assertRaises(ValueError):
+            codes.lookup("RHO4002").render({"cycle": [float("nan")]})
 
     def test_the_wire_object_carries_every_a1_field(self):
         diag = Diagnostic.new(
