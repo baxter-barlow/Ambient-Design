@@ -31,7 +31,8 @@ RHO6009). An instance pick is then held to the constraints the instance
 states now: the digest it was made for (RHO6011, a stale pick) and the
 constraint-satisfaction subset (RHO6010) -- mpn, manufacturer and package
 equal the record's, a nominal's interval holds what the record guarantees,
-and a rating or limit is met by the record's guaranteed maximum. A
+and a rating or limit is met by the record's guaranteed maximum, each read
+from the one place in the record the D3 key vocabulary gives it (HOMES). A
 constraint the subset does not cover, or whose record data cannot decide
 it, is an actionable row: the pick is not shown to satisfy it.
 
@@ -87,10 +88,42 @@ REQUIRE_ROWS = (
 EQUALITIES = (("manufacturer", ("manufacturer",)), ("mpn", ("mpn",)),
               ("package", ("package", "name")))
 
+# Where the subset reads each vocabulary constraint in a record, as a path
+# into its Binding: the one home the D3 v1 key vocabulary (L20) gives the
+# key, so a key a record holds anywhere else is read by nothing. A nominal
+# is a defining value, under `parameters`; a rating is an operating rating,
+# under `ratings.recommended`, never an abs-max stress limit; `rds_on_max`
+# limits the record's `rds_on`. A vocabulary name with no home is outside
+# the subset: `dcr_max`, since no D3 key states a DCR, and `vds_max` and
+# `supply_max`, a pin's own window relative to another pin, not a value
+# of the part. Spec 05/09 restates the table (subset_rows).
+HOMES = {
+    "resistance": ("parameters", "resistance"),
+    "capacitance": ("parameters", "capacitance"),
+    "inductance": ("parameters", "inductance"),
+    "reference_voltage": ("parameters", "reference_voltage"),
+    "voltage_rating": ("ratings", "recommended", "voltage_rating"),
+    "power_rating": ("ratings", "recommended", "power_rating"),
+    "rms_current": ("ratings", "recommended", "rms_current"),
+    "saturation_current": ("ratings", "recommended", "saturation_current"),
+    "rds_on_max": ("parameters", "rds_on"),
+}
+
 
 def code_rows() -> tuple:
     """(code, slug, severity) for every code of the pass's owner."""
     return tuple((entry.code, entry.slug, entry.severity) for entry in CODES)
+
+
+def subset_rows() -> tuple:
+    """(name, kind, the record field the subset reads) for every name of
+    the constraint vocabulary, in its order."""
+    from .dimensions import CONSTRAINT_VOCABULARY
+
+    return tuple(
+        (name, kind, ".".join(HOMES[name]) if name in HOMES
+         else "none: outside the subset")
+        for name, (_dimension, kind) in CONSTRAINT_VOCABULARY.items())
 
 
 # ---- the context ------------------------------------------------------------
@@ -290,6 +323,14 @@ def _spelled(value) -> str:
     return str(value)
 
 
+def _home(binding, path) -> tuple:
+    """The Measures at a HOMES path of a binding, or none."""
+    node = getattr(binding, path[0])
+    for key in path[1:-1]:
+        node = node.get(key, {})
+    return node.get(path[-1], ())
+
+
 def _subset(part, binding, document):
     """D29's subset over one instance pick: (unsatisfied as (name,
     required, found), unverified names, names outside the subset, names
@@ -316,8 +357,11 @@ def _subset(part, binding, document):
                 values.from_quantity(value).dim != values.named(dimension):
             ill_typed.append(name)
             continue
+        if name not in HOMES:
+            outside.append(name)
+            continue
         want = values.from_quantity(value)
-        measures = binding.parameters.get(name, ())
+        measures = _home(binding, HOMES[name])
         if len(measures) != 1:
             unverified.append(name)
             continue

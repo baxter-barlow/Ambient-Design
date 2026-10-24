@@ -163,6 +163,26 @@ class FactsTest(_Case):
                          len(parts.ROWS))
         self.assertTrue(all(not entry.waivable for entry in CODES))
 
+    def test_each_subset_home_is_where_the_d3_vocabulary_puts_its_kind(self):
+        # A nominal is a defining value and a rating an operating rating
+        # (spec 05/09 9.5); the limit names each say what they limit.
+        from rhoform.check import parts
+        from rhoform.check.dimensions import CONSTRAINT_VOCABULARY
+
+        self.assertLessEqual(set(parts.HOMES), set(CONSTRAINT_VOCABULARY))
+        for name, home in parts.HOMES.items():
+            kind = CONSTRAINT_VOCABULARY[name][1]
+            with self.subTest(name=name):
+                if kind == "at_least":
+                    self.assertEqual(home, ("ratings", "recommended", name))
+                elif kind == "nominal":
+                    self.assertEqual(home, ("parameters", name))
+                else:
+                    self.assertEqual(home[0], "parameters")
+        self.assertEqual(
+            sorted(set(CONSTRAINT_VOCABULARY) - set(parts.HOMES)),
+            ["dcr_max", "supply_max", "vds_max"])
+
 
 class RecordTest(_Case):
     def test_the_hash_fixit_re_pins_and_then_the_pick_binds(self):
@@ -280,17 +300,18 @@ class SubsetTest(_Case):
 
     PARAMETERS = {"resistance": {"max": 10.1, "min": 9.9, "typ": 10,
                                  "unit": "kohm"},
-                  "voltage_rating": {"max": 25, "unit": "V"},
-                  "dcr_max": {"max": 50, "unit": "mohm"},
+                  "rds_on": {"max": 50, "unit": "mohm"},
                   "capacitance": {"typ": 100, "unit": "nF"}}
+    RATINGS = {"recommended": {"voltage_rating": {"max": 25, "unit": "V"}}}
 
-    def picked(self, constraints, parameters=None):
+    def picked(self, constraints, parameters=None, ratings=None):
         """(codes, rows) of a resistor instance-picking a record with
-        `parameters`, made for exactly `constraints`."""
+        `parameters` and `ratings`, made for exactly `constraints`."""
         root = self.case("c02_instance_pick_satisfied")
         record = root / "parts" / "acme" / "r10k.part.json"
         document = json.loads(record.read_bytes())
         document["parameters"] = parameters or self.PARAMETERS
+        document["ratings"] = ratings or self.RATINGS
         data = (json.dumps(document, ensure_ascii=False, sort_keys=True,
                            indent=2) + "\n").encode()
         record.write_bytes(data)
@@ -323,8 +344,8 @@ class SubsetTest(_Case):
             (["resistance = 10kohm (9kohm to 11kohm)"], []),
             (["voltage_rating = 25V"], []),
             (["voltage_rating = 25.5V"], ["RHO6010"]),
-            (["dcr_max = 50mohm"], []),
-            (["dcr_max = 40mohm"], ["RHO6010"]),
+            (["rds_on_max = 50mohm"], []),
+            (["rds_on_max = 40mohm"], ["RHO6010"]),
             (['mpn = "R-10K"', 'manufacturer = "Acme"', 'package = "0402"'],
              []),
             (['manufacturer = "Acme Corp"'], ["RHO6010"]),
@@ -348,6 +369,42 @@ class SubsetTest(_Case):
         self.assertEqual(rows["constraint-outside-subset"], ("dielectric",))
         self.assertEqual(rows["constraint-ill-typed"], ("rms_current",))
         self.assertIn("bound", rows)
+
+    def test_a_rating_is_read_from_its_home_and_nowhere_else(self):
+        # D3 v1 keeps a rating in `ratings`, apart from the `parameters`
+        # that define the part: a 25 V record fails a 50 V requirement
+        # from ratings.recommended, and one stating its rating anywhere
+        # else, abs-max included, decides nothing.
+        rated = {"recommended": {
+            "power_rating": {"max": 62.5, "unit": "mW"},
+            "voltage_rating": {"max": 25, "unit": "V"}}}
+        self.assertEqual(self.picked(["voltage_rating = 50V"], None, rated),
+                         (["RHO6010"], {"constraint-unsatisfied":
+                                        ("voltage_rating",)}))
+        self.assertEqual(self.picked(["power_rating = 100mW"], None, rated)[0],
+                         ["RHO6010"])
+        self.assertEqual(self.picked(["power_rating = 62.5mW"], None,
+                                     rated)[0], [])
+        misplaced = dict(self.PARAMETERS,
+                         voltage_rating={"max": 25, "unit": "V"})
+        for parameters, ratings in (
+                (misplaced, {"thermal": {"theta_ja": {
+                    "max": 200, "unit": "degC/W"}}}),
+                (None, {"abs_max": {"voltage_rating": {
+                    "max": 25, "unit": "V"}}})):
+            with self.subTest(ratings=sorted(ratings)):
+                found, rows = self.picked(["voltage_rating = 50V"],
+                                          parameters, ratings)
+                self.assertEqual((found, rows["constraint-unverified"]),
+                                 ([], ("voltage_rating",)))
+
+    def test_a_vocabulary_name_with_no_home_is_outside_the_subset(self):
+        parameters = dict(self.PARAMETERS,
+                          dcr_max={"max": 50, "unit": "mohm"})
+        found, rows = self.picked(["dcr_max = 40mohm", "supply_max = 5V",
+                                   "vds_max = 30V"], parameters)
+        self.assertEqual((found, rows["constraint-outside-subset"]),
+                         ([], ("dcr_max", "supply_max", "vds_max")))
 
     def test_a_condition_array_or_an_unbounded_nominal_is_undecided(self):
         parameters = dict(self.PARAMETERS)

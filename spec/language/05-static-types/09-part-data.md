@@ -137,9 +137,37 @@ record MUST satisfy each constraint the subset covers:
 |---|---|
 | `mpn`, `manufacturer` | the record's value is equal |
 | `package` | the record's `package.name` is equal |
-| a nominal of the constraint vocabulary ([2.7](02-values.md#27-the-dimensions-pass)) | the guaranteed enclosure of the record's `parameters` entry of that name lies inside the constraint's interval |
-| an `at_least` rating | the record's guaranteed maximum is at least the constraint's upper end |
-| an `at_most` limit | the record's guaranteed maximum is at most the constraint's lower end |
+| a nominal of the constraint vocabulary ([2.7](02-values.md#27-the-dimensions-pass)) | the guaranteed enclosure of the record field below lies inside the constraint's interval |
+| an `at_least` rating | the guaranteed maximum of the record field below is at least the constraint's upper end |
+| an `at_most` limit | the guaranteed maximum of the record field below is at most the constraint's lower end |
+
+Each vocabulary constraint is read from one record field, the one home
+the D3 v1 key vocabulary (lint L20) gives its key: a nominal from
+`parameters`, the values that define the part; a rating from
+`ratings.recommended`, the operating ratings, never from
+`ratings.abs_max`, whose stress limits are no rating to operate at; and a
+limit from the `parameters` value it limits. A record stating a key
+anywhere else is not read for it. A
+vocabulary name whose key has no home is outside the subset: `dcr_max`,
+which no D3 key states yet, and `vds_max` and `supply_max`, which are a
+pin's own window relative to another pin, not a value of the part.
+
+<!-- reconcile: rhoform.check.parts:subset_rows -->
+
+| Constraint | Kind | Record field |
+|---|---|---|
+| `resistance` | nominal | `parameters.resistance` |
+| `capacitance` | nominal | `parameters.capacitance` |
+| `inductance` | nominal | `parameters.inductance` |
+| `reference_voltage` | nominal | `parameters.reference_voltage` |
+| `voltage_rating` | at_least | `ratings.recommended.voltage_rating` |
+| `supply_max` | at_least | none: outside the subset |
+| `vds_max` | at_least | none: outside the subset |
+| `power_rating` | at_least | `ratings.recommended.power_rating` |
+| `rms_current` | at_least | `ratings.recommended.rms_current` |
+| `saturation_current` | at_least | `ratings.recommended.saturation_current` |
+| `dcr_max` | at_most | none: outside the subset |
+| `rds_on_max` | at_most | `parameters.rds_on` |
 
 The record is read as [2.6](02-values.md#26-part-data-quantities) reads
 part data: a guaranteed statistic is a `min` or `max` of vendor
@@ -147,10 +175,10 @@ provenance, never a `typ` or a `peak`. A constraint the
 record fails is `RHO6010`, one finding per instance naming each failed
 constraint, what the instance requires and what the record gives. A
 constraint the subset does not cover — any name but these and the
-vocabulary's — is a `constraint-outside-subset` row, and one the record
-cannot decide — no
-`parameters` entry of that name, several operating points, or no
-guaranteed statistic — a `constraint-unverified` row. Both are
+vocabulary's, or a vocabulary name with no record field — is a
+`constraint-outside-subset` row, and one the record cannot decide — no
+entry at its record field, several operating points, or no guaranteed
+statistic — a `constraint-unverified` row. Both are
 actionable: the pick binds, and nothing shows it satisfies them. A
 vocabulary constraint of the wrong dimension is the `dimensions` pass's
 to report (2.7), and gets an inherent `constraint-ill-typed` row here.
@@ -249,5 +277,6 @@ least one case: a key with no pick with no lockfile, with no parts
 section and with no entry; an instance pick of no instance; a missing,
 changed, future-version, lint-failing and misidentified record; a
 record implementing another definition, and a version 0 record, neither
-of which binds; a role conflict; the mpn, package, value-interval and
-rating failures of the subset; and a stale pick.
+of which binds; a role conflict; the mpn, package, value-interval,
+voltage-rating and power-rating failures of the subset; and a stale
+pick.

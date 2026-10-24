@@ -15,7 +15,7 @@
     "inputs": [
       {
         "path": "parts/acme/r10k.part.json",
-        "sha256": "sha256:244e373621ea1951d07fbb275fc447d47bd0d6f3f125e00e0f3f98083a325fc0"
+        "sha256": "sha256:97b78b25289a97b87793c8c02ba7a45283a985513bc2b35f3803bd476719df09"
       }
     ]
   }

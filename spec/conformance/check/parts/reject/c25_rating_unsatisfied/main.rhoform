@@ -1,7 +1,8 @@
 #pragma rhoform-syntax 0.2
 
-# The record is rated to 25 V, and the instance requires at
-# least 50 V.
+# The record is rated to 25 V in ratings.recommended, where D3
+# keeps an operating rating, and the instance requires at least
+# 50 V.
 module Board:
     port bottom passive
     port top passive
