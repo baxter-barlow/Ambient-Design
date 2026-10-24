@@ -1,0 +1,38 @@
+#pragma rhoform-syntax 0.2
+
+# Every constraint the vocabulary names holds its own dimension and every
+# bound fits its measurement, and nothing the T4 lint exempts is flagged:
+# exact ratings and limits, a degenerate band written with a tolerance
+# (`0ohm +/- 5%`), and an exact value on a resolved part. A quantity name
+# outside the vocabulary is an inherent `not-run` row, so the stream is
+# empty.
+module Board:
+    port vin power_in
+    c1 = new rhoform.lib.passive.Capacitor:
+        part abstract:
+            capacitance = 9.5uF (8uF to 10uF)
+            voltage_rating = 16V
+    c2 = new rhoform.lib.passive.Capacitor:
+        part "c-100n":
+            capacitance = 100nF
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            power_rating = 100mW
+            resistance = 10kohm +/- 1%
+    r2 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 0ohm +/- 5%
+    u1 = new acme.ic.Regulator:
+        pin vin power_in 1
+        part abstract:
+            reference_voltage = 800mV +/- 1%
+            supply = 3.3V +/- 5%
+            supply_max = 6V
+    net VIN:
+        u1.vin
+        vin
+    assert vin_draw dynamic operating_point(VIN) at most 500mA
+    assert vin_level static operating_point(VIN) within 3V to 3.6V
+    assert vin_overshoot dynamic overshoot(VIN) at most 0.05
+    assert vin_ripple dynamic ripple(VIN) at most 50mV
+    assert vin_rise dynamic rise_time(VIN) at most 1ms

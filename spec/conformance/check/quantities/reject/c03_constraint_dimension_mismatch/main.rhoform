@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.2
+
+# RHO3202: constraints the vocabulary names, holding values of another
+# dimension. Both are one finding about the instance, in name order.
+module Board:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            power_rating = 100mW
+            resistance = 10uF +/- 10%
+            voltage_rating = "50V"
+    net VIN:
+        r1.a
+        vin
