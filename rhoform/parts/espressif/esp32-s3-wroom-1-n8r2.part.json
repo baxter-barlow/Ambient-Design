@@ -11,6 +11,12 @@
       "pointer": "/pins/1/abs_max",
       "reason": "vendor-unpublished",
       "target": "EN"
+    },
+    {
+      "note": "Table 6-1 rates no voltage for IO3 either. IO3 is not a member of the gpio class (see /pins/18/characteristics), so it states this absence itself instead of inheriting the class's.",
+      "pointer": "/pins/18/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "IO3"
     }
   ],
   "description": "2.4 GHz Wi-Fi (802.11 b/g/n) and Bluetooth LE 5 module, Xtensa dual-core 32-bit LX7, 8 MB flash, 2 MB quad SPI PSRAM, PCB antenna",
@@ -345,7 +351,7 @@
     }
   ],
   "mpn": "ESP32-S3-WROOM-1-N8R2",
-  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nGPIO DC CHARACTERISTICS ARE STATED ONCE, in the `gpio` pin class, because the datasheet states them once (Table 6-3) for the GPIO pins as a class; every GPIO, IO0-IO21, IO35-IO48 and TXD0/RXD0, is a member. Under schema v0, which had no class mechanism, this record carried them on IO0 and capability on five pins only, and a consumer could misread the bare pins as unable to drive. That limitation is what the v1 class closes.\n\nSTRAPPING PINS (AMB-127 item 1): IO0, IO3, IO45 and IO46 carry their reset default (Table 4-1) in `strap`, and the boot-mode table (Table 4-3) is the record's `straps`.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead, and recorded as such (absent: vendor-unpublished). The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in the gpio class's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it.",
+  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nGPIO DC CHARACTERISTICS ARE STATED ONCE, in the `gpio` pin class, because the datasheet states them once (Table 6-3) for the GPIO pins as a class; every GPIO but IO3, so IO0-IO2, IO4-IO21, IO35-IO48 and TXD0/RXD0, is a member. Under schema v0, which had no class mechanism, this record carried them on IO0 and capability on five pins only, and a consumer could misread the bare pins as unable to drive. That limitation is what the v1 class closes. IO3 is the exception because Section 4.4 says GPIO3 has no internal pull resistors: a pin's own block can override a class member but not remove one, so IO3 states Table 6-3's other GPIO rows itself instead of inheriting the class's pull_up_resistance and pull_down_resistance.\n\nSTRAPPING PINS (AMB-127 item 1): IO0, IO3, IO45 and IO46 carry their reset default (Table 4-1) in `strap`, and the boot-mode table (Table 4-3) is the record's `straps`.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead, and recorded as such (absent: vendor-unpublished). The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in the gpio class's characteristics (IO3's on its own pin) and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it.",
   "package": {
     "footprint_ref": "rho:XCVR_ESP32-S3-WROOM-1",
     "name": "ESP32-S3-WROOM-1",
@@ -359,6 +365,10 @@
         "sink_current": {
           "conditions": {
             "pad_driver": "3",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
             "vdd": {
               "typ": 3.3,
               "unit": "V"
@@ -374,6 +384,10 @@
         "source_current": {
           "conditions": {
             "pad_driver": "3",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
             "vdd": {
               "typ": 3.3,
               "unit": "V"
@@ -534,7 +548,7 @@
           "unit": "V"
         }
       },
-      "description": "Every GPIO of the module (IO0-IO21, IO35-IO48, and TXD0/RXD0 = GPIO43/GPIO44). Table 6-3 states the GPIO DC characteristics once, for all of them.",
+      "description": "Every GPIO of the module except IO3 (IO0-IO2, IO4-IO21, IO35-IO48, and TXD0/RXD0 = GPIO43/GPIO44). Table 6-3 states the GPIO DC characteristics once, for all of them; IO3 states them itself, less the pull resistors Section 4.4 says it does not have.",
       "id": "gpio",
       "role": "bidirectional"
     }
@@ -575,6 +589,16 @@
     {
       "characteristics": {
         "vih_nrst": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": {
             "offset": 0.3,
             "reference": "3V3"
@@ -586,6 +610,16 @@
           "unit": "V"
         },
         "vil_nrst": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": {
             "factor": 0.25,
             "reference": "3V3"
@@ -752,7 +786,165 @@
       "role": "bidirectional"
     },
     {
-      "class": "gpio",
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "characteristics": {
+        "capacitance": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "typ": 2,
+          "unit": "pF"
+        },
+        "input_leakage_high": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "max": 50,
+          "unit": "nA"
+        },
+        "input_leakage_low": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "max": 50,
+          "unit": "nA"
+        },
+        "vih": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "max": {
+            "offset": 0.3,
+            "reference": "3V3"
+          },
+          "min": {
+            "factor": 0.75,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vil": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "max": {
+            "factor": 0.25,
+            "reference": "3V3"
+          },
+          "min": -0.3,
+          "unit": "V"
+        },
+        "voh": {
+          "conditions": {
+            "load": "high impedance",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "min": {
+            "factor": 0.8,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vol": {
+          "conditions": {
+            "load": "high impedance",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
+          "max": {
+            "factor": 0.1,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        }
+      },
       "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select.",
       "name": "IO3",
       "numbers": [
@@ -1049,9 +1241,9 @@
     },
     "/pin_classes": {
       "confidence": "datasheet-stated",
-      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C)",
+      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C), pages 27-28",
       "method": "manual",
-      "note": "Table 6-3 states each row once, against VDD, 'voltage from a power pin of a respective power domain' (its note 1). The module brings out one supply, 3V3, so the bounds are referenced to it. For the pins in the VDD_SPI domain (IO35-IO37, IO47, IO48) that holds while VDD_SPI is at its 3.3 V default (GPIO45 strapped 0, eFuses unburnt, Table 4-4), which is what the pin descriptions already state for this part. In v0 these values sat on IO0 alone and capability on five pins, because v0 had no class mechanism. Every class characteristic carries the table's own conditions, 3.3 V and 25 C from its title, and VOH and VOL also the high-impedance load its note 2 measures them into.",
+      "note": "Table 6-3 states each row once, against VDD, 'voltage from a power pin of a respective power domain' (its note 1). The module brings out one supply, 3V3, so the bounds are referenced to it. For the pins in the VDD_SPI domain (IO35-IO37, IO47, IO48) that holds while VDD_SPI is at its 3.3 V default (GPIO45 strapped 0, eFuses unburnt, Table 4-4), which is what the pin descriptions already state for this part. In v0 these values sat on IO0 alone and capability on five pins, because v0 had no class mechanism. Every class characteristic and capability carries the table's own conditions, 3.3 V and 25 C from its title, beside what its rows state themselves: VOH and VOL the high-impedance load its note 2 measures them into, IOH and IOL their VOH, VOL and PAD_DRIVER. IO3 is not a member: Section 4.4 (page 15) says GPIO3 has no internal pull resistors, and a member inherits every class member it does not state itself, so IO3 carries the class's other rows on its own blocks.",
       "source_id": "esp32-s3-wroom-1-ds-v1.8"
     },
     "/pins": {
@@ -1060,6 +1252,30 @@
       "method": "manual",
       "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it.",
       "source_id": "esp32-s3-wroom-1-ds-v1.8"
+    },
+    "/pins/1/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C), VIH_nRST and VIL_nRST rows, page 28",
+      "method": "manual",
+      "note": "The two rows continue Table 6-3 onto page 28, under the same title, so they carry its 3.3 V and 25 C conditions as the gpio class's rows do. VDD is note 1's 'voltage from a power pin of a respective power domain', which on this module is 3V3.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "EN"
+    },
+    "/pins/18/capability": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C), page 27; Section 4.4 JTAG Signal Source Control, page 15",
+      "method": "manual",
+      "note": "Table 6-3's IOH and IOL rows, as the gpio class carries them. IO3 states them itself because it is not a member of that class; see /pins/18/characteristics.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO3"
+    },
+    "/pins/18/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C), page 27; Section 4.4 JTAG Signal Source Control, page 15",
+      "method": "manual",
+      "note": "Table 6-3's GPIO rows, with the same values and conditions as the gpio class's, less RPU and RPD: Section 4.4 says GPIO3 'does not have any internal pull resistors'. A pin's own block overrides a class member but cannot remove one, so IO3 is not a member of the gpio class, whose pull_up_resistance and pull_down_resistance it would otherwise inherit.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "IO3"
     },
     "/pins/18/strap": {
       "confidence": "datasheet-stated",

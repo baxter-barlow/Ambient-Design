@@ -62,7 +62,7 @@ rhoform/parts/*/*.part.json
     of values whose governing entry names no table -- today that means
     falling to a default, since every more specific entry carries one, but
     the gate reads the locator field rather than trusting that to stay true:
-    5 of the 134 measured values across the 5 records, of which 4 are
+    5 of the 143 measured values across the 5 records, of which 4 are
     ratings.
 
     Those four numbers are COMPUTED AND GATED by parts/lint-part-data.py, not

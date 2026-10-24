@@ -599,6 +599,43 @@ class ViewTest(unittest.TestCase):
             "ta": {"typ": 25, "unit": "degC"},
             "ven": "VIN", "vin": "VOUT + 1 V"})
 
+    def test_table_6_3_figures_carry_its_title_conditions(self):
+        ports = self.ports(ESP32, "rhoform.lib.module.Esp32S3Wroom1",
+                           [("io35", "bidirectional", ()),
+                            ("io3", "bidirectional", ()),
+                            ("en", "input", ())])
+        for name, block in (("en", "characteristics"),
+                            ("io35", "capability"),
+                            ("io35", "characteristics"),
+                            ("io3", "capability"),
+                            ("io3", "characteristics")):
+            for symbol, measures in getattr(ports[name], block).items():
+                with self.subTest(pin=name, symbol=symbol):
+                    stated = {(m.conditions["ta"]["typ"],
+                               m.conditions["vdd"]["typ"]) for m in measures}
+                    self.assertEqual(stated, {(25, Decimal("3.3"))})
+
+    def test_io3_inherits_no_internal_pull_and_keeps_the_rest(self):
+        # Section 4.4: GPIO3 "does not have any internal pull resistors".
+        ports = self.ports(ESP32, "rhoform.lib.module.Esp32S3Wroom1",
+                           [("io0", "bidirectional", ()),
+                            ("io3", "bidirectional", ())])
+        io0, io3 = ports["io0"], ports["io3"]
+        pulls = {"pull_up_resistance", "pull_down_resistance"}
+        self.assertLessEqual(pulls, set(io0.characteristics))
+        self.assertFalse(pulls & set(io3.characteristics))
+
+        def plain(block):
+            return {name: [(m.unit, m.values, json.dumps(
+                               m.conditions, sort_keys=True, default=str))
+                           for m in measures]
+                    for name, measures in block.items() if name not in pulls}
+        self.assertEqual(plain(io3.capability), plain(io0.capability))
+        self.assertEqual(plain(io3.characteristics),
+                         plain(io0.characteristics))
+        self.assertEqual(io3.absent, {"abs_max": "vendor-unpublished"})
+        self.assertEqual(io3.strap["default"], "floating")
+
     def test_class_data_and_class_absences_reach_every_member(self):
         ports = self.ports(ESP32, "rhoform.lib.module.Esp32S3Wroom1",
                            [("io35", "bidirectional", ()),
