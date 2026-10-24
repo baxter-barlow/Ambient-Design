@@ -30,7 +30,10 @@ exponent notation; exactly one space either side of `+/-` and `to`; a
 `+/-` magnitude is non-negative (the sign is in the operator); a
 bracketed interval MUST contain its nominal; a lower bound MUST NOT
 exceed its upper bound; every unit in one literal MUST share one
-dimension.
+dimension; a percent tolerance MUST NOT be given on an offset scale
+(`25degC +/- 1%` is an error; write `25degC +/- 2degC`), because a
+percentage of a reading moves with the scale's arbitrary zero (see
+Errata).
 
 ## Value-exactness
 
@@ -68,9 +71,12 @@ a ladder is a change to this section, made here first.
 Temperature is an offset scale: `degC` has no prefixed siblings and is
 never rescaled — scaling a Celsius reading by a power of ten is
 meaningless, and the way to make that mistake unrepresentable is to give
-the table nowhere to scale it to. Dimensionless values are NUMBER and
-INTEGER tokens of the grammar, not quantities; there is no dimensionless
-unit.
+the table nowhere to scale it to. For the same reason a `degC` literal
+takes an absolute tolerance or a bracketed window, never a percentage.
+Dimensionless values are NUMBER and INTEGER tokens of the grammar, not
+quantities; there is no dimensionless unit. Each dimension's exponent
+vector over the SI base dimensions, and what a check may compute with a
+value, are [05 section 2](05-static-types/02-values.md)'s.
 
 ## The normal form (T3)
 
@@ -124,3 +130,20 @@ vector table's `errors` half pins the reasons a literal's own text
 yields. The two reasons for a misspaced `+/-`, which the parser gives
 before the literal is read as one token, are pinned by the reference
 implementation's parser tests, not by the table.
+
+## Errata
+
+**Erratum 1 — a percent tolerance on the offset scale (M2, AMB-53).**
+Until M2 the reference implementation accepted `<n>degC +/- <p>%` under
+every syntax version and read it as the band |n| × p/100 about the
+reading, so `25degC +/- 1%` meant [24.75, 25.25] degC. That band has no
+physical meaning: the same temperature written on another offset scale
+would get another band. It was never well defined, no tracked source
+used it, and no release shipped with it, so it is corrected as an
+erratum rather than a language change: such a literal is `RHO1010` under
+every syntax version, with the stable reason the vector table's `errors`
+half pins ("meaningless on an offset scale"). An absolute band
+(`25degC +/- 2degC`) and a bracketed window are unchanged. No source
+needs migrating, and none could be migrated mechanically: the old band
+was not what any author meant, so rewriting it to the absolute band it
+computed would carry the defect forward.

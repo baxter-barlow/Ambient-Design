@@ -47,6 +47,7 @@
     { "input": "5V to 3V", "reason_fragment": "lower bound exceeds" },
     { "input": "2V +/- 10ms", "reason_fragment": "is time but the value is voltage" },
     { "input": "9.5mA (8s to 10s)", "reason_fragment": "is time but the value is current" },
-    { "input": "3V to 3600ms", "reason_fragment": "is time but the value is voltage" }
+    { "input": "3V to 3600ms", "reason_fragment": "is time but the value is voltage" },
+    { "input": "25degC +/- 1%", "reason_fragment": "meaningless on an offset scale" }
   ]
 }

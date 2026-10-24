@@ -32,6 +32,14 @@ bracketed interval, and bare interval are five distinct value shapes (T4),
 and normalization rewrites their components without converting between
 them.
 
+DIMENSIONS AND THE OFFSET SCALE. Every dimension name is also an
+exponent vector over the SI base dimensions (`DIMENSIONS`), the single
+table the checker's exact algebra (rhoform/check/values.py) builds on.
+Temperature is an offset scale: a `degC` literal is a reading, not a
+magnitude, so it is never rescaled and a percent tolerance on it is
+refused (spec 03, Errata) — a percentage of a reading moves with the
+scale's arbitrary zero.
+
 DELIBERATELY ABSENT: the prototype's dimensionless pseudo-unit `"1"`. No
 literal can lex it (a quantity token requires a letter-initial unit), and
 dimensionless assertion bounds are NUMBER tokens, not quantities. Carrying
@@ -93,7 +101,31 @@ UNITS: dict[str, tuple[str, Decimal]] = {
     "degC": ("temperature", Decimal(1)),
 }
 
-_NUM = r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
+# Each dimension name as an exponent vector over the SI base dimensions
+# below (T3; spec 05 section 2 restates the table). The names are the
+# param_type words, so a declared parameter type, a literal's unit and a
+# checker's dimension are one vocabulary. The checker's algebra
+# (rhoform/check/values.py) multiplies and divides these vectors; nothing
+# here does arithmetic on them, and none of it reaches the IR.
+BASE_DIMENSIONS = ("m", "kg", "s", "A", "K")
+DIMENSIONS: dict[str, tuple[int, int, int, int, int]] = {
+    "resistance": (2, 1, -3, -2, 0),
+    "capacitance": (-2, -1, 4, 2, 0),
+    "inductance": (2, 1, -2, -2, 0),
+    "voltage": (2, 1, -3, -1, 0),
+    "current": (0, 0, 0, 1, 0),
+    "power": (2, 1, -3, 0, 0),
+    "frequency": (0, 0, -1, 0, 0),
+    "time": (0, 0, 1, 0, 0),
+    "length": (1, 0, 0, 0, 0),
+    "temperature": (0, 0, 0, 0, 1),
+}
+# A dimension measured on an OFFSET scale: its literals are readings
+# against an arbitrary zero (0degC), not magnitudes. A reading has no
+# meaningful percentage, and two readings have a difference but no sum.
+OFFSET_DIMENSIONS = frozenset({"temperature"})
+
+_NUM =r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?"
 _UNIT = r"[A-Za-z][A-Za-z0-9/]*"
 
 # The five T4 forms in one anchored expression — the same shape the frozen
@@ -331,6 +363,17 @@ def parse_quantity(text: str) -> Quantity:
                     "negative; the sign is already in the operator"
                 )
             if tol_unit == "%":
+                if dimension in OFFSET_DIMENSIONS:
+                    # Refused under every syntax version, as an erratum
+                    # (spec 03, Errata): the band used to be |value|*p/100,
+                    # which moves with the scale's arbitrary zero.
+                    raise QuantityError(
+                        "a percent tolerance is meaningless on an offset "
+                        f"scale: `{unit}` is a reading against an "
+                        "arbitrary zero, not a magnitude, so a percentage "
+                        "of it changes with where that zero sits; write "
+                        "the band absolutely, as in `25degC +/- 2degC`"
+                    )
                 form = "tolerance-percent"
                 spread = +(value.copy_abs() * magnitude / Decimal(100))
                 components = ((value, unit), (magnitude, "%"))
