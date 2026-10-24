@@ -212,8 +212,11 @@ made:
   excepted — no pin pulls low (that is RHO3104's case), and no root port
   is on it.
 - **RHO3104** fires on a net that is not ground-typed and holds an open
-  drain or open collector, when no pin on it is a driver and no root
-  port is on it.
+  drain or open collector, when no pin on it can pull it up and no root
+  port is on it. A pin that can pull it up is a driver, less a passive
+  pin of a two-terminal part whose other pin is on a ground-typed net: a
+  pull-down, a delay or filter capacitor or a clamp to ground holds the
+  line low and never lifts it.
 - **RHO3110** is 4.8's.
 
 An `isolated` net holds one member (RHO2026). When that member is a
@@ -248,7 +251,11 @@ Each is a reading the baseline does not make, and why:
    pass reports nothing for it.
 7. **An open drain with nothing to pull it up is an error** (RHO3104),
    which KiCad does not check: such a net can never go high. A pull
-   inside a part is a T6 waiver.
+   inside a part is a T6 waiver. A part returning to ground is no
+   pull-up, though its passive pin drives an input under item 4: a
+   soft-start pin with only a capacitor to ground is set by its part's
+   current source, an open-drain reset with only a delay capacitor is
+   never released.
 8. **`isolated` is the no-connect flag** (4.7), and an unconnected pin
    is an error whatever its role (KiCad gives the same).
 9. **Net topology** (4.8): two rules from the AC2 corpus, outside the
@@ -349,6 +356,7 @@ an `nc` pin left out, test points, module-port roles, root ports as
 terminals and a DNP alternate regulator; each reports nothing. The
 reject cases give every code above at least one case, mirror the corpus
 entries the rules catch (BUG-0018, 0020, 0022, 0030, 0034, 0036, 0038,
-0042, 0046, 0056), and include a module reused twice whose defect is
+0042, 0046, 0056), and include open drains held low by a pull-down or a
+delay capacitor alone and a module reused twice whose defect is
 reported once. The three benchmarks produce no finding of this pass
 (test_benchmarks.py pins their streams).
