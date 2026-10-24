@@ -45,6 +45,7 @@ opens no network connection.
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -59,6 +60,13 @@ SCHEMAS = {0: "part-data.schema.json", 1: "part-data.v1.schema.json"}
 # path and there is no index and no search.
 STORE = Path(__file__).resolve().parent / "parts"
 RECORD_SUFFIX = ".part.json"
+# D3's part_id, `<vendor-slug>/<part-slug>`, exactly as both schema versions
+# spell it (rhoform/tests/test_partdata.py holds the three equal). Each slug
+# starts and ends with a letter or digit and the vendor's holds no dot, so an
+# id this admits cannot be `..`, absolute, or carry a second separator: the
+# store path it names is always one directory under STORE.
+PART_ID = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/"
+                     r"[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?(?![\s\S])")
 
 ROLES = ("power_in", "power_out", "passive", "bidirectional", "open_drain",
          "open_collector", "tri_state", "input", "output", "nc")
@@ -134,8 +142,8 @@ INDEXED = ("implements", "pins", "modes", "sources", "pin_classes",
 
 class Problem(NamedTuple):
     """One defect: the rule (a lint id L1-L22, "json", "version", "schema",
-    or for a binding the join rule it breaks), where in the document (an
-    RFC 6901 pointer), and why."""
+    "part_id" for an id no store path can name, or for a binding the join
+    rule it breaks), where in the document (an RFC 6901 pointer), and why."""
     check: str
     pointer: str
     message: str
@@ -995,7 +1003,16 @@ def load(path, *, picked=False) -> Record:
 
 
 def store_path(part_id: str) -> Path:
-    """Where the bundled store keeps `part_id`: the path IS the identity."""
+    """Where the bundled store keeps `part_id`: the path IS the identity.
+
+    Raises PartDataError for anything that is not a D3 part_id. Splitting
+    first resolved `../x` to a file beside the store and died with a bare
+    ValueError on `a/../../b`; an id is checked before it becomes a path."""
+    if not isinstance(part_id, str) or PART_ID.match(part_id) is None:
+        raise PartDataError("<part_id>", [Problem(
+            "part_id", "/part_id",
+            f"{part_id!r} is not a D3 part_id (<vendor-slug>/<part-slug>, "
+            "lower-case slugs), so it names no record in the store")])
     vendor, slug = part_id.split("/")
     return STORE / vendor / (slug + RECORD_SUFFIX)
 
