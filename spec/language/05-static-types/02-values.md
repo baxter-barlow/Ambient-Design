@@ -325,15 +325,18 @@ its tier: params `value` (the bound as written), `found`, `context` and
 `expected`, RHO2038's shape, its primary span the bound.
 
 **The exact-value lint (T4).** A `part abstract` constraint on a nominal
-name whose value is exact *by authored form* is `RHO3201`, a warning, one
-per instance with its constraints and values as arrays: no physical part
-has an exact resistance, so resolution would match nothing or invent a
-tolerance. The form is the one the author wrote — a reference to a
-parameter has the form of the value it evaluates to — never the width of
-the interval: `0ohm +/- 5%` is written with a tolerance and is not
-exact, though its interval is a point. A rating or a limit is exact by
-nature and is never flagged, and neither is a constraint of a part bound
-to a lockfile key, which names one real part. For each literal it
+name whose value is exact *by authored form* is `RHO3201`, a warning: no
+physical part has an exact resistance, so resolution would match nothing
+or invent a tolerance. It is one per instance, with its constraints and
+values as arrays, each value the evaluated one in normal form (2.8) — a
+reference's value, never its name — so instances given different values
+are separate findings. The form is the one the author wrote — a
+reference to a parameter has the form of the value it evaluates to —
+never the width of the interval: `0ohm +/- 5%` is written with a
+tolerance and is not exact, though its interval is a point. A rating or
+a limit is exact by nature and is never flagged, and neither is a
+constraint of a part bound to a lockfile key, which names one real
+part. For each literal it
 flags, the finding's fix-it (`has-placeholders`) inserts
 ` +/- <tolerance>` after the literal; a reference has no literal to fix
 here.
