@@ -1834,6 +1834,35 @@ class Syntax03Test(unittest.TestCase):
         self.assertEqual(diags[0]["params"]["found"],
                          "`p` (a name (not a keyword))")
 
+    def test_what_0_3_opens_with_an_older_token_is_read_as_0_2_reads_it(self):
+        # A bundle port's `=`, a view's `port`, and a member access's dot or
+        # index are tokens 0.2 had. A 0.2 line broken there is reported
+        # where 0.2 reported it, asking for what 0.2 asked (spec 01).
+        for body, found, expected in (
+                ("module M:\n    port p\n", "end of line", "a name"),
+                ("component C:\n    pn a passive 1\n",
+                 "`pn` (a name (not a keyword))", "`pin`"),
+                ("module M:\n    r.a ~ r.b c\n",
+                 "`c` (a name (not a keyword))", "`~`, end of line"),
+                ("module M:\n    r.a ~ r.b.\n", "`.`", "`~`, end of line"),
+                ("module M:\n    r.a ~ r.b[\n", "`[`", "`~`, end of line"),
+                ("module M:\n    net N:\n        r.a.\n", "`.`",
+                 "end of line")):
+            with self.subTest(body=body):
+                _, diags = _diags(PRAGMA_0_2 + "\n" + body)
+                self.assertEqual([d["code"] for d in diags], ["RHO1006"])
+                self.assertEqual(diags[0]["params"],
+                                 {"found": found, "expected": expected})
+        _, diags = _diags(PRAGMA_0_3 + "\nmodule M:\n    port p\n")
+        self.assertEqual(diags[0]["params"]["expected"], "`=`, a name")
+        # Alone, the construct is one RHO1016; in a file broken elsewhere
+        # too, the 0.2 reading's diagnostics stand, as a soft head's do.
+        bundle = "\nmodule M:\n    port p = new I\n"
+        self.assertEqual(_codes(_parse(PRAGMA_0_2 + bundle)), ["RHO1016"])
+        _, diags = _diags(PRAGMA_0_2 + bundle + "    port q\n")
+        self.assertEqual([d["code"] for d in diags], ["RHO1006", "RHO1006"])
+        self.assertEqual(diags[0]["params"]["found"], "`=`")
+
     def test_ground_kind_is_a_closed_vocabulary_inside_its_string(self):
         source = (PRAGMA_0_3 + '\nmodule M:\n    net G(ground_kind = "pwer"):'
                   "\n        a\n")

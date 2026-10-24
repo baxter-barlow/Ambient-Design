@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# A second dot, or an index after a dot, reaches into a 0.3 bundle. A 0.2
+# line broken there is reported at that token, as 0.2 reported it, and is
+# never asked for a member's name or offered a dot it cannot write.
+module Top:
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    r.a ~ r.b.
+    r.a ~ r.b[
+    net N:
+        r.a.
+    r.a ~ r.b c

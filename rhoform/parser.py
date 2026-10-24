@@ -9,7 +9,9 @@ vocabularies are read from the same source-of-truth module (they are
 published there as CLOSED_VOCABULARIES precisely so tools can consume
 them), and which L8 pragma versions are legal is decided by running the
 artifact's own PRAGMA terminal. If the grammar changes, this parser changes
-with it, because it carries nothing that could fall behind.
+with it, because it carries nothing that could fall behind. The one thing
+it does carry, _OLDER_READING, is four edits the artifact must still match
+word for word, or the parser refuses to load.
 
 ERROR TOLERANCE, BY RESTART. A parse never stops at the first defect (P2:
 one problem per repair round is the convergence failure the language exists
@@ -159,6 +161,22 @@ _MEMBER_ACCESS = ("a member access", "0.3")
 # a member access.
 _ENDPOINTS = frozenset({"endpoint", "chain_head"})
 
+# What 0.3 added to the grammar that opens on a token 0.2 already had: a
+# bundle port's `=` after `port NAME`, a view's `port` in a component body,
+# and a member access's second dot or an index after a dot. The expected
+# sets are filtered token by token, which cannot take these out, and the
+# parse would carry on into them, so a broken 0.2 line would be reported
+# somewhere else than 0.2 reported it. The older reading (_parse_as) is
+# therefore the artifact with these four edits made, each to the one rule
+# that carries it: (rule, artifact text, what 0.2 had). All four are 0.3,
+# like the soft heads, so one older reading serves both.
+_OLDER_READING = (
+    ("statement", " | bundle_port_decl", ""),
+    ("component_def", " | view_decl", ""),
+    ("chain_head", '("." NAME index?)*', '("." NAME)?'),
+    ("endpoint", '("." NAME index?)*', '("." NAME)?'),
+)
+
 # The soft keywords a statement's head may be while it is the name it was
 # before 0.3 (`supply = new ...`): the parser retypes them to FREE_NAME, so
 # such a 0.2 file keeps its 0.2 tree. The SoT's SOFT_KEYWORDS comment says
@@ -237,6 +255,23 @@ def _load_sot():
     return module
 
 
+def _older_grammar(grammar: str) -> str:
+    """The artifact as a file older than 0.3 is parsed: `grammar` with the
+    _OLDER_READING edits made. Each must find its text exactly once on its
+    rule's line, so an artifact that has moved on fails here, loudly,
+    rather than leaving 0.3 in the older reading."""
+    lines = grammar.split("\n")
+    for rule, text, older in _OLDER_READING:
+        at = [index for index, line in enumerate(lines)
+              if line.startswith(f"{rule}: ")]
+        if len(at) != 1 or lines[at[0]].count(text) != 1:
+            raise RuntimeError(  # pragma: no cover - artifact drift
+                f"rule `{rule}` in rhoform.lark no longer reads "
+                f"`{text}`; revisit _OLDER_READING")
+        lines[at[0]] = lines[at[0]].replace(text, older)
+    return "\n".join(lines)
+
+
 _SYNTAX_VERSIONS: tuple[tuple[str, ...], tuple[str, ...]] | None = None
 
 
@@ -279,7 +314,8 @@ def normalize(source: str) -> str:
 @dataclass
 class _Loaded:
     parser: object
-    demoted: object       # the same grammar, its soft heads read as names
+    demoted: object       # the older reading: soft heads read as names,
+                          # and _OLDER_READING's edits made
     pragma_text: str      # the CURRENT header: what a new file and a fix-it use
     pragma_re: object     # the artifact's own PRAGMA terminal, compiled
     pragma_prefix: str    # the header minus its version
@@ -327,16 +363,26 @@ def _load() -> _Loaded:
         return Token.new_borrow_pos("FREE_NAME", str(token), token)
 
     # A file older than the soft keywords is read first by a lexer that
-    # hands each one on as the FREE_NAME it was then: the parse a 0.2
-    # toolchain made of it, diagnostics and all (see _parse_as).
+    # hands each one on as the FREE_NAME it was then, over the grammar with
+    # 0.3's older-token openings taken out: the parse a 0.2 toolchain made
+    # of it, diagnostics and all (see _parse_as).
     demoted = Lark(
-        grammar,
+        _older_grammar(grammar),
         parser="lalr",
         postlex=indenter(),
         start="start",
         propagate_positions=True,
         lexer_callbacks={name: as_name for name in _SOFT_HEADS},
     )
+    # One table below describes the tokens of both readings, so the edits
+    # must leave every terminal the older one has named as it was.
+    terminals = {terminal.name: terminal.pattern
+                 for terminal in parser.terminals}
+    if any(terminals.get(terminal.name) != terminal.pattern
+           for terminal in demoted.terminals):
+        raise RuntimeError(  # pragma: no cover - artifact drift
+            "the older reading of rhoform.lark names a terminal differently "
+            "from the grammar; revisit _OLDER_READING")
 
     sot = _load_sot()
     pragma_pattern = None
@@ -1380,11 +1426,14 @@ def _parse_as(file: str, data: bytes, parse_text: str, shift: int,
     it had (spec 01): its `supply`, `draw`, `waive` and `rule` are names,
     so a broken line they head is reported where 0.2 reported it, and the
     expected set is 0.2's — not a 0.3 statement's, whose hint (`within`)
-    only draws RHO1016 when followed. So it is parsed with the soft heads
-    demoted first. A clean parse is the 0.2 tree. A failed one is tried
-    once more with them on: if the file then parses, its lines were 0.3
-    statements, which the version gate reports as one RHO1016; if not,
-    the 0.2 reading's diagnostics stand."""
+    only draws RHO1016 when followed. The same holds for what 0.3 opens
+    with an older token (_OLDER_READING): `port p` missing its role is
+    asked for the role alone, not for a bundle port's `=`, and `r.b.` is
+    reported at its second dot. So it is parsed with the soft heads
+    demoted and those openings taken out first. A clean parse is the 0.2
+    tree. A failed one is tried once more with the whole grammar: if the
+    file then parses, its lines were 0.3 statements, which the version gate
+    reports as one RHO1016; if not, the 0.2 reading's diagnostics stand."""
     soft = min((loaded.since[name] for name in _SOFT_HEADS),
                key=_version_key)
     if _version_key(version) >= _version_key(soft):

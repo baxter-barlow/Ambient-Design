@@ -495,6 +495,13 @@ declares 0.1 or 0.2, with one `RHO1016` per file whose fix-it rewrites
 the pragma to 0.3, and the `ground_kind` attribute and a member access
 (an endpoint with a second dot, or an index after a dot) with them.
 
+A bundle port, a view and a member access open on tokens 0.2 already
+had: the `=` after `port NAME` in a module body, `port` in a component
+body, and a dot or `[` after an endpoint's second name. So a 0.1 or 0.2
+line broken at one of them is reported where 0.2 reported it, and its
+expected set names none of them: `port p` is asked for a role alone,
+and `r.b.` is reported at its second dot (parse cases `r44` to `r46`).
+
 ## What the grammar deliberately does not check
 
 The parse level accepts some sentences the language rejects later, and

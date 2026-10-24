@@ -1,0 +1,7 @@
+#pragma rhoform-syntax 0.2
+
+# `port` in a component body opens a 0.3 interface view, so a 0.2
+# component's misspelled `pin` is offered `pin` alone, as 0.2 offered it.
+component Header:
+    pn a passive 1
+    pin b passive 2

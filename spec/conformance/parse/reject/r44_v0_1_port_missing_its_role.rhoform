@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.1
+
+# `port p =` opens a 0.3 bundle port, so a 0.1 port missing its role is
+# asked for the role alone, as 0.1 asked, and never for an `=`.
+module Top:
+    port p
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    r.a ~ p
