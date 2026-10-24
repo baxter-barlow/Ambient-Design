@@ -36,6 +36,60 @@
     {
       "conditions": {
         "load": "none",
+        "output_state": "high",
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vcc": {
+          "typ": 15,
+          "unit": "V"
+        }
+      },
+      "description": "Output high, no load, at 15 V supply",
+      "draw": [
+        {
+          "current": {
+            "max": 13,
+            "typ": 9,
+            "unit": "mA"
+          },
+          "pin": "VCC"
+        }
+      ],
+      "id": "output_high_no_load_vcc15",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "load": "none",
+        "output_state": "high",
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vcc": {
+          "typ": 5,
+          "unit": "V"
+        }
+      },
+      "description": "Output high, no load, at 5 V supply",
+      "draw": [
+        {
+          "current": {
+            "max": 5,
+            "typ": 2,
+            "unit": "mA"
+          },
+          "pin": "VCC"
+        }
+      ],
+      "id": "output_high_no_load_vcc5",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "load": "none",
         "output_state": "low",
         "ta": {
           "typ": 25,
@@ -89,7 +143,7 @@
     }
   ],
   "mpn": "NE555P",
-  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nRthetaJA is Section 5.4's P (PDIP) column, 98.5 degC/W, read from the rendered page. That table spans six packages across four devices under merged header cells, which the PDF text layer flattens; on the page, the P (PDIP) column is the only PDIP column and sits alone under the NA555, NE555 header.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). Every other electrical figure is at VCC = 5 V only.\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
+  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nRthetaJA is Section 5.4's P (PDIP) column, 98.5 degC/W, read from the rendered page. That table spans six packages across four devices under merged header cells, which the PDF text layer flattens; on the page, the P (PDIP) column is the only PDIP column and sits alone under the NA555, NE555 header.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). THRES current, TRIG current and the RESET voltage level have no VCC row: Section 5.5 (page 5) states each once, under its header's conditions (VCC = 5 V to 15 V, TA = 25 degC), so each is one Measure with no vcc condition rather than a 5 V figure. Supply current is stated per output state at both columns, four modes (page 6).\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
   "package": {
     "footprint_ref": "rho:DIP-8_W7.62mm",
     "name": "P (PDIP)",
@@ -494,8 +548,24 @@
       "confidence": "datasheet-stated",
       "locator": "Section 5.5 Electrical Characteristics, Supply current rows (output low, no load)",
       "method": "manual",
-      "note": "IMPORTANT for benchmark (a), which runs this part at 9 V: the datasheet characterises supply current only at 5 V and 15 V. There is no 9 V row, and neither recorded mode describes the benchmark's operating point. A current budget at 9 V must bound the draw between these two points or declare an interpolation; it must not silently pick one. Recording only the two measured points, rather than an interpolated 9 V figure, is what forces that choice to be explicit.",
+      "note": "IMPORTANT for benchmark (a), which runs this part at 9 V: the datasheet characterises supply current only at 5 V and 15 V. There is no 9 V row, and none of the recorded modes describes the benchmark's operating point. A current budget at 9 V must bound the draw between these two points or declare an interpolation; it must not silently pick one. Recording only the measured points, rather than an interpolated 9 V figure, is what forces that choice to be explicit.",
       "source_id": "ti-xx555-slfs022k"
+    },
+    "/modes/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 5.5 Electrical Characteristics (continued), page 6, Supply current, Output high, no load, VCC = 15V row, NA555, NE555, SA555 column",
+      "method": "manual",
+      "note": "The output-high rows, transcribed from the 2026-10-24 retrieval of the same SLFS022K revision. Supply current is published per output state, and supply-current-per-mode is an R29a field family on a record a benchmark picks, so both states are recorded at both columns. The output-low modes are the original transcription under /modes.",
+      "source_id": "ti-xx555-slfs022k-2026-10-24",
+      "target": "output_high_no_load_vcc15"
+    },
+    "/modes/1": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 5.5 Electrical Characteristics (continued), page 6, Supply current, Output high, no load, VCC = 5V row, NA555, NE555, SA555 column",
+      "method": "manual",
+      "note": "The output-high rows, transcribed from the 2026-10-24 retrieval of the same SLFS022K revision. Supply current is published per output state, and supply-current-per-mode is an R29a field family on a record a benchmark picks, so both states are recorded at both columns. The output-low modes are the original transcription under /modes.",
+      "source_id": "ti-xx555-slfs022k-2026-10-24",
+      "target": "output_high_no_load_vcc5"
     },
     "/pins": {
       "confidence": "datasheet-stated",

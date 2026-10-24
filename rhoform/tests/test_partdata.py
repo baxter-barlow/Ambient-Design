@@ -575,6 +575,20 @@ class ViewTest(unittest.TestCase):
             [(5, Decimal("2.4"), Decimal("4.2")),
              (15, Decimal("8.8"), Decimal("11.2"))])
 
+    def test_ne555_supply_current_is_stated_per_output_state_per_column(self):
+        # SLFS022K page 6 publishes both output states at both columns; the
+        # record carried output low only.
+        binding = partdata.bind(_doc(NE555), "rhoform.lib.timer.Ne555",
+                                [("vcc", "power_in", ())])
+        got = {(cond["output_state"], cond["vcc"]["typ"]):
+               (draw["vcc"].get("typ").bound, draw["vcc"].get("max").bound,
+                draw["vcc"].get("max").guaranteed)
+               for _id, _kind, cond, draw in binding.modes}
+        self.assertEqual(got, {("high", 15): (9, 13, True),
+                               ("high", 5): (2, 5, True),
+                               ("low", 15): (10, 15, True),
+                               ("low", 5): (3, 6, True)})
+
     def test_the_regulators_floor_carries_its_tables_header_conditions(self):
         vout = self.ports(AP7361C, "rhoform.lib.regulator.LinearRegulator",
                           [("vout", "power_out", ())])["vout"]
