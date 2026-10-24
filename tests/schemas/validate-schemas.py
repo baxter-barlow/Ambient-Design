@@ -10,7 +10,8 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
                                    1 netlist-ir.v1.schema.json
                *.sourcemap.json -> by sourcemap_version: 0 source-map.schema.json,
                                    1 source-map.v1.schema.json
-        parts/ *.part.json      -> part-data.schema.json
+        parts/ *.part.json      -> by schema_version: 0 part-data.schema.json,
+                                   1 part-data.v1.schema.json
         eval/  *.run.json       -> run-result.schema.json
         lang/  *.design.json    -> design-model.schema.json
   - a versioned document goes to the schema of the version IT declares
@@ -19,7 +20,11 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
     rather than validated against a neighbouring version's schema;
   - files under <root>/examples/negative/ are expected-INVALID controls:
     each must parse as JSON and then FAIL schema validation; a negative
-    control that validates is an error;
+    control that validates is an error. The one exception is a LINT control
+    (its declaration starts `LINT-REJECTED`): it exists to prove a
+    cross-reference check the schema cannot express, so it must VALIDATE,
+    or it would fail for a reason other than the one it names. The part-data
+    linter holds it to its own check;
   - every other JSON file under <root>/examples/ must validate against its
     mapped schema;
   - any *.json under <root>/examples/ matched by no mapping rule is a hard
@@ -31,6 +36,9 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
     case must produce (spec/conformance/elaborate/accept/<case>
     .expected.ir.json, spec/conformance/packages/accept/<case>/
     expected.ir.json);
+  - the bundled part store, rhoform/parts/<vendor>/<slug>.part.json, holds
+    records the compiler reads, so each is a positive of the parts/ root,
+    routed by its schema_version like any record;
     any other file with a mapped suffix outside an examples/ directory is
     still a failure;
   - a root that declares schemas but ships no negative controls is a hard
@@ -71,6 +79,10 @@ IR_VERSIONS = (("header", "ir_version"),
 SOURCEMAP_VERSIONS = (("sourcemap_version",),
                       {0: "source-map.schema.json",
                        1: "source-map.v1.schema.json"})
+# Part data follows the same rule: v0's file is immutable and v1 is a second
+# file, so a record goes to the schema of the version it declares.
+PART_VERSIONS = (("schema_version",),
+                 {0: "part-data.schema.json", 1: "part-data.v1.schema.json"})
 
 # Declared schema roots: top-level directory -> example-filename suffixes
 # it recognises and the schema each routes to (a file name, or a version
@@ -82,7 +94,7 @@ SCHEMA_ROOTS = {
         (".ir.json", IR_VERSIONS),
         (".sourcemap.json", SOURCEMAP_VERSIONS),
     ),
-    "parts": ((".part.json", "part-data.schema.json"),),
+    "parts": ((".part.json", PART_VERSIONS),),
     "eval": ((".run.json", "run-result.schema.json"),),
     "lang": ((".design.json", "design-model.schema.json"),),
     "rhoform": ((".diag.json", "diagnostic.schema.json"),),
@@ -109,6 +121,21 @@ CONFORMANCE_GOLDENS = (
     ("spec/conformance/elaborate/accept", "ir", "*.expected.ir.json"),
     ("spec/conformance/packages/accept", "ir", "*/expected.ir.json"),
 )
+
+# The bundled part store: records the compiler reads, so positives of the
+# parts/ root wherever they sit. A record's path is its part_id, exactly two
+# segments deep; a file at any other depth is a stray, because no lookup
+# would find it. Entries: (directory, schema root, glob).
+STORE_RECORDS = (("rhoform/parts", "parts", "*/*.part.json"),)
+
+
+def store_paths(root):
+    """{schema root: [store record paths]}, each list sorted."""
+    found = {}
+    for directory, schema_root, pattern in STORE_RECORDS:
+        for path in sorted((root / directory).glob(pattern)):
+            found.setdefault(schema_root, []).append(path)
+    return found
 
 
 def golden_paths(root):
@@ -173,6 +200,14 @@ MINIMUM_NEGATIVE_CONTROLS = 61
 # rather than being waved through by a loosened threshold.
 CONTROL_KEY = "x_negative_control"
 CONTROL_PREFIX = re.compile(r"^REJECTED at (?P<locs>[^:]+):")
+LINT_CONTROL_PREFIX = "LINT-REJECTED"
+
+
+def is_lint_control(example):
+    """True for a control proving a cross-reference check, not the schema."""
+    control = example.get(CONTROL_KEY) if isinstance(example, dict) else None
+    return isinstance(control, str) and \
+        control.strip().startswith(LINT_CONTROL_PREFIX)
 
 
 def declared_locations(example):
@@ -211,9 +246,11 @@ def load_json(path, rel, failures):
         return None
 
 
-def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
-    """Validate one schema root, plus any goldens routed to it. Returns
-    (schemas, positives, negatives, goldens)."""
+def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=(),
+               store=()):
+    """Validate one schema root, plus any goldens and store records routed to
+    it. Returns (schemas, positives, negatives, goldens, store records, lint
+    controls)."""
     root_dir = root / root_name
     examples_dir = root_dir / "examples"
 
@@ -227,7 +264,7 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
         # entire root — every example and every negative control with it.
         # Goldens routed here are the same case.
         stray = sorted(examples_dir.rglob("*.json")) if examples_dir.is_dir() else []
-        stray += list(goldens)
+        stray += list(goldens) + list(store)
         if stray:
             failures.append(
                 f"{root_name}/: {len(stray)} example or golden file(s) need "
@@ -235,9 +272,9 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
                 "A schema was deleted or renamed, which would otherwise switch "
                 "off this root's validation silently."
             )
-            return 0, 0, 0, 0
+            return 0, 0, 0, 0, 0, 0
         print(f"schemas: {root_name}/: no *.schema.json files; nothing to validate.")
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0, 0, 0
 
     validators = {}
     for schema_path in schema_paths:
@@ -257,12 +294,15 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
     positive_count = 0
     negative_count = 0
     golden_count = 0
+    store_count = 0
+    lint_control_count = 0
+    store_set = set(store)
 
     example_paths = sorted(examples_dir.rglob("*.json")) if examples_dir.is_dir() else []
-    for example_path in example_paths + sorted(goldens):
+    for example_path in example_paths + sorted(goldens) + sorted(store):
         rel = example_path.relative_to(root)
-        # A golden is a positive wherever it sits: it is compiler output,
-        # never a control.
+        # A golden or a store record is a positive wherever it sits: it is
+        # compiler output or compiler input, never a control.
         is_golden = examples_dir not in example_path.parents
         expect_invalid = not is_golden and NEGATIVE_DIR_NAME in \
             example_path.relative_to(examples_dir).parts[:-1]
@@ -312,7 +352,17 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
             continue
 
         errors = sorted(validator.iter_errors(example), key=str)
-        if expect_invalid:
+        if expect_invalid and is_lint_control(example):
+            lint_control_count += 1
+            for error in errors:
+                path = "/".join(str(part) for part in error.absolute_path) or "<root>"
+                failures.append(
+                    f"{rel}: lint control is not schema-valid (at {path}: "
+                    f"{error.message}); it must fail ONLY the cross-reference "
+                    "check it names, which the part-data linter verifies.")
+            if not errors:
+                print(f"schemas: {rel}: lint control, valid against {schema_name} as it must be.")
+        elif expect_invalid:
             negative_count += 1
             if not errors:
                 failures.append(
@@ -340,7 +390,9 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
             else:
                 print(f"schemas: {rel}: invalid as expected, at the {len(declared)} location(s) it declares: {', '.join(sorted(declared))}.")
         else:
-            if is_golden:
+            if example_path in store_set:
+                store_count += 1
+            elif is_golden:
                 golden_count += 1
             else:
                 positive_count += 1
@@ -359,7 +411,8 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=()):
             "expected-invalid fixture."
         )
 
-    return len(schema_paths), positive_count, negative_count, golden_count
+    return (len(schema_paths), positive_count, negative_count, golden_count,
+            store_count, lint_control_count)
 
 
 def self_test() -> int:
@@ -379,7 +432,8 @@ def self_test() -> int:
     SCHEMA = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
-        "properties": {"stability": {"const": "unstable"}},
+        "properties": {"stability": {"const": "unstable"},
+                       "schema_version": {"const": 0}},
         "required": ["stability"],
         "patternProperties": {"^x_": {"type": "string"}},
         "additionalProperties": False,
@@ -403,8 +457,9 @@ def self_test() -> int:
             finally:
                 sys.argv = argv
 
-    good = {"stability": "unstable"}
-    control = {"stability": "stable",
+    # Part records route by schema_version, so every planted one declares it.
+    good = {"stability": "unstable", "schema_version": 0}
+    control = {"stability": "stable", "schema_version": 0,
                "x_negative_control": "REJECTED at /stability: stability is const"}
 
     cases = []
@@ -463,12 +518,13 @@ def self_test() -> int:
         # a mapped suffix outside every declared examples/ directory
         (root / "parts" / "elsewhere").mkdir()
         (root / "parts" / "elsewhere" / "orphan.part.json").write_text(
-            _json.dumps({"stability": "whatever it likes"}))
+            _json.dumps({"stability": "whatever it likes", "schema_version": 0}))
     code, text = run_raw(_stray)
     cases.append(("a mapped example outside examples/ is caught",
                   code == 1 and "no gate validates it" in text))
 
-    code, text = run(good, {"n1.part.json": {"stability": "stable"}})
+    code, text = run(good, {"n1.part.json": {"stability": "stable",
+                                             "schema_version": 0}})
     cases.append(("a control with no declaration is caught",
                   code == 1 and "does not declare where it fails" in text))
 
@@ -507,8 +563,96 @@ def self_test() -> int:
     cases.append(("the floor is WIRED into main() over the real tree",
                   _wired == 1 and "below the floor of 10000" in _err.getvalue()))
 
-    code, text = run({"stability": "stable"}, {"n1.part.json": control})
+    code, text = run(dict(good, stability="stable"), {"n1.part.json": control})
     cases.append(("an invalid POSITIVE example is caught", code == 1))
+
+    # PART-DATA VERSIONS. v0's file is immutable and v1 is a second file, each
+    # pinning its own version, so a record validated against any schema but
+    # its own fails on the version alone.
+    def _parts_root(root, *, examples=(), store=(), negatives=()):
+        (root / "parts" / "examples" / "negative").mkdir(parents=True,
+                                                         exist_ok=True)
+        for name, version in (("part-data.schema.json", 0),
+                              ("part-data.v1.schema.json", 1)):
+            (root / "parts" / name).write_text(_json.dumps(dict(
+                SCHEMA, properties=dict(SCHEMA["properties"],
+                                        schema_version={"const": version}),
+                required=["stability", "schema_version"])))
+        if not negatives:
+            negatives = (("n1.part.json", control),)
+        for name, body in negatives:
+            (root / "parts" / "examples" / "negative" / name).write_text(
+                _json.dumps(body))
+        for name, body in examples:
+            (root / "parts" / "examples" / name).write_text(_json.dumps(body))
+        for rel, body in store:
+            path = root / "rhoform" / "parts" / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_json.dumps(body))
+
+    v1_good = dict(good, schema_version=1)
+    code, text = run_raw(lambda root: _parts_root(
+        root, examples=(("a.part.json", good), ("b.part.json", v1_good))))
+    cases.append(("each part record is validated against its own version's schema",
+                  code == 0
+                  and "parts/examples/a.part.json: valid against "
+                  "part-data.schema.json" in text
+                  and "parts/examples/b.part.json: valid against "
+                  "part-data.v1.schema.json" in text))
+    code, text = run_raw(lambda root: _parts_root(
+        root, examples=(("a.part.json", dict(good, schema_version=7)),)))
+    cases.append(("a part record of a version no schema describes is refused",
+                  code == 1
+                  and "a.part.json: declares schema_version 7, and the "
+                  "schemas of parts/ describe versions 0, 1 only" in text))
+
+    # THE STORE. rhoform/parts/<vendor>/<slug>.part.json is compiler input:
+    # before it was routed here the stray rule failed every record in it, and
+    # routed wrongly it would pass unvalidated.
+    code, text = run_raw(lambda root: _parts_root(
+        root, store=(("acme/x.part.json", v1_good),)))
+    cases.append(("a store record is validated and counted as one",
+                  code == 0
+                  and "rhoform/parts/acme/x.part.json: valid against "
+                  "part-data.v1.schema.json" in text
+                  and "1 valid store record(s)" in text))
+    code, text = run_raw(lambda root: _parts_root(
+        root, store=(("acme/x.part.json", dict(v1_good, stability="stable")),)))
+    cases.append(("an invalid store record is caught",
+                  code == 1 and "rhoform/parts/acme/x.part.json: at stability"
+                  in text))
+    code, text = run_raw(lambda root: _parts_root(
+        root, store=(("x.part.json", v1_good),)))
+    cases.append(("a store record off the <vendor>/<slug> depth is a stray",
+                  code == 1
+                  and "rhoform/parts/x.part.json: carries a mapped" in text))
+
+    def _orphan_store(root):
+        path = root / "rhoform" / "parts" / "acme" / "x.part.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(_json.dumps(v1_good))
+    code, text = run_raw(_orphan_store)
+    cases.append(("store records whose schema root is gone are caught",
+                  code == 1 and "1 example or golden file(s)" in text
+                  and "declares NO *.schema.json" in text))
+
+    # LINT CONTROLS prove a cross-reference check, so they must pass the
+    # schema; one that fails it proves nothing about the check it names.
+    lint_control = dict(v1_good, x_negative_control=(
+        "LINT-REJECTED by L1 at /x: a cross-reference the schema cannot see"))
+    code, text = run_raw(lambda root: _parts_root(
+        root, negatives=(("n1.part.json", control),
+                         ("n2.part.json", lint_control))))
+    cases.append(("a schema-valid lint control is accepted and counted",
+                  code == 0 and "1 lint control(s) schema-valid" in text
+                  and "1 negative control(s) rejected" in text))
+    code, text = run_raw(lambda root: _parts_root(
+        root, negatives=(("n1.part.json", control),
+                         ("n2.part.json", dict(lint_control,
+                                               stability="stable")))))
+    cases.append(("a lint control that fails the schema is caught",
+                  code == 1 and "n2.part.json: lint control is not "
+                  "schema-valid (at stability" in text))
 
     # GOLDENS: the elaborator's committed output for each benchmark source,
     # which sits outside every examples/ directory by design. Before they
@@ -678,10 +822,12 @@ def main() -> int:
     root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DEFAULT_ROOT
 
     goldens = golden_paths(root)
-    # A root that goldens route to is checked even if its directory is gone,
-    # so goldens with no schema left to validate them fail rather than skip.
+    store = store_paths(root)
+    # A root that goldens or store records route to is checked even if its
+    # directory is gone, so documents with no schema left to validate them
+    # fail rather than skip.
     present = [name for name in sorted(SCHEMA_ROOTS)
-               if (root / name).is_dir() or name in goldens]
+               if (root / name).is_dir() or name in goldens or name in store]
     if not present:
         print("schemas: no declared schema roots present yet; nothing to validate.")
         return 0
@@ -699,7 +845,7 @@ def main() -> int:
         return 2
 
     failures = []
-    totals = [0, 0, 0, 0]
+    totals = [0, 0, 0, 0, 0, 0]
 
     # A file carrying a mapped example suffix but living outside any
     # declared examples/ directory is validated by nothing. `make check`
@@ -710,7 +856,8 @@ def main() -> int:
         {suffix for suffixes in SCHEMA_ROOTS.values() for suffix, _ in suffixes}
     )
     known_example_dirs = [root / name / "examples" for name in SCHEMA_ROOTS]
-    golden_set = {path for paths in goldens.values() for path in paths}
+    golden_set = {path for paths in list(goldens.values())
+                  + list(store.values()) for path in paths}
     skip_dirs = {".git", "node_modules", "__pycache__", ".venv"}
     for path in sorted(root.rglob("*.json")):
         if skip_dirs & set(path.parts):
@@ -731,7 +878,7 @@ def main() -> int:
     for root_name in present:
         counts = check_root(
             root, root_name, SCHEMA_ROOTS[root_name], jsonschema, failures,
-            goldens=goldens.get(root_name, ()),
+            goldens=goldens.get(root_name, ()), store=store.get(root_name, ()),
         )
         totals = [a + b for a, b in zip(totals, counts)]
 
@@ -746,7 +893,9 @@ def main() -> int:
     print(
         f"schemas: PASS: {totals[0]} schema(s) across {len(present)} root(s), "
         f"{totals[1]} valid example(s), {totals[3]} valid golden(s), "
-        f"{totals[2]} negative control(s) rejected as expected."
+        f"{totals[4]} valid store record(s), "
+        f"{totals[2]} negative control(s) rejected as expected, "
+        f"{totals[5]} lint control(s) schema-valid as required."
     )
     return 0
 

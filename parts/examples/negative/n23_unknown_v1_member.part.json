@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "transfers": [
+    {
+      "id": "ldo",
+      "kind": "linear_regulator",
+      "input": "1",
+      "output": "2"
+    }
+  ],
+  "x_negative_control": "REJECTED at /: v1 is additive but still closed, so a member it does not define fails loudly. `transfers` is the member deliberately left out of v1: how a part transforms one supply into another is structure, and structure lives in the design's rules; part data carries the numbers (pins[].output, series)."
+}
