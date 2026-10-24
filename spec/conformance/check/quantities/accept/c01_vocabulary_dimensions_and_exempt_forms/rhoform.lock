@@ -1,0 +1,20 @@
+{
+  "lockfile_version": 0,
+  "parts": {
+    "entries": [
+      {
+        "key": "c-100n",
+        "manufacturer": "Acme",
+        "mpn": "C-100N",
+        "part_id": "acme/c100n",
+        "record": "parts/acme/c100n.part.json"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "parts/acme/c100n.part.json",
+        "sha256": "sha256:b453605e08e1233964f624bd8e7ee1b38a82dfd6c5324d2fc0c3794d9a0df2df"
+      }
+    ]
+  }
+}

@@ -274,7 +274,9 @@ class PassTest(unittest.TestCase):
             "            reference_voltage = 800mV\n"
             "            dcr_max = 50mohm\n",
             header)
-        by_entity = {d["entity"]: d for d in lines}
+        # The resolved part's missing pick is the parts pass's (RHO6001).
+        by_entity = {d["entity"]: d for d in lines
+                     if d["code"].startswith("RHO32")}
         self.assertEqual(sorted(by_entity), ["/c2", "/d/r1", "/l1"])
         # A reference has the form of its value, and the finding names the
         # value, not the parameter; there is no literal here to fix.

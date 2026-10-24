@@ -1,0 +1,54 @@
+{
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Capacitor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "manufacturer": "Acme",
+  "mpn": "C-100N",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "part_id": "acme/c100n",
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "source_id": "acme-ds"
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "source_id": "acme-ds",
+      "state": "source-unreachable",
+      "url": "https://acme.example/ds.pdf",
+      "vendor": "acme"
+    }
+  ],
+  "stability": "unstable"
+}

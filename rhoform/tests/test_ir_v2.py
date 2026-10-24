@@ -100,6 +100,15 @@ V1_DESIGN_HASHES = {
         "sha256:36dd61f95e6bbf7ad0f440ab2f999905808f96f30fe40d786959719fa54a801c",
     PACKAGES + "a05_standard_library/expected.ir.json":
         "sha256:d2dbcb0f88df1e7deca46f7576c816594d93e459f49ee9786ea249e42f802294",
+    # The lockfile cases (L2b, AMB-59) came after version 1, but their
+    # sources are 0.2, so each is held to its version 1 reading: a06 and a07
+    # are a02's design under a lockfile and keep a02's hash.
+    PACKAGES + "a06_lockfile_workspace/expected.ir.json":
+        "sha256:2723c055a5804476656acb17baef34d2c082199ef8d4c76abeec8d3f475408c5",
+    PACKAGES + "a07_lockfile_packages/expected.ir.json":
+        "sha256:2723c055a5804476656acb17baef34d2c082199ef8d4c76abeec8d3f475408c5",
+    PACKAGES + "a08_lockfile_keyed_pick/expected.ir.json":
+        "sha256:39da29bbe8294b3bf5e68a914de9fe250e04ea960b69d904a0dd4cf939b6988e",
 }
 
 # Goldens that came with version 2 and have no version 1 to be held to:
