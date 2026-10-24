@@ -575,6 +575,16 @@ class ViewTest(unittest.TestCase):
             [(5, Decimal("2.4"), Decimal("4.2")),
              (15, Decimal("8.8"), Decimal("11.2"))])
 
+    def test_the_regulators_floor_carries_its_tables_header_conditions(self):
+        vout = self.ports(AP7361C, "rhoform.lib.regulator.LinearRegulator",
+                          [("vout", "power_out", ())])["vout"]
+        floor, = vout.capability["source_current"]
+        self.assertEqual(floor.conditions, {
+            "cin": {"typ": Decimal("4.7"), "unit": "uF"},
+            "cout": {"typ": Decimal("4.7"), "unit": "uF"},
+            "ta": {"typ": 25, "unit": "degC"},
+            "ven": "VIN", "vin": "VOUT + 1 V"})
+
     def test_class_data_and_class_absences_reach_every_member(self):
         ports = self.ports(ESP32, "rhoform.lib.module.Esp32S3Wroom1",
                            [("io35", "bidirectional", ()),

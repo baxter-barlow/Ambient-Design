@@ -99,6 +99,19 @@
       "capability": {
         "source_current": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven": "VIN",
             "vin": "VOUT + 1 V"
           },
           "min": 1.0,
@@ -267,9 +280,9 @@
     },
     "/pins/2/capability/source_current": {
       "confidence": "datasheet-stated",
-      "locator": "Electrical Characteristics, IOUT Maximum Output Current row",
+      "locator": "Electrical Characteristics, page 5, IOUT Maximum Output Current row (VIN = VOUT +1V), under the table's header conditions",
       "method": "manual",
-      "note": "Recorded as a guaranteed MINIMUM (min 1.0 A), which is what the datasheet specifies and what a current-budget check may rely on. Contrast the ESP32-S3 record, whose GPIO drive is published as a typical only and therefore supports no such guarantee.",
+      "note": "Recorded as a guaranteed MINIMUM (min 1.0 A), which is what the datasheet specifies and what a current-budget check may rely on. Contrast the ESP32-S3 record, whose GPIO drive is published as a typical only and therefore supports no such guarantee. The row states only VIN = VOUT + 1 V. Its other conditions are the table header's (TA = +25 C, CIN = 4.7 uF, COUT = 4.7 uF, VEN = VIN, page 5), recorded with it so the floor is not read outside them; dropout and current_limit carry TA from the same header.",
       "source_id": "ap7361c-ds37274-rev5-2",
       "target": "OUT"
     },
