@@ -137,7 +137,9 @@ CEILINGS = {
     "tests/corpus/check-corpus.py": (37, 3),
     "tests/diagnostics/check-registry.py": (12, 0),
     "tests/eval/check-run-records.py": (62, 9),
-    "tests/ir/check-hashes.py": (23, 1),
+    # 23 -> 24 sites with the Interface.members order (L2a, IR2-5), caught
+    # by its own self-test case.
+    "tests/ir/check-hashes.py": (24, 1),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.

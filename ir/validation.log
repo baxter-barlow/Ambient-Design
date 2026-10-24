@@ -27,7 +27,7 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 78 checks.
+ir-hashes: self-test PASS: 79 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
@@ -63,6 +63,8 @@ schemas: ir/examples/negative/n14_v2_waiver_without_justification.ir.json: inval
 schemas: ir/examples/negative/n15_v2_waiver_bad_code.ir.json: invalid as expected, at the 1 location(s) it declares: /annotations/1.
 schemas: ir/examples/negative/n16_v2_rule_from_and_to.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/rules/0.
 schemas: ir/examples/negative/n17_v2_no_annotations.ir.json: invalid as expected, at the 1 location(s) it declares: /.
+schemas: ir/examples/negative/n18_v2_interface_without_members.ir.json: invalid as expected, at the 1 location(s) it declares: /interfaces/0/members.
+schemas: ir/examples/negative/n19_v2_unset_parameter_as_null.ir.json: invalid as expected, at the 1 location(s) it declares: /interfaces/0/parameters/v.
 schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.v2.schema.json.
 schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.v2.schema.json.
 schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.v2.schema.json.
@@ -198,3 +200,22 @@ removes the version 2 additions from each, sets ir_version to 1, and
 recomputes design_hash: every one equals the version 1 design_hash it had
 before this change (24 documents: three benchmarks, sixteen elaboration
 cases, five package cases).
+
+=== interfaces fill IR version 2, 2026-10-24 ===
+Syntax 0.3's interfaces (T1, L2a) landed, and version 2's `interfaces`
+array now holds one entry per bundle node: each element of a module's
+bundle port, each component view, and each bundle nested in either. Version
+2 is unfrozen, so its schema changed in place: an entry's `members` must not
+be empty, since every interface has at least one leaf. Two version 2
+negative controls pin the new shape, n18 (an entry with no member) and n19
+(an unset parameter written as null, where it is omitted), for 74 controls
+in all, up from 72. The ir-hashes self-test went from 78 to 79 checks: the
+schema's order on an interface's `members`, by member path, which nothing
+held before (the L1a review's IR2-5), now has a sort rule and a case.
+
+The transcript above was re-run for this change and replaces the one before
+it. The ir-hashes PASS line did not change, and no benchmark golden moved:
+the benchmarks use no interface, so their IR is byte for byte what it was.
+The documents that do hold interfaces are the new conformance expectations
+(four elaboration cases and one package case), which the schemas gate
+validates against version 2 with every other expectation.

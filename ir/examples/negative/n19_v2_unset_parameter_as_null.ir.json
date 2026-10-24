@@ -1,0 +1,66 @@
+{
+  "x_negative_control": "REJECTED at /interfaces/0/parameters/v: an unset interface parameter written as null. A parameter a bundle leaves unset is omitted (spec 05/03), never a null, so a consumer cannot mistake it for a value.",
+  "header": {
+    "ir_version": 2,
+    "language_version": "0.3.0",
+    "design_name": "neg",
+    "design_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "source_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "generator": {
+      "name": "rhoformc",
+      "version": "0.1.0"
+    },
+    "canonical_form": "rhoform-canonical-json/1"
+  },
+  "instances": [
+    {
+      "path": "/",
+      "kind": "module",
+      "definition": "neg.Root",
+      "parameters": {},
+      "ports": [
+        {
+          "name": "power.gnd",
+          "role": "passive"
+        },
+        {
+          "name": "power.hv",
+          "role": "passive"
+        }
+      ],
+      "dnp": false,
+      "exclude_from_bom": false,
+      "board_only": false
+    }
+  ],
+  "nets": [],
+  "connections": [],
+  "assertions": [],
+  "interfaces": [
+    {
+      "instance": "/",
+      "port": "power",
+      "definition": "rhoform.lib.iface.Power",
+      "parameters": {
+        "v": null
+      },
+      "members": [
+        {
+          "member": "gnd",
+          "port": {
+            "instance": "/",
+            "port": "power.gnd"
+          }
+        },
+        {
+          "member": "hv",
+          "port": {
+            "instance": "/",
+            "port": "power.hv"
+          }
+        }
+      ]
+    }
+  ],
+  "annotations": []
+}

@@ -181,6 +181,19 @@ def sort_problems(document, label):
                     f"{label}: {instance.get('path')!r}/{port.get('name')!r} has "
                     "`pin_numbers` out of the ascending order the schema "
                     "declares.")
+    # Version 2: an interface's members, by member path. The schema has said
+    # so since version 2 opened and nothing held it until interfaces filled
+    # the array (L1a review, IR2-5): a reversed member list gave the same
+    # bundle a second design_hash.
+    for interface in document.get("interfaces") or []:
+        members = [m.get("member") or ""
+                   for m in (interface.get("members") or [])]
+        if members != sorted(members):
+            problems.append(
+                f"{label}: interface {interface.get('instance')!r} "
+                f"{interface.get('port')!r} has `members` out of the "
+                "bytewise-ascending order of `member` the version 2 schema "
+                "declares.")
     return problems
 
 
@@ -686,8 +699,9 @@ def self_test() -> int:
         any("bytewise-ascending path order" in p
             for p in _unsorted_map_probe()),
     ))
-    # IR version 2's three orders: interfaces by (instance, port), and
-    # annotations and each component's rules by their canonical bytes.
+    # IR version 2's four orders: interfaces by (instance, port) and their
+    # members by member path, and annotations and each component's rules by
+    # their canonical bytes.
     checks.append((
         "interfaces out of (instance, port) order are caught",
         any("`interfaces`" in p for p in sort_problems({"interfaces": [
@@ -708,6 +722,12 @@ def self_test() -> int:
             "probe")),
     ))
     checks.append((
+        "an interface's members out of member order are caught",
+        any("`members`" in p for p in sort_problems({"interfaces": [
+            {"instance": "/", "port": "power", "members": [
+                {"member": "hv"}, {"member": "gnd"}]}]}, "probe")),
+    ))
+    checks.append((
         "rules, annotations and interfaces in their orders pass",
         not sort_problems({
             "instances": [{"path": "/x", "rules": [
@@ -715,7 +735,8 @@ def self_test() -> int:
                 {"pins": ["b"], "word": "tie"}]}],
             "annotations": [{"kind": "supply", "scope": "/"},
                             {"kind": "waive", "scope": "/"}],
-            "interfaces": [{"instance": "/", "port": "i2c"},
+            "interfaces": [{"instance": "/", "port": "i2c", "members": [
+                               {"member": "scl"}, {"member": "sda"}]},
                            {"instance": "/", "port": "usb"}]}, "probe"),
     ))
     # Every IR version's schema: the hand-written examples are version 0

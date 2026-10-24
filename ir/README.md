@@ -126,8 +126,8 @@ integer beyond 2^53 is a compile error rather than a rounding (spec 04,
   that a standard library module's `files` path is its library path.
 - **Version 2** is `netlist-ir.v2.schema.json`, paired with `source-map.v2.schema.json`, and is
   **unfrozen** (below). It adds the source facts syntax 0.3 states and the one version 1 dropped:
-  the required top-level `interfaces` (empty until syntax 0.3's interfaces land) and
-  `annotations` arrays (`supply`, `draw`, `waive`), a component's `rules`, a net's `isolated`
+  the required top-level `interfaces` and `annotations` arrays (`supply`, `draw`, `waive`), a
+  component's `rules`, a net's `isolated`
   (present only when true) and authored `ground_kind`, and an assertion's `severity` (present only
   when `"warning"`). `Port.name` and `PortRef.port` widen to member paths (`i2c.sda`), and
   `Assertion.waiver`, which nothing wrote, is removed: a waiver is a `waive` annotation. Nothing
@@ -136,6 +136,14 @@ integer beyond 2^53 is a compile error rather than a rounding (spec 04,
   `rhoform/tests/test_ir_v2.py` holds for every benchmark golden and conformance expectation
   against the version 1 hashes they had. The version 2 source map pins its versions and gives
   every interface a node (`<instance path>.<port>`). The compiler writes version 2 only.
+  `interfaces` holds one entry per bundle node of syntax 0.3's interfaces (spec 05/03): each
+  element of a module's bundle port, each component view and each bundle nested in either, with
+  the interface's `definition`, its `parameters` (an unset one omitted, never null) and its
+  `members`, each leaf by member path and the port it is — a module's bundle-port leaf is a port
+  of the module instance named by its member path (`power.hv`), a view's leaf the pin it binds.
+  A design that uses no interface has an empty `interfaces` and is otherwise unchanged by them;
+  a bundle connect is the chains of its leaves, so `connections` holds it and the IR keeps no
+  record of the connect itself.
 - Version 0's two files stay, byte for byte as version 0 published them, for the hand-written
   documents under `examples/`, which are version 0 and validate against them. The syntax 0.2 line
   first widened version 0's `Net.name` pattern and its source-map path description in place,
@@ -248,8 +256,8 @@ correctness proof; each needs a compiler check plus its own test, not a schema f
 - **Interval ordering.** `Interval.max >= min` and `AssertionBounds.max >= min` are cross-field
   comparisons the schema cannot express.
 - **Ordering and canonicality.** The sort rules on `instances`, `nets`, `connections`,
-  `assertions`, `ports`, and in version 2 `interfaces`, `annotations` and each component's
-  `rules`, and the `canonical_form` serialization profile itself.
+  `assertions`, `ports`, and in version 2 `interfaces`, each interface's `members`, `annotations`
+  and each component's `rules`, and the `canonical_form` serialization profile itself.
 - **Annotation targets (version 2).** An annotation's target names a real net, instance pin,
   instance or assertion, as a connection's does; the schema checks only its shape.
 - **Hash correctness and pairing.** `design_hash` and `source_hash` must actually hash what they
@@ -277,7 +285,7 @@ expectation (`spec/conformance/elaborate/accept/<case>.expected.ir.json`,
 `spec/conformance/packages/accept/<case>/expected.ir.json`) must **validate**; every file in
 `examples/negative/` must be **rejected**. Each document is validated against the schema of the
 version it declares (`header.ir_version`, or a source map's `sourcemap_version`) and no other: the
-examples and the negative controls `n01`-`n09` against version 0, `n10`-`n17` against version 2,
+examples and the negative controls `n01`-`n09` against version 0, `n10`-`n19` against version 2,
 and the goldens and expectations against version 2. A document that declares no version, or one no schema here describes, fails the run,
 as a backend refuses it. A negative control that validates fails the run, which is what stops the schema from
 quietly losing a constraint it advertises. Each fixture is a minimal complete document carrying
@@ -302,6 +310,8 @@ exactly one defect, described in its own `x_negative_control` member:
 | `n15_v2_waiver_bad_code.ir.json` | version 2: a `waive` annotation whose code is not `RHO` and four digits |
 | `n16_v2_rule_from_and_to.ir.json` | version 2: a rule naming both a `from` and a `to` pin |
 | `n17_v2_no_annotations.ir.json` | version 2: no `annotations` array, which version 2 requires |
+| `n18_v2_interface_without_members.ir.json` | version 2: an `interfaces` entry with no member |
+| `n19_v2_unset_parameter_as_null.ir.json` | version 2: an unset interface parameter written as `null`, which is spelled by absence |
 
 `*.ir.json` files are checked against the IR schema of their version, `*.sourcemap.json` against
 the source-map schema of theirs, and an empty fixture directory is itself a failure. The duplicate-path and dangling-net

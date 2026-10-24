@@ -38,7 +38,7 @@
     },
     "interfaces": {
       "type": "array",
-      "description": "One entry per bundle node of the design (an interface-typed port, at every nesting level), filled by syntax 0.3's interface constructs; empty until those land. Sorted by (instance, port), each key bytewise-ascending.",
+      "description": "One entry per bundle node of the design (an interface-typed port, at every nesting level): each element of a module's bundle port, each component view, and each bundle nested in either. Empty for a design that uses no interface. Sorted by (instance, port), each key bytewise-ascending.",
       "items": { "$ref": "#/$defs/Interface" }
     },
     "annotations": {
@@ -622,7 +622,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["instance", "port", "definition", "parameters", "members"],
-      "description": "One bundle node: an interface-typed port of an instance, at any nesting level.",
+      "description": "One bundle node: an interface-typed port of an instance, at any nesting level. The bundles a chain joins are not recorded here: a bundle connect is the chains of its leaves, which `connections` holds.",
       "properties": {
         "instance": {
           "$ref": "#/$defs/PathId",
@@ -648,7 +648,8 @@
         },
         "members": {
           "type": "array",
-          "description": "Each leaf member and the port it is, sorted bytewise-ascending by `member`.",
+          "minItems": 1,
+          "description": "Each leaf member and the port it is, sorted bytewise-ascending by `member`. Never empty: every interface has at least one leaf. A module's bundle port's leaf is a port of the module instance named by its member path from the instance (`power.hv`); a component view's leaf is the pin it binds.",
           "items": {
             "type": "object",
             "additionalProperties": false,
