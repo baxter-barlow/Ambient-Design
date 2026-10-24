@@ -1,11 +1,11 @@
 # 02 — Grammar, names, and vocabularies
 
-*Rhoform Language Specification · normative, v0.2 · CC-BY-4.0 (see
+*Rhoform Language Specification · normative, v0.2 and the unfrozen 0.3 · CC-BY-4.0 (see
 [spec/README.md](../README.md))*
 
 ## The grammar, by reference
 
-The productions of Rhoform syntax 0.1 and 0.2 are defined by
+The productions of Rhoform syntax 0.1, 0.2 and 0.3 are defined by
 [`lang/grammar/rhoform.ebnf`](../../lang/grammar/rhoform.ebnf), generated
 from the single source of truth and held to it by `make grammar`. That
 artifact is normative; this section states only what the grammar cannot
@@ -17,10 +17,11 @@ ambiguity rather than resolve it silently (E2) — the conformance suite's
 `parse/reject` cases include the disambiguation decisions with the
 reading each MUST get.
 
-One grammar serves both syntax versions. [Syntax 0.2
-additions](#syntax-02-additions) below describes what 0.2 adds, and
-[01 — Lexical structure](01-lexical-structure.md#syntax-versions) how a
-file declaring 0.1 is held to 0.1.
+One grammar serves every syntax version. [Syntax 0.2
+additions](#syntax-02-additions) and [Syntax 0.3
+additions](#syntax-03-additions-unfrozen) below describe what each
+adds, and [01 — Lexical structure](01-lexical-structure.md#syntax-versions)
+how a file is held to the version it declares.
 
 ## Names
 
@@ -28,9 +29,11 @@ Two identifier roles exist, and the distinction is frozen (the second
 recorded asymmetry of v0.1, carried into 0.2 unchanged):
 
 - A name being **bound** — a module, port, net, table row, or instance
-  name, and since 0.2 a component, an imported name, a declared
-  parameter, or a loop variable — MUST NOT be a keyword or a reserved
-  word.
+  name, since 0.2 a component, an imported name, a declared parameter,
+  or a loop variable, and since 0.3 a component's side — MUST NOT be a
+  keyword or a reserved word. In a file declaring 0.3, it MUST NOT be a
+  word [reserved from 0.3](#reserved-from-03) either (`RHO1019`); nor
+  may a reference, or the first name of a 0.3 statement's target.
 - A **parameter reference** (0.2) — a bare name used as a value, in an
   `if` condition, as a `range` bound, as an array size, or as the base
   of an index — MUST NOT be one either. A reference can only name a
@@ -41,7 +44,9 @@ recorded asymmetry of v0.1, carried into 0.2 unchanged):
   names (the name in `name = value` inside an argument list), column
   names, and the component after a dot — MAY be a keyword.
   `pin net passive` is legal; so is `r1.net` as an endpoint, and since
-  0.2 `pin in passive` and `r1.in`.
+  0.2 `pin in passive` and `r1.in`. A pin a 0.3 component rule or side
+  names MAY be any keyword but `from` and `to`, the two words a rule
+  spells itself, so `regulate out from in` names a pin `in`.
 
 One consequence, stated so it stays a decision: a chain statement's HEAD
 is a binding-checked position while endpoints after `~` are not, so
@@ -74,7 +79,7 @@ seven of them productions, and they are keywords now.
 
 ## Closed vocabularies
 
-Six word sets are checked by list AFTER parsing, never as keywords —
+Seven word sets are checked by list AFTER parsing, never as keywords —
 `input` and `output` are pin roles, and a grammar that reserved them
 would reject `input = new ...`, a legal design. A conforming
 implementation MUST accept these words as ordinary names in name
@@ -96,7 +101,20 @@ gate.
 
 ### net_attribute (T5)
 
-`ground_domain` `voltage_domain`
+`ground_domain` `ground_kind` `voltage_domain`
+
+The third is syntax 0.3's: in a file declaring an older version it is
+RHO1016, and its value is a string holding a word of the next list.
+
+### ground_kind (GA-2)
+
+The kind a net's ground_kind attribute states (syntax 0.3), checked as
+the string's content, as in ground_kind = "power". A string outside the
+list is RHO1009 with this vocabulary named and, when one word is
+clearly closest, a fix-it that writes it in quotes. What a kind means, and how
+the kinds of joined nets meet, is the check stage's (GA-2).
+
+`chassis` `earth` `power` `signal` `unspecified`
 
 ### measurement_kind (V2)
 
@@ -263,6 +281,147 @@ fix-it that rewrites the pragma, as
 [01 — Lexical structure](01-lexical-structure.md#syntax-versions)
 states. The grammar itself accepts them under either pragma.
 
+## Syntax 0.3 additions (unfrozen)
+
+Syntax 0.3 is unfrozen ([01 — Lexical
+structure](01-lexical-structure.md#syntax-versions)): the constructs
+below may still change until M2 exits. It adds them and nothing else; a
+file declaring 0.1 or 0.2 keeps its parse tree, its diagnostics and its
+meaning. They state source facts: the electrical structure of a
+component, a supply, a load, a waiver, a severity, a ground's kind. What
+each fact MEANS to a check is the check stage's (spec 05); elaboration
+resolves what a statement names and keeps it ([04 —
+Elaboration](04-elaboration.md#syntax-03-source-facts-unfrozen)).
+
+### Soft keywords (0.3)
+
+The words that open 0.3's statements. None was reserved in 0.2, so none
+can be a keyword without breaking a 0.2 file that binds it (E1): each is
+recognized as its word only where its statement may start, a 0.2 file
+binding one parses to the tree it always had, and from 0.3 on the words
+of [Reserved from 0.3](#reserved-from-03) are refused as names. This
+list is reconciled against the grammar source of truth by the
+conformance gate.
+
+`draw` `rule` `side` `supply` `waive` `warning`
+
+### Rule words (0.3)
+
+The words a component rule opens with, recognized only where a component
+body statement starts. A misspelled one is an unexpected token whose
+expected list names "a rule word", not a did-you-mean: a component body
+held only pin statements through 0.2, and a name-shaped rule would turn
+a misspelled pin keyword in a 0.2 file into a rule. This list is reconciled
+against the grammar source of truth by the conformance gate; only the
+check stage's owner adds to it.
+
+`bias` `bridge` `conduct` `connector` `diode` `feedback` `ground` `hiz`
+`open` `pass` `rail` `ref` `regulate` `source` `switch` `tie`
+
+### Reserved from 0.3
+
+The words a file declaring 0.3 or later may not use as a name
+(RHO1019): the four module-statement soft keywords, and variant,
+reserved for assembly variants (E4) before any construct uses it, so
+that adding one later breaks nothing. A file declaring 0.2 binds them
+freely. This list is reconciled against the grammar source of truth by
+the conformance gate.
+
+`draw` `rule` `supply` `variant` `waive`
+
+### Component rules and sides
+
+```text
+component Ldo(vout: voltage = 3.3V):
+    pin gnd passive 3
+    pin in power_in 1
+    pin out power_out 2
+    ground gnd
+    regulate out from in = vout
+
+component Opto:
+    pin a passive 1
+    pin c passive 3
+    pin e passive 4
+    pin k passive 2
+    side detector: c e
+    side emitter: a k
+```
+
+A component body may hold, beside its `pin` statements, rules and
+sides. A rule is a rule word, the pins it covers, optionally `from` or
+`to` and one more pin, and optionally `=` and a value, which may be a
+parameter reference. A side is `side`, its name, a colon and the pins on
+it. The grammar takes them in any order; the canonical form puts the
+pins first ([07 — Formatting](07-formatting.md)).
+
+### Quoted designators
+
+```text
+pin gnd passive "03"
+```
+
+A pin's designator may be a quoted string of printable characters with
+no space, for the designators a number or a name cannot spell (a
+leading zero). From 0.3 on, designators that run together with no
+separator, `01`, are the error `RHO1018`, whose two needs-review fix-its
+separate them (`0 1`) or quote them (`"01"`); 0.1 and 0.2 keep reading
+`01` as `0` and `1` (AMB-139).
+
+### Rule statements
+
+```text
+rule isos[1] open a k
+```
+
+`rule`, a target naming a component instance of the module, and a rule
+body as a component's: the instance takes the module's rules in place of
+its definition's, and keeps its definition's sides. It is for a part
+used as something its definition does not say — a diode as a power
+path, a FET as a load switch.
+
+### Supply and draw
+
+```text
+supply VIN within 4.5V to 5.5V
+supply ldo.out at most 300mA
+draw ldo.in at most 5mA
+```
+
+`supply` or `draw`, a target, and a bound, the bound of an assertion. A
+target is a name, optionally indexed, and optionally a pin after a dot:
+here a net label or an instance pin. A supply's bound is a voltage window
+or a current capability, a draw's a current into its target; which
+dimension a target may take is the check stage's. There is no `expect`
+statement: a containment expectation is a static assertion.
+
+### Waivers
+
+```text
+waive RHO3001 isos[0] "a spare footprint; nothing drives it yet"
+```
+
+`waive`, the code it waives, a target — an instance, an array member, a
+net label or an assertion of the module — and a justification string,
+which is mandatory. Which codes are waivable, and what a waiver does, is
+the check stage's (T6).
+
+### Assertion severity
+
+```text
+assert ripple_ok dynamic ripple(VOUT) at most 50mV warning
+```
+
+An assertion may end with `warning`: a failing assertion then warns
+rather than gates. Without it, an assertion is an error, as it always
+was. An assertion that cannot be measured gates either way (V1).
+
+### Under an older pragma
+
+Every construct in this section is refused in a file whose pragma
+declares 0.1 or 0.2, with one `RHO1016` per file whose fix-it rewrites
+the pragma to 0.3, and the `ground_kind` attribute with them.
+
 ## What the grammar deliberately does not check
 
 The parse level accepts some sentences the language rejects later, and
@@ -285,3 +444,8 @@ an implementation MUST NOT tighten these at parse level:
   statements a loop body may hold, which conditions, sizes, indexes and
   ranges are legal, and how far a design may expand are elaboration's
   ([04 — Elaboration](04-elaboration.md)).
+- **What a 0.3 statement names, and what its rule means.** Whether a
+  target names something its module has, whether a fact is stated twice,
+  and whether a rule's pins are its component's are elaboration's; how
+  many pins a rule word takes, which targets and dimensions a statement
+  accepts, and which codes may be waived are the check stage's.

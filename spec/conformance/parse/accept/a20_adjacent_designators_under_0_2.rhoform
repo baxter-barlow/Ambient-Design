@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.2
+
+# AMB-139: through syntax 0.2 a designator run with no separator, `01`,
+# reads as the designators `0` and `1`. Syntax 0.3 refuses the run
+# (RHO1018, parse/reject r31); this file keeps its 0.2 reading.
+component Header:
+    pin a passive 01
+    pin b passive 2

@@ -145,9 +145,13 @@ class VersionsTest(unittest.TestCase):
             "_sot", ROOT / "lang" / "grammar" / "rhoform_syntax.py")
         sot = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sot)
+        # Only the frozen ones (decision OD8): an unfrozen version parses,
+        # but no manifest's range may admit it while it can still change.
         self.assertEqual(language_versions(),
-                         tuple(v + ".0" for v in sot.SYNTAX_VERSIONS))
+                         tuple(v + ".0" for v in sot.SYNTAX_VERSIONS
+                               if v not in sot.UNFROZEN_SYNTAX_VERSIONS))
         self.assertEqual(language_versions(), ("0.1.0", "0.2.0"))
+        self.assertEqual(sot.UNFROZEN_SYNTAX_VERSIONS, ("0.3",))
 
 
 class NamesTest(unittest.TestCase):

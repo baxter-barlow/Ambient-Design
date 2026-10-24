@@ -1,0 +1,43 @@
+#pragma rhoform-syntax 0.3
+
+# Every construct syntax 0.3 adds, once: component rules and sides, a
+# quoted designator, the `rule`, `supply`, `draw` and `waive` module
+# statements, an assertion's trailing `warning`, and the `ground_kind` net
+# attribute. 0.3 is unfrozen (spec 01): this case moves with it.
+component Ldo(vout: voltage = 3.3V):
+    pin in power_in 1
+    pin out power_out 2
+    pin gnd passive "03"
+    regulate out from in = vout
+    ground gnd
+    side primary: in gnd
+
+component Opto:
+    pin a passive 1
+    pin k passive 2
+    pin c passive 3
+    pin e passive 4
+    side led: a k
+    side transistor: c e
+
+module Supply:
+    port vin power_in
+    port vout power_out
+    port gnd passive
+    ldo = new Ldo(vout = 3.3V)
+    isos = new Opto[2]
+    rule ldo regulate out from in = 3.3V
+    rule isos[1] open a k
+    ldo.in ~ vin
+    ldo.out ~ vout
+    net GND(ground_kind = "power"):
+        gnd
+        ldo.gnd
+    supply vin within 4.5V to 5.5V
+    supply ldo.out at most 300mA
+    draw ldo.in at most 5mA
+    supply GND within 0V to 0V
+    assert vout_ok static operating_point(vout) within 3.2V to 3.4V
+    assert vout_ripple dynamic ripple(vout) at most 50mV warning
+    waive RHO3001 isos[0] "the opto is a spare; nothing drives it yet"
+    waive RHO3551 vout_ok "measured on the bench, see the lab notes"

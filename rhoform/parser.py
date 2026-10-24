@@ -51,16 +51,20 @@ control character, and non-ASCII byte with byte spans
 (RHO1001/1003/1014/1002) and, when any fire, skips the grammar parse —
 those defects are pre-syntactic, and diagnosing the structure of text
 the author did not legally write would blame lines for bytes; (2) the
-pragma pre-check; (3) the restart parse;
-(4) post-parse file-local checks the prototype also made at parse level:
+pragma pre-check; (3) the restart parse, whose expected-token lists name
+no token newer than the file's pragma; (4) the soft-keyword heads of a
+0.2-style name are retyped to the FREE_NAME they always were; (5)
+post-parse file-local checks the prototype also made at parse level:
 closed-vocabulary words (RHO1009) and quantity-literal semantics (RHO1010,
-via rhoform.quantities); (5) the syntax-version gate: one grammar parses
-0.1 and 0.2, and a 0.2 construct under a 0.1 pragma is ONE RHO1016 per
-file whose fix-it rewrites the pragma. The table-row arity check is
+via rhoform.quantities), and since 0.3 designators run together
+(RHO1018) and reserved words used as names (RHO1019); (6) the
+syntax-version gate: one grammar parses every version, and a construct
+newer than the pragma is ONE RHO1016 per file whose fix-it rewrites the
+pragma to the newest version the file needs. The table-row arity check is
 deliberately NOT here — the grammar's own docstring assigns it to the
-checker — and neither is anything about what the 0.2 constructs MEAN
-(parameter references resolving, range bounds, instances inside `for`):
-that is the elaborator's.
+checker — and neither is anything about what the 0.2 and 0.3 constructs
+MEAN (parameter references resolving, range bounds, instances inside
+`for`, what an annotation's target names): that is the elaborator's.
 
 Every diagnostic goes through rhoform.diagnostics; there is no second
 reporting path.
@@ -120,11 +124,14 @@ _VOCAB_SITES = {
     "for_stmt": ("loop_iterator", 0),
 }
 
-# Syntax 0.2 constructs, as the tree shows them, with the words the
-# needs-newer-pragma diagnostic names them by. A `value` whose child is a
-# FREE_NAME (a parameter reference) is the one construct with no rule of its
-# own; _v0_2_extents recognizes it directly.
-_V0_2_CONSTRUCTS = {
+# The words the needs-newer-pragma diagnostic names each construct of the
+# source of truth's CONSTRUCT_SINCE by (a test holds the two tables to one
+# key set). An annotation is named by its own word, `supply` or `draw`. The
+# two constructs with no key there are recognized directly by
+# _newer_constructs: a `value` whose child is a FREE_NAME (a parameter
+# reference, 0.2) and a vocabulary word of WORDS_SINCE (a `ground_kind`
+# attribute, 0.3).
+_CONSTRUCT_PROSE = {
     "import_stmt": "an `import` statement",
     "component_def": "a `component` definition",
     "params": "a parameter list",
@@ -132,9 +139,27 @@ _V0_2_CONSTRUCTS = {
     "for_stmt": "a `for` loop",
     "array_size": "an array size",
     "index": "an index",
+    "annotation": "a `{word}` statement",
+    "waiver": "a `waive` statement",
+    "rule_override": "a `rule` statement",
+    "rule_decl": "a component rule",
+    "side_decl": "a `side` declaration",
+    "QUOTED_DESIGNATOR": "a quoted designator",
+    "WARNING": "a `warning` severity",
 }
-_PARAMETER_REFERENCE = "a parameter reference"
-_V0_2 = "0.2"
+_PARAMETER_REFERENCE = ("a parameter reference", "0.2")
+
+# The soft keywords a statement's head may be while it is the name it was
+# before 0.3 (`supply = new ...`): the parser retypes them to FREE_NAME, so
+# such a 0.2 file keeps its 0.2 tree. The SoT's SOFT_KEYWORDS comment says
+# why they are terminals at all.
+_SOFT_HEADS = frozenset({"SUPPLY", "DRAW", "WAIVE", "RULE"})
+_HEAD_POSITIONS = frozenset({"instance_decl", "chain_head"})
+
+# Where a FREE_NAME names a component's pin rather than a bound name: a
+# rule's pins and a side's. Pin names are not bound names (spec 02, Names),
+# so a word reserved from 0.3 on may still be one.
+_PIN_REFERENCES = frozenset({"rule_body", "side_decl"})
 
 _QUANTITY_TOKEN_TYPES = frozenset(
     {"QUANTITY", "QUANTITY_INTERVAL", "QUANTITY_PLAIN"}
@@ -159,6 +184,11 @@ _TERMINAL_PROSE = {
     # backtick-initial description for the token itself, which made a
     # stray `-` read "unexpected `+` or `-`".
     "INDEX_OP": "an index offset operator",
+    # Syntax 0.3. The soft keywords need no entry: each is its word with a
+    # keyword boundary, so it is described like a keyword.
+    "RULE_WORD": "a rule word",
+    "DIAGNOSTIC_CODE": "a diagnostic code",
+    "QUOTED_DESIGNATOR": "a quoted designator",
     "PRAGMA": "the syntax-version pragma",
     "_NEWLINE": "end of line",
     "_INDENT": "indentation",
@@ -197,17 +227,34 @@ def _load_sot():
     return module
 
 
-_SYNTAX_VERSIONS: tuple[str, ...] | None = None
+_SYNTAX_VERSIONS: tuple[tuple[str, ...], tuple[str, ...]] | None = None
+
+
+def _versions() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    global _SYNTAX_VERSIONS
+    if _SYNTAX_VERSIONS is None:
+        sot = _load_sot()
+        _SYNTAX_VERSIONS = (tuple(sot.SYNTAX_VERSIONS),
+                            tuple(sot.FROZEN_SYNTAX_VERSIONS))
+    return _SYNTAX_VERSIONS
 
 
 def syntax_versions() -> tuple[str, ...]:
-    """The syntax versions this toolchain implements, as the grammar
-    source of truth lists them (`0.1`, `0.2`). Needs no lark: the package
+    """The syntax versions this toolchain parses, as the grammar source of
+    truth lists them (`0.1`, `0.2`, `0.3`). Needs no lark: the package
     layer checks manifests against them before anything is parsed."""
-    global _SYNTAX_VERSIONS
-    if _SYNTAX_VERSIONS is None:
-        _SYNTAX_VERSIONS = tuple(_load_sot().SYNTAX_VERSIONS)
-    return _SYNTAX_VERSIONS
+    return _versions()[0]
+
+
+def frozen_syntax_versions() -> tuple[str, ...]:
+    """The syntax versions that are frozen: every one but those the source
+    of truth marks unfrozen (decision OD8), which may still change shape and
+    so are not announced to a manifest."""
+    return _versions()[1]
+
+
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
 
 
 def normalize(source: str) -> str:
@@ -229,6 +276,11 @@ class _Loaded:
     keyword_of: dict
     vocabularies: dict
     quantity_re: object  # the SoT's full five-form literal pattern
+    since: dict          # terminal name -> the version that introduced it
+    construct_since: dict
+    words_since: dict
+    reserved_since: dict
+    pin_names: frozenset  # what a rule's pin position takes, by terminal
 
 
 _CACHE: _Loaded | None = None
@@ -257,8 +309,10 @@ def _load() -> _Loaded:
         propagate_positions=True,
     )
 
+    sot = _load_sot()
     pragma_pattern = None
     keyword_of = {}
+    since = {}
     for terminal in parser.terminals:
         pattern = terminal.pattern
         value = getattr(pattern, "value", "")
@@ -271,8 +325,16 @@ def _load() -> _Loaded:
             match = _KEYWORD_PATTERN.match(value)
             if match:
                 keyword_of[terminal.name] = match.group(1)
+        # Which version introduced the token, by its word, its spelling or
+        # its name (the SoT keys each kind its own way): what the expected
+        # sets are filtered by.
+        version = (sot.KEYWORDS_SINCE.get(keyword_of.get(terminal.name))
+                   or (sot.TERMINALS_SINCE.get(value)
+                       if pattern.type == "str" else None)
+                   or sot.TERMINALS_SINCE.get(terminal.name))
+        if version is not None:
+            since[terminal.name] = version
 
-    sot = _load_sot()
     pragma_re = re.compile(pragma_pattern or "(?!)")
     # Drift guard, both directions: every version the source of truth
     # lists must be a header the artifact accepts, and the artifact may
@@ -294,6 +356,14 @@ def _load() -> _Loaded:
         keyword_of=keyword_of,
         vocabularies=dict(sot.CLOSED_VOCABULARIES),
         quantity_re=re.compile(sot.LEXER_QUANTITY),
+        since=since,
+        construct_since=dict(sot.CONSTRUCT_SINCE),
+        words_since={vocabulary: dict(words) for vocabulary, words
+                     in sot.WORDS_SINCE.items()},
+        reserved_since=dict(sot.RESERVED_SINCE),
+        pin_names=frozenset(
+            {"FREE_NAME"} | {name for name, word in keyword_of.items()
+                             if word in sot.PIN_KEYWORDS}),
     )
     return _CACHE
 
@@ -393,11 +463,31 @@ def _describe_token(token, keyword_of: dict) -> str:
     return f"`{excerpt}` ({kind})"
 
 
-def _expected_list(names, keyword_of: dict) -> str:
-    described = sorted(
-        {_describe_terminal(name, keyword_of) for name in names}
-    )
+def _expected_list(names, keyword_of: dict, pin_names=frozenset()) -> str:
+    names = set(names)
+    described = set()
+    if pin_names and pin_names <= names:
+        # A component rule's pin position (0.3) takes a name or any keyword
+        # but `from` and `to`, which is one thing to ask for, not twenty-six.
+        names -= pin_names
+        described.add("a pin name")
+    described |= {_describe_terminal(name, keyword_of) for name in names}
+    described = sorted(described)
     return ", ".join(described) if described else "nothing (internal state)"
+
+
+def _for_version(names, loaded: "_Loaded", version: str) -> set:
+    """The expected terminals a file declaring `version` may be told about
+    (AMB-146 #2): one grammar serves every version, so the parser's own set
+    can name a token only a newer version has — `import` to a 0.1 file,
+    `supply` to a 0.2 one — and following that hint draws RHO1016. A token
+    newer than the pragma is dropped. When nothing would be left the parse
+    stands inside a newer construct already, which only its own tokens can
+    continue, and the set is kept whole rather than claim nothing fits."""
+    key = _version_key(version)
+    kept = {name for name in names
+            if _version_key(loaded.since.get(name, "0.1")) <= key}
+    return kept or set(names)
 
 
 def _prescan(file: str, data: bytes, sink: Diagnostics) -> bool:
@@ -600,9 +690,11 @@ def _blank_block(text: str, header_start: int, header_indent: int) -> str:
 
 
 def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
-                   loaded: _Loaded, sink: Diagnostics):
+                   loaded: _Loaded, sink: Diagnostics, version: str):
     """Parse, reporting and blanking one defect per round. Returns the
-    final tree, or None when recovery was abandoned."""
+    final tree, or None when recovery was abandoned. `version` is the
+    syntax version the file is checked as, which bounds what an expected
+    set may name."""
     from lark.exceptions import UnexpectedCharacters, UnexpectedToken
     from lark.indenter import DedentError
 
@@ -640,6 +732,12 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
     # errors elsewhere, must still be reported, so "we emptied it" is
     # tracked precisely rather than inferred from any-blanking-happened.
     suspect_headers: set[int] = set()
+    # Lines whose unterminated string was reported (RHO1004) and blanked
+    # to their end. What is left of such a line is the string's shadow: the
+    # statement around it can no longer be complete, and charging it with
+    # the token it now lacks asked the author for "a string", the very
+    # thing the line was writing (AMB-137 #3).
+    string_lines: set[int] = set()
     baseline = len(sink)
 
     def consume(start: int, end: int, *, destroys_statement: bool) -> None:
@@ -769,6 +867,7 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 # only the quote would re-parse its words as junk names
                 # and charge the author once per word.
                 sink.add("RHO1004", {}, primary=span_at(pos, line_end))
+                string_lines.add(line_start)
                 consume(pos, line_end, destroys_statement=False)
             elif re.match(r"#pragma(?![A-Za-z0-9_])", parse_text[pos:]):
                 # A `#pragma` the lexer refuses is mid-line (the header
@@ -830,7 +929,9 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
         except UnexpectedToken as exc:
             token = exc.token
             expected_names = set(exc.accepts or exc.expected)
-            expected = _expected_list(expected_names, loaded.keyword_of)
+            expected = _expected_list(
+                _for_version(expected_names, loaded, version),
+                loaded.keyword_of, loaded.pin_names)
             # Layout tokens borrow their position from the newline run
             # that produced them, whose START sits at the end of the
             # PREVIOUS line; their END is the first content column of the
@@ -845,6 +946,17 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
                 pos = token.end_pos if token.end_pos is not None else 0
             else:
                 pos = token.start_pos if token.start_pos is not None else 0
+
+            start, end = _line_bounds(parse_text,
+                                      min(pos, len(parse_text) - 1))
+            if token.type != "$END" and start in string_lines \
+                    and parse_text[start:end].strip():
+                # What an unterminated string left of its line: silence,
+                # and the line goes, with its block, as any broken
+                # statement's does. Once the line is empty a layout token
+                # that lands on it is the next rule's to judge.
+                consume(start, end, destroys_statement=True)
+                continue
 
             if "_INDENT" in expected_names:
                 # The parser wants a block that is not there. Whatever
@@ -895,14 +1007,24 @@ def _restart_parse(file: str, data: bytes, parse_text: str, shift: int,
 
             pos = min(pos, len(parse_text) - 1)
             start, end = _line_bounds(parse_text, pos)
+            if token.type == "_INDENT":
+                # Unexpected indentation names the indentation: the spaces
+                # from the line's start to its first content column, where
+                # `pos` stays for the orphan search. An insertion point
+                # here (both ends at end_pos) named none of the bytes it
+                # complains about (AMB-135 #1). An unexpected _DEDENT keeps
+                # its insertion point, the place a block was owed.
+                primary = span_at(start, pos)
+            else:
+                primary = span_at(
+                    pos,
+                    token.end_pos if token.end_pos is not None else pos + 1,
+                )
             sink.add(
                 "RHO1006",
                 {"found": _describe_token(token, loaded.keyword_of),
                  "expected": expected},
-                primary=span_at(
-                    pos,
-                    token.end_pos if token.end_pos is not None else pos + 1,
-                ),
+                primary=primary,
             )
             # The blanked statement's subordinate block goes with it,
             # UNCONDITIONALLY: a reactive rule that waited for the block's
@@ -1206,13 +1328,38 @@ def parse(source: str, file: str = "design.rhoform",
 
     parse_text, shift, header = _pragma_precheck(file, source, data, loaded,
                                                  sink)
-    tree = _restart_parse(file, data, parse_text, shift, loaded, sink)
+    # A file with no legal header is parsed as the current version, which
+    # is what RHO1005's fix-it writes.
+    version = loaded.current_version if header is None else header.version
+    tree = _restart_parse(file, data, parse_text, shift, loaded, sink,
+                          version)
 
     if tree is not None:
-        _postparse(file, data, shift, tree, loaded, sink)
+        _retype_soft_heads(tree)
+        _postparse(file, data, shift, tree, loaded, sink, version)
         _version_gate(file, data, shift, tree, loaded, sink, header)
     return ParseResult(tree=tree, diagnostics=sink, file=file, data=data,
                        shift=shift)
+
+
+def _retype_soft_heads(tree) -> None:
+    """A soft keyword that heads an instance declaration or a chain is the
+    name it was before 0.3: give it back the FREE_NAME type, so a 0.2 file
+    that names an instance `supply` has the tree it always had. Only the
+    lexer told the two apart (the SoT's SOFT_KEYWORDS says why)."""
+    from lark import Token
+
+    work = [tree]
+    while work:
+        node = work.pop()
+        children = getattr(node, "children", None)
+        if children is None:
+            continue
+        if node.data in _HEAD_POSITIONS and children \
+                and getattr(children[0], "type", None) in _SOFT_HEADS:
+            children[0] = Token.new_borrow_pos("FREE_NAME", str(children[0]),
+                                               children[0])
+        work.extend(child for child in children if hasattr(child, "data"))
 
 
 def _token_span(file: str, data: bytes, shift: int, token) -> Span:
@@ -1224,8 +1371,9 @@ def _token_span(file: str, data: bytes, shift: int, token) -> Span:
 
 
 def _postparse(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
-               sink: Diagnostics) -> None:
-    """File-local checks past the grammar: vocabularies and quantities."""
+               sink: Diagnostics, version: str) -> None:
+    """File-local checks past the grammar: vocabularies and quantities,
+    and since 0.3 designator runs and reserved words."""
     for node in tree.iter_subtrees():
         site = _VOCAB_SITES.get(node.data)
         if site is not None:
@@ -1243,6 +1391,15 @@ def _postparse(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
                         primary=span,
                         fixits=_closest_fixit(str(word), allowed, span),
                     )
+        if node.data == "net_attribute":
+            _ground_kind_value(file, data, shift, node, loaded, sink)
+    # A designator run needs a separator from the version that can spell
+    # its other reading, the quoted designator (AMB-139: 0.1 and 0.2 keep
+    # the old lexing).
+    if _version_key(version) >= _version_key(
+            loaded.construct_since["QUOTED_DESIGNATOR"]):
+        _designator_runs(file, data, shift, tree, sink)
+    _reserved_names(file, data, shift, tree, loaded, sink, version)
     # Tree.scan_values recurses once per level, and if/for nest without
     # bound; this is the same left-to-right walk on an explicit stack.
     work = [tree]
@@ -1262,10 +1419,6 @@ def _postparse(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
                 {"literal": str(token), "reason": exc.reason},
                 primary=_token_span(file, data, shift, token),
             )
-
-
-def _version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in version.split("."))
 
 
 def _comment_start(line: str):
@@ -1295,19 +1448,42 @@ def _content_end(data: bytes, start: int, end: int) -> int:
         text = text[:line_start + cut]
 
 
-def _v0_2_extents(data: bytes, shift: int,
-                  tree) -> list[tuple[int, int, str]]:
-    """(start, end, construct) for each syntax 0.2 construct in `tree`, as
-    author byte offsets, ordered by start, then longest first."""
+def _newer_constructs(data: bytes, shift: int, tree,
+                      loaded: _Loaded) -> list[tuple[int, int, str, str]]:
+    """(start, end, construct, version) for each construct of `tree` that
+    some version after 0.1 introduced, as author byte offsets, ordered by
+    start, then longest first. A construct is a node whose rule, or a token
+    whose terminal, the SoT's CONSTRUCT_SINCE names, plus the two it cannot
+    name: a parameter reference and a vocabulary word of WORDS_SINCE."""
     found = []
     work = [tree]
     while work:
         node = work.pop()
-        construct = _V0_2_CONSTRUCTS.get(node.data)
-        if construct is None and node.data == "value" and any(
+        if not hasattr(node, "data"):
+            version = loaded.construct_since.get(node.type)
+            if version is not None:
+                start = max(0, node.start_pos - shift)
+                found.append((start, max(start, node.end_pos - shift),
+                              _CONSTRUCT_PROSE[node.type], version))
+            continue
+        construct = version = None
+        if node.data in loaded.construct_since:
+            version = loaded.construct_since[node.data]
+            construct = _CONSTRUCT_PROSE[node.data]
+            if "{word}" in construct:  # an annotation, by its own word
+                construct = construct.format(word=node.children[0])
+        elif node.data == "value" and any(
                 getattr(child, "type", None) == "FREE_NAME"
                 for child in node.children):
-            construct = _PARAMETER_REFERENCE
+            construct, version = _PARAMETER_REFERENCE
+        elif node.data in _VOCAB_SITES:
+            vocabulary, index = _VOCAB_SITES[node.data]
+            names = [child for child in node.children
+                     if getattr(child, "type", None) == "NAME"]
+            word = str(names[index]) if index < len(names) else None
+            version = loaded.words_since.get(vocabulary, {}).get(word)
+            if version is not None:
+                construct = f"a `{word}` attribute"
         if construct is not None and not node.meta.empty:
             # The node's meta counts the anonymous `(` `)` `[` `]` its
             # tokens do not (an empty parameter list has NO tokens in the
@@ -1318,48 +1494,151 @@ def _v0_2_extents(data: bytes, shift: int,
             start = max(0, node.meta.start_pos - shift)
             end = _content_end(data, start,
                                max(start, node.meta.end_pos - shift))
-            found.append((start, end, construct))
-        work.extend(child for child in node.children
-                    if hasattr(child, "data"))
+            found.append((start, end, construct, version))
+        work.extend(node.children)
     found.sort(key=lambda item: (item[0], -item[1], item[2]))
     return found
 
 
 def _version_gate(file: str, data: bytes, shift: int, tree, loaded: _Loaded,
                   sink: Diagnostics, header: "_Header | None") -> None:
-    """A 0.2 construct under a 0.1 pragma: ONE diagnostic per file.
+    """Constructs newer than the pragma: ONE diagnostic per file.
 
     One grammar parses every version (decision S-2), so this is where 0.1
-    stays 0.1. One diagnostic, not one per construct, because there is one
-    defect — the header — and one repair: its fix-it rewrites the version,
-    which is machine-applicable because 0.2 only adds, so no 0.1 file means
-    anything different under it. The primary span is the FIRST offending
-    construct, so the author sees why; `count` says how many more there
-    are, so nobody mistakes the first for the only one. A file with no
-    legal header (`header` None) was already given RHO1005 and is parsed as
-    the current version, so it draws nothing here.
+    stays 0.1 and 0.2 stays 0.2. One diagnostic, not one per construct,
+    because there is one defect — the header — and one repair: its fix-it
+    rewrites the version to the newest one any construct in the file needs
+    (`required`), which is machine-applicable because each version only
+    adds, so no older file means anything different under it. The primary
+    span is the FIRST construct that needs `required`, so the author sees
+    why and the message is true of it; `count` says how many constructs
+    the pragma refuses, so nobody mistakes the first for the only one. A
+    file with no legal header (`header` None) was already given RHO1005
+    and is parsed as the current version, so it draws nothing here.
     """
-    if header is None or _version_key(header.version) >= _version_key(_V0_2):
+    if header is None:
         return
-    found = _v0_2_extents(data, shift, tree)
+    declared = _version_key(header.version)
+    found = [item for item in _newer_constructs(data, shift, tree, loaded)
+             if _version_key(item[3]) > declared]
     if not found:
         return
-    start, end, construct = found[0]
+    required = max((item[3] for item in found), key=_version_key)
+    start, end, construct, _ = next(item for item in found
+                                    if item[3] == required)
     primary = span_from_bytes(file, data, start, end)
     version_span = span_from_bytes(file, data, header.version_start,
                                    header.version_end)
     sink.add(
         "RHO1016",
-        {"construct": construct, "required": _V0_2,
+        {"construct": construct, "required": required,
          "declared": header.version, "count": len(found)},
         primary=primary,
         fixits=(FixIt(
-            f"declare syntax {_V0_2}: `{loaded.pragma_prefix}{_V0_2}` "
+            f"declare syntax {required}: `{loaded.pragma_prefix}{required}` "
             f"(it only adds to {header.version})",
             "machine-applicable",
-            (Edit(version_span, _V0_2),),
+            (Edit(version_span, required),),
         ),),
     )
+
+
+def _ground_kind_value(file: str, data: bytes, shift: int, node,
+                       loaded: _Loaded, sink: Diagnostics) -> None:
+    """A `ground_kind` attribute's string names one of the ground kinds
+    (RHO1009, vocabulary `ground_kind`): the word inside the quotes is
+    checked, and a did-you-mean fix-it rewrites the whole string."""
+    names = [child for child in node.children
+             if getattr(child, "type", None) == "NAME"]
+    strings = [child for child in node.children
+               if getattr(child, "type", None) == "STRING"]
+    if not names or str(names[0]) != "ground_kind" or not strings:
+        return
+    word = str(strings[0])[1:-1]
+    allowed = loaded.vocabularies["ground_kind"]
+    if word in allowed:
+        return
+    span = _token_span(file, data, shift, strings[0])
+    fixits = tuple(
+        FixIt(fixit.message, fixit.applicability,
+              tuple(Edit(edit.span, f'"{edit.replacement}"')
+                    for edit in fixit.edits))
+        for fixit in _closest_fixit(word, allowed, span))
+    sink.add("RHO1009", {"vocabulary": "ground_kind", "word": word},
+             primary=span, fixits=fixits)
+
+
+def _designator_runs(file: str, data: bytes, shift: int, tree,
+                     sink: Diagnostics) -> None:
+    """Designators that touch, under a pragma that requires a separator
+    between them (AMB-146 #1): `01` lexes as `0` then `1`, and `1A` as `1`
+    then `A`, which 0.1 and 0.2 accept as two designators. One RHO1018 per
+    run, with both readings as needs-review fix-its: the run split by
+    spaces, and the run quoted as one designator (unless it holds a quote
+    already, which no quoted designator can)."""
+    for node in tree.iter_subtrees():
+        if node.data != "pin_decl":
+            continue
+        tokens = [designator.children[0]
+                  for designator in node.children
+                  if getattr(designator, "data", None) == "designator"]
+        run = tokens[:1]
+        for token in tokens[1:] + [None]:
+            if token is not None and run and \
+                    run[-1].end_pos == token.start_pos:
+                run.append(token)
+                continue
+            if len(run) > 1:
+                start = max(0, run[0].start_pos - shift)
+                end = max(start, run[-1].end_pos - shift)
+                span = span_from_bytes(file, data, start, end)
+                text = "".join(str(part) for part in run)
+                fixits = [FixIt(
+                    f"read it as {len(run)} designators",
+                    "needs-review",
+                    (Edit(span, " ".join(str(part) for part in run)),),
+                )]
+                if '"' not in text:
+                    fixits.append(FixIt(
+                        f"read it as the one designator `{text}`",
+                        "needs-review",
+                        (Edit(span, f'"{text}"'),),
+                    ))
+                sink.add("RHO1018", {"text": text}, primary=span,
+                         fixits=tuple(fixits))
+            run = [token] if token is not None else []
+
+
+def _reserved_names(file: str, data: bytes, shift: int, tree,
+                    loaded: _Loaded, sink: Diagnostics,
+                    version: str) -> None:
+    """From the version that reserves it on, a word of RESERVED_SINCE is no
+    name (RHO1019): not a bound name, and not a reference to one, which
+    could never resolve. Earlier versions bind it freely, which is what
+    makes reserving it additive. A pin a rule or a side names is not a
+    bound name (spec 02, Names), so it is not checked."""
+    key = _version_key(version)
+    reserved = {word: since for word, since in loaded.reserved_since.items()
+                if _version_key(since) <= key}
+    if not reserved:
+        return
+    work = [tree]
+    while work:
+        node = work.pop()
+        children = getattr(node, "children", None)
+        if children is None:
+            continue
+        names = [child for child in children
+                 if getattr(child, "type", None) == "FREE_NAME"]
+        if node.data in _PIN_REFERENCES:
+            # A side's own name is bound; its pins, and a rule's, are not.
+            names = names[:1] if node.data == "side_decl" else []
+        for token in names:
+            if str(token) in reserved:
+                sink.add("RHO1019", {"word": str(token),
+                                     "version": reserved[str(token)]},
+                         primary=_token_span(file, data, shift, token))
+        work.extend(child for child in children if hasattr(child, "data"))
 
 
 def _closest_fixit(word: str, allowed: tuple, span: Span) -> tuple:

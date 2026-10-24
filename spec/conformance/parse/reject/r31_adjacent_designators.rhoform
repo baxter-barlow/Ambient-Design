@@ -1,0 +1,4 @@
+#pragma rhoform-syntax 0.3
+component Header:
+    pin a passive 01
+    pin b passive 2

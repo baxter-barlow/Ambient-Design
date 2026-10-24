@@ -79,6 +79,7 @@ one per syntax version this specification defines:
 ```text
 #pragma rhoform-syntax 0.1
 #pragma rhoform-syntax 0.2
+#pragma rhoform-syntax 0.3
 ```
 
 Blank lines and comments may precede it. The version is `major.minor`
@@ -90,9 +91,27 @@ header nothing validates cannot do its one job.
 ### Syntax versions
 
 An implementation of this specification implements the version set
-{0.1, 0.2}, and MUST accept a file declaring either. Syntax 0.2 is the
-current version: a new file SHOULD declare it, and a fix-it that writes
-a pragma writes the current version.
+{0.1, 0.2, 0.3}, and MUST accept a file declaring any of them.
+Syntax 0.2 is the current version: a new file SHOULD declare it, and a
+fix-it that writes a pragma writes the current version.
+
+Of these, the unfrozen version set {0.3} may still change. An unfrozen
+version is a working version (decision OD8): its constructs, their
+diagnostics and the IR version that carries them may change in place
+until it is frozen, so a file declaring it is not yet promised to keep
+its meaning. It is never the current version, a toolchain does not
+announce it as a language version a package may require
+([08 — Packages](08-packages.md)), and no tagged release may ship while
+any syntax or IR version is unfrozen. Syntax 0.3 is frozen with the M2
+exit.
+
+**Deviation from L8, recorded 2026-10-24.** L8 gates unstable syntax
+behind `#pragma experiment(...)`. Syntax 0.3 is instead opened as an
+unfrozen version, because the M2 checkers that give its statements
+their meaning land one at a time, and an experiment mechanism does not
+exist to gate them behind. The no-release rule above is the
+compensating control: nothing unfrozen reaches a user as a stable
+version.
 
 0.2 is a strict superset of 0.1. Every valid 0.1 file is a valid 0.2
 file with the same parse tree and the same meaning, so raising a file's
@@ -110,25 +129,40 @@ adds is listed in
 promoted to a keyword was reserved in 0.1, so no 0.1 file could bind
 one.
 
-One grammar defines both versions, and the version is checked after
-parsing. A construct only 0.2 has, in a file whose pragma declares 0.1,
-is the syntax error `RHO1016` (`syntax-needs-newer-pragma`). It is
-reported once per file however many such constructs the file holds: the
-primary span is the first of them in source order, the `count` param
-says how many there are, and its one fix-it is machine-applicable and
-rewrites only the version in the pragma, from 0.1 to 0.2. A missing
-pragma, or one naming a version outside the set, is `RHO1005`
-(`missing-or-wrong-pragma`) instead; its fix-it writes the current
-version, and the rest of such a file is checked as the current version.
+0.3 is likewise a superset of 0.2 for every file that declares 0.2 or
+earlier: such a file parses to the same tree, draws the same
+diagnostics and means the same thing under an implementation of 0.3.
+Its new statements open with soft keywords, words 0.2 never reserved, so
+a 0.2 file may still bind `supply`, `draw`, `waive`, `rule`, `side`,
+`warning` or `variant` as a name. A file declaring 0.3 may not bind the
+words 0.3 reserves (`RHO1019`), and it reads a run of designators with
+no separator, `01`, as the error `RHO1018` where 0.1 and 0.2 read two
+designators. What 0.3 adds is listed in
+[02 — Grammar](02-grammar.md#syntax-03-additions-unfrozen).
+
+One grammar defines every version, and the version is checked after
+parsing. A construct newer than the file's pragma is the syntax error
+`RHO1016` (`syntax-needs-newer-pragma`). It is reported once per file
+however many such constructs the file holds: its `required` param is the
+highest version any of them needs, the primary span is the first
+construct in source order that needs that version, the `count` param
+says how many constructs newer than the pragma there are, and its one
+fix-it is machine-applicable and rewrites only the version in the
+pragma, to `required`. A missing pragma, or one naming a version outside
+the set, is `RHO1005` (`missing-or-wrong-pragma`) instead; its fix-it
+writes the current version, and the rest of such a file is checked as
+the current version.
 
 The expected-token lists of `RHO1006` and `RHO1007` come from the one
-grammar, so under a 0.1 pragma they may name a token only 0.2 allows.
-Following such a hint is safe: it draws `RHO1016`, whose fix-it
-completes the repair.
+grammar, filtered by the file's pragma: a token only a newer version
+allows is left out, so a 0.1 file is never told to write `import` and a
+0.2 file never `supply` (AMB-146 #2). When the filter would leave
+nothing, the parse already stands inside a newer construct, and the list
+is given whole.
 
 Unstable syntax, when it exists, gates behind `#pragma experiment(...)`
-(L8). Neither 0.1 nor 0.2 defines experiments: the 0.2 additions are
-stable syntax.
+(L8). No version defines experiments: the 0.2 additions are stable
+syntax, and 0.3's are unfrozen until M2 exits (above).
 
 ## Frozen asymmetries (v0.1)
 

@@ -1,0 +1,5 @@
+#pragma rhoform-syntax 0.3
+module Rail:
+    port gnd passive
+    net GND(ground_kind = "pwer"):
+        gnd
