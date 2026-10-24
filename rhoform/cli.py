@@ -45,7 +45,12 @@ PATHS (spec 04, E-8). Each compilation's compile root is `--compile-root`,
 else the nearest ancestor of the entry file holding `rhoform.lock` (the
 workspace root, AMB-144), else the nearest holding `rhoform.toml`, else
 the entry file's directory; each name matched exactly, letter case
-included. Span files, the source map's `files[].path`
+included. The search climbs no higher than the version-control checkout
+the entry is in, the first directory holding a CHECKOUT_MARKERS entry, so
+a marker outside the checkout -- a stray rhoform.lock in a home directory
+-- never decides a project's root (AMB-151 item 5); an entry in no
+checkout still searches to the file-system root, and --compile-root is
+how to bound it there. Span files, the source map's `files[].path`
 and definition names are POSIX paths relative to it, so a span names the
 same file the source map does. The standard library modules a compilation
 reads are the exception: they are the toolchain's own files, listed as
@@ -61,8 +66,8 @@ the grammar artifacts the parser loads, the IR schema, and with
 --emit-report the check report's schema. Nothing outside a compile root
 is read as an author's file, and a directory is listed only to check the
 exact spelling of a name the file system resolved (a manifest, a
-lockfile, a part record or a path being imported). Writes: fmt's targets
-and --emit-ir's and
+lockfile, a checkout marker, a part record or a path being imported).
+Writes: fmt's targets and --emit-ir's and
 --emit-report's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.
@@ -89,6 +94,9 @@ from .diagnostics import Diagnostics, span_from_bytes
 LOCKFILE = "rhoform.lock"
 MANIFEST = "rhoform.toml"
 SUFFIX = ".rhoform"
+# A directory holding one of these is the root of a version-control
+# checkout: the default compile-root search goes no higher.
+CHECKOUT_MARKERS = (".git", ".hg", ".jj", ".svn")
 IR_SCHEMA = (Path(__file__).resolve().parents[1] / "ir"
              / "netlist-ir.v2.schema.json")
 
@@ -141,16 +149,37 @@ def _holds(directory: Path, name: str) -> bool:
         return False
 
 
+def _checkout(directory: Path) -> bool:
+    """Whether `directory` is the root of a version-control checkout: it
+    holds a CHECKOUT_MARKERS entry of any kind (a worktree's `.git` is a
+    file), spelled exactly so."""
+    present = [name for name in CHECKOUT_MARKERS
+               if os.path.lexists(directory / name)]
+    if not present:
+        return False
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return False
+    return any(name in names for name in present)
+
+
 def compile_root(entry, explicit=None) -> Path:
     """The compile root of a compilation whose entry file is `entry`: the
     explicit root, else the nearest ancestor holding rhoform.lock (the
     workspace root, above any package in it), else the nearest holding
-    rhoform.toml, else the entry's own directory."""
+    rhoform.toml, else the entry's own directory. The ancestors searched
+    end at the checkout the entry is in, so nothing outside it decides."""
     if explicit is not None:
         return _absolute(explicit)
     directory = _absolute(entry).parent
+    searched = []
+    for candidate in (directory, *directory.parents):
+        searched.append(candidate)
+        if _checkout(candidate):
+            break
     for marker in (LOCKFILE, MANIFEST):
-        for candidate in (directory, *directory.parents):
+        for candidate in searched:
             if _holds(candidate, marker):
                 return candidate
     return directory
@@ -171,8 +200,10 @@ def root_relative(entry, root: Path) -> str:
 def _sources_under(directory: Path) -> list[Path]:
     """Every *.rhoform file under `directory`, descending into no symbolic
     link to a directory. A subdirectory that cannot be listed is a usage
-    error naming it: skipping it, as a glob does, would let a check pass
-    over files it never read."""
+    error naming it, and so is a *.rhoform name in one that can be listed
+    but not searched (mode 0444), whose file cannot even be examined:
+    skipping either, as a glob does, would let a check pass over files it
+    never read (AMB-151 item 6)."""
     def refuse(exc):
         raise UsageError(
             f"cannot list {exc.filename}: {exc.strerror}; a check that "
@@ -181,8 +212,17 @@ def _sources_under(directory: Path) -> list[Path]:
     found = []
     for folder, _subdirectories, names in os.walk(directory, onerror=refuse):
         for name in names:
+            if not name.endswith(SUFFIX):
+                continue
             path = Path(folder) / name
-            if name.endswith(SUFFIX) and path.is_file():
+            try:
+                mode = os.stat(path).st_mode
+            except OSError as exc:
+                raise UsageError(
+                    f"cannot examine {path}: {exc.strerror}; a check that "
+                    "skipped it would pass over a file it never read") \
+                    from None
+            if stat.S_ISREG(mode):
                 found.append(path)
     return found
 
@@ -554,7 +594,8 @@ def _parser() -> argparse.ArgumentParser:
         "--compile-root", metavar="DIR",
         help="the compile root every path is relative to (default: the "
              "nearest ancestor holding rhoform.lock, else the nearest "
-             "holding rhoform.toml, else the file's directory)")
+             "holding rhoform.toml, within the file's checkout, else the "
+             "file's directory)")
 
     check = commands.add_parser(
         "check", parents=[common],

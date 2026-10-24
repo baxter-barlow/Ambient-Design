@@ -23,7 +23,13 @@ root is defined in [04 — Elaboration](04-elaboration.md#the-compile-root),
 and every file of the compilation MUST lie under it; in this version the
 compile root is also the package specification's workspace root, which
 is why the nearest `rhoform.lock` (L1) decides it ahead of the nearest
-`rhoform.toml`. The compilation also holds the
+`rhoform.toml`. The reference command line looks for either no higher
+than the version-control checkout the entry file is in — the nearest
+directory, from the entry's own up, holding a `.git`, `.hg`, `.jj` or
+`.svn` entry — so a marker outside the checkout, such as a stray
+`rhoform.lock` in a home directory above it, never decides a project's
+root; an entry in no checkout is searched to the file system's root, and
+`--compile-root` bounds it there. The compilation also holds the
 [standard library](04-elaboration.md#the-standard-library) modules its
 files name under `rhoform.lib.`; those are the toolchain's own files,
 recorded by their fixed library path, and are not imported: no import

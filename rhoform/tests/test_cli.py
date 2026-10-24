@@ -409,6 +409,56 @@ class CheckTest(_Tmp):
         (self.tmp / "ws" / "app" / "rhoform.lock").mkdir()
         self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
 
+    def test_no_marker_outside_the_checkout_decides_the_root(self):
+        # AMB-151 item 5: a stray rhoform.lock in a home directory above a
+        # project's checkout would otherwise make the home directory every
+        # project's compile root. The search stops at the checkout.
+        from rhoform import cli
+
+        self.write("home/rhoform.lock", '{\n  "lockfile_version": 0\n}\n')
+        self.write("home/rhoform.toml", MANIFEST)
+        entry = self.write("home/proj/boards/main.rhoform", CLEAN)
+        (self.tmp / "home" / "proj" / ".git").mkdir()
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(entry.parent))
+        code, out, err = run("check", "--emit-ir", self.tmp / "ir", entry)
+        self.assertEqual((code, err), (0, ""))
+        source_map = json.loads(
+            (self.tmp / "ir" / "main.sourcemap.json").read_text())
+        self.assertEqual([f["path"] for f in source_map["files"]],
+                         ["main.rhoform"])
+        # Inside the checkout the markers count as ever; a worktree's
+        # `.git` is a file.
+        self.write("home/proj/rhoform.toml", MANIFEST)
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(self.tmp / "home" / "proj"))
+        (self.tmp / "home" / "proj" / ".git").rmdir()
+        self.write("home/proj/.git", "gitdir: elsewhere\n")
+        self.write("home/proj/rhoform.lock", '{\n  "lockfile_version": 0\n'
+                                             '}\n')
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(self.tmp / "home" / "proj"))
+        # Outside any checkout the search still reaches the stray lock: the
+        # recorded residual, which --compile-root bounds.
+        (self.tmp / "home" / "proj" / ".git").unlink()
+        (self.tmp / "home" / "proj" / "rhoform.lock").unlink()
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(self.tmp / "home"))
+
+    def test_only_a_marker_spelled_exactly_bounds_the_search(self):
+        from rhoform import cli
+
+        self.write("home/rhoform.lock", '{\n  "lockfile_version": 0\n}\n')
+        entry = self.write("home/proj/main.rhoform", CLEAN)
+        (self.tmp / "home" / "proj" / ".GIT").mkdir()
+        if not os.path.lexists(self.tmp / "home" / "proj" / ".git"):
+            # A case-sensitive file system: `.GIT` is no marker anyway.
+            self.assertEqual(cli.compile_root(entry),
+                             cli._absolute(self.tmp / "home"))
+            return
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(self.tmp / "home"))
+
     def test_explicit_compile_root_wins_and_must_contain_the_entry(self):
         self.write("pkg/rhoform.toml", MANIFEST)
         entry = self.write("pkg/boards/bad.rhoform", BROKEN)
@@ -521,6 +571,36 @@ class CheckTest(_Tmp):
                 code, out, err = run(*argv)
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn(f"cannot list {locked}", err)
+
+    def test_a_directory_listed_but_not_searchable_stops_the_run(self):
+        # AMB-151 item 6: mode 0444 lists the names but no file under them
+        # can be examined, so the sweep would pass over them unread.
+        self.write("d/a.rhoform", CLEAN)
+        self.write("d/locked/b.rhoform", BROKEN)
+        locked = self.tmp / "d" / "locked"
+        locked.chmod(0o444)
+        self.addCleanup(locked.chmod, 0o755)
+        if os.access(locked / "b.rhoform", os.F_OK):
+            self.skipTest("this user can search a mode-0444 directory "
+                          "(root)")
+        for argv in (("check", self.tmp / "d"),
+                     ("fmt", "--check", self.tmp / "d")):
+            with self.subTest(command=argv[0]):
+                code, out, err = run(*argv)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn(f"cannot examine {locked / 'b.rhoform'}", err)
+
+    def test_a_lockfile_without_jsonschema_is_unavailable_not_a_pass(self):
+        from rhoform import lockfile
+
+        self.write("rhoform.lock", '{\n  "lockfile_version": 0\n}\n')
+        entry = self.write("m.rhoform", CLEAN)
+        missing = ModuleNotFoundError("No module named 'jsonschema'",
+                                      name="jsonschema")
+        with mock.patch.object(lockfile, "_validator", side_effect=missing):
+            code, out, err = run("check", "--compile-root", self.tmp, entry)
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("UNAVAILABLE: jsonschema is not installed", err)
 
     def test_an_entry_compiles_with_the_files_it_imports(self):
         self.write("pkg/rhoform.toml", MANIFEST.replace("^0.1.0", "^0.2.0"))
