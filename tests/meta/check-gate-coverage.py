@@ -157,7 +157,9 @@ CEILINGS = {
 # grow, the survivor count only goes down, and a ceiling may never drop
 # because sites moved out of a gate into a module listed here.
 COVERED_MODULES = {
-    "rhoform/partdata.py": ((54, 0), (
+    # 54 -> 60 sites with L2d (AMB-58): the unit and vocabulary lint (L20),
+    # relative-bound references (L23), and L18's class clause.
+    "rhoform/partdata.py": ((60, 0), (
         ("parts/lint-part-data.py", "--self-test"),
         # `make diagnostics` discovers rhoform/tests from the root; -p
         # narrows that same run to the one file that covers this module.

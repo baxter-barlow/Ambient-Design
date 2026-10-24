@@ -319,6 +319,166 @@ class LoadTest(unittest.TestCase):
         self.assertEqual([p.check for p in problems], ["L18"])
 
 
+class NumberAgreementTest(unittest.TestCase):
+    """partdata and the schema gate read one record's numbers differently --
+    exact Decimals here, floats there -- and must reach one verdict on its
+    shape (AMB-151 item 16)."""
+
+    def check_both(self, data, want_valid):
+        import jsonschema
+        exact = partdata.parse(data)
+        problems = partdata.validate(exact)
+        # The schema gate's reading: json.loads, floats, the same schema.
+        loose = json.loads(data)
+        schema = json.loads((ROOT / "parts" / partdata.SCHEMAS[1]).read_text(
+            encoding="utf-8"))
+        gate = list(jsonschema.validators.validator_for(schema)(schema)
+                    .iter_errors(loose))
+        self.assertEqual(problems == [], want_valid, problems)
+        self.assertEqual(gate == [], want_valid, gate)
+
+    def respelt(self, old, new):
+        data = NE555.read_bytes()
+        self.assertEqual(data.count(old), 1)
+        return data.replace(old, new)
+
+    @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
+    def test_an_integral_fraction_is_an_integer_to_both_readers(self):
+        self.check_both(self.respelt(b'"pin_count": 8', b'"pin_count": 8.0'),
+                        True)
+        self.check_both(self.respelt(b'"pin_count": 8', b'"pin_count": 8.5'),
+                        False)
+
+    @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
+    def test_schema_version_1_0_is_version_1_to_both_readers(self):
+        data = self.respelt(b'"schema_version": 1', b'"schema_version": 1.0')
+        self.check_both(data, True)
+        self.assertEqual(partdata.schema_version(partdata.parse(data)), 1)
+        self.assertIsNone(partdata.schema_version(
+            partdata.parse(b'{"schema_version": 1.5}')))
+
+
+class VocabularyTest(unittest.TestCase):
+    """L20: the keys a check may read, each with one dimension."""
+
+    def test_every_dimension_spec_names_a_dimension(self):
+        from rhoform.check import values
+        specs = [spec for section in partdata.VOCABULARY.values()
+                 for spec in section.values()]
+        specs += list(partdata.CLOSED_DIMENSIONS.values())
+        specs += list(partdata.CONDITION_DIMENSIONS.values())
+        for spec in sorted(set(specs)):
+            with self.subTest(spec=spec):
+                dimension, kind = partdata._dimension(spec)
+                self.assertIsInstance(dimension, values.Dimension)
+                self.assertIn(kind, values.UNIT_KINDS)
+
+    def test_keys_the_dsl_also_names_have_the_dsls_dimension(self):
+        # A record value RHO6007 compares with a `part abstract` constraint
+        # of the same name must be in the same dimension, or the comparison
+        # is between two different quantities.
+        from rhoform.check import dimensions, values
+        for name, (dimension, _kind) in sorted(
+                dimensions.CONSTRAINT_VOCABULARY.items()):
+            for section, keys in sorted(partdata.VOCABULARY.items()):
+                if name in keys:
+                    with self.subTest(key=name, section=section):
+                        self.assertEqual(
+                            partdata._dimension(keys[name])[0],
+                            values.named(dimension))
+
+    def test_the_slot_a_pointer_names(self):
+        for pointer, want in (
+                ("/pins/2/abs_max/voltage", ("closed", "voltage", "voltage")),
+                ("/pins/2/output/dropout/1", ("closed", "dropout", "voltage")),
+                ("/pin_classes/0/capability/source_current",
+                 ("closed", "source_current", "current")),
+                ("/series/resistance/0", ("closed", "resistance",
+                                          "resistance")),
+                ("/modes/3/draw/0/current", ("closed", "current", "current")),
+                ("/parameters/capacitance", ("parameters", "capacitance",
+                                             "capacitance")),
+                ("/ratings/recommended/voltage_rating/1",
+                 ("ratings/recommended", "voltage_rating", "voltage")),
+                ("/ratings/thermal/theta_ja",
+                 ("ratings/thermal", "theta_ja", "temperature/power")),
+                ("/pins/0/characteristics/required_supply_current",
+                 ("characteristics", "required_supply_current", "current")),
+                ("/pins/2/output/voltage/0/conditions/ta",
+                 ("conditions", "ta", "temperature")),
+                ("/parameters/flux_capacity", None),
+                ("/pins/2/characteristics/start_up_time", None),
+                ("/pins/2/output/voltage/0/conditions/vout_range", None)):
+            with self.subTest(pointer=pointer):
+                self.assertEqual(partdata.vocabulary_slot(pointer), want)
+
+    def test_the_readme_defines_every_key(self):
+        # The key's MEANING is the contract; its dimension alone is not.
+        text = (ROOT / "parts" / "README.md").read_text(encoding="utf-8")
+        start = text.index("## Checker-reliable keys")
+        section = text[start:text.index("\n## ", start + 1)]
+        for where, keys in sorted(partdata.VOCABULARY.items()):
+            for key in sorted(keys):
+                with self.subTest(section=where, key=key):
+                    self.assertIn(f"`{key}`", section)
+        for name in sorted(partdata.CONDITION_DIMENSIONS):
+            with self.subTest(condition=name):
+                self.assertIn(f"`{name}`", section)
+
+    def test_the_store_records_read_as_their_slots(self):
+        # Every Measure a check may read parses and has its dimension: the
+        # lint's verdict, restated against the checker's own reader.
+        from rhoform.check import values
+        for path in sorted(STORE.glob("*/*.part.json")):
+            for pointer, measure in partdata.walk_measures(_doc(path)):
+                slot = partdata.vocabulary_slot(pointer)
+                if slot is None:
+                    continue
+                with self.subTest(record=path.name, pointer=pointer):
+                    unit = values.parse_part_unit(measure["unit"])
+                    want = partdata._dimension(slot[2])
+                    self.assertEqual((unit.dimension, unit.kind), want)
+
+
+class ConditionValueTest(unittest.TestCase):
+    """Conditions compare by value (AMB-151 item 15)."""
+
+    def key(self, conditions):
+        return partdata.condition_key(conditions)
+
+    def test_spellings_of_one_value_are_one_condition(self):
+        five = {"vcc": {"unit": "V", "typ": 5}}
+        for same in ({"vcc": {"unit": "V", "typ": Decimal("5.0")}},
+                     {"vcc": {"unit": "mV", "typ": 5000}},
+                     {"vcc": {"typ": Decimal("5.00"), "unit": "V"}}):
+            with self.subTest(same=same):
+                self.assertEqual(self.key(five), self.key(same))
+
+    def test_different_values_kinds_and_statistics_stay_apart(self):
+        base = {"ta": {"unit": "degC", "typ": 25}}
+        for other in ({"ta": {"unit": "degC", "typ": 85}},
+                      {"ta": {"unit": "K", "typ": 25}},
+                      {"ta": {"unit": "degC", "max": 25}},
+                      {"ta": "25 degC"},
+                      {"tj": {"unit": "degC", "typ": 25}}):
+            with self.subTest(other=other):
+                self.assertNotEqual(self.key(base), self.key(other))
+
+    def test_strings_and_unreadable_units_compare_as_written(self):
+        self.assertEqual(self.key({"vin": "VOUT + 1 V"}),
+                         self.key({"vin": "VOUT + 1 V"}))
+        self.assertNotEqual(self.key({"vin": "VOUT + 1 V"}),
+                            self.key({"vin": "VOUT+1V"}))
+        self.assertNotEqual(self.key({"x": {"unit": "furlong", "typ": 1}}),
+                            self.key({"x": {"unit": "furlong", "typ": 2}}))
+
+    def test_a_strap_level_x_is_a_pin_left_out(self):
+        self.assertEqual(partdata._strap_key({"IO0": "1", "IO46": "x"}),
+                         partdata._strap_key({"IO0": "1"}))
+        self.assertNotEqual(partdata._strap_key({"IO0": "1", "IO46": "0"}),
+                            partdata._strap_key({"IO0": "1"}))
+
+
 class LintTest(unittest.TestCase):
     def test_every_record_lints_clean(self):
         for path in sorted(STORE.glob("*/*.part.json")) + \
@@ -337,6 +497,46 @@ class LintTest(unittest.TestCase):
                               ("/parameters", False)):
             with self.subTest(pointer=pointer):
                 self.assertEqual(partdata.touches_r29a(pointer), want)
+
+    def test_every_relative_bound_names_a_record_pin(self):
+        # L23 over the store, and the reason it exists: a reference is a
+        # record pin name, and nothing else resolves.
+        for path in sorted(STORE.glob("*/*.part.json")):
+            doc = _doc(path)
+            names = {pin["name"] for pin in doc["pins"]}
+            for pointer, measure in partdata.walk_measures(doc):
+                for stat in partdata.STATISTICS:
+                    bound = measure.get(stat)
+                    if isinstance(bound, dict):
+                        with self.subTest(record=path.name, pointer=pointer):
+                            self.assertIn(bound["reference"], names)
+        doc = _doc(NE555)
+        doc["pins"][4]["abs_max"]["voltage"]["max"]["reference"] = "V+"
+        self.assertEqual(
+            [(p.check, p.pointer) for p in partdata.lint_problems(doc, [])],
+            [("L23", "/pins/4/abs_max/voltage/max/reference")])
+
+    def test_an_absence_cannot_contradict_the_class(self):
+        doc = _doc(ESP32)
+        io0 = [p["name"] for p in doc["pins"]].index("IO0")
+        doc["absent"].append({"pointer": f"/pins/{io0}/characteristics/vih",
+                              "reason": "vendor-unpublished",
+                              "target": "IO0"})
+        doc["absent"].sort(key=lambda a: a["pointer"])
+        # Its parent does not resolve on the raw pin; that is not what is
+        # wrong. The class supplies vih to IO0.
+        doc["pins"][io0]["characteristics"] = {"capacitance": {
+            "unit": "pF", "typ": 2}}
+        self.assertIn(("L18", f"/pins/{io0}/characteristics/vih"),
+                      [(p.check, p.pointer)
+                       for p in partdata.lint_problems(doc, [])])
+
+    def test_a_unit_outside_the_grammar_is_a_problem_not_a_crash(self):
+        doc = _doc(AP7361C)
+        doc["pins"][0]["abs_max"]["voltage"]["unit"] = "%"
+        self.assertEqual(
+            [(p.check, p.pointer) for p in partdata.lint_problems(doc, [])],
+            [("L20", "/pins/0/abs_max/voltage/unit")])
 
     def test_problems_carry_the_pointer_they_are_about(self):
         doc = _doc(ESP32)
@@ -494,6 +694,36 @@ class BindTest(unittest.TestCase):
         # Supply draw arrives keyed by the DEFINITION's pin.
         self.assertTrue(all(set(draw) == {"p3v3"}
                             for _id, _kind, _cond, draw in binding.modes))
+
+    def test_a_reference_resolves_through_the_binding_to_a_port(self):
+        # AMB-151 item 13: references stay record pin names; port_of maps
+        # each to the definition pin whose net evaluates it.
+        for path, definition in (
+                (NE555, "rhoform.lib.timer.Ne555"),
+                (AP7361C, "rhoform.lib.regulator.LinearRegulator"),
+                (ESP32, "rhoform.lib.module.Esp32S3Wroom1")):
+            binding = self.bind(path, definition)
+            seen = set()
+            for facts in binding.ports.values():
+                for block in (facts.abs_max, facts.recommended,
+                              facts.capability, facts.characteristics,
+                              facts.output):
+                    for measures in block.values():
+                        for measure in measures:
+                            for value in measure.values:
+                                if isinstance(value.bound, partdata.Relative):
+                                    seen.add(value.bound.reference)
+            with self.subTest(record=path.name):
+                self.assertTrue(seen)
+                for reference in sorted(seen):
+                    self.assertIsNotNone(binding.port_of(reference))
+        esp = self.bind(ESP32, "rhoform.lib.module.Esp32S3Wroom1")
+        self.assertEqual((esp.port_of("3V3"), esp.port_of("TXD0"),
+                          esp.port_of("NOPE")), ("p3v3", "io43", None))
+        ne = self.bind(NE555, "rhoform.lib.timer.Ne555")
+        self.assertEqual(ne.ports["rst"].abs_max["voltage"][0].get("max")
+                         .bound.reference, "VCC")
+        self.assertEqual(ne.port_of("VCC"), "vcc")
 
     def test_no_implements_entry_means_no_join(self):
         doc = _doc(AP7361C)
@@ -656,6 +886,41 @@ class ViewTest(unittest.TestCase):
         self.assertEqual(accuracy.conditions["iout"]["typ"], 100)
         self.assertNotIn("voltage", vout.recommended)
 
+    def test_the_module_states_what_its_supply_must_deliver(self):
+        # AMB-151 item 19: Table 6-2's IVDD minimum, under a key a budget
+        # check reads, as a guarantee with no free-text condition.
+        p3v3 = self.ports(ESP32, "rhoform.lib.module.Esp32S3Wroom1",
+                          [("p3v3", "power_in", ())])["p3v3"]
+        need, = p3v3.characteristics["required_supply_current"]
+        self.assertEqual((need.unit, need.conditions), ("A", {}))
+        self.assertEqual([(v.statistic, v.bound, v.guaranteed)
+                          for v in need.values],
+                         [("min", Decimal("0.5"), True)])
+
+    def test_table_header_conditions_reach_the_figures_under_them(self):
+        # AMB-151 item 23: the NE555 Section 5.5 header and the AP7361C
+        # Electrical Characteristics header.
+        ne = self.ports(NE555, "rhoform.lib.timer.Ne555",
+                        [("thr", "input", ()), ("trig", "input", ()),
+                         ("rst", "input", ())])
+        for port, symbol in (("thr", "input_current"),
+                             ("trig", "input_current"),
+                             ("rst", "reset_voltage_level")):
+            with self.subTest(part="NE555", port=port):
+                measure, = ne[port].characteristics[symbol]
+                self.assertEqual(measure.conditions["ta"],
+                                 {"typ": 25, "unit": "degC"})
+                self.assertEqual(measure.conditions["vcc"],
+                                 {"max": 15, "min": 5, "unit": "V"})
+        vout = self.ports(AP7361C, "rhoform.lib.regulator.LinearRegulator",
+                          [("vout", "power_out", ())])["vout"]
+        for symbol in ("psrr", "output_discharge_resistance",
+                       "short_circuit_current", "start_up_time"):
+            with self.subTest(part="AP7361C", symbol=symbol):
+                measure, = vout.characteristics[symbol]
+                self.assertEqual(measure.conditions["ta"],
+                                 {"typ": 25, "unit": "degC"})
+
     def test_straps(self):
         binding = partdata.bind(_doc(ESP32), "rhoform.lib.module.Esp32S3Wroom1",
                                 [("io0", "bidirectional", ()),
@@ -721,6 +986,25 @@ partdata.bind(doc, "rhoform.lib.timer.Ne555", [("vcc", "power_in", ("8",))])
 marks["end"] = len(events)
 print(json.dumps({"events": events, "marks": marks, "python": _python}))
 '''
+
+
+class ImportOrderTest(unittest.TestCase):
+    """partdata reads units with rhoform.check.values, which imports
+    partdata's Relative: either may be imported first."""
+
+    def test_either_module_may_be_imported_first(self):
+        for first in ("rhoform.partdata", "rhoform.check.values",
+                      "rhoform.check"):
+            with self.subTest(first=first):
+                done = subprocess.run(
+                    [sys.executable, "-c",
+                     f"import sys; sys.path.insert(0, sys.argv[1]); "
+                     f"import {first}; from rhoform import partdata; "
+                     "print(partdata._values.parse_part_unit('mV').kind)",
+                     str(ROOT)],
+                    capture_output=True, text=True, timeout=120)
+                self.assertEqual((done.returncode, done.stdout.strip()),
+                                 (0, "linear"), done.stderr)
 
 
 @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")

@@ -2,7 +2,7 @@
 #
 # THE WINDOWS BELOW ARE THE **TYPICAL** MODEL, and they are derived
 # mechanically by tests/benchmarks/derive-555-windows.py from the values
-# parts/examples/ti-ne555p.part.json transcribes — not by hand. Four hand
+# rhoform/parts/ti/ne555p.part.json transcribes — not by hand. Four hand
 # derivations produced four different wrong answers, each omitting a different
 # term, so the arithmetic now lives in a script that `make sim` re-runs.
 #

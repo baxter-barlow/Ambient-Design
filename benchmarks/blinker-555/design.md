@@ -272,7 +272,7 @@ wrong in three ways worth recording:
    operating point, so it is not in the window and this paragraph is the record
    of why. (An earlier revision of sec. "Timing
    design" quoted 0.1 uA here; it was corrected to the datasheet's 30 nA typ
-   / 250 nA max, which is what `parts/examples/ti-ne555p.part.json` records.
+   / 250 nA max, which is what `rhoform/parts/ti/ne555p.part.json` records.
    Kept as the record of that correction -- there is nothing left to fix at
    the cross-reference.)
 3. **Rounding.** The first correction tabulated 55.609 % and then set the

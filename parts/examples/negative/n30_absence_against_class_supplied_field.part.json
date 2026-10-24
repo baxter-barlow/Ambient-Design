@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive",
+      "class": "contact"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive",
+      "class": "contact"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "pin_classes": [
+    {
+      "id": "contact",
+      "role": "passive",
+      "characteristics": {
+        "capacitance": {
+          "unit": "pF",
+          "typ": 1
+        }
+      }
+    }
+  ],
+  "absent": [
+    {
+      "pointer": "/pins/0/characteristics",
+      "reason": "vendor-unpublished",
+      "target": "1"
+    }
+  ],
+  "x_negative_control": "LINT-REJECTED by L18 at /pins/0/characteristics: pin 1 inherits its class's characteristics, and an absence on the member says the same field is missing. The binding would hand a checker both a value and an absence for it, so the record is refused."
+}

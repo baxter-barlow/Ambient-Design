@@ -66,11 +66,220 @@ record. What it adds, and what a consumer may rely on:
 | `pins[].output` | What a power_out pin delivers: `voltage`, `current_limit`, `dropout`, each with its conditions. An output's accuracy goes here and never in `recommended.voltage`, which is a window the design must keep a pin inside (L17). |
 | `series` | A two-terminal part's DC series model: `resistance`, `forward_voltage`. |
 | `absent[]` | A field deliberately not recorded, with the reason: `vendor-unpublished`, `ambiguous-in-source`, or `not-transcribed`. The pointer names where the field would sit and must not resolve (L18). A consumer that needs the field reports degraded coverage with that reason; it never reads the absence as a value. `not-transcribed` is refused on the pin-role, abs-max and supply-current-per-mode fields of any record a benchmark picks (R29a). |
-| `conduction_groups`, `pins[].ground_kind_hint` | Reserved, not populated: a v1 record carrying either fails validation, so a later version can define them. |
+| `conduction_groups`, `pins[].ground_kind_hint` | Reserved, not populated: a v1 record carrying either fails validation, so a later version can define them (controls n25, n26). |
 
 How a part transforms one supply into another is deliberately **not** a
 part-data field: that is structure, and structure lives in the design's
 rules. Part data carries the numbers (`output`, `series`).
+
+## Checker-reliable keys
+
+`parameters`, `ratings.*` and `characteristics` are open maps, so a key in
+one is a name no check promised to read. The keys below are the ones a check
+MAY read (L20, `VOCABULARY` in `rhoform/partdata.py`). Each has one home,
+one meaning and one dimension, and the lint holds every Measure under it to
+that dimension; any other key stays legal and no check reads it. Every
+Measure's unit, anywhere in a record, must also parse by the part-unit
+grammar the checker reads it with (`rhoform.check.values.parse_part_unit`:
+`1`, an atom, or `atom/atom`, the atoms being the literal units plus `K`,
+`ppm`, `min`, `dB` and `dBm`). A unit outside it -- `%`, `nC`, `pA`,
+`Ohm` -- is refused, so a value with no unit in the grammar is recorded as an
+`absent` entry naming the unit in its note. `temperature` below means a
+reading on the degC scale; a `K` is a difference and is refused there.
+
+A two-terminal rating is across the part's two terminals. A rating with a
+polarity (a diode's or LED's reverse voltage, a TVS's stand-off, a MOSFET's
+VDS and VGS, an IC's BST-to-SW) is not a key: it is the pin's own
+`abs_max` or `recommended` window, as a relative bound on the other pin
+(`K: max = A + 40`).
+
+`parameters` -- what the part is:
+
+| Key | Dimension | Meaning |
+|---|---|---|
+| `resistance` | resistance | A resistor's resistance between its terminals. `typ` is the nominal its MPN codes, `min`/`max` that nominal at the tolerance (datasheet-derived, the rule in the note). A jumper carries `max` only. |
+| `resistance_tolerance` | dimensionless | The tolerance as a fraction of nominal: +/-1 % is `min -0.01, max 0.01`. |
+| `capacitance` | capacitance | A capacitor's capacitance, as for `resistance`, at the vendor's measurement conditions. |
+| `capacitance_tolerance` | dimensionless | As `resistance_tolerance`. |
+| `capacitance_dc_bias_change` | dimensionless | Capacitance change at the DC bias in `vdc`, only where the vendor TABULATES it; a typical curve is not transcribed. |
+| `inductance` | inductance | An inductor's inductance at its measurement conditions. |
+| `inductance_tolerance` | dimensionless | As `resistance_tolerance`. |
+| `impedance` | resistance | A ferrite bead's impedance magnitude at the `frequency` in its conditions. |
+| `temperature_coefficient` | dimensionless/temperature | A resistor's TCR, or a C0G capacitor's coefficient, in `ppm/K`. |
+| `temperature_characteristic` | dimensionless | A class-II capacitor's capacitance change over its rated range (X7R: `min -0.15, max 0.15`, conditions `ta` `min -55, max 125`). The EIA class itself is in `description`. |
+| `reference_voltage` | voltage | An IC's internal reference as regulated at its feedback pin (the LM25145's VREF). |
+| `efficiency` | dimensionless | A converter's guaranteed efficiency, where one is published; a typical curve is not transcribed. |
+| `rds_on` | resistance | A MOSFET's drain-source on-resistance, one element per `vgs` and `tj`. |
+| `gate_threshold_voltage` | voltage | VGS(th), with its `vds` and `id`. |
+| `breakdown_voltage` | voltage | A TVS's or array's VBR at the test current `it`. |
+| `clamping_voltage` | voltage | A TVS's VC at the pulse current `ipp`. |
+| `reverse_leakage_current` | current | A two-terminal part's reverse current, cathode to anode, at the `vr` in its conditions. |
+| `hold_current` | current | A PTC's hold current: the vendor guarantees it carries this much without tripping, so it is recorded in `min`. |
+| `trip_current` | current | A PTC's trip current: the vendor guarantees it trips at no more than this, so it is recorded in `max`. |
+
+`ratings.abs_max` -- stress limits from the vendor's absolute-maximum table;
+exceeding one is damage:
+
+| Key | Dimension | Meaning |
+|---|---|---|
+| `junction_temperature`, `storage_temperature` | temperature | As named. |
+| `power_dissipation` | power | Total dissipation, at the ambient or case condition stated. |
+| `esd_hbm`, `esd_cdm`, `esd_mm` | voltage | Component ESD ratings by model. |
+| `esd_iec_contact`, `esd_iec_air` | voltage | IEC 61000-4-2 system ESD ratings, contact and air. |
+| `forward_current` | current | A diode's average forward current or an LED's continuous forward current. |
+| `peak_forward_current` | current | An LED's pulsed forward current, with its duty cycle and `pulse_width`. |
+| `surge_current` | current | A diode's non-repetitive peak forward surge current, with its `pulse_width`. |
+| `peak_pulse_power`, `peak_pulse_current` | power, current | A TVS's PPP and IPP, with the waveform. |
+| `drain_current`, `pulsed_drain_current` | current | A MOSFET's ID and IDM, with `tc` or `ta`. |
+| `interrupt_current` | current | A PTC's maximum fault current (Imax). |
+| `overload_voltage` | voltage | A resistor's maximum overload voltage. |
+
+`ratings.recommended` -- what the design must keep the part within:
+
+| Key | Dimension | Meaning |
+|---|---|---|
+| `voltage_rating` | voltage | The continuous voltage across the part's terminals it is rated for: a capacitor's rated voltage, a resistor's maximum working voltage, a PTC's Vmax, a connector's or switch's rated voltage. The DSL's `voltage_rating` constraint is compared with this. |
+| `power_rating` | power | A two-terminal part's rated dissipation, at the `ta` in its conditions (a resistor's P70). |
+| `current_rating` | current | A ferrite's, jumper's, contact's or switch's rated continuous current. |
+| `rms_current` | current | An inductor's rms current for the temperature rise in its conditions. |
+| `saturation_current` | current | An inductor's saturation current, one element per inductance drop. |
+| `ambient_temperature` | temperature | The operating ambient range, whichever table the vendor states it in. |
+
+`ratings.thermal`: `theta_ja`, `theta_jb`, `theta_jc`, `theta_jc_top`,
+`theta_jc_bottom`, `theta_jl`, `psi_jt` and `psi_jb`, each a
+temperature/power (`degC/W`) for THIS record's package, with its board or
+mounting in the conditions.
+
+`characteristics`, on a pin or on a pin class:
+
+| Key | Dimension | Meaning |
+|---|---|---|
+| `vih`, `vil`, `voh`, `vol` | voltage | Logic thresholds and output levels, absolute or relative to a supply pin of the part. |
+| `input_current` | current | Current into an input at the conditions stated. |
+| `leakage_current` | current | Current into the pin at the voltage in its conditions (a protection array's VBUS leakage). |
+| `pull_up_resistance`, `pull_down_resistance` | resistance | Internal pulls. |
+| `capacitance` | capacitance | Pin or line capacitance. |
+| `required_supply_current` | current | On a `power_in` pin only: what the supply feeding it must be able to deliver (the ESP32-S3 module's IVDD, `min 0.5 A`). The budget check holds the supply chain's capability to it. |
+
+The closed slots have their dimensions by construction: `abs_max` and
+`recommended` `voltage` and `current`, `capability.source_current` and
+`sink_current`, `output.voltage`, `current_limit` and `dropout`,
+`series.resistance` and `forward_voltage`, and `modes[].draw[].current`.
+
+Conditions. A condition is a Measure (a number, or a range as `min` and
+`max`) or a string (a categorical setting, or a relation the vendor states
+in words: `VOUT + 1 V`). These names carry one meaning, and a numeric one
+has its dimension: `ta`, `tc`, `tj` (temperature readings); `vcc`, `vdd`,
+`vin`, `vout`, `vr`, `vgs`, `vds`, `vdc`, `voh`, `vol` (voltage); `iout`,
+`if`, `ir`, `id`, `it`, `ipp`, `ioh`, `iol`, `iin` (current); `frequency`,
+`cpu_frequency` (frequency); `cin`, `cout`, `cload` (capacitance); `rload`
+(resistance); `duration`, `pulse_width` (time); `duty_cycle`
+(dimensionless); `tx_power` (`dBm`). Two operating points are compared by
+value, so `5`, `5.0` and `5000 mV` are one point (L19), and in a strap
+combination `x` and leaving a pin out are one requirement (L16).
+
+Relative bounds. A bound `{reference, factor, offset}` is
+`factor x V(reference) + offset`, and its reference is a pin of THIS record
+(L23); it bounds a voltage. `bind` keys ports by definition pin and leaves
+a reference as the record pin's name, so a checker resolves it with
+`Binding.port_of(reference)` and evaluates it in that port's net, at the
+same corner; a reference to a pin the definition does not carry resolves
+to nothing, which is a coverage row. L12 compares a recommended bound with
+an absolute maximum when both are numbers or both are the same function of
+one pin (`BST + 6` against `BST + 14`); any other pair is an unperformable
+check, counted against the ceiling the lint gate holds.
+
+## Authoring the benchmark records
+
+What landing L2d's records carry, so L2b, L3 and L4 read one shape.
+
+- **Identity.** `rhoform/parts/<vendor>/<slug>.part.json`, part_id
+  `<vendor>/<slug>`: the vendor slug is a `VENDOR_DOMAINS` key, and the slug
+  is the exact orderable MPN in lower case with every character outside
+  `a-z 0-9 . _ -` written `-` (`SS34-E3/57T` is `ss34-e3-57t`). `mpn` is
+  that MPN verbatim, `manufacturer` as the vendor writes its name,
+  `lifecycle` from the vendor's product page, `description` paraphrased in
+  about 120 characters and naming a capacitor's EIA class. For a chip
+  passive `package.name` is the EIA inch size (`0402`); otherwise the
+  vendor's package name.
+- **Join.** One `implements` entry for the definition the benchmarks
+  instantiate, mapped pin by pin. Two-terminal parts name their terminals as
+  the vendor does: `A` and `K` for a diode or LED, else `1` and `2` (a
+  generic `a`/`b` maps to `1`/`2`). A header's or shunt's contacts are named
+  by their designators (`1` to `N`). A USB-C receptacle names each signal as
+  the vendor's pin table does, one pin per signal with every designator it
+  occupies (VBUS on A4, A9, B4 and B9), and its SBU1 and SBU2 are `unbound`.
+  Internally common legs (a tactile switch's pairs) are one pin, named by
+  the lowest designator. When the vendor gives two pins one name (`NC`),
+  each takes its designator as a suffix (`NC9`, `NC16`). A part-specific definition
+  (`PART_SPECIFIC`) must match the record role for role; where the vendor's
+  pin table disagrees with the library, the record keeps the vendor's role
+  and the drift is reported, never papered over.
+- **Roles.** From the vendor's pin table. Passives, connectors, switches,
+  test points and two-terminal semiconductors are `passive`; a ground or
+  supply pin of an IC or array is `power_in`.
+- **Statistics.** `min` and `max` only where the vendor guarantees them, as
+  the column header or footnote says; `typ` where it says typical; `peak`
+  for an observed maximum it does not guarantee. A tolerance-evaluated
+  nominal (`10 kohm +/- 1 %` as `min 9.9, typ 10, max 10.1`) is
+  `datasheet-derived`, the rule in the provenance note. Nothing is promoted,
+  averaged or estimated.
+- **Conditions.** Every condition the row states and every one its table
+  header states, under the names above. A row that overrides a header
+  condition replaces it; one the header does not apply to (a dropout,
+  measured by lowering VIN) leaves it off, and the note says so.
+- **Passives.** Resistor: `resistance`, `resistance_tolerance`,
+  `temperature_coefficient`, `power_rating` with its `ta`, `voltage_rating`
+  (maximum working voltage), `overload_voltage`, `ambient_temperature`.
+  Capacitor: `capacitance`, `capacitance_tolerance`,
+  `temperature_characteristic` (class II) or `temperature_coefficient`
+  (C0G), `voltage_rating`, `ambient_temperature`. Inductor: `inductance`,
+  `inductance_tolerance`, DCR as `series.resistance`, `rms_current`,
+  `saturation_current`. Ferrite: `impedance`, DC resistance as
+  `series.resistance`, `current_rating`. PTC: `hold_current`,
+  `trip_current` (the hold-versus-ambient table as further elements, with
+  the vendor's "reference only" in the note), initial and post-trip
+  resistance as `series.resistance` elements, `voltage_rating` (Vmax),
+  `interrupt_current` (Imax). No passive carries `modes`.
+- **Semiconductors.** Diode, LED, TVS: forward voltage as
+  `series.forward_voltage` per `if`; reverse limits on `K` relative to `A`
+  (`abs_max` for VRRM or VR, `recommended` for a TVS's VRWM);
+  `reverse_leakage_current`, `breakdown_voltage`, `clamping_voltage`,
+  `forward_current`, `surge_current`, `peak_pulse_power`, thermal. MOSFET:
+  VDS on `D` and VGS on `G`, each relative to `S`; `rds_on` per `vgs`,
+  `gate_threshold_voltage`, `drain_current`, `pulsed_drain_current`,
+  thermal. Gate charge has no unit in the grammar (`nC`): an `absent` entry
+  says so.
+- **ICs.** Every pin's role and `abs_max`, absolute or relative to another
+  pin as the table states it, and its `recommended` window; one `modes`
+  entry per supply-current row the vendor publishes (shutdown, standby,
+  operating), drawn on `power_in` pins; what a `power_out` pin delivers in
+  `output`; `capability.source_current` only for a guaranteed minimum.
+- **Connectors and switches.** Contacts `passive`; `current_rating` and
+  `voltage_rating` per contact as the vendor rates them; contact
+  resistance as `series.resistance` where published.
+- **Absences.** A profile field the documents do not state is an `absent`
+  entry, `vendor-unpublished`, with where you looked; one they state but
+  that cannot be read unambiguously is `ambiguous-in-source`, with what is
+  ambiguous. `not-transcribed` is refused on pin roles, abs-max and modes
+  of every `BENCHMARK_PICKED` record (L18). A part with no `power_in` pin
+  has no supply modes and needs no absence for them; a part whose vendor
+  publishes no absolute-maximum table carries `/ratings/abs_max` as
+  `vendor-unpublished`.
+- **Provenance.** One source per document as fetched: `url` on the vendor's
+  host, `byte_sha256` of the exact bytes, `retrieved_at` in UTC, `doc_title`
+  and `document_version` as printed (if the document prints no revision,
+  `document_version` says what it does print and the note says no revision
+  is printed), `origin` `vendor-direct`, `license_class` `vendor-public`, no
+  `content_hash` (only the pipeline mints one). A record default entry and
+  one entry per table read, each with a `locator` (page, table, row) and
+  `target` wherever its pointer passes through a sorted array.
+- **Checking one file.** From the repository root, with the pinned
+  toolchain: `python3 parts/lint-part-data.py rhoform/parts/<vendor>/<slug>.part.json`
+  (the lint, including layout), then `python3 tests/schemas/validate-schemas.py`
+  and the whole-tree `python3 parts/lint-part-data.py`, which also holds
+  NOTICE's provenance numbers to the records and prints the numbers to
+  publish.
 
 ## The seed store
 
@@ -101,9 +310,17 @@ vendor's first record).
 The three benchmark records moved here from `examples/` in D3 v1 and were
 upgraded to version 1: the NE555's 15 V datasheet column, the AP7361C's
 output figures moved to `output`, and the ESP32-S3 module's GPIO class,
-strapping pins and boot table. Benchmark (a)'s `design.md` and
-`assertions.yaml` still cite the old `examples/` path in prose; the record is
-`rhoform/parts/ti/ne555p.part.json`.
+strapping pins and boot table.
+
+A record a benchmark picks is listed in `BENCHMARK_PICKED`
+(`parts/lint-part-data.py`), and on it `not-transcribed` is refused for pin
+roles, abs-max and supply-current-per-mode (R29a). The list names one
+part_id per distinct benchmark MPN, so a record arrives already held to it.
+`tests/parts/pick-benchmark-parts.py` maps every benchmark instance to the
+record it picks, by exact MPN (`--check` fails on an instance with no record
+or a pick the list does not name), and `tests/parts/crosscheck.py` is the
+review tooling: a figure table per record, the blind-extraction diff, and
+the passive MPN-code decoders.
 
 ## Design decisions worth knowing
 

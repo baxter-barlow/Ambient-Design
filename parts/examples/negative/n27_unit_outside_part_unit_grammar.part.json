@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "parameters": {
+    "resistance": {
+      "unit": "Ohm",
+      "min": 9.9,
+      "typ": 10,
+      "max": 10.1
+    }
+  },
+  "x_negative_control": "LINT-REJECTED by L20 at /parameters/resistance/unit: `Ohm` is not a unit of the part-unit grammar (the resistance atoms are mohm, ohm, kohm and Mohm), so no check could read these numbers; the lint reads every unit the way the checker will."
+}

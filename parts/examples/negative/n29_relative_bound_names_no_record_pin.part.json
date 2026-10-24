@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive",
+      "abs_max": {
+        "voltage": {
+          "unit": "V",
+          "max": {
+            "reference": "VCC",
+            "offset": 5
+          }
+        }
+      }
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "x_negative_control": "LINT-REJECTED by L23 at /pins/1/abs_max/voltage/max/reference: a relative bound names the RECORD pin whose voltage it moves with, and this part has no pin VCC. bind() leaves references as record pin names, so one naming anything else is a bound no checker can resolve."
+}

@@ -158,7 +158,7 @@ assertions:
 
   - id: A9_strapping_dc_state
     not_mechanisable: >-
-      a boot-mode truth table over pull-up/pull-down states, not a numeric relation. Mechanising it needs the strap defaults encoded in the part record, which they are not (AMB-127; an earlier revision routed this to AMB-124, the corpus-augmentation issue).
+      a boot-mode truth table over pull-up/pull-down states, not a numeric relation. The part record now carries what it reads from the vendor: each strapping pin's reset default and the boot-mode table (pins[].strap and straps in rhoform/parts/espressif/esp32-s3-wroom-1-n8r2.part.json, AMB-127). What is still missing is the check itself, a DC solution of each strapping node over the board's pulls at reset, which no M2 pass performs.
     kind: strapping-node DC solution at EN rising edge (details in pin-plan.md)
     expr: "straps sample to {GPIO0:1, GPIO45:0, GPIO46:0, GPIO3:float} unless BOOT held"
     inputs:

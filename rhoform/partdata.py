@@ -22,9 +22,11 @@ rules rather than two that drift:
     rewrites a value and `4.0` stays `4.0`.
   - CHECKING. `validate` holds a record to the schema of the version it
     declares and refuses a version this module does not implement. `lint`
-    holds it to the cross-references no JSON Schema can state (L1-L22,
-    listed at `lint_problems`). parts/lint-part-data.py is a thin gate over
-    these functions.
+    holds it to the cross-references no JSON Schema can state (L1-L23,
+    listed at `lint_problems`), including the checker-reliable key
+    vocabulary (`VOCABULARY`, L20): the keys a check may read out of the
+    schema's open maps, each with its dimension. parts/lint-part-data.py is
+    a thin gate over these functions.
   - BINDING. `bind` joins a record to one component definition through the
     record's `implements` map and nothing else: no name, case or designator
     guessing, because `ctl` is not `CONT` and `p3v3` is not `3V3`. The
@@ -36,6 +38,9 @@ rules rather than two that drift:
     are, and neither is any value whose provenance says `estimated` or
     `unverified`. A relative bound stays symbolic (`Relative`); evaluating
     it against the referenced pin's net is the checker's job, at one corner.
+    Its `reference` is always a RECORD pin name (L23), never a design name,
+    and the binding re-keys ports and leaves references alone, so a checker
+    reaches the referenced port through `Binding.port_of(reference)`.
 
 HERMETIC. partdata opens the path it is given and, once per process per
 schema_version, the toolchain's own schema file for that version
@@ -48,6 +53,7 @@ import json
 import re
 from dataclasses import dataclass
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
@@ -107,12 +113,29 @@ VENDOR_CONFIDENCE = ("datasheet-stated", "datasheet-derived",
 # a source URL must be on its own vendor's list (L21). A distributor page may
 # be used to FIND a document but never cited, and the schema's origin enum
 # cannot see a distributor URL dressed as vendor-direct. Add a vendor here in
-# the change that adds its first record.
+# the change that adds its first record. Each key is the vendor slug that
+# also starts the vendor's part_ids, and each domain is one the vendor itself
+# operates: Murata serves its per-part specifications from murata.co.jp,
+# TDK serves EPCOS film capacitors from tdk-electronics.tdk.com, and
+# Kingbright's US subsidiary serves the catalogue PDFs from kingbrightusa.com.
 VENDOR_DOMAINS = {
+    "ck": ("ckswitches.com",),
+    "coilcraft": ("coilcraft.com",),
     "diodes": ("diodes.com",),
     "espressif": ("espressif.com",),
+    "gct": ("gct.co",),
+    "infineon": ("infineon.com",),
+    "kemet": ("kemet.com",),
+    "keystone": ("keyelco.com",),
+    "kingbright": ("kingbright.com", "kingbrightusa.com"),
+    "littelfuse": ("littelfuse.com",),
+    "murata": ("murata.com", "murata.co.jp"),
+    "st": ("st.com",),
+    "sullins": ("sullinscorp.com",),
+    "tdk": ("tdk.com",),
     "ti": ("ti.com",),
     "vishay": ("vishay.com",),
+    "yageo": ("yageo.com",),
 }
 
 # Field families requirement R29a names (pin roles, abs-max,
@@ -130,6 +153,166 @@ def touches_r29a(pointer):
     tokens = pointer.split("/")[1:]
     return any(all(want in ("*", have) for want, have in zip(family, tokens))
                for family in R29A_FAMILIES)
+
+
+# ---- L20: the checker-reliable key vocabulary -----------------------------
+#
+# `parameters`, `ratings.*` and `characteristics` are open maps, because
+# their vocabulary is part-family specific; so a key in one is a name nobody
+# promised to read. These are the keys a check MAY read. Each has one home
+# (the section it is listed under) and one dimension, and L20 holds every
+# Measure under one to that dimension. Any other key stays legal and no
+# check reads it, so a misspelling costs coverage, never a wrong verdict. A
+# dimension is a quantities.DIMENSIONS name, `dimensionless`, a ratio `a/b`
+# of two of them, `temperature` (a reading on the degC scale: `K` is a
+# difference and is refused there) or a level (`dB`, `dBm`). What each key
+# means is parts/README.md, "Checker-reliable keys"; the meaning is part of
+# the contract, so a key is added there in the change that adds it here.
+VOCABULARY = {
+    # What the part IS: its defining values, as the vendor states them.
+    "parameters": {
+        "breakdown_voltage": "voltage",
+        "capacitance": "capacitance",
+        "capacitance_dc_bias_change": "dimensionless",
+        "capacitance_tolerance": "dimensionless",
+        "clamping_voltage": "voltage",
+        "efficiency": "dimensionless",
+        "gate_threshold_voltage": "voltage",
+        "hold_current": "current",
+        "impedance": "resistance",
+        "inductance": "inductance",
+        "inductance_tolerance": "dimensionless",
+        "rds_on": "resistance",
+        "reference_voltage": "voltage",
+        "resistance": "resistance",
+        "resistance_tolerance": "dimensionless",
+        "reverse_leakage_current": "current",
+        "temperature_characteristic": "dimensionless",
+        "temperature_coefficient": "dimensionless/temperature",
+        "trip_current": "current",
+    },
+    # Stress limits: the vendor's absolute-maximum table. Exceeding one is
+    # damage.
+    "ratings/abs_max": {
+        "drain_current": "current",
+        "esd_cdm": "voltage",
+        "esd_hbm": "voltage",
+        "esd_iec_air": "voltage",
+        "esd_iec_contact": "voltage",
+        "esd_mm": "voltage",
+        "forward_current": "current",
+        "interrupt_current": "current",
+        "junction_temperature": "temperature",
+        "overload_voltage": "voltage",
+        "peak_forward_current": "current",
+        "peak_pulse_current": "current",
+        "peak_pulse_power": "power",
+        "power_dissipation": "power",
+        "pulsed_drain_current": "current",
+        "storage_temperature": "temperature",
+        "surge_current": "current",
+    },
+    # Operating ratings: what the design must keep the part within. A
+    # two-terminal rating is across the part's two terminals.
+    "ratings/recommended": {
+        "ambient_temperature": "temperature",
+        "current_rating": "current",
+        "power_rating": "power",
+        "rms_current": "current",
+        "saturation_current": "current",
+        "voltage_rating": "voltage",
+    },
+    "ratings/thermal": {
+        "psi_jb": "temperature/power",
+        "psi_jt": "temperature/power",
+        "theta_ja": "temperature/power",
+        "theta_jb": "temperature/power",
+        "theta_jc": "temperature/power",
+        "theta_jc_bottom": "temperature/power",
+        "theta_jc_top": "temperature/power",
+        "theta_jl": "temperature/power",
+    },
+    # On a pin, or on a pin class for its members.
+    "characteristics": {
+        "capacitance": "capacitance",
+        "input_current": "current",
+        "leakage_current": "current",
+        "pull_down_resistance": "resistance",
+        "pull_up_resistance": "resistance",
+        "required_supply_current": "current",
+        "vih": "voltage",
+        "vil": "voltage",
+        "voh": "voltage",
+        "vol": "voltage",
+    },
+}
+# A characteristic only one pin role can carry: what a supply must be able to
+# deliver INTO a pin is a fact about a power_in pin and nothing else.
+ROLE_BOUND_CHARACTERISTICS = {"required_supply_current": "power_in"}
+# The schema's closed slots, which have one dimension by construction.
+CLOSED_DIMENSIONS = {
+    ("abs_max", "current"): "current",
+    ("abs_max", "voltage"): "voltage",
+    ("capability", "sink_current"): "current",
+    ("capability", "source_current"): "current",
+    ("output", "current_limit"): "current",
+    ("output", "dropout"): "voltage",
+    ("output", "voltage"): "voltage",
+    ("recommended", "current"): "current",
+    ("recommended", "voltage"): "voltage",
+    ("series", "forward_voltage"): "voltage",
+    ("series", "resistance"): "resistance",
+    ("draw", "current"): "current",
+}
+# Condition names with one meaning, so a check can select an operating point
+# by them (`ta` is the ambient, as a reading). A string condition is legal
+# under any name; a numeric one under a name listed here has its dimension.
+CONDITION_DIMENSIONS = {
+    "cin": "capacitance", "cload": "capacitance", "cout": "capacitance",
+    "cpu_frequency": "frequency", "duration": "time",
+    "duty_cycle": "dimensionless", "frequency": "frequency",
+    "id": "current", "if": "current", "iin": "current", "iol": "current",
+    "ioh": "current", "iout": "current", "ipp": "current", "ir": "current",
+    "it": "current", "pulse_width": "time", "rload": "resistance",
+    "ta": "temperature", "tc": "temperature", "tj": "temperature",
+    "tx_power": "dBm", "vcc": "voltage", "vdc": "voltage", "vdd": "voltage",
+    "vds": "voltage", "vgs": "voltage", "vin": "voltage", "voh": "voltage",
+    "vol": "voltage", "vout": "voltage", "vr": "voltage",
+}
+
+
+def vocabulary_slot(pointer):
+    """(where, key, dimension spec) for the Measure at `pointer` when a
+    check may read it, else None. `where` names the vocabulary it is held
+    to: a VOCABULARY section, `closed`, or `conditions`."""
+    tokens = pointer.split("/")[1:]
+    if "conditions" in tokens:
+        rest = tokens[len(tokens) - tokens[::-1].index("conditions"):]
+        name = rest[0] if rest else None
+        spec = CONDITION_DIMENSIONS.get(name)
+        return None if spec is None else ("conditions", name, spec)
+    head = tokens[0] if tokens else None
+    if head == "parameters" and len(tokens) > 1:
+        section, key = "parameters", tokens[1]
+    elif head == "ratings" and len(tokens) > 2:
+        section, key = f"ratings/{tokens[1]}", tokens[2]
+    elif head == "series" and len(tokens) > 1:
+        spec = CLOSED_DIMENSIONS.get(("series", tokens[1]))
+        return None if spec is None else ("closed", tokens[1], spec)
+    elif head == "modes" and len(tokens) > 4 and tokens[2] == "draw":
+        return ("closed", "current", CLOSED_DIMENSIONS[("draw", "current")]) \
+            if tokens[4] == "current" else None
+    elif head in ("pins", "pin_classes") and len(tokens) > 3:
+        block, key = tokens[2], tokens[3]
+        if block == "characteristics":
+            section = "characteristics"
+        else:
+            spec = CLOSED_DIMENSIONS.get((block, key))
+            return None if spec is None else ("closed", key, spec)
+    else:
+        return None
+    spec = VOCABULARY.get(section, {}).get(key)
+    return None if spec is None else (section, key, spec)
 
 
 # Restrictiveness ordering for L10. Higher means more restrictive.
@@ -305,6 +488,16 @@ def layout_problems(data: bytes) -> list:
 _VALIDATORS = {}
 
 
+def _integral(value):
+    """True for an exact number with no fractional part, as JSON Schema
+    defines an integer: `3` and `3.0` alike. jsonschema's own rule knows
+    int and float; partdata parses a fraction as a Decimal, which it does
+    not, so `"pin_count": 3.0` passed the schema gate (which reads floats)
+    and was refused here. One rule for both readers."""
+    return isinstance(value, Decimal) and value.is_finite() \
+        and value == value.to_integral_value()
+
+
 def _validator(version):
     """The validator for one schema version, read once. Raises ImportError
     when the pinned jsonschema is missing: an unavailable check, never a
@@ -314,14 +507,21 @@ def _validator(version):
     if version not in _VALIDATORS:
         path = SCHEMA_DIR / SCHEMAS[version]
         schema = json.loads(path.read_text(encoding="utf-8"))
-        _VALIDATORS[version] = \
-            jsonschema.validators.validator_for(schema)(schema)
+        base = jsonschema.validators.validator_for(schema)
+        checker = base.TYPE_CHECKER.redefine(
+            "integer", lambda checker, value: _integral(value)
+            or base.TYPE_CHECKER.is_type(value, "integer"))
+        _VALIDATORS[version] = jsonschema.validators.extend(
+            base, type_checker=checker)(schema)
     return _VALIDATORS[version]
 
 
 def schema_version(doc):
-    """The integer version `doc` declares, or None."""
+    """The integer version `doc` declares, or None. `1.0` is version 1,
+    as it is to the schema's `const`."""
     version = doc.get("schema_version") if isinstance(doc, dict) else None
+    if _integral(version):
+        return int(version)
     if isinstance(version, bool) or not isinstance(version, int):
         return None
     return version
@@ -458,6 +658,101 @@ def _canonical(value):
                       default=str)
 
 
+def _exact(number):
+    # Fraction reads a Decimal exactly; a float, which no parsed record
+    # holds, exactly as its binary value.
+    return Fraction(number)
+
+
+def _affine(bound):
+    """(reference, factor, offset) of a Bound: a number is the constant
+    function, (None, 0, value). None for anything else."""
+    if isinstance(bound, dict) and isinstance(bound.get("reference"), str):
+        factor, offset = bound.get("factor", 1), bound.get("offset", 0)
+        if _is_number(factor) and _is_number(offset):
+            return bound["reference"], _exact(factor), _exact(offset)
+        return None
+    if _is_number(bound):
+        return None, Fraction(0), _exact(bound)
+    return None
+
+
+def _difference(a, b):
+    """a - b, exactly, when the two Bounds are the same function of the
+    same reference; None when only a value for it could compare them."""
+    fa, fb = _affine(a), _affine(b)
+    if fa is None or fb is None or fa[:2] != fb[:2]:
+        return None
+    return fa[2] - fb[2]
+
+
+def _show(bound):
+    if isinstance(bound, dict):
+        factor, offset = bound.get("factor", 1), bound.get("offset", 0)
+        if not (_is_number(factor) and _is_number(offset)):
+            return _canonical(bound)
+        scaled = bound.get("reference") if factor == 1 \
+            else f"{factor} x {bound.get('reference')}"
+        return scaled if offset == 0 else \
+            f"{scaled} {'-' if offset < 0 else '+'} {abs(offset)}"
+    return str(bound)
+
+
+def _condition_value(node):
+    """One condition as a value: a Measure becomes its dimension, kind and
+    each statistic in base units, exactly, so 5 V and 5.0 V and 5000 mV are
+    one condition. A string, a relative bound or a unit the grammar cannot
+    read is left as written (L20 reports the unit)."""
+    if not _is_measure(node):
+        return ("as-written", _canonical(node))
+    try:
+        unit = _values.parse_part_unit(node["unit"])
+    except (_values.UnitError, TypeError):
+        return ("as-written", _canonical(node))
+    published = [stat for stat in STATISTICS if node.get(stat) is not None]
+    if not all(_is_number(node[stat]) for stat in published):
+        return ("as-written", _canonical(node))
+    return ("measure", unit.dimension.exponents, unit.dimension.level,
+            unit.kind, tuple((stat, _exact(node[stat]) * unit.scale)
+                             for stat in published))
+
+
+def condition_key(conditions):
+    """A hashable value for a conditions map, compared by value (L16 and L19
+    used to compare spellings, so `5` and `5.0` were two operating points)."""
+    if not isinstance(conditions, dict):
+        return ("as-written", _canonical(conditions))
+    return tuple(sorted((name, _condition_value(value))
+                        for name, value in conditions.items()))
+
+
+def _strap_key(when):
+    """A strap combination's levels by value: `x` is any level, which is
+    what leaving a pin out also says."""
+    if not isinstance(when, dict):
+        return _canonical(when)
+    return _canonical({pin: level for pin, level in when.items()
+                       if level != "x"})
+
+
+def _dimension(spec):
+    """(Dimension, unit kind) a vocabulary dimension spec names."""
+    if spec in ("dB", "dBm"):
+        return _values.Dimension((0, 0, 0, 0, 0), spec), "level"
+    if spec == "temperature":
+        return _values.named("temperature"), "offset"
+    if "/" in spec:
+        top, bottom = spec.split("/")
+        return _values.named(top) / _values.named(bottom), "linear"
+    return _values.named(spec), "linear"
+
+
+def _spell(dimension, kind):
+    if kind == "offset":
+        return "a temperature reading (degC)"
+    return dimension.describe()
+
+
 # ---- pin classes -------------------------------------------------------------
 
 BLOCKS = ("abs_max", "recommended", "capability", "characteristics")
@@ -512,7 +807,9 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
       L11 a provenance pointer addressing an element of a SORTED array echoes
           that element's identity, so a re-sort cannot silently re-point it.
       L12 a pin's (effective) recommended window sits inside its
-          absolute-maximum window.
+          absolute-maximum window. Two bounds are compared when both are
+          numbers or both are relative to the same pin by the same factor
+          (BST - SW against BST - SW); any other pair is unperformable.
       L13 physical designators are in ascending natural order.
       L14 implements: entries sorted and unique by definition; every map value
           and unbound pin is a declared record pin; the map is injective; no
@@ -522,18 +819,26 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
       L15 pin classes: sorted and unique by id; a pin's class exists; a member
           carries its class's role; every class has a member.
       L16 straps: sorted and unique by id; a combination names only pins that
-          carry `strap`; no two combinations require the same levels.
+          carry `strap`; no two combinations require the same levels, `x`
+          and leaving a pin out both meaning any level.
       L17 a power_out pin carries no recommended voltage: what an output
           delivers is `output.voltage`, with its conditions.
       L18 absent: sorted and unique by pointer; the pointer does not resolve
-          (no absence alongside a value) but its parent does; an indexed
-          pointer echoes its element's identity; and on a picked record no
-          R29a field is `not-transcribed`.
+          (no absence alongside a value), neither on the record nor through
+          the pin's class (no absence alongside a value the class
+          supplies), but its parent does; an indexed pointer echoes its
+          element's identity; and on a picked record no R29a field is
+          `not-transcribed`.
       L19 the Measures of a condition array state pairwise-distinct
-          conditions.
-      L20 reserved for the checker-reliable key vocabulary (landing L2d).
+          conditions, compared by value (`condition_key`), not spelling.
+      L20 every Measure's unit is in the part-unit grammar
+          (rhoform.check.values.parse_part_unit); a Measure in a closed slot,
+          under a VOCABULARY key or under a CONDITION_DIMENSIONS condition
+          has that slot's dimension; and a role-bound characteristic sits
+          on a pin of its role.
       L21 every source URL is on its vendor's host allowlist.
       L22 canonical layout -- a property of the bytes, so `layout_problems`.
+      L23 a relative bound names a pin of this record, and bounds a voltage.
     """
     problems = []
     unchecked = problems if unchecked is None else unchecked
@@ -722,35 +1027,46 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
                     "containment cannot be checked across units")
                 continue
             a_lo, a_hi = a.get("min"), a.get("max")
-            # A RelativeBound (`{reference, offset}`) is not a number. Resolving
-            # the reference needs a supply value the record does not carry, so
-            # it is REPORTED as unchecked rather than skipped: a containment
-            # gate that quietly covers some pins and not others, with no way
-            # to tell which, is the shape of gap this module exists to close.
-            for endpoint, side in ((a_lo, "min"), (a_hi, "max")):
-                if isinstance(endpoint, dict) and "reference" in endpoint:
-                    cannot_check(
-                        "L12", f"/pins/{i}/abs_max/{quantity}/{side}",
-                        f"pin {pin.get('name')!r}: abs_max {quantity} "
-                        f"{side} is a relative bound "
-                        f"({endpoint.get('reference')}"
-                        f"{endpoint.get('offset', 0):+g}), so containment "
-                        "cannot be checked without a value for that "
-                        "reference. Either state the bound numerically or "
-                        "record the reference's value in the same record; "
-                        "an unresolvable limit checks nothing.")
+            # A RelativeBound (`{reference, offset}`) is not a number, and two
+            # bounds compare only when they are the same affine function of
+            # the same pin (both numbers, or `BST + 14` against `BST + 6`).
+            # Any other pair needs a value for the reference the record does
+            # not carry, so it is REPORTED as unchecked rather than skipped:
+            # a containment gate that quietly covers some pins and not
+            # others, with no way to tell which, is the shape of gap this
+            # module exists to close. A relative RECOMMENDED value against a
+            # numeric limit used to be skipped in exactly that silent way.
+            unresolved = {}
             for key in ("min", "typ", "max"):
                 value = r.get(key)
-                if not _is_number(value):
+                if value is None:
                     continue
-                if _is_number(a_lo) and value < a_lo:
-                    bad("L12", f"{where}/{quantity}/{key}",
-                        f"pin {pin.get('name')!r}: recommended {quantity} "
-                        f"{key}={value} is below abs_max min={a_lo}")
-                if _is_number(a_hi) and value > a_hi:
-                    bad("L12", f"{where}/{quantity}/{key}",
-                        f"pin {pin.get('name')!r}: recommended {quantity} "
-                        f"{key}={value} exceeds abs_max max={a_hi}")
+                for endpoint, side in ((a_lo, "min"), (a_hi, "max")):
+                    if endpoint is None:
+                        continue
+                    gap = _difference(value, endpoint)
+                    if gap is None:
+                        unresolved.setdefault(side, endpoint)
+                    elif side == "min" and gap < 0:
+                        bad("L12", f"{where}/{quantity}/{key}",
+                            f"pin {pin.get('name')!r}: recommended {quantity} "
+                            f"{key}={_show(value)} is below abs_max "
+                            f"min={_show(a_lo)}")
+                    elif side == "max" and gap > 0:
+                        bad("L12", f"{where}/{quantity}/{key}",
+                            f"pin {pin.get('name')!r}: recommended {quantity} "
+                            f"{key}={_show(value)} exceeds abs_max "
+                            f"max={_show(a_hi)}")
+            for side, endpoint in sorted(unresolved.items()):
+                cannot_check(
+                    "L12", f"/pins/{i}/abs_max/{quantity}/{side}",
+                    f"pin {pin.get('name')!r}: abs_max {quantity} {side} "
+                    f"({_show(endpoint)}) and the recommended window are not "
+                    "the same function of one reference (a relative bound "
+                    "against a number, or against another reference), so "
+                    "containment cannot be checked without a value for that "
+                    "reference. State both numerically or both relative to "
+                    "the same pin; an unresolvable limit checks nothing.")
 
     # L13: physical designators are documented as sorted ascending, for the
     # same determinism reason as every other ordering here.
@@ -865,7 +1181,7 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
                     f"strap combination {combination.get('id')!r} needs pin "
                     f"{name!r} at a level, but that pin "
                     f"{'carries no strap block' if name in pin_by_name else 'does not exist'}")
-        key = _canonical(when)
+        key = _strap_key(when)
         if key in seen_when:
             bad("L16", f"/straps/{s}/when",
                 f"strap combinations {seen_when[key]!r} and "
@@ -893,11 +1209,25 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
     for entry in absent:
         pointer = entry.get("pointer", "")
         parent = pointer.rsplit("/", 1)[0]
+        tokens = pointer.split("/")
+        member = pointer_target(doc, "/".join(tokens[:3])) \
+            if len(tokens) > 3 and tokens[1] == "pins" and tokens[3] in BLOCKS \
+            else None
         if pointer_resolves(doc, pointer):
             bad("L18", pointer,
                 f"{pointer!r} is declared absent "
                 f"({entry.get('reason')}) and also carries a value; one of "
                 "the two is wrong")
+        elif isinstance(member, dict) and member.get("class") is not None \
+                and pointer_resolves(effective_pin(doc, member),
+                                     "/" + "/".join(tokens[3:])):
+            # The binding hands a member its class's blocks, so this field
+            # reached a checker as a value AND as an absence.
+            bad("L18", pointer,
+                f"{pointer!r} is declared absent "
+                f"({entry.get('reason')}) on pin {member.get('name')!r}, but "
+                f"its class {member.get('class')!r} supplies that field; a "
+                "member cannot both inherit a value and lack it")
         elif not pointer_resolves(doc, parent):
             bad("L18", pointer,
                 f"absent {pointer!r}: its parent {parent or '/'!r} does not "
@@ -917,13 +1247,74 @@ def lint_problems(doc, unchecked=None, *, picked=False, domains=None):
     for path, array in condition_arrays(doc):
         seen = {}
         for k, measure in enumerate(array):
-            key = _canonical(measure.get("conditions"))
+            key = condition_key(measure.get("conditions"))
             if key in seen:
                 bad("L19", f"{path}/{k}/conditions",
                     f"{path}: elements {seen[key]} and {k} state the same "
                     "conditions; each element of a condition array is a "
                     "distinct operating point")
             seen.setdefault(key, k)
+
+    # L20: a number is only as good as its unit. Every Measure's unit is read
+    # by the grammar a check reads it with, and a Measure a check may read
+    # (a closed slot, a vocabulary key, a named condition) has that slot's
+    # dimension, so `voltage_rating` in mA or a `ta` in K is refused here
+    # rather than met by a DimensionError, or a wrong verdict, in a pass.
+    for path, measure in walk_measures(doc):
+        try:
+            unit = _values.parse_part_unit(measure.get("unit"))
+        except (_values.UnitError, AttributeError) as exc:
+            bad("L20", f"{path}/unit",
+                f"{path}: unit {measure.get('unit')!r} is outside the "
+                f"part-unit grammar, so no check can read its numbers: {exc}")
+            continue
+        slot = vocabulary_slot(path)
+        if slot is None:
+            continue
+        where, key, spec = slot
+        want, kind = _dimension(spec)
+        if unit.dimension != want or unit.kind != kind:
+            bad("L20", f"{path}/unit",
+                f"{path}: {key!r} ({where}) is {_spell(want, kind)}, and "
+                f"{measure.get('unit')!r} is "
+                f"{_spell(unit.dimension, unit.kind)}")
+    for collection in ("pins", "pin_classes"):
+        for i, owner in enumerate(doc.get(collection, [])):
+            for key in sorted(owner.get("characteristics") or {}):
+                role = ROLE_BOUND_CHARACTERISTICS.get(key)
+                if role is not None and owner.get("role") != role:
+                    bad("L20", f"/{collection}/{i}/characteristics/{key}",
+                        f"{key!r} on {owner.get('name', owner.get('id'))!r}, "
+                        f"whose role is {owner.get('role')!r}: it states what "
+                        f"a supply must deliver into a {role} pin, and a "
+                        "check reads it nowhere else")
+
+    # L23: a relative bound is factor x V(reference) + offset, where the
+    # reference is a pin of THIS record. bind() re-keys ports by definition
+    # pin and leaves references alone, so a reference to anything else (a
+    # rail, a design net, a misspelt pin) is one no checker can resolve.
+    for path, measure in walk_measures(doc):
+        for stat in STATISTICS:
+            bound = measure.get(stat)
+            if not isinstance(bound, dict):
+                continue
+            reference = bound.get("reference")
+            if reference not in pin_by_name:
+                bad("L23", f"{path}/{stat}/reference",
+                    f"{path}: {stat} is relative to {reference!r}, which is "
+                    "not a pin of this record; a relative bound names the "
+                    "record pin whose voltage it moves with")
+                continue
+            try:
+                unit = _values.parse_part_unit(measure.get("unit"))
+            except (_values.UnitError, AttributeError):
+                continue
+            if unit.dimension != _values.named("voltage") \
+                    or unit.kind != "linear":
+                bad("L23", f"{path}/{stat}",
+                    f"{path}: {stat} is relative to pin {reference!r}'s "
+                    f"voltage, and the Measure is "
+                    f"{_spell(unit.dimension, unit.kind)}")
 
     # L21: provenance has to be the vendor's own document.
     for s, source in enumerate(sources):
@@ -974,7 +1365,7 @@ class Record:
 
     @property
     def schema_version(self):
-        return self.document["schema_version"]
+        return schema_version(self.document)
 
 
 def check(data: bytes, *, picked=False):
@@ -1076,7 +1467,15 @@ class PinFacts:
 @dataclass(frozen=True)
 class Binding:
     """A record joined to one definition: facts per definition pin, and the
-    part-level data, with every value statistic-tagged."""
+    part-level data, with every value statistic-tagged.
+
+    Ports and mode draws are keyed by DEFINITION pin. A Relative's
+    `reference` stays a RECORD pin name (L23 holds it to one), because a
+    bound is a fact about the part. `record_pins` maps each joined record
+    pin to the definition pin it carries, so a checker resolves a reference
+    with `port_of` and evaluates it in that port's net; a reference to a
+    record pin the definition does not carry (one listed `unbound`)
+    resolves to None, a bound no net can evaluate, which is a coverage row."""
     definition: str
     part_id: str
     ports: dict
@@ -1088,6 +1487,11 @@ class Binding:
     straps: tuple
     absent: dict
     problems: tuple
+    record_pins: dict
+
+    def port_of(self, record_pin):
+        """The definition pin `record_pin` is joined to, or None."""
+        return self.record_pins.get(record_pin)
 
 
 def compatible(record_role, definition_role, *, exact=False):
@@ -1244,4 +1648,12 @@ def bind(record, definition, pins) -> Binding:
         ratings=ratings,
         series=_block(doc, doc.get("series"), "/series"),
         straps=tuple(doc.get("straps", ())), absent=absences,
-        problems=tuple(problems))
+        problems=tuple(problems),
+        record_pins={facts.pin: name for name, facts in ports.items()})
+
+
+# Last, because rhoform.check.values imports Relative from this module: by
+# here every name it needs exists, whichever of the two is imported first.
+# The lint core reads units with the checker's own grammar (L20), so a unit
+# the lint admits is one every pass can read.
+from .check import values as _values  # noqa: E402

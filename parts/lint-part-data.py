@@ -38,6 +38,7 @@ Exit codes: 0 pass, 1 lint failure, 2 usage/environment error.
 import json
 import re
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,10 @@ sys.path.insert(0, str(ROOT))
 from rhoform import partdata  # noqa: E402
 
 EXAMPLES = ROOT / "parts" / "examples"
+# The controls' own directory. A control is a file under it, judged by where
+# it sits in THIS tree: testing for a `negative` path component misfired on a
+# checkout under any directory of that name, skipping every record in it.
+CONTROLS = EXAMPLES / "negative"
 STORE = partdata.STORE
 DEFAULT_TARGETS = (EXAMPLES, STORE)
 
@@ -54,14 +59,71 @@ lint = partdata.lint
 walk_measures = partdata.walk_measures
 
 # Records a benchmark picks, on which `not-transcribed` is refused for pin
-# roles, abs-max and supply-current-per-mode (R29a). Today these are the
-# three benchmark records the store holds. The landing that commits the
-# benchmarks' lockfiles should derive this set from their picks rather than
-# keep a list.
+# roles, abs-max and supply-current-per-mode (R29a): one part_id per distinct
+# MPN the three benchmarks name, whether or not its record has landed yet, so
+# a record arrives already held to the rule. Two lines are left out because
+# the vendor lists no such orderable part (BOM decisions for L5b): the
+# Littelfuse 1206L075YR and the Murata GRM188R61A106KE69, whose product page
+# murata.com no longer serves. tests/parts/pick-benchmark-parts.py --check
+# fails on a pick outside this list. The landing that commits the
+# benchmarks' lockfiles should derive the set from their picks instead.
 BENCHMARK_PICKED = (
+    "ck/pts645sm43smtr92-lfs",
+    "coilcraft/xgl6060-103mec",
     "diodes/ap7361c-33e-13",
     "espressif/esp32-s3-wroom-1-n8r2",
+    "gct/usb4105-gf-a",
+    "infineon/bsc059n04ls6atma1",
+    "kemet/c0805c103k5ractu",
+    "kemet/c0805c104k5ractu",
+    "keystone/232",
+    "keystone/5015",
+    "kingbright/apt1608sgc",
+    "kingbright/kp-1608surck",
+    "kingbright/wp7113id",
+    "littelfuse/smf5.0a",
+    "murata/blm31pg601sn1l",
+    "murata/gcm188r71h104ka57d",
+    "murata/grm1555c1h561ja01d",
+    "murata/grm1555c1h562je01d",
+    "murata/grm1555c1h682je01d",
+    "murata/grm1555c1h820ja01d",
+    "murata/grm155r61c105ke01d",
+    "murata/grm155r71c104ka88d",
+    "murata/grm155r71e104ke14d",
+    "murata/grm155r71h104ke14d",
+    "murata/grm188r72a472ka01d",
+    "murata/grm21br61a226me44l",
+    "murata/grm21br71e225ke11l",
+    "murata/grm32dr71e106ka12l",
+    "murata/grm32er61c226ke20l",
+    "st/usblc6-2sc6",
+    "sullins/prpc002saan-rc",
+    "sullins/prpc006saan-rc",
+    "sullins/prpc020saan-rc",
+    "sullins/spc02syan",
+    "tdk/b32529c0105j000",
+    "tdk/c1608x5r1e475k080ac",
+    "ti/lm25145rgyr",
     "ti/ne555p",
+    "vishay/ss34-e3-57t",
+    "vishay/tnpw040231k2beed",
+    "vishay/wslp1206r0200fea",
+    "yageo/mfr-25fbf52-100k",
+    "yageo/mfr-25fbf52-560r",
+    "yageo/mfr-25fte52-680k",
+    "yageo/rc0402fr-07100kl",
+    "yageo/rc0402fr-0710kl",
+    "yageo/rc0402fr-0716k9l",
+    "yageo/rc0402fr-071k13l",
+    "yageo/rc0402fr-071kl",
+    "yageo/rc0402fr-071ml",
+    "yageo/rc0402fr-0720kl",
+    "yageo/rc0402fr-0749k9l",
+    "yageo/rc0402fr-075k1l",
+    "yageo/rc0402fr-07634rl",
+    "yageo/rc0402fr-077k5l",
+    "yageo/rc0402jr-070rl",
 )
 
 # Controls cite sources at the reserved .example domain, which no vendor
@@ -73,7 +135,7 @@ LINT_CONTROL = re.compile(
 # EQUAL to the population, as the floors elsewhere are: a lint control that
 # vanished, or stopped being recognised as one, must not leave this gate
 # green with less evidence behind it.
-MINIMUM_LINT_CONTROLS = 5
+MINIMUM_LINT_CONTROLS = 9
 
 
 def valid_multi_unit_record():
@@ -191,6 +253,11 @@ def record_files():
     store, never the controls."""
     return sorted(EXAMPLES.glob("*.part.json")) + \
         sorted(STORE.glob("*/*.part.json"))
+
+
+def is_control(path):
+    """True for a file under this tree's parts/examples/negative/."""
+    return Path(path).resolve().is_relative_to(CONTROLS.resolve())
 
 
 def _rel(path):
@@ -311,7 +378,7 @@ def self_test():
 
     # EQUAL to the case count, not one below it: a floor with slack in it
     # permits exactly the silent drift it exists to name.
-    MINIMUM_CASES = 56  # raise deliberately; drifting below is not a decision
+    MINIMUM_CASES = 70  # raise deliberately; drifting below is not a decision
     cases = [
         ("L1", "unresolvable provenance pointer", mutate(lambda d: set_provenance_key(d, "/pins/99/role"))),
         ("L2", "provenance cites unknown source", mutate(lambda d: d["provenance"].__setitem__("", {"source_id": "nope", "confidence": "unverified", "method": "manual"}))),
@@ -380,6 +447,29 @@ def self_test():
         ("L21", "a lookalike domain that ends in the vendor's", v1(lambda d: d["sources"][0].__setitem__("url", "https://evilacme.example/ds.pdf")), "is not one of acme's hosts"),
         ("L12", "a class window outside the pin's abs_max", v1(lambda d: d["pin_classes"][0].__setitem__("recommended", {"voltage": {"unit": "V", "min": 0, "max": 9}}) or d["pins"][0].__setitem__("abs_max", {"voltage": {"unit": "V", "min": 0, "max": 4}})), "exceeds abs_max max=4"),
         ("L17", "a class window making a power_out pin restate accuracy", v1(lambda d: d["pins"][5].__setitem__("class", "pwr") or d["pin_classes"].append({"id": "pwr", "role": "power_out", "recommended": {"voltage": {"unit": "V", "max": 2}}})), "carries a recommended voltage"),
+        # L2d. L20, one case per clause and per kind of slot it reads: the
+        # grammar, a closed slot, a vocabulary key, a reading, a condition,
+        # and the role a supply requirement belongs to.
+        ("L20", "a unit outside the part-unit grammar", v1(lambda d: put(d, "/pins/4/abs_max/voltage/unit", "volts")), "outside the part-unit grammar"),
+        ("L20", "a closed slot in another dimension", v1(lambda d: put(d, "/pins/4/abs_max/voltage/unit", "mA")), "'voltage' (closed) is a voltage, and 'mA' is a current"),
+        ("L20", "a vocabulary key in another dimension", v1(lambda d: d["absent"].pop(0) and d.__setitem__("parameters", {"capacitance": {"unit": "V", "typ": 1}})), "'capacitance' (parameters) is a capacitance"),
+        ("L20", "a temperature reading in a difference unit", v1(lambda d: d.__setitem__("ratings", {"abs_max": {"junction_temperature": {"unit": "K", "max": 150}}})), "is a temperature reading (degC), and 'K' is a temperature"),
+        ("L20", "a named condition in another dimension", v1(lambda d: put(d, "/pins/5/output/voltage/0/conditions/iout/unit", "V")), "'iout' (conditions) is a current"),
+        ("L20", "a supply requirement on a pin that is not power_in", v1(lambda d: d["pins"][0].__setitem__("characteristics", {"required_supply_current": {"unit": "A", "min": 0.5}})), "on 'BOOT', whose role is 'bidirectional'"),
+        ("L20", "a supply requirement on a class whose role is not power_in", v1(lambda d: d["pin_classes"][0]["characteristics"].__setitem__("required_supply_current", {"unit": "A", "min": 0.5})), "on 'gpio', whose role is 'bidirectional'"),
+        # L23: a reference names a record pin, and a relative bound bounds a
+        # voltage.
+        ("L23", "a relative bound naming no pin of the record", v1(lambda d: put(d, "/pin_classes/0/characteristics/vih/min/reference", "VCC")), "not a pin of this record"),
+        ("L23", "a relative bound on a current", v1(lambda d: d["pins"][4]["abs_max"].__setitem__("current", {"unit": "mA", "max": {"reference": "VDD"}})), "and the Measure is a current"),
+        # L18 against the class: the binding would hand BOOT the class's
+        # characteristics and an absence for them.
+        ("L18", "an absence on a member whose class supplies the field", v1(lambda d: d["absent"].append({"pointer": "/pins/0/characteristics", "reason": "vendor-unpublished", "target": "BOOT"})), "its class 'gpio' supplies that field"),
+        # By value, not spelling (AMB-151 item 15).
+        ("L16", "two combinations equal once `x` reads as any level", v1(lambda d: d["straps"][1].__setitem__("when", {"BOOT": "1"})), "require the same levels"),
+        ("L19", "one operating point spelt 1 and 1.0", v1(lambda d: put(d, "/pins/5/output/voltage/1/conditions", {"iout": {"unit": "mA", "typ": Decimal("1.0")}})), "state the same conditions"),
+        ("L19", "one operating point spelt 1 mA and 1000 uA", v1(lambda d: put(d, "/pins/5/output/voltage/1/conditions", {"iout": {"unit": "uA", "typ": 1000}})), "state the same conditions"),
+        # L12 between two bounds on the same reference.
+        ("L12", "a relative recommended bound above a relative abs_max", v1(lambda d: d["pins"][2].update({"abs_max": {"voltage": {"unit": "V", "max": {"reference": "VDD", "offset": 0.3}}}, "recommended": {"voltage": {"unit": "V", "max": {"reference": "VDD", "offset": 0.5}}}})), "exceeds abs_max max=VDD + 0.3"),
     ]
 
     failures = 0
@@ -434,6 +524,14 @@ def self_test():
          lambda d: d["pins"][5].update({
              "recommended": {"current": {"unit": "A", "min": -1000, "max": 0}}}),
          "no abs_max"),
+        # Skipped silently until L2d: a relative recommended value against a
+        # numeric limit compared nothing and reported nothing.
+        ("a relative recommended bound against a numeric abs_max",
+         lambda d: d["pins"][5].update({
+             "abs_max": {"voltage": {"unit": "V", "min": -0.3, "max": 4}},
+             "recommended": {"voltage": {"unit": "V",
+                                         "max": {"reference": "VDD"}}}}),
+         "not the same function of one reference"),
     ):
         notes = []
         lint(mutate(mutation), "probe", notes, domains=hosts)
@@ -442,6 +540,31 @@ def self_test():
         else:
             print(f"self-test FAIL: L12 did NOT report {description} as unchecked")
             failures += 1
+
+    # The comparisons L2d added, in the direction a false positive would
+    # take: the same point stated twice is caught above, and these are not
+    # the same point, nor out of their window.
+    for name, mutation in (
+            ("a relative recommended bound inside its relative abs_max",
+             lambda d: d["pins"][2].update({
+                 "abs_max": {"voltage": {"unit": "V", "max": {
+                     "reference": "VDD", "offset": 0.3}}},
+                 "recommended": {"voltage": {"unit": "V", "max": {
+                     "reference": "VDD", "offset": 0.2}}}})),
+            ("two operating points 1 mA and 1 uA apart",
+             lambda d: put(d, "/pins/5/output/voltage/1/conditions",
+                           {"iout": {"unit": "uA", "typ": 1}})),
+            ("combinations that differ in a pin `x` does not cover",
+             lambda d: d["straps"][1].__setitem__("when", {"BOOT": "1",
+                                                           "MODE": "0"})),
+            ("an absence on a pin that has no class",
+             lambda d: d["absent"].append({
+                 "pointer": "/pins/4/characteristics",
+                 "reason": "vendor-unpublished", "target": "VDD"}))):
+        found = lint(v1(mutation), "case", domains=hosts)
+        ok = found == []
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} lints clean: {name}")
+        failures += 0 if ok else 1
 
     # CANONICAL LAYOUT (L22), on bytes. Numbers are kept as written, so `4.0`
     # and `1e3` are canonical; whitespace, key order, CR and the trailing LF
@@ -530,13 +653,23 @@ def self_test():
             outcomes[name] = found
         broken = Path(tmp) / "broken.part.json"
         broken.write_bytes(b'{"schema_version": 1,')
+        # A record under SOME directory named `negative` is still a record:
+        # the path-component test skipped it as a control, exit 0.
+        elsewhere = Path(tmp) / "negative" / "x.part.json"
+        elsewhere.parent.mkdir()
+        elsewhere.write_text(json.dumps(v1(lambda d: d["implements"][0][
+            "pins"].__setitem__("vdd2", "VDD"))), encoding="utf-8")
         argv = sys.argv
-        sys.argv = ["lint-part-data.py", str(broken)]
         try:
             import contextlib, io
+            sys.argv = ["lint-part-data.py", str(broken)]
             with contextlib.redirect_stdout(io.StringIO()), \
                     contextlib.redirect_stderr(io.StringIO()) as err:
                 unparsed = main()
+            sys.argv = ["lint-part-data.py", str(elsewhere)]
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as stray:
+                misplaced = main()
         finally:
             sys.argv = argv
     for name, ok in (
@@ -550,7 +683,10 @@ def self_test():
             ("a NOTICE stating the records' numbers, wrapped, passes",
              outcomes["current"] == []),
             ("a record that does not parse fails the run",
-             unparsed == 1 and "does not parse as JSON" in err.getvalue())):
+             unparsed == 1 and "does not parse as JSON" in err.getvalue()),
+            ("a record under a directory named negative is linted, not "
+             "skipped as a control",
+             misplaced == 1 and ": L14: " in stray.getvalue())):
         print(f"self-test {'ok:  ' if ok else 'FAIL:'} {name}")
         failures += 0 if ok else 1
 
@@ -686,7 +822,7 @@ def self_test():
     # never the controls; a record that left either directory must leave it.
     _named = {_rel(path) for path in record_files()}
     if not (set(REQUIRED_RECORDS) <= _named) or any(
-            "/negative/" in name for name in _named):
+            is_control(path) for path in record_files()):
         print(f"FAIL record_files() gives {sorted(_named)}; it must include "
               f"every required record and no control", file=sys.stderr)
         return 1
@@ -937,7 +1073,7 @@ def main() -> int:
         # Schema controls are not lint subjects: they are deliberately
         # malformed, and linting them would report noise. Lint controls are
         # schema-valid records with one cross-reference defect, held to it.
-        if "negative" in path.parts:
+        if is_control(path):
             if lint_control_problems(path, doc, problems):
                 controls += 1
             continue
@@ -977,7 +1113,7 @@ def main() -> int:
         return 1
 
     print(
-        f"lint: PASS: {len([f for f in files if 'negative' not in f.parts])} "
+        f"lint: PASS: {len([f for f in files if not is_control(f)])} "
         f"record(s) consistent ({stored} in the store, canonical and at their "
         f"part_id's path), {controls} lint control(s) failing exactly where "
         "they declare, NOTICE's provenance-coverage numbers verified, "

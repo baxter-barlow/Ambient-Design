@@ -143,7 +143,7 @@
     }
   ],
   "mpn": "NE555P",
-  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nRthetaJA is Section 5.4's P (PDIP) column, 98.5 degC/W, read from the rendered page. That table spans six packages across four devices under merged header cells, which the PDF text layer flattens; on the page, the P (PDIP) column is the only PDIP column and sits alone under the NA555, NE555 header.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). THRES current, TRIG current and the RESET voltage level have no VCC row: Section 5.5 (page 5) states each once, under its header's conditions (VCC = 5 V to 15 V, TA = 25 degC), so each is one Measure with no vcc condition rather than a 5 V figure. Supply current is stated per output state at both columns, four modes (page 6).\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
+  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nRthetaJA is Section 5.4's P (PDIP) column, 98.5 degC/W, read from the rendered page. That table spans six packages across four devices under merged header cells, which the PDF text layer flattens; on the page, the P (PDIP) column is the only PDIP column and sits alone under the NA555, NE555 header.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). THRES current, TRIG current and the RESET voltage level have no VCC row: Section 5.5 (page 5) states each once, under its header's conditions, so each is one Measure carrying them, TA = 25 degC and VCC anywhere from 5 V to 15 V (a vcc condition with a min and a max), rather than a 5 V figure. Supply current is stated per output state at both columns, four modes (page 6).\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
   "package": {
     "footprint_ref": "rho:DIP-8_W7.62mm",
     "name": "P (PDIP)",
@@ -382,6 +382,17 @@
       },
       "characteristics": {
         "reset_voltage_level": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": {
+              "max": 15,
+              "min": 5,
+              "unit": "V"
+            }
+          },
           "max": 1.0,
           "min": 0.3,
           "typ": 0.7,
@@ -406,6 +417,17 @@
       },
       "characteristics": {
         "input_current": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": {
+              "max": 15,
+              "min": 5,
+              "unit": "V"
+            }
+          },
           "max": 250,
           "typ": 30,
           "unit": "nA"
@@ -464,6 +486,15 @@
       "characteristics": {
         "input_current": {
           "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": {
+              "max": 15,
+              "min": 5,
+              "unit": "V"
+            },
             "vtrig": {
               "typ": 0,
               "unit": "V"

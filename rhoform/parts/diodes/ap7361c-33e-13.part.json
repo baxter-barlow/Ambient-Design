@@ -16,6 +16,14 @@
   "modes": [
     {
       "conditions": {
+        "cin": {
+          "typ": 4.7,
+          "unit": "uF"
+        },
+        "cout": {
+          "typ": 4.7,
+          "unit": "uF"
+        },
         "iout": {
           "typ": 0,
           "unit": "A"
@@ -24,6 +32,7 @@
           "typ": 25,
           "unit": "degC"
         },
+        "ven": "VIN",
         "vin": "VOUT + 1 V"
       },
       "description": "Regulating, no load current. This is the regulator's own overhead draw on its input rail.",
@@ -121,6 +130,20 @@
       "characteristics": {
         "output_discharge_resistance": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven": "VIN",
+            "vin": "VOUT + 1 V",
             "vol": {
               "typ": 1,
               "unit": "V"
@@ -131,6 +154,14 @@
         },
         "psrr": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
             "frequency": {
               "typ": 1,
               "unit": "kHz"
@@ -138,13 +169,32 @@
             "iout": {
               "typ": 100,
               "unit": "mA"
-            }
+            },
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven": "VIN",
+            "vin": "VOUT + 1 V"
           },
           "typ": 75,
           "unit": "dB"
         },
         "short_circuit_current": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven": "VIN",
             "vin": "VOUT + 1 V",
             "vout": "< 15% of nominal VOUT"
           },
@@ -153,6 +203,10 @@
         },
         "start_up_time": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
             "cout": {
               "typ": 2.2,
               "unit": "uF"
@@ -161,6 +215,12 @@
               "typ": 30,
               "unit": "ohm"
             },
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven": "VIN",
+            "vin": "VOUT + 1 V",
             "vout": {
               "typ": 3,
               "unit": "V"
@@ -178,10 +238,19 @@
       "output": {
         "current_limit": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
             "ta": {
               "typ": 25,
               "unit": "degC"
             },
+            "ven": "VIN",
             "vin": "VOUT + 1 V, VIN(min) = 2.2 V"
           },
           "min": 1.1,
@@ -191,6 +260,14 @@
         "dropout": [
           {
             "conditions": {
+              "cin": {
+                "typ": 4.7,
+                "unit": "uF"
+              },
+              "cout": {
+                "typ": 4.7,
+                "unit": "uF"
+              },
               "iout": {
                 "typ": 300,
                 "unit": "mA"
@@ -199,6 +276,7 @@
                 "typ": 25,
                 "unit": "degC"
               },
+              "ven": "VIN",
               "vout_range": "2.6 V <= VOUT <= 3.3 V"
             },
             "max": 140,
@@ -207,6 +285,14 @@
           },
           {
             "conditions": {
+              "cin": {
+                "typ": 4.7,
+                "unit": "uF"
+              },
+              "cout": {
+                "typ": 4.7,
+                "unit": "uF"
+              },
               "iout": {
                 "typ": 1.0,
                 "unit": "A"
@@ -215,6 +301,7 @@
                 "typ": 25,
                 "unit": "degC"
               },
+              "ven": "VIN",
               "vout_range": "2.6 V <= VOUT <= 3.3 V"
             },
             "typ": 340,
@@ -223,6 +310,14 @@
         ],
         "voltage": {
           "conditions": {
+            "cin": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
+            "cout": {
+              "typ": 4.7,
+              "unit": "uF"
+            },
             "iout": {
               "typ": 100,
               "unit": "mA"
@@ -231,6 +326,7 @@
               "typ": 25,
               "unit": "degC"
             },
+            "ven": "VIN",
             "vin": "VOUT + 1 V"
           },
           "max": 3.333,
@@ -282,7 +378,7 @@
       "confidence": "datasheet-stated",
       "locator": "Electrical Characteristics, page 5, IOUT Maximum Output Current row (VIN = VOUT +1V), under the table's header conditions",
       "method": "manual",
-      "note": "Recorded as a guaranteed MINIMUM (min 1.0 A), which is what the datasheet specifies and what a current-budget check may rely on. Contrast the ESP32-S3 record, whose GPIO drive is published as a typical only and therefore supports no such guarantee. The row states only VIN = VOUT + 1 V. Its other conditions are the table header's (TA = +25 C, CIN = 4.7 uF, COUT = 4.7 uF, VEN = VIN, page 5), recorded with it so the floor is not read outside them; dropout and current_limit carry TA from the same header.",
+      "note": "Recorded as a guaranteed MINIMUM (min 1.0 A), which is what the datasheet specifies and what a current-budget check may rely on. Contrast the ESP32-S3 record, whose GPIO drive is published as a typical only and therefore supports no such guarantee. The row states only VIN = VOUT + 1 V. Its other conditions are the table header's (TA = +25 C, CIN = 4.7 uF, COUT = 4.7 uF, VEN = VIN, page 5), recorded with it so the floor is not read outside them. Every figure this record reads from that table carries the header's conditions the same way, except where its own row overrides one: start-up time states COUT = 2.2 uF, and dropout, measured by lowering VIN, does not carry the header's VIN = VOUT + 1 V.",
       "source_id": "ap7361c-ds37274-rev5-2",
       "target": "OUT"
     },
