@@ -436,6 +436,36 @@ module Board:
         self.assertEqual(self.codes(single), [("RHO3101", "p1/Y"),
                                               ("RHO3104", "N_p1/a.a")])
 
+    def test_a_part_returning_to_ground_pulls_no_open_drain_up(self):
+        text = BOARD + f"""\
+    r = new {RES}
+    c_od = new {CAP}
+    c_ss = new {CAP}
+    net A:
+        r.a
+        x.od
+    r.b ~ c.b
+    net B:
+        c_od.a
+        z.od
+    c_od.b ~ c.b
+    net SS:
+        c_ss.a
+        x.a
+    c_ss.b ~ c.b
+    x.y ~ z.a
+    isolated z.y
+"""
+        # A pull-down and a capacitor to ground hold a line low and never
+        # lift it. An input with only a capacitor to ground is still
+        # driven (a soft-start pin's current source charges it).
+        self.assertEqual(self.codes(text), [("RHO3104", "A"),
+                                            ("RHO3104", "B")])
+        # The same resistor to the rail is the pull-up.
+        self.assertEqual(self.codes(text.replace("    r.b ~ c.b\n",
+                                                 "    r.b ~ c.a\n")),
+                         [("RHO3104", "B")])
+
     def test_ground_typed_nets_take_returns_but_not_outputs(self):
         text = BOARD + f"""\
     j2 = new {BAT}

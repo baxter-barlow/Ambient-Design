@@ -100,7 +100,10 @@ REFERENCE = {
 
 # What can bring a net to a level an input reads: passive counts, since a
 # resistor or a capacitor sets a node (a divider, an RC); single-pin
-# hardware does not, though it is a passive pin.
+# hardware does not, though it is a passive pin. What can pull an open
+# drain up is narrower: a two-terminal part whose other pin is on a
+# ground-typed net (a pull-down, a delay or filter capacitor, a clamp)
+# holds the line low and never lifts it.
 DRIVING = frozenset({"output", "power_out", "bidirectional", "tri_state",
                      "passive"})
 PULL_LOW = frozenset({"open_drain", "open_collector"})
@@ -358,7 +361,8 @@ class _Rules:
             found.append(("RHO3103", {"net": net,
                                       "inputs": self.pins(scope, inputs)},
                           self.at(scope, inputs)))
-        if pulls and not drivers and not view.root_ports:
+        lifts = [m for m in drivers if not self.to_ground(m)]
+        if pulls and not lifts and not view.root_ports:
             found.append(("RHO3104", {"net": net,
                                       "pins": self.pins(scope, pulls)},
                           self.at(scope, pulls)))
@@ -369,6 +373,16 @@ class _Rules:
                                       "pins": self.pins(scope, supplies)},
                           self.at(scope, supplies)))
         return found
+
+    def to_ground(self, member) -> bool:
+        """Whether a passive pin's part has two pins and the other one is
+        on a ground-typed net, so it can hold a line low but not lift it."""
+        instance = self.model.instances[member.path]
+        if member.role != "passive" or len(instance.ports) != 2:
+            return False
+        (other,) = (self.model.net_of.get((member.path, port.name))
+                    for port in instance.ports if port.name != member.port)
+        return other is not None and self.ground.is_ground(other)
 
     def decoupled(self, name, present) -> bool:
         """Whether a present capacitor joins the net to a ground-typed
