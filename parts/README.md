@@ -272,6 +272,11 @@ These are recorded rather than hidden. Each is a candidate for the first
 If a value cannot be read unambiguously from the document, record nothing and
 say so: an `absent` entry with reason `ambiguous-in-source`, or
 `vendor-unpublished` when the document does not state it at all, and the
-detail in its `note`. The 555's thermal resistance and the HC00's supply
-current are recorded this way (the HC00, a v0 example, says so in `notes`),
-because a confidently-wrong number is worse than an absent one.
+detail in its `note`, because a confidently-wrong number is worse than an
+absent one. `ambiguous-in-source` is a statement about the document, not
+about the extraction. A PDF text layer that scrambles a table is not an
+ambiguous table: render the page and read it there, or try a second
+vendor-direct source, and if the value still was not read, it is
+`not-transcribed`. The 555's thermal table is the example. Its text layer
+flattens merged header cells, and the rendered page shows the P (PDIP)
+column plainly, so the record carries that column's figure.
