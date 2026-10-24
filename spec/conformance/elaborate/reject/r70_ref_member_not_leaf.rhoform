@@ -1,10 +1,16 @@
 # RHO3015: a member named `ref` is a reference, a single node a check binds
-# to a ground-typed net (GA-1), so it is never a nested interface.
+# to a ground-typed net (GA-1), so it is never a nested interface, and never
+# an array, whose elements would be nodes with no `ref` among them.
 #pragma rhoform-syntax 0.3
 
 interface Probe:
     port ref = new rhoform.lib.iface.Logic
     port tip
 
+interface Pair:
+    port ref[2]
+    port tip
+
 module Top:
+    port pair = new Pair
     port probe = new Probe

@@ -163,9 +163,10 @@ this section is the contract the passes that implement it read
   net a `rhoform.lib.iface.Power` bundle's `gnd` lands on is
   ground-typed (GA-1, definition (b)), and `Power.v` is measured from
   that net's ground domain.
-- **`ref`.** A member named `ref` is a reference: it MUST be a leaf
-  (RHO3015), so that it is one node, and it MUST land on a ground-typed
-  net, which the ground pass checks.
+- **`ref`.** A member named `ref` is a reference: it MUST be one leaf,
+  neither a nested interface nor an array (RHO3015), so that it is one
+  node that a pass can find by the name `ref`, and it MUST land on a
+  ground-typed net, which the ground pass checks.
 - **Union.** A bundle connect joins `gnd` with `gnd` and `ref` with
   `ref`, like every member. Each one is recorded in the elaborated design
   — its interface, the bundles it joined and the nodes it joined at each
@@ -243,7 +244,7 @@ The codes, reconciled against the registry:
 | RHO3012 | `interface-array-size-not-literal` | error | a bundle port or member sized by a parameter (3.2) |
 | RHO3013 | `index-on-scalar-port` | error | an index on what is not an array (3.5) |
 | RHO3014 | `port-index-out-of-range` | error | an index outside a bundle port or member array (3.5) |
-| RHO3015 | `reference-member-not-leaf` | error | a `ref` member that is an interface (3.8) |
+| RHO3015 | `reference-member-not-leaf` | error | a `ref` member that is a nested interface or an array (3.8) |
 | RHO3016 | `port-array-needs-index` | error | a member of an array no index selects (3.5) |
 
 Block-2 codes keep their meaning for interfaces: RHO2005 and RHO2067 for

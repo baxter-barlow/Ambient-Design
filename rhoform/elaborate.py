@@ -1521,9 +1521,10 @@ class _Elaborator:
     def collect_members(self, defn: _Definition) -> None:
         """An interface's members: each named once (RHO2007), a size a
         literal (RHO3012) of at least one (RHO2042), a nested member an
-        interface (RHO3001), and `ref` a leaf (RHO3015, GA-1). A member whose
-        own defect was reported leaves the interface's shape unknown
-        (`broken`), and what names it stays quiet."""
+        interface (RHO3001), and `ref` one leaf, neither a nested interface
+        nor an array (RHO3015, GA-1). A member whose own defect was reported
+        leaves the interface's shape unknown (`broken`), and what names it
+        stays quiet."""
         result = defn.result
         for node in _trees(defn.tree, "member_decl"):
             name = str(_tokens(node, "FREE_NAME")[0])
@@ -1536,13 +1537,14 @@ class _Elaborator:
                     span, secondary=((defn.members[name].span,
                                       "first declared here"),))
                 continue
-            size = self.literal_size(defn, _tree(node, "array_size"), name)
+            sized = _tree(node, "array_size")
+            size = self.literal_size(defn, sized, name)
             qualified = _tree(node, "qualified_name")
             target = None
             if qualified is not None:
                 target = self.interface_of(defn, qualified)
-                if name == "ref":
-                    self.report("RHO3015", {"interface": defn.name}, span)
+            if name == "ref" and (qualified is not None or sized is not None):
+                self.report("RHO3015", {"interface": defn.name}, span)
             if size is UNKNOWN or (qualified is not None and target is None):
                 defn.broken = True
                 size = None

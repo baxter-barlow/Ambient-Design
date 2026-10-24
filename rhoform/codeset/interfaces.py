@@ -150,9 +150,9 @@ CODES: tuple[CodeDef, ...] = (
     CodeDef(
         code="RHO3015", slug="reference-member-not-leaf", severity="error",
         message=(
-            "member `ref` of interface `{interface}` is a nested interface; "
-            "a reference member is a single node, so that it can be bound to "
-            "a ground-typed net (GA-1)."
+            "member `ref` of interface `{interface}` is a nested interface "
+            "or an array; a reference member is a single node, so that it "
+            "can be bound to a ground-typed net (GA-1)."
         ),
         params=("interface",),
         rule="GA-1",

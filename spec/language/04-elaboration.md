@@ -753,8 +753,9 @@ they mean; this section states how a design is elaborated from them.
 
 **Definitions and shapes.** An interface definition's members have
 unique names (RHO2007); a nested member names an interface (RHO3001),
-and a member named `ref` is a leaf (RHO3015). An array size is an
-integer literal (RHO3012 for a reference) of at least 1 (RHO2042). The
+and a member named `ref` is one leaf, not an array (RHO3015). An array
+size is an integer literal (RHO3012 for a reference) of at least 1
+(RHO2042). The
 nesting MUST be acyclic, reported once per set of interfaces that
 contain one another (RHO3002), so every interface has a finite **shape**:
 its leaves, each named by a **member path** relative to it (`hv`,

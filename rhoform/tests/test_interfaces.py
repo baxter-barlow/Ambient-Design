@@ -159,6 +159,23 @@ module Top:
 """)
         self.assertEqual(_codes(result), ["RHO3002"])
 
+    def test_ref_is_one_leaf_so_the_ground_pass_finds_it(self):
+        # An array of leaves has `ref[0]` and `ref[1]` and no `ref`, so a
+        # pass that looks the reference up by name would find none (GA-1).
+        for member, codes in (("ref", []), ("refs[2]", []),
+                              ("ref[2]", ["RHO3015"]),
+                              (f"ref = new {LOGIC}", ["RHO3015"])):
+            with self.subTest(member=member):
+                result = _elaborate(P + f"""\
+interface Probe:
+    port {member}
+    port tip
+
+module Top:
+    port p = new Probe
+""")
+                self.assertEqual(_codes(result), codes)
+
 
 @unittest.skipUnless(HAVE_LARK, SKIP)
 class BundlePortTest(unittest.TestCase):
