@@ -37,17 +37,26 @@ from grammar import conformance, rhoform_syntax  # noqa: E402
 from grammar.rhoform_syntax import (  # noqa: E402
     ARTIFACTS,
     CLOSED_VOCABULARIES,
+    CONSTRUCT_SINCE,
+    FROZEN_SYNTAX_VERSIONS,
     KEYWORDS,
+    KEYWORDS_SINCE,
     LEXER_QUANTITY,
     PRAGMA_PREFIX,
     PRAGMA_TEXT,
     PRAGMA_TEXTS,
     PROMOTED_IN_0_2,
     RESERVED_FUTURE,
+    RESERVED_SINCE,
+    RULE_WORDS,
     RULES,
+    SOFT_KEYWORDS,
     SYNTAX_VERSION,
     SYNTAX_VERSIONS,
     TERMINALS,
+    TERMINALS_SINCE,
+    UNFROZEN_SYNTAX_VERSIONS,
+    WORDS_SINCE,
     Alt,
     Lit,
     Opt,
@@ -262,9 +271,14 @@ class Anchoring(unittest.TestCase):
         self.assertEqual(
             CLOSED_VOCABULARIES["measurement_kind"], tuple(MEASUREMENT_KINDS)
         )
+        # Syntax 0.3 added `ground_kind`, which the frozen prototype
+        # predates; every older word is still exactly the prototype's.
+        newer = WORDS_SINCE["net_attribute"]
         self.assertEqual(
-            CLOSED_VOCABULARIES["net_attribute"], candidate_b.NET_ATTRIBUTES
-        )
+            tuple(word for word in CLOSED_VOCABULARIES["net_attribute"]
+                  if word not in newer),
+            candidate_b.NET_ATTRIBUTES)
+        self.assertEqual(set(newer), {"ground_kind"})
 
     def test_every_literal_in_the_tree_is_a_declared_keyword(self):
         found: set[str] = set()
@@ -349,13 +363,19 @@ class Anchoring(unittest.TestCase):
             tuple(PRAGMA_PREFIX + version for version in SYNTAX_VERSIONS))
         for text in PRAGMA_TEXTS:
             self.assertIsNotNone(pragma.fullmatch(text), text)
-        for text in (PRAGMA_PREFIX + "0.3", PRAGMA_PREFIX + "0.10",
+        for text in (PRAGMA_PREFIX + "0.4", PRAGMA_PREFIX + "0.10",
                      PRAGMA_PREFIX + "0", PRAGMA_PREFIX + "0.1.0",
                      PRAGMA_PREFIX.strip(), "#pragma rhoform-syntax  0.1"):
             self.assertIsNone(pragma.fullmatch(text), text)
-        # One CURRENT version, which new files and fix-its use.
+        # One CURRENT version, which new files and fix-its use: the newest
+        # frozen one. An unfrozen version (decision OD8) parses but is never
+        # current, and only the newest versions may be unfrozen.
         self.assertIn(SYNTAX_VERSION, SYNTAX_VERSIONS)
-        self.assertEqual(SYNTAX_VERSION, SYNTAX_VERSIONS[-1])
+        self.assertEqual(SYNTAX_VERSION, FROZEN_SYNTAX_VERSIONS[-1])
+        self.assertEqual(UNFROZEN_SYNTAX_VERSIONS, ("0.3",))
+        self.assertEqual(
+            SYNTAX_VERSIONS,
+            FROZEN_SYNTAX_VERSIONS + UNFROZEN_SYNTAX_VERSIONS)
         self.assertEqual(PRAGMA_TEXT, PRAGMA_PREFIX + SYNTAX_VERSION)
 
 
@@ -577,6 +597,38 @@ class Conformance(unittest.TestCase):
         )
         self.assertTrue(self._accepts(source))
 
+    # Syntax 0.3. Here, in this class, because each needs lark: the README
+    # counts this class's tests as the ones that do.
+
+    def test_every_0_3_construct_parses(self):
+        source = (PRAGMA_PREFIX + "0.3\n\ncomponent Ldo:\n"
+                  "    pin in power_in 1\n    pin out power_out \"02\"\n"
+                  "    regulate out from in = 3.3V\n    side primary: in\n"
+                  "module M:\n    port vin power_in\n    u = new Ldo\n"
+                  "    rule u pass in to out\n"
+                  "    net VIN(ground_kind = \"power\"):\n        vin\n"
+                  "    supply VIN within 4.5V to 5.5V\n"
+                  "    draw u.in at most 5mA\n"
+                  "    assert a static operating_point(VIN) at most 6V warning\n"
+                  "    waive RHO3001 u \"why\"\n")
+        self.assertTrue(self._accepts(source))
+
+    def test_the_0_3_words_are_still_names_where_a_statement_starts(self):
+        source = (PRAGMA_0_1 + "\n\nmodule M:\n    port supply passive\n"
+                  "    supply = new X\n    draw = new X\n    waive = new X\n"
+                  "    rule = new X\n    side = new X\n    warning = new X\n"
+                  "    supply.a ~ draw.a ~ waive\n    rule.b ~ supply\n")
+        self.assertTrue(self._accepts(source))
+
+    def test_a_rule_reads_from_and_to_as_its_own_words_not_pins(self):
+        # Any other keyword is a pin a rule may name (`pin in power_in`).
+        body = PRAGMA_PREFIX + "0.3\ncomponent C:\n    pin a passive 1\n    {}\n"
+        for rule, legal in (("tie a from b", True), ("tie a to b", True),
+                            ("tie a in b", True), ("tie a from b c", False),
+                            ("tie a from b to c", False)):
+            with self.subTest(rule=rule):
+                self.assertEqual(self._accepts(body.format(rule)), legal)
+
     def test_the_pragma_names_this_syntax_version_and_no_other(self):
         """L8's header must be able to refuse a file from another version.
 
@@ -588,7 +640,8 @@ class Conformance(unittest.TestCase):
         for pragma, legal in (
             (PRAGMA_0_1, True),
             (PRAGMA_PREFIX + "0.2", True),
-            ("#pragma rhoform-syntax 0.3", False),
+            (PRAGMA_PREFIX + "0.3", True),
+            ("#pragma rhoform-syntax 0.4", False),
             ("#pragma rhoform-syntax 9.9", False),
             ("#pragma rhoform-syntax 0.10", False),
             ("#pragma verilog 1.0", False),
@@ -1158,6 +1211,72 @@ class Attribution(unittest.TestCase):
         self.assertIn('"Attribution" section of LICENSES.md', notice)
         licenses = (LANG.parent / "LICENSES.md").read_text(encoding="utf-8")
         self.assertIn("## Attribution", licenses)
+
+
+class Syntax03Tables(unittest.TestCase):
+    """The tables syntax 0.3's mechanics run on, held to the grammar they
+    describe. Each is the source of truth for one parser behaviour (the
+    version gate, the expected-set filter, the reserved-word check), so a
+    row that names nothing would switch that behaviour off silently."""
+
+    def test_every_versioned_construct_is_a_rule_or_a_terminal(self):
+        rules = {name for name, _, _ in RULES}
+        for name, version in CONSTRUCT_SINCE.items():
+            with self.subTest(construct=name):
+                self.assertTrue(name in rules or name in TERMINALS
+                                or name in SOFT_KEYWORDS, name)
+                self.assertIn(version, SYNTAX_VERSIONS)
+        for name in ("annotation", "waiver", "rule_override", "rule_decl",
+                     "side_decl"):
+            self.assertEqual(CONSTRUCT_SINCE[name], "0.3")
+
+    def test_the_soft_keywords_are_0_3_and_not_keywords(self):
+        for name, word in SOFT_KEYWORDS.items():
+            with self.subTest(word=word):
+                self.assertNotIn(word, KEYWORDS)
+                self.assertNotIn(word, RESERVED_FUTURE)
+                self.assertEqual(KEYWORDS_SINCE[word], "0.3")
+                terminal = re.compile(TERMINALS[name])
+                self.assertIsNotNone(terminal.fullmatch(word))
+                self.assertIsNone(terminal.match(word + "s"))
+        self.assertEqual({w: v for w, v in KEYWORDS_SINCE.items()
+                          if v == "0.2"},
+                         {w: "0.2" for w in PROMOTED_IN_0_2})
+
+    def test_the_reserved_from_0_3_words_are_still_free_names(self):
+        # Reserving per version is what keeps it additive: FREE_NAME must
+        # still take each word, so a 0.2 file that binds one parses.
+        free = re.compile(TERMINALS["FREE_NAME"])
+        for word, version in RESERVED_SINCE.items():
+            with self.subTest(word=word):
+                self.assertIsNotNone(free.fullmatch(word))
+                self.assertEqual(version, "0.3")
+        self.assertIn("variant", RESERVED_SINCE)
+
+    def test_the_rule_word_terminal_is_exactly_the_rule_words(self):
+        terminal = re.compile(TERMINALS["RULE_WORD"])
+        for word in RULE_WORDS:
+            self.assertIsNotNone(terminal.fullmatch(word), word)
+            self.assertIsNone(terminal.fullmatch(word + "x"), word)
+        self.assertIsNone(terminal.fullmatch("pin"))
+        self.assertEqual(list(RULE_WORDS), sorted(RULE_WORDS))
+
+    def test_every_versioned_terminal_exists(self):
+        punctuation = {node.text for _, _, rule in RULES
+                       for node in _walk(rule) if isinstance(node, Lit)}
+        for key, version in TERMINALS_SINCE.items():
+            with self.subTest(terminal=key):
+                self.assertTrue(key in TERMINALS or key in punctuation, key)
+                self.assertIn(version, SYNTAX_VERSIONS)
+
+
+def _walk(node):
+    yield node
+    for child in getattr(node, "items", ()) or getattr(node, "options", ()) or ():
+        yield from _walk(child)
+    inner = getattr(node, "item", None)
+    if inner is not None:
+        yield from _walk(inner)
 
 
 class SuiteCountDocumentation(unittest.TestCase):

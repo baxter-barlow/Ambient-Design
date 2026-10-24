@@ -67,6 +67,20 @@ a reader counting what `FREE_NAME` rejects got 24 where the grammar enforced
 32; a test now reconciles all three counts and the listed words against the
 grammar source.
 
+Syntax 0.3 (`#pragma rhoform-syntax 0.3`, **unfrozen** until M2 exits:
+`supply`, `draw` and `waive` statements, `rule` overrides, component rules
+and sides, quoted designators, an assertion's trailing `warning`, the
+`ground_kind` net attribute) adds no keyword and leaves `FREE_NAME` alone.
+None of its words was reserved in 0.2, so each statement opens with a *soft*
+keyword, a terminal matching only its word and viable only where its
+statement may start: `draw`, `rule`, `side`, `supply`, `waive`, `warning`. A
+0.2 file binding one of them keeps its 0.2 parse tree. Instead the production
+parser refuses five words as names in a file declaring 0.3 or later — `draw`,
+`rule`, `supply`, `variant` (E4's assembly variants, reserved before any
+construct uses them) and `waive` — which is the per-version reservation that
+keeps 0.3 additive. A component rule opens with one of sixteen rule words
+(`RULE_WORDS`), viable only where a component-body statement starts.
+
 ## The bake-off that decided it
 
 ```
@@ -75,7 +89,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 177 tests (35 need lark)
+python3 -m unittest discover -s tests -t .  # 185 tests (38 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the

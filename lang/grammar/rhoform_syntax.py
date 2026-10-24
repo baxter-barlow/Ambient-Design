@@ -18,9 +18,10 @@ its surface, over the layout-tokenized INDENT/DEDENT stream L5 fixes. The
 grammar is context-free over that stream: indentation is resolved by the
 lexer, so no rule here is sensitive to column position.
 
-WHAT IS DELIBERATELY NOT IN THE GRAMMAR. Six closed vocabularies — pin roles
-(T2), hardware kinds (L9), measurement kinds (V2), net attributes (T5), and
-since syntax 0.2 parameter types and the loop iterator — are NOT keywords. They are ordinary names checked against a list after parsing,
+WHAT IS DELIBERATELY NOT IN THE GRAMMAR. Seven closed vocabularies — pin roles
+(T2), hardware kinds (L9), measurement kinds (V2), net attributes (T5), since
+syntax 0.2 parameter types and the loop iterator, and since 0.3 ground kinds —
+are NOT keywords. They are ordinary names checked against a list after parsing,
 exactly as the prototype checks them, and the reason is load-bearing: `input`
 and `output` are pin roles, and a grammar that made them keywords would reject
 `input = new ...`, which is a legal design today. They are published below as
@@ -45,19 +46,36 @@ from pathlib import Path
 # `<major.minor>`, not a quoted semver string: the pragma gates syntax, and a
 # patch component would imply a syntax difference that cannot exist.
 #
-# A SET OF VERSIONS, ONE GRAMMAR (decision S-1/S-2). 0.2 is a strict superset
-# of 0.1: it adds imports, component definitions, parameters, `if`, `for` and
-# arrays, and every valid 0.1 file is a valid 0.2 file with the same tree.
-# One grammar therefore parses both, and the PRAGMA terminal accepts exactly
-# the versions listed here. What 0.1 forbids is enforced AFTER parsing, by the
-# production parser, as one diagnostic per file with a fix-it that rewrites
-# the pragma — a second grammar per version would be two artifacts nobody
-# diffs, which is the failure this module exists to prevent.
+# A SET OF VERSIONS, ONE GRAMMAR (decision S-1/S-2). Each version adds to
+# the one before: 0.2 imports, component definitions, parameters, `if`, `for`
+# and arrays, and 0.3 the design annotations (`supply`, `draw`, `waive`),
+# component rules, rule overrides, a quoted designator and an assertion's
+# `warning`. A file declaring an older version keeps its tree under the one
+# grammar; what a newer version takes away is only in files that declare it
+# (0.3 reserves a few names, RESERVED_SINCE, and refuses designators run
+# together). One grammar therefore parses all of them, and the PRAGMA
+# terminal accepts exactly the versions listed here.
+# What an older version forbids is enforced AFTER parsing, by the production
+# parser, as one diagnostic per file with a fix-it that rewrites the pragma
+# (CONSTRUCT_SINCE says what needs which version) — a second grammar per
+# version would be two artifacts nobody diffs, which is the failure this
+# module exists to prevent.
 #
 # SYNTAX_VERSION is the CURRENT version: what a new file is written with and
-# what every fix-it inserts. PRAGMA_TEXT is its header line.
+# what a missing pragma's fix-it inserts. PRAGMA_TEXT is its header line.
+#
+# UNFROZEN VERSIONS (decision OD8, 2026-10-24). 0.3 is the working version
+# M2's checkers grow in: its constructs may still change shape in place,
+# with no E1 migrator, until M2 exit freezes it. That is honest only while
+# nothing ships, so no tagged release may ship while any version here is
+# unfrozen (spec 01 records the deviation from L8). An unfrozen version
+# parses like any other, but it is never the current version, and the
+# package layer does not announce it (rhoform.package.language_versions).
 PRAGMA_PREFIX = "#pragma rhoform-syntax "
-SYNTAX_VERSIONS = ("0.1", "0.2")
+SYNTAX_VERSIONS = ("0.1", "0.2", "0.3")
+UNFROZEN_SYNTAX_VERSIONS = ("0.3",)
+FROZEN_SYNTAX_VERSIONS = tuple(version for version in SYNTAX_VERSIONS
+                               if version not in UNFROZEN_SYNTAX_VERSIONS)
 SYNTAX_VERSION = "0.2"
 PRAGMA_TEXTS = tuple(PRAGMA_PREFIX + version for version in SYNTAX_VERSIONS)
 PRAGMA_TEXT = PRAGMA_PREFIX + SYNTAX_VERSION
@@ -198,6 +216,98 @@ PROMOTED_IN_0_2 = ("component", "else", "for", "from", "if", "import", "in")
 # `test_the_freeze_drops_signal_and_nothing_else`.
 RESERVED_FUTURE = ("interface",)
 
+# SOFT KEYWORDS (syntax 0.3). A word 0.1 and 0.2 never reserved cannot become
+# a keyword without breaking a file that binds it (E1), so each 0.3 statement
+# opens with a NAMED terminal that matches only its word and is viable only
+# where that statement may start. FREE_NAME does not exclude these words:
+# `supply = new ...` still parses, the head positions of `instance_decl` and
+# `chain_head` accept the soft terminals beside FREE_NAME, and the production
+# parser retypes such a head to FREE_NAME, so a 0.2 file that names something
+# `supply` keeps its 0.2 tree.
+#
+# WHY TERMINALS AND NOT NAMES. The other closed vocabularies are plain names
+# checked after parsing, which is right where the position is a name anyway.
+# A statement head is not: spelled as a name, `prt p passive` (a typo of
+# `port`, conformance case r13) would parse as a three-word 0.3 statement and
+# lose the 0.1 diagnostic it has always had, and every expected set at a
+# statement's start would name "a name" for 0.3's sake. A terminal that only
+# the exact word lexes as leaves every other line's parse, error and
+# expected set what they were.
+#
+# The first four open module statements and compete with FREE_NAME at a
+# statement's start, so they outrank it (LARK_TERMINAL_PRIORITY). `side` opens
+# a component-body statement and `warning` ends an assertion, positions where
+# no name is viable, so they need no rank.
+SOFT_KEYWORDS = {
+    "SUPPLY": "supply",
+    "DRAW": "draw",
+    "WAIVE": "waive",
+    "RULE": "rule",
+    "SIDE": "side",
+    "WARNING": "warning",
+}
+
+# The words a component rule opens with (0.3): the electrical structure of a
+# component KIND, whose numbers come from part data and parameters and whose
+# meaning is spec 05's (the check stage's). One terminal, RULE_WORD, viable
+# only where a component-body statement starts, for the reason the soft
+# keywords above are terminals: a component body held only `pin` lines
+# through 0.2, and a name-shaped rule head would turn every misspelled `pin`
+# into a rule. The trade is that a misspelled rule word is an unexpected-token
+# error naming "a rule word", not a did-you-mean.
+RULE_WORDS = (
+    "bias",
+    "bridge",
+    "conduct",
+    "connector",
+    "diode",
+    "feedback",
+    "ground",
+    "hiz",
+    "open",
+    "pass",
+    "rail",
+    "ref",
+    "regulate",
+    "source",
+    "switch",
+    "tie",
+)
+
+# The version that introduced each word the grammar spells, keyword or soft
+# keyword, after 0.1, and each other token. The production parser drops an
+# expected token newer than the file's pragma from RHO1006 and RHO1007
+# (AMB-146 #2), so a 0.1 file is never told to write `import` and a 0.2 file
+# never `supply`. Punctuation is keyed by its spelling, a named terminal by
+# its name.
+KEYWORDS_SINCE = {
+    **{word: "0.2" for word in PROMOTED_IN_0_2},
+    **{word: "0.3" for word in SOFT_KEYWORDS.values()},
+}
+TERMINALS_SINCE = {
+    "[": "0.2",
+    "]": "0.2",
+    "COMPARE": "0.2",
+    "INDEX_OP": "0.2",
+    "DIAGNOSTIC_CODE": "0.3",
+    "QUOTED_DESIGNATOR": "0.3",
+    "RULE_WORD": "0.3",
+}
+
+# Words no name may be from a version on, though older files may bind them:
+# the module-statement soft keywords, and E4's assembly-variant word, which
+# 0.3 reserves before any construct uses it so that adding one later breaks
+# nothing. Reserving per version is what keeps it additive: a 0.2 file binds
+# `variant` freely. Checked after parsing (RHO1019), because the grammar is one
+# grammar for every version.
+RESERVED_SINCE = {
+    "draw": "0.3",
+    "rule": "0.3",
+    "supply": "0.3",
+    "variant": "0.3",
+    "waive": "0.3",
+}
+
 
 def _free_name_pattern() -> str:
     """An identifier that is neither a keyword nor a reserved future keyword.
@@ -303,6 +413,21 @@ TERMINALS: dict[str, str] = {
     # RHO1010/RHO1012 naming the literal, into an "unexpected `+`" token
     # error that skips that recovery entirely.
     "INDEX_OP": r"[+-](?!/)",
+    # Syntax 0.3. The soft keywords, each its word with the keyword boundary
+    # every keyword carries, then the rule words as one terminal, longest
+    # alternative first.
+    **{name: rf"{word}(?![A-Za-z0-9_])" for name, word in SOFT_KEYWORDS.items()},
+    "RULE_WORD": "(?:" + "|".join(sorted(RULE_WORDS, key=lambda w: (-len(w), w)))
+                 + ")(?![A-Za-z0-9_])",
+    # The code a waiver names: `RHO` and four digits, a terminal so that a
+    # malformed code is a syntax error at its own token. Viable only after
+    # `waive`, so a net or instance spelled like a code is still a name.
+    "DIAGNOSTIC_CODE": r"RHO[0-9]{4}(?![A-Za-z0-9_])",
+    # A designator in quotes (AMB-146 #1): `"01"` and `"1A"` are one
+    # designator each, where `01` is the two designators `0` and `1`. Printable
+    # ASCII with no space and no quote, and never empty, so it is a narrowing
+    # of STRING that only a designator position lexes.
+    "QUOTED_DESIGNATOR": r'"[!#-~]+"',
 }
 
 # Lark lexer priorities. A terminal absent from this map is emitted unranked.
@@ -322,11 +447,18 @@ TERMINALS: dict[str, str] = {
 #                      then fail to reduce. NUMBER still wins on `1.5` because
 #                      it matches longer, which is exactly the rejection the
 #                      `value` rule wants.
+#   SUPPLY DRAW WAIVE  outrank FREE_NAME, which also matches their word at a
+#   RULE               statement's start; the head positions that bind a name
+#                      take them too (see SOFT_KEYWORDS).
 LARK_TERMINAL_PRIORITY = {
     "PRAGMA": 2,
     "QUANTITY_INTERVAL": 2,
     "QUANTITY": 1,
     "INTEGER": 1,
+    "SUPPLY": 1,
+    "DRAW": 1,
+    "WAIVE": 1,
+    "RULE": 1,
 }
 
 # Names the grammar checks by list AFTER parsing, never as keywords. See the
@@ -351,7 +483,8 @@ CLOSED_VOCABULARIES: dict[str, tuple[str, ...]] = {
         "test_point",
         "grounded_mounting_hole",
     ),
-    "net_attribute": ("ground_domain", "voltage_domain"),
+    # `ground_kind` is syntax 0.3 (WORDS_SINCE).
+    "net_attribute": ("ground_domain", "voltage_domain", "ground_kind"),
     "measurement_kind": (
         "operating_point",
         "ripple",
@@ -395,6 +528,17 @@ CLOSED_VOCABULARIES: dict[str, tuple[str, ...]] = {
     # list here exists: `range` was never reserved, so making it a keyword
     # would stop `range = new ...` parsing — a breaking change E1 forbids.
     "loop_iterator": ("range",),
+    # Syntax 0.3: what a `ground_kind` net attribute's string may say (GA-2's
+    # kinds). The value is a string, like every net attribute's, and the word
+    # inside it is checked here.
+    "ground_kind": ("unspecified", "signal", "power", "chassis", "earth"),
+}
+
+# Words of a closed vocabulary that a version after its first added, by
+# vocabulary: a 0.2 file's `ground_kind` attribute is a 0.3 construct
+# (RHO1016), not an unknown attribute.
+WORDS_SINCE = {
+    "net_attribute": {"ground_kind": "0.3"},
 }
 
 
@@ -564,6 +708,20 @@ QUANTITY, QUANTITY_INTERVAL = Term("QUANTITY"), Term("QUANTITY_INTERVAL")
 QUANTITY_PLAIN = Term("QUANTITY_PLAIN")
 # A name being bound, which may not be a keyword. See TERMINALS.
 FREE_NAME = Term("FREE_NAME")
+# A statement's head name. Since 0.3 a module-statement soft keyword lexes as
+# its own terminal where a statement starts, so the two head positions that
+# bind or name something there take those terminals too: `supply = new ...`
+# is still a 0.2 instance named `supply` (see SOFT_KEYWORDS).
+_HEAD = Alt(FREE_NAME, Term("SUPPLY"), Term("DRAW"), Term("WAIVE"),
+            Term("RULE"))
+# A pin a component rule or side names (0.3). A pin's own declaration takes
+# any NAME, keywords included (`pin in power_in 1`), so a rule must be able
+# to name it back: a FREE_NAME or any keyword but the two a rule body spells
+# itself, `from` and `to`, which a pin so named cannot be referred to by.
+# Every keyword here is already a literal of an older rule, so no terminal
+# is added or renumbered.
+PIN_KEYWORDS = tuple(word for word in KEYWORDS if word not in ("from", "to"))
+_PIN = Alt(FREE_NAME, *(Lit(word) for word in PIN_KEYWORDS))
 
 
 def _block(*body: Node) -> Seq:
@@ -599,7 +757,8 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     ),
     (
         "statement",
-        "Everything a module body can carry. `if` and `for` are 0.2.",
+        "Everything a module body can carry. `if` and `for` are 0.2; the "
+        "annotations, waivers and rule overrides are 0.3.",
         Alt(
             Ref("port_decl"),
             Ref("isolated_decl"),
@@ -610,6 +769,9 @@ RULES: tuple[tuple[str, str, Node], ...] = (
             Ref("instance_decl"),
             Ref("if_stmt"),
             Ref("for_stmt"),
+            Ref("annotation"),
+            Ref("waiver"),
+            Ref("rule_override"),
         ),
     ),
     (
@@ -660,15 +822,17 @@ RULES: tuple[tuple[str, str, Node], ...] = (
         "and does not check the ones after `~`, so `net.a ~ x` is rejected "
         "while `x ~ net.a` is accepted. Writing that asymmetry down is also "
         "what keeps the statement head unambiguous for a one-token lexer. "
-        "An index is 0.2.",
-        Seq(FREE_NAME, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
+        "An index is 0.2. A 0.3 soft keyword heads a chain too, as the name "
+        "it was before 0.3.",
+        Seq(_HEAD, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
     ),
     (
         "instance_decl",
         "Instantiation. Facts about the instance live in its optional body. "
-        "An array size is 0.2.",
+        "An array size is 0.2. A 0.3 soft keyword may be the bound name, "
+        "as it could before 0.3; from 0.3 on that name is reserved.",
         Seq(
-            FREE_NAME,
+            _HEAD,
             Lit("="),
             Lit("new"),
             Ref("qualified_name"),
@@ -706,8 +870,9 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     ),
     (
         "designator",
-        "A footprint pin designator: `7`, or `A1` on a connector.",
-        Alt(NUMBER, NAME),
+        "A footprint pin designator: `7`, or `A1` on a connector, or (0.3) a "
+        "quoted one, `\"01\"`, which is one designator where `01` is two.",
+        Alt(NUMBER, NAME, Term("QUOTED_DESIGNATOR")),
     ),
     (
         "part_decl",
@@ -780,7 +945,8 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "assertion",
         "A V1 assertion. The tier is written because V1 makes it visible in "
-        "every diagnostic.",
+        "every diagnostic. A trailing `warning` (0.3) makes a failure "
+        "annotate rather than gate; without it a failure is an error.",
         Seq(
             Lit("assert"),
             NAME,
@@ -790,6 +956,7 @@ RULES: tuple[tuple[str, str, Node], ...] = (
             NAME,
             Lit(")"),
             Ref("bound"),
+            Opt(Term("WARNING")),
             NEWLINE,
         ),
     ),
@@ -870,15 +1037,17 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     ),
     (
         "component_def",
-        "A component definition: its pins and nothing else. Defaults such "
-        "as `hardware` or flags are deliberately not definable here. A "
-        "component with no pins (a mounting hole, a fiducial, artwork) has "
-        "no block, as a `part` binding with no constraints has none.",
+        "A component definition: its pins and, since 0.3, its electrical "
+        "rules and sides, and nothing else. Defaults such as `hardware` or "
+        "flags are deliberately not definable here. A component with no "
+        "pins (a mounting hole, a fiducial, artwork) has no block, as a "
+        "`part` binding with no constraints has none.",
         Seq(
             Lit("component"),
             FREE_NAME,
             Opt(Ref("params")),
-            Alt(_block(Rep(Ref("pin_decl"), 1)), NEWLINE),
+            Alt(_block(Rep(Alt(Ref("pin_decl"), Ref("rule_decl"),
+                               Ref("side_decl")), 1)), NEWLINE),
         ),
     ),
     (
@@ -957,7 +1126,96 @@ RULES: tuple[tuple[str, str, Node], ...] = (
             Lit("]"),
         ),
     ),
+    # ----------------------------------------------------------------------
+    # Syntax 0.3 (unfrozen until M2 exit, decision OD8). Appended after every
+    # 0.2 rule for the reason the 0.2 rules follow the 0.1 ones, and spelling
+    # no new keyword literal: every word they open with is a soft keyword
+    # (SOFT_KEYWORDS, RULE_WORDS), so no 0.1 or 0.2 keyword's terminal moves
+    # and no 0.1 or 0.2 tree changes. The production parser refuses each
+    # construct below under an older pragma (CONSTRUCT_SINCE).
+    # ----------------------------------------------------------------------
+    (
+        "annotation",
+        "A design annotation: `supply` (a voltage window or a current "
+        "capability at its target) or `draw` (a current bound into it), a "
+        "target, and a bound. The target is a net label or an instance pin. "
+        "What the bound means is the check stage's.",
+        Seq(Alt(Term("SUPPLY"), Term("DRAW")), Ref("target"), Ref("bound"),
+            NEWLINE),
+    ),
+    (
+        "waiver",
+        "A per-site waiver (T6): the code it waives, the target it waives it "
+        "for (an instance, a net label or an assertion), and the "
+        "justification, which is mandatory.",
+        Seq(Term("WAIVE"), Term("DIAGNOSTIC_CODE"), Ref("target"), STRING,
+            NEWLINE),
+    ),
+    (
+        "rule_override",
+        "An instance's electrical rules, stated by the module that "
+        "instantiates it: a component used for something its definition "
+        "does not say (a diode as a power path, a FET as a load switch).",
+        Seq(Term("RULE"), Ref("target"), Ref("rule_body"), NEWLINE),
+    ),
+    (
+        "target",
+        "What a 0.3 module statement is about: a name, an array member, or "
+        "a pin of either. Its first name is a FREE_NAME, as a chain head's "
+        "is, so that the keyword after it (`within`, `at`) lexes as one.",
+        Seq(FREE_NAME, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
+    ),
+    (
+        "rule_decl",
+        "One electrical rule of a component definition. Rules and sides "
+        "follow the pins in canonical form; the grammar takes them in any "
+        "order.",
+        Seq(Ref("rule_body"), NEWLINE),
+    ),
+    (
+        "rule_body",
+        "A rule word, the pins it covers, optionally a `from` or `to` pin, "
+        "and optionally a value. A pin is a FREE_NAME or a keyword other "
+        "than `from` and `to`, so those two after the pins lex as keywords; "
+        "which words take how many pins is the check stage's.",
+        Seq(
+            Term("RULE_WORD"),
+            Rep(_PIN),
+            Opt(Seq(Alt(Lit("from"), Lit("to")), _PIN)),
+            Opt(Seq(Lit("="), Ref("value"))),
+        ),
+    ),
+    (
+        "side_decl",
+        "One side of an isolating component (GA-13): its name and the pins "
+        "on it.",
+        Seq(Term("SIDE"), FREE_NAME, Lit(":"), Rep(_PIN, 1), NEWLINE),
+    ),
 )
+
+# What needs which syntax version, for the production parser's version gate
+# (RHO1016): a tree rule, or a terminal whose token is the whole construct.
+# A construct appearing under an older pragma counts once per node, nested
+# ones included. Two 0.2 constructs have no key here, because neither is a
+# rule or a token of its own: a parameter reference (a `value` whose token is
+# a FREE_NAME) and, in 0.3, a `ground_kind` attribute (WORDS_SINCE); the
+# parser recognizes both directly.
+CONSTRUCT_SINCE = {
+    "import_stmt": "0.2",
+    "component_def": "0.2",
+    "params": "0.2",
+    "if_stmt": "0.2",
+    "for_stmt": "0.2",
+    "array_size": "0.2",
+    "index": "0.2",
+    "annotation": "0.3",
+    "waiver": "0.3",
+    "rule_override": "0.3",
+    "rule_decl": "0.3",
+    "side_decl": "0.3",
+    "QUOTED_DESIGNATOR": "0.3",
+    "WARNING": "0.3",
+}
 
 
 # --------------------------------------------------------------------------
@@ -965,6 +1223,7 @@ RULES: tuple[tuple[str, str, Node], ...] = (
 # --------------------------------------------------------------------------
 
 _VERSION_LIST = ", ".join(SYNTAX_VERSIONS)
+_UNFROZEN_LIST = ", ".join(UNFROZEN_SYNTAX_VERSIONS)
 
 _HEADER = f"""\
 Rhoform syntax v{SYNTAX_VERSION} — {{title}}
@@ -977,14 +1236,18 @@ The grammar is context-free over the layout-tokenized stream L5 fixes, so
 INDENT, DEDENT and NEWLINE arrive as terminals and no rule below is sensitive
 to column position. Every file opens with the L8 pragma, naming one of the
 versions {_VERSION_LIST}; new files use `{PRAGMA_TEXT}`. One grammar
-serves every version: 0.2 only adds, and the constructs it adds are refused
-under a 0.1 pragma after parsing, not by a second grammar.
+serves every version: each version only adds, and the constructs it adds are
+refused under an older pragma after parsing, not by a second grammar.
+Version {_UNFROZEN_LIST} is unfrozen: its constructs may still change shape
+before it is frozen, and no release ships while it is.
 
-Pin roles, hardware kinds, measurement kinds, net attributes, parameter types
-and the loop iterator are NOT keywords here: they are plain names checked
-against a closed list after parsing, because `input` and `output` are pin
-roles and a design may legitimately name an instance `input`. The lists are
-published in the source module as CLOSED_VOCABULARIES.
+Pin roles, hardware kinds, measurement kinds, net attributes, parameter types,
+the loop iterator and ground kinds are NOT keywords here: they are plain names
+checked against a closed list after parsing, because `input` and `output` are
+pin roles and a design may legitimately name an instance `input`. The lists are
+published in the source module as CLOSED_VOCABULARIES. The words that open a
+0.3 statement are soft keywords: named terminals viable only where that
+statement starts, which leave the word free as a name everywhere else.
 """
 
 

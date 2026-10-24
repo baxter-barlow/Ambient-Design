@@ -7,15 +7,19 @@
 // The grammar is context-free over the layout-tokenized stream L5 fixes, so
 // INDENT, DEDENT and NEWLINE arrive as terminals and no rule below is sensitive
 // to column position. Every file opens with the L8 pragma, naming one of the
-// versions 0.1, 0.2; new files use `#pragma rhoform-syntax 0.2`. One grammar
-// serves every version: 0.2 only adds, and the constructs it adds are refused
-// under a 0.1 pragma after parsing, not by a second grammar.
+// versions 0.1, 0.2, 0.3; new files use `#pragma rhoform-syntax 0.2`. One grammar
+// serves every version: each version only adds, and the constructs it adds are
+// refused under an older pragma after parsing, not by a second grammar.
+// Version 0.3 is unfrozen: its constructs may still change shape
+// before it is frozen, and no release ships while it is.
 //
-// Pin roles, hardware kinds, measurement kinds, net attributes, parameter types
-// and the loop iterator are NOT keywords here: they are plain names checked
-// against a closed list after parsing, because `input` and `output` are pin
-// roles and a design may legitimately name an instance `input`. The lists are
-// published in the source module as CLOSED_VOCABULARIES.
+// Pin roles, hardware kinds, measurement kinds, net attributes, parameter types,
+// the loop iterator and ground kinds are NOT keywords here: they are plain names
+// checked against a closed list after parsing, because `input` and `output` are
+// pin roles and a design may legitimately name an instance `input`. The lists are
+// published in the source module as CLOSED_VOCABULARIES. The words that open a
+// 0.3 statement are soft keywords: named terminals viable only where that
+// statement starts, which leave the word free as a name everywhere else.
 //
 
 // A file is the L8 pragma, then imports (0.2), then definitions: modules, and (0.2) components. Nothing else at file scope. The definitions are an inline choice rather than a `definition` rule so a 0.1 file's tree is exactly what it was under 0.1.
@@ -24,8 +28,8 @@ start: _NEWLINE? PRAGMA _NEWLINE import_stmt* (module_def | component_def)+
 // A module groups instances, nets and assertions. A parameter list is 0.2.
 module_def: /module(?![A-Za-z0-9_])/ FREE_NAME params? ":" _NEWLINE _INDENT statement+ _DEDENT
 
-// Everything a module body can carry. `if` and `for` are 0.2.
-statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl | if_stmt | for_stmt
+// Everything a module body can carry. `if` and `for` are 0.2; the annotations, waivers and rule overrides are 0.3.
+statement: port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl | if_stmt | for_stmt | annotation | waiver | rule_override
 
 // This module's own interface port. The role is a pin_role name.
 port_decl: /port(?![A-Za-z0-9_])/ FREE_NAME NAME _NEWLINE
@@ -45,11 +49,11 @@ net_attribute: NAME "=" STRING
 // An unnamed net written as a chain of endpoints.
 chain: chain_head ("~" endpoint)+ _NEWLINE
 
-// The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer. An index is 0.2.
-chain_head: FREE_NAME index? ("." NAME)?
+// The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer. An index is 0.2. A 0.3 soft keyword heads a chain too, as the name it was before 0.3.
+chain_head: (FREE_NAME | SUPPLY | DRAW | WAIVE | RULE) index? ("." NAME)?
 
-// Instantiation. Facts about the instance live in its optional body. An array size is 0.2.
-instance_decl: FREE_NAME "=" /new(?![A-Za-z0-9_])/ qualified_name array_size? arguments? (instance_body | _NEWLINE)
+// Instantiation. Facts about the instance live in its optional body. An array size is 0.2. A 0.3 soft keyword may be the bound name, as it could before 0.3; from 0.3 on that name is reserved.
+instance_decl: (FREE_NAME | SUPPLY | DRAW | WAIVE | RULE) "=" /new(?![A-Za-z0-9_])/ qualified_name array_size? arguments? (instance_body | _NEWLINE)
 
 // The block that carries everything about an instance but its values.
 instance_body: ":" _NEWLINE _INDENT instance_stmt+ _DEDENT
@@ -60,8 +64,8 @@ instance_stmt: pin_decl | part_decl | hardware_decl | negated_flag | flag
 // A component pin, optionally carrying footprint designators.
 pin_decl: /pin(?![A-Za-z0-9_])/ NAME NAME designator* _NEWLINE
 
-// A footprint pin designator: `7`, or `A1` on a connector.
-designator: NUMBER | NAME
+// A footprint pin designator: `7`, or `A1` on a connector, or (0.3) a quoted one, `"01"`, which is one designator where `01` is two.
+designator: NUMBER | NAME | QUOTED_DESIGNATOR
 
 // D1's binding ladder: an abstract constrained part, or a pinned pick.
 part_decl: /part(?![A-Za-z0-9_])/ (/abstract(?![A-Za-z0-9_])/ | STRING) (":" _NEWLINE _INDENT constraint+ _DEDENT | _NEWLINE)
@@ -93,8 +97,8 @@ column: NAME ("." NAME)?
 // An instance name and its values. HOW MANY is not a syntactic fact: a row carries one value per column of its header, and no context-free rule can count a preceding declaration. The grammar therefore accepts any number, including none — a table declaring no columns has rows that are a bare name — and the arity check belongs to the checker, which reports the mismatch against the header.
 table_row: FREE_NAME value* _NEWLINE
 
-// A V1 assertion. The tier is written because V1 makes it visible in every diagnostic.
-assertion: /assert(?![A-Za-z0-9_])/ NAME (/static(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/) NAME "(" NAME ")" bound _NEWLINE
+// A V1 assertion. The tier is written because V1 makes it visible in every diagnostic. A trailing `warning` (0.3) makes a failure annotate rather than gate; without it a failure is an error.
+assertion: /assert(?![A-Za-z0-9_])/ NAME (/static(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/) NAME "(" NAME ")" bound WARNING? _NEWLINE
 
 // `within` takes an interval; a dimensionless one is two NUMBERs, since the lexer only forms a QUANTITY around a unit.
 bound: /within(?![A-Za-z0-9_])/ (QUANTITY_INTERVAL | NUMBER /to(?![A-Za-z0-9_])/ NUMBER) | /at(?![A-Za-z0-9_])/ (/least(?![A-Za-z0-9_])/ | /most(?![A-Za-z0-9_])/) (QUANTITY_PLAIN | NUMBER)
@@ -117,8 +121,8 @@ qualified_name: NAME ("." NAME)*
 // Names imported from another file. The names are BOUND here, so each is a FREE_NAME; resolving the path is the package layer's job.
 import_stmt: /import(?![A-Za-z0-9_])/ FREE_NAME ("," FREE_NAME)* /from(?![A-Za-z0-9_])/ STRING _NEWLINE
 
-// A component definition: its pins and nothing else. Defaults such as `hardware` or flags are deliberately not definable here. A component with no pins (a mounting hole, a fiducial, artwork) has no block, as a `part` binding with no constraints has none.
-component_def: /component(?![A-Za-z0-9_])/ FREE_NAME params? (":" _NEWLINE _INDENT pin_decl+ _DEDENT | _NEWLINE)
+// A component definition: its pins and, since 0.3, its electrical rules and sides, and nothing else. Defaults such as `hardware` or flags are deliberately not definable here. A component with no pins (a mounting hole, a fiducial, artwork) has no block, as a `part` binding with no constraints has none.
+component_def: /component(?![A-Za-z0-9_])/ FREE_NAME params? (":" _NEWLINE _INDENT (pin_decl | rule_decl | side_decl)+ _DEDENT | _NEWLINE)
 
 // A definition's parameter list. It may be empty, and like an argument list it may wrap, because `(` suspends layout.
 params: "(" (param ("," param)*)? ")"
@@ -147,10 +151,31 @@ array_size: "[" (INTEGER | FREE_NAME) "]"
 // An array member. A loop variable may be offset by a whole number.
 index: "[" (FREE_NAME | INTEGER) (INDEX_OP INTEGER)? "]"
 
+// A design annotation: `supply` (a voltage window or a current capability at its target) or `draw` (a current bound into it), a target, and a bound. The target is a net label or an instance pin. What the bound means is the check stage's.
+annotation: (SUPPLY | DRAW) target bound _NEWLINE
+
+// A per-site waiver (T6): the code it waives, the target it waives it for (an instance, a net label or an assertion), and the justification, which is mandatory.
+waiver: WAIVE DIAGNOSTIC_CODE target STRING _NEWLINE
+
+// An instance's electrical rules, stated by the module that instantiates it: a component used for something its definition does not say (a diode as a power path, a FET as a load switch).
+rule_override: RULE target rule_body _NEWLINE
+
+// What a 0.3 module statement is about: a name, an array member, or a pin of either. Its first name is a FREE_NAME, as a chain head's is, so that the keyword after it (`within`, `at`) lexes as one.
+target: FREE_NAME index? ("." NAME)?
+
+// One electrical rule of a component definition. Rules and sides follow the pins in canonical form; the grammar takes them in any order.
+rule_decl: rule_body _NEWLINE
+
+// A rule word, the pins it covers, optionally a `from` or `to` pin, and optionally a value. A pin is a FREE_NAME or a keyword other than `from` and `to`, so those two after the pins lex as keywords; which words take how many pins is the check stage's.
+rule_body: RULE_WORD (FREE_NAME | /abstract(?![A-Za-z0-9_])/ | /assert(?![A-Za-z0-9_])/ | /at(?![A-Za-z0-9_])/ | /board_only(?![A-Za-z0-9_])/ | /dnp(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/ | /exclude_from_bom(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/ | /hardware(?![A-Za-z0-9_])/ | /isolated(?![A-Za-z0-9_])/ | /least(?![A-Za-z0-9_])/ | /module(?![A-Za-z0-9_])/ | /most(?![A-Za-z0-9_])/ | /net(?![A-Za-z0-9_])/ | /new(?![A-Za-z0-9_])/ | /no(?![A-Za-z0-9_])/ | /part(?![A-Za-z0-9_])/ | /pin(?![A-Za-z0-9_])/ | /port(?![A-Za-z0-9_])/ | /static(?![A-Za-z0-9_])/ | /table(?![A-Za-z0-9_])/ | /true(?![A-Za-z0-9_])/ | /within(?![A-Za-z0-9_])/ | /component(?![A-Za-z0-9_])/ | /else(?![A-Za-z0-9_])/ | /for(?![A-Za-z0-9_])/ | /if(?![A-Za-z0-9_])/ | /import(?![A-Za-z0-9_])/ | /in(?![A-Za-z0-9_])/)* ((/from(?![A-Za-z0-9_])/ | /to(?![A-Za-z0-9_])/) (FREE_NAME | /abstract(?![A-Za-z0-9_])/ | /assert(?![A-Za-z0-9_])/ | /at(?![A-Za-z0-9_])/ | /board_only(?![A-Za-z0-9_])/ | /dnp(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/ | /exclude_from_bom(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/ | /hardware(?![A-Za-z0-9_])/ | /isolated(?![A-Za-z0-9_])/ | /least(?![A-Za-z0-9_])/ | /module(?![A-Za-z0-9_])/ | /most(?![A-Za-z0-9_])/ | /net(?![A-Za-z0-9_])/ | /new(?![A-Za-z0-9_])/ | /no(?![A-Za-z0-9_])/ | /part(?![A-Za-z0-9_])/ | /pin(?![A-Za-z0-9_])/ | /port(?![A-Za-z0-9_])/ | /static(?![A-Za-z0-9_])/ | /table(?![A-Za-z0-9_])/ | /true(?![A-Za-z0-9_])/ | /within(?![A-Za-z0-9_])/ | /component(?![A-Za-z0-9_])/ | /else(?![A-Za-z0-9_])/ | /for(?![A-Za-z0-9_])/ | /if(?![A-Za-z0-9_])/ | /import(?![A-Za-z0-9_])/ | /in(?![A-Za-z0-9_])/))? ("=" value)?
+
+// One side of an isolating component (GA-13): its name and the pins on it.
+side_decl: SIDE FREE_NAME ":" (FREE_NAME | /abstract(?![A-Za-z0-9_])/ | /assert(?![A-Za-z0-9_])/ | /at(?![A-Za-z0-9_])/ | /board_only(?![A-Za-z0-9_])/ | /dnp(?![A-Za-z0-9_])/ | /dynamic(?![A-Za-z0-9_])/ | /exclude_from_bom(?![A-Za-z0-9_])/ | /false(?![A-Za-z0-9_])/ | /hardware(?![A-Za-z0-9_])/ | /isolated(?![A-Za-z0-9_])/ | /least(?![A-Za-z0-9_])/ | /module(?![A-Za-z0-9_])/ | /most(?![A-Za-z0-9_])/ | /net(?![A-Za-z0-9_])/ | /new(?![A-Za-z0-9_])/ | /no(?![A-Za-z0-9_])/ | /part(?![A-Za-z0-9_])/ | /pin(?![A-Za-z0-9_])/ | /port(?![A-Za-z0-9_])/ | /static(?![A-Za-z0-9_])/ | /table(?![A-Za-z0-9_])/ | /true(?![A-Za-z0-9_])/ | /within(?![A-Za-z0-9_])/ | /component(?![A-Za-z0-9_])/ | /else(?![A-Za-z0-9_])/ | /for(?![A-Za-z0-9_])/ | /if(?![A-Za-z0-9_])/ | /import(?![A-Za-z0-9_])/ | /in(?![A-Za-z0-9_])/)+ _NEWLINE
+
 // Terminals, emitted from TERMINALS so this artifact cannot
 // carry a different terminal SET from the EBNF. Priorities come
 // from LARK_TERMINAL_PRIORITY; see it for why each is ranked.
-PRAGMA.2: /\#pragma\ rhoform\-syntax\ (?:0\.1|0\.2)/
+PRAGMA.2: /\#pragma\ rhoform\-syntax\ (?:0\.1|0\.2|0\.3)/
 FREE_NAME: /(?!(?:abstract|assert|at|board_only|component|dnp|dynamic|else|exclude_from_bom|false|for|from|hardware|if|import|in|interface|isolated|least|module|most|net|new|no|part|pin|port|static|table|to|true|within)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
 NAME: /[A-Za-z_][A-Za-z0-9_]*/
 QUANTITY.1: /-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*(?: \+\/- -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9\/]*|%)| \(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]* to -?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[A-Za-z][A-Za-z0-9\/]*\))?/
@@ -161,6 +186,15 @@ INTEGER.1: /-?(?:0|[1-9][0-9]*)/
 STRING: /"[ !#-~]*"/
 COMPARE: /==|!=|<=|>=|<|>/
 INDEX_OP: /[+-](?!\/)/
+SUPPLY.1: /supply(?![A-Za-z0-9_])/
+DRAW.1: /draw(?![A-Za-z0-9_])/
+WAIVE.1: /waive(?![A-Za-z0-9_])/
+RULE.1: /rule(?![A-Za-z0-9_])/
+SIDE: /side(?![A-Za-z0-9_])/
+WARNING: /warning(?![A-Za-z0-9_])/
+RULE_WORD: /(?:connector|feedback|regulate|conduct|bridge|ground|source|switch|diode|bias|open|pass|rail|hiz|ref|tie)(?![A-Za-z0-9_])/
+DIAGNOSTIC_CODE: /RHO[0-9]{4}(?![A-Za-z0-9_])/
+QUOTED_DESIGNATOR: /"[!#-~]+"/
 
 // A comment runs to end of line. A `#pragma` word is excluded so the L8 header is never swallowed as one — but `#pragmatic` is an ordinary comment, which is why the exclusion ends at a word boundary. ASCII only, like every other lexeme.
 COMMENT: /\#(?!pragma(?![A-Za-z0-9_]))[ -~]*/
