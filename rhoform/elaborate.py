@@ -461,6 +461,14 @@ def _words(node) -> list[str]:
     return [str(c) for c in node.children if not _is_tree(c)]
 
 
+def _designator(node) -> str:
+    """A `designator` node's pad: a quoted one (0.3) is its text without
+    the quotes, so `"01"` is the designator `01` and `"3"` is `3`."""
+    token = node.children[0]
+    text = str(token)
+    return text[1:-1] if token.type == "QUOTED_DESIGNATOR" else text
+
+
 def _rule_parts(body):
     """A `rule_body` as (word token, pin tokens, relation, other pin
     token, value tree): `regulate OUT from IN = v`."""
@@ -1247,7 +1255,7 @@ class _Elaborator:
             defn.pin_spans[pin] = span
             designators = []
             for designator in _trees(pin_node, "designator"):
-                text = str(designator.children[0])
+                text = _designator(designator)
                 if text in designators:
                     self.report(
                         "RHO2007",
@@ -2292,7 +2300,7 @@ class _Elaborator:
                 pin_spans[pin] = span
                 designators = []
                 for designator in _trees(fact, "designator"):
-                    text = str(designator.children[0])
+                    text = _designator(designator)
                     if text in designators:
                         self.report(
                             "RHO2007",

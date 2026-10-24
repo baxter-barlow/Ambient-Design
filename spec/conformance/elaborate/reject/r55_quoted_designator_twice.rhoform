@@ -1,0 +1,12 @@
+# A quoted designator is its pad without the quotes (syntax 0.3), so `"3"`
+# and `3` name one pad, and a pin that lists both lists it twice (RHO2007).
+#pragma rhoform-syntax 0.3
+
+component Header:
+    pin a passive "01"
+    pin c passive "3" 3
+
+module Board:
+    port vin power_in
+    h = new Header
+    h.c ~ vin

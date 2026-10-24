@@ -3,11 +3,12 @@
 # evaluated per instance; a `rule` statement gives one array member others
 # and keeps its sides; `supply`, `draw` and `waive` resolve to the entity
 # they name, once per module instance; a trailing `warning` is the
-# assertion's severity; `ground_kind` is the net's authored kind.
+# assertion's severity; `ground_kind` is the net's authored kind. A quoted
+# designator is its pad without the quotes: `"03"` is pin_numbers ["03"].
 #pragma rhoform-syntax 0.3
 
 component Ldo(vout: voltage = 3.3V):
-    pin gnd passive 3
+    pin gnd passive "03"
     pin in power_in 1
     pin out power_out 2
     ground gnd
