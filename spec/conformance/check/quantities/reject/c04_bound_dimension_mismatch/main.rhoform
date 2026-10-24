@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# RHO3203: bounds whose dimension the measurement does not admit, of
+# either tier. An operating point is a voltage or a current, an efficiency
+# a number, and a ripple a voltage or a current, never a bare number.
+module Board:
+    port vin power_in
+    net VIN:
+        vin
+    assert vin_efficiency dynamic efficiency(VIN) at least 85W
+    assert vin_power static operating_point(VIN) within 1W to 2W
+    assert vin_ripple dynamic ripple(VIN) at most 0.05

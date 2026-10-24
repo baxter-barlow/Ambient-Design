@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+
+# The T4 lint (RHO3201, a warning): an exact value on a nominal-valued
+# name of a `part abstract`. No physical part has an exact resistance, so
+# the fix-it inserts a tolerance placeholder after the literal. The exact
+# voltage rating beside it is a limit, and is not flagged.
+module Board:
+    port vin power_in
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm
+            voltage_rating = 50V
+    net VIN:
+        r1.a
+        vin

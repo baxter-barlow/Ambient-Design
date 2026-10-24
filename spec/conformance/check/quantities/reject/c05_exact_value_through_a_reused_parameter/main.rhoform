@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.2
+
+# The lint reads the value a reference evaluates to: both dividers take
+# the exact default, so both resistors are flagged, at the one site, as
+# one finding about no single instance. A reference has no literal to
+# fix, so there is no fix-it.
+module Divider(r: resistance = 10kohm):
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = r
+    top ~ r1.a
+
+module Board:
+    port vin power_in
+    a = new Divider
+    b = new Divider
+    net VIN:
+        a.top
+        b.top
+        vin
