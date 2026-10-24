@@ -436,6 +436,64 @@ module Board:
         self.assertEqual(self.codes(single), [("RHO3101", "p1/Y"),
                                               ("RHO3104", "N_p1/a.a")])
 
+    def test_a_labelled_net_its_parent_extends_is_spelled_by_the_parent(self):
+        # Stage labels OUT; Channel extends it to a second buffer. The net
+        # is sited at Stage's label, but Channel's body holds it, so the
+        # copies spell it as Channel does and are one finding.
+        text = P + f"""\
+component Buffer:
+    pin gnd power_in
+    pin vdd power_in
+    pin y output
+
+module Stage:
+    port gnd passive
+    port out passive
+    port vdd passive
+    a = new Buffer
+    net OUT:
+        a.y
+        out
+    vdd ~ a.vdd
+    gnd ~ a.gnd
+
+module Channel:
+    port gnd passive
+    port vdd passive
+    d = new Buffer
+    s = new Stage
+    s.out ~ d.y
+    vdd ~ d.vdd ~ s.vdd
+    gnd ~ d.gnd ~ s.gnd
+
+module Board:
+    c = new {CAP}
+    j = new {BAT}
+    ch1 = new Channel
+    ch2 = new Channel
+    net GND(ground_domain = "gnd"):
+        c.b
+        ch1.gnd
+        ch2.gnd
+        j.neg
+    net VCC:
+        c.a
+        ch1.vdd
+        ch2.vdd
+        j.pos
+"""
+        spelled = {"net": "s/OUT", "members": ["d.y", "s/a.y"],
+                   "roles": ["output", "output"]}
+        found, _rows, _a, _r = self.run_erc(text)
+        self.assertEqual([(d["code"], d["entity"], d["params"])
+                          for d in found], [("RHO3101", None, spelled)])
+        single = text.replace("    ch2 = new Channel\n", "").replace(
+            "        ch2.gnd\n", "").replace("        ch2.vdd\n", "")
+        found, _rows, _a, _r = self.run_erc(single)
+        self.assertEqual([(d["code"], d["entity"], d["params"])
+                          for d in found],
+                         [("RHO3101", "ch1/s/OUT", spelled)])
+
     def test_a_part_returning_to_ground_pulls_no_open_drain_up(self):
         text = BOARD + f"""\
     r = new {RES}
