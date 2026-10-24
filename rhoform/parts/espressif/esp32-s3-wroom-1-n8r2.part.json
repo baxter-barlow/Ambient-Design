@@ -389,26 +389,86 @@
       },
       "characteristics": {
         "capacitance": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "typ": 2,
           "unit": "pF"
         },
         "input_leakage_high": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": 50,
           "unit": "nA"
         },
         "input_leakage_low": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": 50,
           "unit": "nA"
         },
         "pull_down_resistance": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "typ": 45,
           "unit": "kohm"
         },
         "pull_up_resistance": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "typ": 45,
           "unit": "kohm"
         },
         "vih": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": {
             "offset": 0.3,
             "reference": "3V3"
@@ -420,6 +480,16 @@
           "unit": "V"
         },
         "vil": {
+          "conditions": {
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": {
             "factor": 0.25,
             "reference": "3V3"
@@ -428,6 +498,17 @@
           "unit": "V"
         },
         "voh": {
+          "conditions": {
+            "load": "high impedance",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "min": {
             "factor": 0.8,
             "reference": "3V3"
@@ -435,6 +516,17 @@
           "unit": "V"
         },
         "vol": {
+          "conditions": {
+            "load": "high impedance",
+            "ta": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            }
+          },
           "max": {
             "factor": 0.1,
             "reference": "3V3"
@@ -959,7 +1051,7 @@
       "confidence": "datasheet-stated",
       "locator": "Table 6-3 DC Characteristics (3.3 V, 25 C)",
       "method": "manual",
-      "note": "Table 6-3 states each row once, against VDD, 'voltage from a power pin of a respective power domain' (its note 1). The module brings out one supply, 3V3, so the bounds are referenced to it. For the pins in the VDD_SPI domain (IO35-IO37, IO47, IO48) that holds while VDD_SPI is at its 3.3 V default (GPIO45 strapped 0, eFuses unburnt, Table 4-4), which is what the pin descriptions already state for this part. In v0 these values sat on IO0 alone and capability on five pins, because v0 had no class mechanism.",
+      "note": "Table 6-3 states each row once, against VDD, 'voltage from a power pin of a respective power domain' (its note 1). The module brings out one supply, 3V3, so the bounds are referenced to it. For the pins in the VDD_SPI domain (IO35-IO37, IO47, IO48) that holds while VDD_SPI is at its 3.3 V default (GPIO45 strapped 0, eFuses unburnt, Table 4-4), which is what the pin descriptions already state for this part. In v0 these values sat on IO0 alone and capability on five pins, because v0 had no class mechanism. Every class characteristic carries the table's own conditions, 3.3 V and 25 C from its title, and VOH and VOL also the high-impedance load its note 2 measures them into.",
       "source_id": "esp32-s3-wroom-1-ds-v1.8"
     },
     "/pins": {
