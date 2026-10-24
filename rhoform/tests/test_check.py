@@ -243,7 +243,9 @@ class ModelTest(_Design):
         from rhoform import ir
 
         text = ir.emit(self.model.design)[0].decode()
-        for word in ("isolated", "attribute_sites", "endpoint_spans",
+        # IR version 2 serializes `isolated` (Net.isolated); the rest stay
+        # in memory.
+        for word in ("attribute_sites", "endpoint_spans",
                      "bound_span", "sites", "declaration"):
             self.assertNotIn(f'"{word}"', text)
 
