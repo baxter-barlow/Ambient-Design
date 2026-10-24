@@ -1,0 +1,15 @@
+# RHO3009: a declared no-connect joins nothing, so no view binds it.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 1
+    pin nc4 nc 4
+    pin vout power_out 3
+    port output = new rhoform.lib.iface.Power:
+        gnd = nc4
+        hv = vout
+
+module Top:
+    port gnd passive
+    reg = new Ldo
+    reg.gnd ~ gnd

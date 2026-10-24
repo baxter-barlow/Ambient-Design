@@ -1,0 +1,6 @@
+# RHO3012: a bundle port's array size is a literal, since a module's port
+# set does not depend on its parameters.
+#pragma rhoform-syntax 0.3
+
+module Top(n: int = 4):
+    port leds = new rhoform.lib.iface.Logic[n]

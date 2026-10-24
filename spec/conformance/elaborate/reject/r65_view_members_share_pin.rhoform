@@ -1,0 +1,20 @@
+# RHO3010: two members of one view bound to one pin would be joined by the
+# view itself. Two views sharing a pin, as `input` and `output` share `gnd`,
+# is legal.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 1
+    pin vin power_in 2
+    pin vout power_out 3
+    port input = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = vin
+    port output = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = gnd
+
+module Top:
+    port gnd passive
+    reg = new Ldo
+    reg.gnd ~ gnd

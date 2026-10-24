@@ -1,0 +1,10 @@
+# RHO2040: a bundle port is a port, and a module's ports do not depend on
+# its parameters; what names the refused port stays quiet.
+#pragma rhoform-syntax 0.3
+
+module Top(powered: bool = true):
+    r = new rhoform.lib.passive.Resistor
+    if powered:
+        port power = new rhoform.lib.iface.Power
+    power.hv ~ r.a
+    r.b ~ power.gnd

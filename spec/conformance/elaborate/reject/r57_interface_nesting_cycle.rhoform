@@ -1,0 +1,14 @@
+# RHO3002: interfaces that contain one another have no finite shape; the
+# cycle is reported once, and what is typed by it stays quiet.
+#pragma rhoform-syntax 0.3
+
+interface Inner:
+    port back = new Outer
+    port line
+
+interface Outer:
+    port inner = new Inner
+    port ref
+
+module Top:
+    port bus = new Outer

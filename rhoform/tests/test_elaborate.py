@@ -624,6 +624,43 @@ class CodeTest(unittest.TestCase):
                                "        a\n", "RHO2006")
         self.assertEqual(text, "Leaf")
 
+    def test_rho2006_is_why_a_table_can_leave_no_root_candidate(self):
+        # Spec 04 (AMB-142 #15): zero candidates need no cycle. A is
+        # instantiated by B and B only named by A's table, so neither is a
+        # candidate; the table is the one defect, and nothing else is said.
+        d, text, result = self.only2(
+            "module A:\n    table B (x):\n        r1 1\n"
+            "module B:\n    port p passive\n    a = new A\n", "RHO2006")
+        self.assertEqual(text, "B")
+        self.assertIsNone(result.design)
+
+    def test_rho2005_and_rho2022_name_interfaces_and_views(self):
+        # Syntax 0.3: a single word may name an interface, so its typo is
+        # RHO2005 with the interface as the fix-it; a view is a port an
+        # endpoint names, so a misspelled one is RHO2022 with the view.
+        d, text, _ = self.only3("interface Power:\n    port hv\n"
+                                "module Top:\n    port p = new Powr\n",
+                                "RHO2005")
+        self.assertEqual((d["params"], text), ({"name": "Powr"}, "Powr"))
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"], "Power")
+        d, text, _ = self.only3(
+            "interface Power:\n    port hv\n"
+            "component Ldo:\n    pin y power_out 1\n"
+            "    port output = new Power:\n        hv = y\n"
+            "module Top:\n    port vin passive\n    u = new Ldo\n"
+            "    vin ~ u.outpt.hv\n", "RHO2022")
+        self.assertEqual((d["params"]["port"], text), ("outpt", "outpt"))
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"], "output")
+
+    def test_rho3001_spans_the_name_of_the_wrong_kind(self):
+        d, text, _ = self.only3("interface Power:\n    port hv\n"
+                                "module Top:\n    p = new Power\n",
+                                "RHO3001")
+        self.assertEqual(text, "Power")
+        self.assertEqual(d["params"], {"name": "Power",
+                                       "found": "an interface",
+                                       "expected": "a module or component"})
+
     def test_rho2007_duplicate_declarations(self):
         cases = {
             "instance": RESISTOR.format(name="r") + RESISTOR.format(name="r"),
@@ -2158,7 +2195,8 @@ class SourceFacts03Test(unittest.TestCase):
             seen += 1
             with self.subTest(path.name):
                 elaborate_source(source, path.name)
-        self.assertEqual(seen, 1)
+        # a19, and the interface cases a21-a23 (L2a).
+        self.assertEqual(seen, 4)
 
 
 def _span_of(offset):

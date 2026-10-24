@@ -27,8 +27,9 @@ VERSION 2 (ir/netlist-ir.v2.schema.json), UNFROZEN until M2 exit (decision
 OD8; ir/README.md, "Unfrozen working versions"). It carries the source facts
 syntax 0.3 adds and the one IR v1 dropped: an `isolated` net, a net's
 authored `ground_kind`, a component's `rules`, an assertion's `severity`,
-the `annotations` (`supply`, `draw`, `waive`), and an `interfaces` array that
-syntax 0.3's interfaces fill (empty until then). It drops
+the `annotations` (`supply`, `draw`, `waive`), and an `interfaces` array: one
+entry per bundle node of syntax 0.3's interfaces, each member the port it
+is, which a design using none leaves empty. It drops
 Assertion.waiver, which nothing wrote: a waiver is an annotation now. With
 those removed and `ir_version` 1, a version 2 document is the version 1
 document of the same design (rhoform/tests/test_ir_v2.py holds that).
@@ -255,6 +256,19 @@ def _annotation(annotation) -> dict:
     return out
 
 
+def _interface(bundle) -> dict:
+    return {
+        "instance": bundle.instance,
+        "port": bundle.port,
+        "definition": bundle.definition,
+        "parameters": {name: _value(value)
+                       for name, value in bundle.parameters.items()},
+        "members": [{"member": member,
+                     "port": {"instance": path, "port": port}}
+                    for member, (path, port) in sorted(bundle.members)],
+    }
+
+
 def to_ir(design) -> dict:
     """The IR v2 document, hashes filled in."""
     document = {
@@ -276,8 +290,9 @@ def to_ir(design) -> dict:
             for net, path, port in design.connections()],
         "assertions": [_assertion(a) for a in
                        sorted(design.assertions, key=lambda a: a.path)],
-        # Syntax 0.3's interfaces fill this; nothing does yet.
-        "interfaces": [],
+        "interfaces": [_interface(b) for b in
+                       sorted(design.bundles,
+                              key=lambda b: (b.instance, b.port))],
         "annotations": _by_bytes(_annotation(a) for a in design.annotations),
     }
     document["header"]["design_hash"] = design_hash_of(document)
@@ -305,7 +320,9 @@ def to_source_map(design, design_hash: str) -> dict:
     for entity, declaration, trace in (
             [(i.path, i.declaration, i.trace) for i in design.instances]
             + [(n.name, n.declaration, n.trace) for n in design.nets]
-            + [(a.path, a.declaration, a.trace) for a in design.assertions]):
+            + [(a.path, a.declaration, a.trace) for a in design.assertions]
+            + [(f"{b.instance}.{b.port}", b.declaration, b.trace)
+               for b in design.bundles]):
         nodes[entity] = {
             "declaration": span(declaration),
             "instantiation_trace": [span(s) for s in trace],

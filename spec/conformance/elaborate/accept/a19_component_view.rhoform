@@ -1,0 +1,43 @@
+# Component views (T1): an interface over pins a component has. Each leaf
+# member of a view is the pin it binds, so a view adds no port and no node:
+# `reg.output.hv` is the node `reg.vout`, and joining views joins pins. Its
+# parameters are evaluated per instance, `v` here from the component's own
+# `vout`. A view of `Spi` is two bundles, itself and its nested `bus`.
+#pragma rhoform-syntax 0.3
+
+component Flash:
+    pin cs input 1
+    pin miso tri_state 2
+    pin mosi input 5
+    pin sck input 6
+    pin vcc power_in 8
+    pin vss passive 4
+    port power = new rhoform.lib.iface.Power:
+        gnd = vss
+        hv = vcc
+    port spi = new rhoform.lib.iface.Spi:
+        bus.miso = miso
+        bus.mosi = mosi
+        bus.ref = vss
+        bus.sck = sck
+        cs = cs
+
+component Ldo(vout: voltage):
+    pin gnd passive 1
+    pin vin power_in 2
+    pin vout power_out 3
+    port input = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = vin
+    port output = new rhoform.lib.iface.Power(v = vout):
+        gnd = gnd
+        hv = vout
+
+module Board:
+    port rail = new rhoform.lib.iface.Power(v = 5V +/- 5%)
+    port spi = new rhoform.lib.iface.Spi
+    flash = new Flash
+    reg = new Ldo(vout = 3.3V)
+    rail ~ reg.input
+    reg.output ~ flash.power
+    spi ~ flash.spi

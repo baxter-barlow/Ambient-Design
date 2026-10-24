@@ -1,0 +1,10 @@
+# RHO3005: bundles of one interface join member by member only when their
+# shapes agree: four elements against two, and an array against one bundle.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port four = new rhoform.lib.iface.Logic[4]
+    port one = new rhoform.lib.iface.Logic
+    port two = new rhoform.lib.iface.Logic[2]
+    four ~ two
+    four ~ one

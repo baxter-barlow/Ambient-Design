@@ -1,0 +1,38 @@
+# The standard library: interfaces (T1). Spec 05/03, "The standard
+# interfaces", says what each one is and why its members are these; a
+# parameter with no default is optional, and a bundle that leaves it unset
+# carries no value for it. No library component has a view of one yet.
+#pragma rhoform-syntax 0.3
+
+# A supply rail and the ground its voltage is measured from (GA-1).
+interface Power(v: voltage):
+    port gnd
+    port hv
+
+# One logic line and the ground its levels are measured from.
+interface Logic:
+    port line
+    port ref
+
+# A differential pair.
+interface DiffPair(impedance: resistance):
+    port n
+    port p
+
+# An I2C bus, its target address and its clock.
+interface I2C(addr: int, freq: frequency):
+    port ref
+    port scl
+    port sda
+
+# The shared lines of an SPI bus.
+interface SpiBus:
+    port miso
+    port mosi
+    port ref
+    port sck
+
+# One SPI target: the shared bus and its own chip select.
+interface Spi:
+    port bus = new SpiBus
+    port cs

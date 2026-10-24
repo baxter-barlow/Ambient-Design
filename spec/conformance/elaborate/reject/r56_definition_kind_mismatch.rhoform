@@ -1,0 +1,7 @@
+# RHO3001: an interface types a port and is never instantiated, and a bundle
+# port's type must be an interface, never a component or a module.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port power = new rhoform.lib.passive.Resistor
+    supply_rail = new rhoform.lib.iface.Power

@@ -1,0 +1,12 @@
+# RHO3006: a net block joins single nodes, and so does a chain that names
+# one; a whole bundle in either is refused, with each of its members as a
+# needs-review fix-it.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port power = new rhoform.lib.iface.Power
+    r = new rhoform.lib.passive.Resistor
+    net VCC:
+        power
+        r.a
+    power ~ r.b

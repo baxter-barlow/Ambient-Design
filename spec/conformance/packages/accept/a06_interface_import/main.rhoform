@@ -1,0 +1,12 @@
+# An interface imported from a sibling file is the one that file defines:
+# its identity is its definition name there, `probes.Probe`, so a bundle
+# port this file declares with it joins a bundle port of the module the
+# sibling file defines with it. No manifest: syntax 0.3 is unfrozen.
+#pragma rhoform-syntax 0.3
+
+import Probe, Tip from "./probes"
+
+module Fixture:
+    port probe = new Probe
+    tip = new Tip
+    probe ~ tip.probe

@@ -1,0 +1,33 @@
+# Interface parameters (T1) are carried attributes, and one with no default
+# is optional: a bundle that does not set it carries no value for it, and
+# the IR omits it rather than invent one, so no RHO2037 applies. `addr` is
+# set on the target's bundle and unset on the controller's; `freq` is set on
+# neither; a default is carried as given, as `freq` of `Clock` is.
+#pragma rhoform-syntax 0.3
+
+interface Clock(freq: frequency = 32kHz, gated: bool):
+    port clk
+    port ref
+
+module Eeprom:
+    port i2c = new rhoform.lib.iface.I2C(addr = 80)
+    chip = new acme.At24c02:
+        pin scl input 6
+        pin sda bidirectional 5
+        pin vss passive 4
+    chip.scl ~ i2c.scl
+    chip.sda ~ i2c.sda
+    chip.vss ~ i2c.ref
+
+module Bus:
+    port clock = new Clock
+    port i2c = new rhoform.lib.iface.I2C
+    port lvds = new rhoform.lib.iface.DiffPair(impedance = 100ohm)
+    rom = new Eeprom
+    rt = new rhoform.lib.passive.Resistor(resistance = 100ohm)
+    rx = new rhoform.lib.passive.Resistor(resistance = 33ohm)
+    i2c ~ rom.i2c
+    lvds.n ~ rt.b
+    lvds.p ~ rt.a
+    clock.clk ~ rx.a
+    clock.ref ~ rx.b

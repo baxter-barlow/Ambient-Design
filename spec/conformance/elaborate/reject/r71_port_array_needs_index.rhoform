@@ -1,0 +1,9 @@
+# RHO3016: a member is reached through one element of an array, never the
+# array as a whole.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port leds = new rhoform.lib.iface.Logic[2]
+    r = new rhoform.lib.passive.Resistor
+    leds.line ~ r.a
+    r.b ~ leds[0].ref

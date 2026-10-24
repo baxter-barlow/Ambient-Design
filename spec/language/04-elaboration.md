@@ -14,9 +14,10 @@ whose serialization and hashes are defined in
 [`ir/README.md`](../../ir/README.md). Version 1 is version 0 with net
 names that carry an array index mid-name ([Names](#names)), which version
 0's schema refuses. Version 2 is version 1 with the source facts syntax
-0.3 states ([Syntax 0.3 source facts](#syntax-03-source-facts-unfrozen))
-and the one version 1 dropped, an `isolated` net; with those removed, a
-version 2 document is the version 1 document of the same design. Version
+0.3 states ([Syntax 0.3 source facts](#syntax-03-source-facts-unfrozen)),
+its bundles ([Interfaces](#interfaces-unfrozen)), and the one version 1
+dropped, an `isolated` net; with those removed, a version 2 document is
+the version 1 document of the same design. Version
 2 is unfrozen with syntax 0.3, and an implementation MUST write it. This section states what the
 schemas cannot: which design a source denotes. The cases under
 [`conformance/elaborate/`](../conformance/README.md) hold the reference
@@ -26,8 +27,9 @@ them.
 This section covers the v0.1 surface and what syntax 0.2 adds to it:
 `component` definitions, parameter lists, parameter references, `if`,
 `for`, arrays, imports, and the bundled standard library those
-definitions make possible; and the source facts the unfrozen syntax 0.3
-adds, which no check reads yet. Every rule stated for v0.1 holds unchanged
+definitions make possible; and what the unfrozen syntax 0.3 adds: source
+facts no check reads yet, and interfaces, whose bundles elaboration
+expands and checks. Every rule stated for v0.1 holds unchanged
 for a 0.1 source, with one deliberate exception: the standard library's
 reserved prefix. Under a toolchain that also implements 0.2, a dotted
 name beginning `rhoform.lib.` names a component of the bundled library
@@ -109,7 +111,8 @@ Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
 
-A module's or component's IR `definition` is `<module name>.<Name>`.
+A module's, component's or interface's IR `definition` is `<module
+name>.<Name>`.
 A file's **module path** is its path without `.rhoform`, with `/` turned
 into `.`, and with each segment made an identifier: every character
 outside `[A-Za-z0-9_]` becomes `_`, and a segment that would start with
@@ -126,7 +129,8 @@ its own or as a dependency, and vendoring or moving it renames nothing
 module name. A file no manifest governs has its compile-root-relative
 module path as its module name: the benchmarks, which have no manifest,
 are named as before. Two definitions of one file MUST NOT share a name:
-two modules are RHO2001, and a clash involving a `component` is RHO2034.
+two modules are RHO2001, and a clash involving a `component` or an
+`interface` is RHO2034.
 The rule maps several paths to one module path — `a-b/x.rhoform` and
 `a_b/x.rhoform` are both `a_b.x` — so two files of one package MUST NOT
 share one: a `Divider` in each would be two definitions with one name.
@@ -152,9 +156,11 @@ instance takes is not reported (see [Diagnostics](#diagnostics)), so it
 does not suppress RHO2002. An implementation MAY let the user name the root explicitly
 (the reference CLI's `--root-module NAME`); a name that is not a module
 of the entry file is then an error (RHO2003). There is no separate error
-for zero candidates: a file whose every module is instantiated by
-another necessarily contains an instantiation cycle, which is already
-reported, and no root is chosen while a cycle exists. An entry file that
+for zero candidates: every module of the entry file is then instantiated
+by another or named by a table. Modules that each have an instantiating
+module contain an instantiation cycle, which is already reported, and no
+root is chosen while a cycle exists; a table that names a module is
+RHO2006 ([Tables](#tables)), which is the defect to repair. An entry file that
 defines no module at all — only `component`s — has no design and is
 RHO2047.
 
@@ -176,7 +182,9 @@ one authored file.
 
 ### Module or component
 
-A `new` (or a `table`) names its definition by a qualified name.
+A `new` (or a `table`) names its definition by a qualified name. It
+MUST NOT name an interface (syntax 0.3), which types a port and is never
+instantiated (RHO3001, and see [Interfaces](#interfaces-unfrozen)).
 
 - A **single word** MUST name a module or a `component` defined in the
   same file or imported into it ([08](08-packages.md#names)); the
@@ -186,9 +194,10 @@ A `new` (or a `table`) names its definition by a qualified name.
   Any other single word is an unknown definition (RHO2005), except a
   name whose import failed, which is reported once, at the import.
 - A dotted name under the **reserved prefix** `rhoform.lib.` MUST name a
-  component of the [standard library](#the-standard-library):
+  definition of the [standard library](#the-standard-library):
   `rhoform.lib.<module>.<Component>`, four words, where `<module>` is a
-  library module and `<Component>` one of its definitions. The instance
+  library module and `<Component>` one of its definitions (or, where a
+  port is typed, `rhoform.lib.<module>.<Interface>`). The instance
   is then a component instance of that definition, exactly as of a
   `component` defined in the file. Any other name under the prefix — an
   unknown module or component, too few words or too many — is RHO2067.
@@ -241,14 +250,17 @@ one path (RHO2008).
 ### Ports
 
 A module instance's ports are its module's `port` declarations, each a
-name and a role. A component instance's ports are its definition's pins
-when it instantiates a `component` definition, and otherwise its `pin`
-statements: name, role, and the pin's designators as `pin_numbers`,
-sorted. Port names are unique per module, pin names per instance, and a
-designator appears at most once per pin (RHO2007). A module's ports are
-the `port` declarations of its body's top level: a `port` inside an
-`if` or `for` is RHO2040, since an interface does not depend on
-parameter values.
+name and a role, and (syntax 0.3) the leaves of its bundle ports, each
+named by its member path, `power.hv` or `leds[2].line`, with the role
+`passive` ([Interfaces](#interfaces-unfrozen)). A component instance's
+ports are its definition's pins when it instantiates a `component`
+definition, and otherwise its `pin` statements: name, role, and the
+pin's designators as `pin_numbers`, sorted; a view adds no port. Port
+names are unique per module, bundle ports counted, pin names per
+instance, and a designator appears at most once per pin (RHO2007). A
+module's ports are the `port` declarations of its body's top level: a
+`port` inside an `if` or `for`, a bundle port included, is RHO2040,
+since a definition's ports do not depend on parameter values.
 
 ### Facts on an instance
 
@@ -296,10 +308,13 @@ its own bundled library and nothing else (see
 [Module or component](#module-or-component)); no source, manifest or
 search path can add to it or replace it.
 
-The library is a set of **modules**, each a syntax 0.2 file at
-`rhoform/lib/<module>.rhoform` in the toolchain, holding `component`
-definitions and nothing else, in the canonical form
-([07 — Formatting](07-formatting.md)). By the naming rule of
+The library is a set of **modules**, each a file at
+`rhoform/lib/<module>.rhoform` in the toolchain, in the canonical form
+([07 — Formatting](07-formatting.md)): syntax 0.2 files holding
+`component` definitions and nothing else, and one syntax 0.3 file,
+`iface`, holding the standard interfaces and nothing else ([05 section
+3](05-static-types/03-interfaces.md#the-standard-interfaces)). No library
+component has a view yet. By the naming rule of
 [Definitions and the root](#definitions-and-the-root), applied to that
 path, the definition `Resistor` of module `passive` is
 `rhoform.lib.passive.Resistor`: the name a source writes is the IR
@@ -339,8 +354,10 @@ wherever the toolchain is installed. Adding a module to the library, or
 changing one a design does not name, therefore changes no existing
 design's hashes. Diagnostics that point into a library definition
 (RHO2035's "defined here") span the library file by the same path.
-Because a library module holds component definitions only, it imports
-nothing: no author's file is ever read on the library's behalf. No
+A library module imports nothing and names no definition of another
+module (`iface`'s `Spi` names its own `SpiBus`), so no author's file,
+and no module a compilation's own names do not name, is ever read on the
+library's behalf. No
 author's file is compiled whose module path falls under the reserved
 prefix — `rhoform/lib.rhoform`, or any file under `rhoform/lib/`,
 relative to the compile root — or whose module name does, as every file
@@ -491,7 +508,9 @@ set of arguments, body facts and declaration span the statement gives.
 (RHO2038 otherwise), and MUST be at least 1 (RHO2042). The array's name
 is one member name of its module.
 
-An endpoint names an array member with an index: `x[i].port`. An index
+An endpoint names an array member with an index: `x[i].port`
+(and, from 0.3, an element of a bundle port array the same way,
+[Interfaces](#interfaces-unfrozen)). An index
 is an integer, a reference of type `int` to a parameter or loop
 variable, or either plus or minus an integer (`x[i + 1]`, `x[i - 1]`).
 Its value MUST select a member, `0 <= i < N` (RHO2043, whose `endpoint`
@@ -503,8 +522,10 @@ a port of the module (RHO2023).
 ## The replication budget
 
 Elaboration counts the loop iterations and array members it expands,
-over every module instance of the design: a loop of 8 iterations in a
-module instantiated 4 times counts 32. The total MUST NOT exceed
+and (syntax 0.3) the leaves of the bundle ports it creates, over every
+module instance of the design: a loop of 8 iterations in a module
+instantiated 4 times counts 32, and so does a bundle port of 8 leaves
+there. The total MUST NOT exceed
 **4096**, and a module body whose own expansion would exceed it is an
 error even when nothing instantiates the module. A design over the
 budget draws one RHO2046, with no entity — one for the design, not one
@@ -512,9 +533,13 @@ per instance of a module whose body crosses the limit, as the
 per-instance rule of [Diagnostics](#diagnostics) would give — against a
 replicating statement whose expansion takes the count past the limit
 (which one, when several do, is the reference implementation's choice,
-pinned by its reject case), and no IR. The budget is what keeps a
-source that parses from making elaboration slow; v0.1 sources replicate
-nothing and are unaffected.
+pinned by its reject case), and no IR. An interface's leaves are counted
+before they are spelled out, so a shape past the budget is never
+enumerated, and a view of one is RHO2046 too. The budget bounds what
+replication alone can expand; it does not count plain module instances,
+so it does not by itself keep every design that parses fast: nested
+modules each instantiated a few times still multiply (AMB-144 #3). v0.1
+sources replicate nothing and are unaffected.
 
 ## Tables
 
@@ -555,7 +580,10 @@ An endpoint `inst.port` names a port of a member of the same module
 `x[i].port` a port of an array member (see [Arrays](#arrays)). A bare
 endpoint names one of the module's own ports (RHO2023). A port whose
 role is `nc` MUST NOT appear in any connecting statement, `isolated`
-included (RHO2024).
+included (RHO2024). From syntax 0.3 the port may be a bundle port or a
+view, and an endpoint may go on into it or name it whole; a first name
+that is no member of the module may name one of its own bundle ports
+([Interfaces](#interfaces-unfrozen)).
 
 ### Union
 
@@ -576,6 +604,11 @@ intentional single-member net: the elaborated design records that, for
 the check stage's single-pin-net rule (L9b,
 [05](05-static-types.md)), and IR version 2 carries it as the net's
 `isolated`, present only when true (version 1 did not carry it).
+
+A chain whose endpoints name whole bundles (syntax 0.3) joins them
+member by member: it is the chains of their leaves, one per leaf path,
+and makes no net and no label beyond theirs
+([Interfaces](#interfaces-unfrozen)).
 
 Every net a connecting statement creates is emitted, a single-member
 net included. Every node of a net is one IR connection, module-port
@@ -712,12 +745,108 @@ What a target may be for each kind, which dimensions a bound may have,
 and which codes may be waived are the owning check pass's (spec 05),
 reported in its own block-3 range.
 
+## Interfaces (unfrozen)
+
+Syntax 0.3's interfaces are T1's nominal types of bundles, and
+[05 section 3](05-static-types/03-interfaces.md) is normative on what
+they mean; this section states how a design is elaborated from them.
+
+**Definitions and shapes.** An interface definition's members have
+unique names (RHO2007); a nested member names an interface (RHO3001),
+and a member named `ref` is a leaf (RHO3015). An array size is an
+integer literal (RHO3012 for a reference) of at least 1 (RHO2042). The
+nesting MUST be acyclic, reported once per set of interfaces that
+contain one another (RHO3002), so every interface has a finite **shape**:
+its leaves, each named by a **member path** relative to it (`hv`,
+`d[3]`, `bus.sck`, `rails[1].gnd`), and its nested bundles, each named
+the same way. A parameter list is checked as a module's, but a parameter
+with no default is optional: a bundle that gives it no value leaves it
+**unset**, never RHO2037. An interface whose own defect was reported has
+no shape, and nothing typed by it is reported again.
+
+**Bundle ports.** `port x = new I[N](args)` at a module body's top level
+declares a bundle port, a port typed by the interface `I` (RHO3001
+otherwise), an array of `N` (an integer literal, RHO3012 otherwise) when
+sized. Its name MUST NOT be a member's of the module (RHO3011), since
+`x.y` would then be ambiguous. Its arguments are checked against `I`'s
+parameters once per definition (RHO2036, RHO2038, RHO2039) and evaluated
+per module instance, in its environment. Each module instance then has,
+as ports, the leaves of `x` (of `x[0]` to `x[N-1]` for an array): for
+each leaf member path `L` the port `x.L` (`x[i].L`), role `passive`.
+These are module ports like any other: non-physical nodes that join nets
+across the hierarchy.
+
+**Views.** `port v = new I(args):` with a block of bindings, in a
+component definition, declares a view: the interface `I` over pins the
+component has. Its name MUST NOT be a pin's (RHO3011); its arguments
+are checked against `I`'s parameters as a bundle port's, a reference
+naming a parameter of the component and evaluated per instance. Each
+binding names one leaf member path of `I` (RHO3003, RHO3013, RHO3014,
+RHO3016, and RHO3006 for a path ending at a bundle) once (RHO2007), and
+a pin the component declares (RHO3008) whose role is not `nc` (RHO3009).
+Every leaf is bound (RHO3007, once per view, naming each leaf left out),
+and no two leaves of one view to one pin (RHO3010); two views may share
+a pin. A view adds no port: each of its leaves is the pin it binds.
+
+**Endpoints.** An endpoint's first name is resolved as before when it
+names a member of the module: the next name is then a port of that
+member, a bundle port (of a module instance) or a view (of a component
+instance) included. A first name that is no member names one of the
+module's own ports, which may be a bundle port. From a bundle port or a
+view on, an index selects an element of an array (RHO3013 on anything
+that is not one, RHO3014 outside it, its endpoint spelled with the index
+evaluated), and each later name a member of the bundle it is in (RHO3003,
+with the one close member as a needs-review fix-it; RHO3016 after an
+array no index selects). An index or a further name on a pin, or on a
+module's own `port`, is RHO3013 or RHO3003. An endpoint that ends at a
+leaf names that one node: a bundle port's leaf `x.L` of its instance, or
+a view's leaf, which is the pin it binds. One that ends earlier names a
+**whole** bundle, an array of bundles, or an array of leaves.
+
+**Connecting bundles.** A net block and `isolated` join single nodes,
+and so does a chain any of whose endpoints is one: a whole bundle there
+is RHO3006, whose needs-review fix-its name each of its leaves. A chain
+whose endpoints are all whole bundles joins them member by member. Each
+endpoint after the first MUST be of the first's interface — the same IR
+`definition`, however alike the members of two interfaces are (RHO3004)
+— and of its shape: a bundle against a bundle, an array against an array
+of as many elements (RHO3005). The chain is then the chains of its
+leaves, one per leaf path, which join nets as any chain does and make no
+net or label of their own; an endpoint the chain refuses is not joined.
+Each bundle so joined, per element of an array, is one **bundle
+connect** of the elaborated design, kept in memory with the module
+instance stating it and the nodes it joined at each leaf path, for the
+check stage ([05](05-static-types/03-interfaces.md#reference-members-and-the-ground-architecture)).
+
+**In the IR.** IR version 2's `interfaces` holds one entry per bundle
+node of the design, at every nesting level: per bundle port, of each of
+its elements; per view; and per nested bundle of each of those. An entry
+is the owning instance, the node's member path within it (`power`,
+`leds[2]`, `spi.bus`), the interface's `definition`, its `parameters`
+(each given or defaulted value, an unset one omitted; a nested bundle
+carries its own interface's defaults), and its `members`: each leaf, its
+member path relative to the node, and the port it is (`{"instance":
+"/ind", "port": "power.hv"}` for a bundle port's leaf, the bound pin for
+a view's), sorted bytewise by member path. The entries are sorted by
+`(instance, port)`.
+
+**Older pragmas.** A 0.1 or 0.2 file cannot declare an interface, a
+bundle port or a view, nor write an endpoint with a second dot
+([02](02-grammar.md#under-an-older-pragma)). It can name a whole
+bundle port of a module another file declares, `x.power`, which is 0.1
+syntax: that endpoint has its 0.3 meaning there too, a whole bundle, the
+same kind of departure as the library prefix's above, and a chain of
+such endpoints joins bundles in that file as in any.
+
 ## Diagnostics
 
 Elaboration reports in block 2 (`RHO2xxx`, see
-[06 — Diagnostics](06-diagnostics.md)); the registry
-(`rhoform/codes.py`) declares each code, and the conformance suite
-holds one reject case for every block-2 code a source can trigger.
+[06 — Diagnostics](06-diagnostics.md)), and (syntax 0.3) the interface
+codes of block 3, RHO3001 to RHO3016, owned by T1 ([05 section
+3](05-static-types/03-interfaces.md#diagnostics)), by the same rules: a
+bundle that does not resolve leaves no design to check. The registry
+(`rhoform/codes.py`) declares each code, and the conformance suite holds
+one reject case for every code a source can trigger.
 
 - What needs no parameter value is checked once per definition, over
   its whole body, branches not taken and loops that run zero times
@@ -788,8 +917,8 @@ hex sha256 of the `rhoform-canonical-json/1` bytes of the list of
 `design_hash` alone.
 
 Every instance path, net name and assertion path has one node, and so,
-in version 2, does every interface (keyed `<instance path>.<port>`, none
-yet); its
+in version 2, does every interface (keyed `<instance path>.<port>`, as
+`/.power` or `/ind.power`); its
 `declaration` is a statement's span, from its first token to its last
 token: a block statement includes its body, and the trailing line
 break, trailing comment and following comment lines are excluded.
@@ -802,10 +931,14 @@ break, trailing comment and following comment lines are excluded.
   file, then byte offset. Every iteration of a loop shares the
   statement's span.
 - An assertion: its `assert` statement.
+- An interface: its bundle port's or its view's declaration, the
+  statement with its bindings, which a nested bundle and every element
+  of an array share.
 
 `instantiation_trace` runs innermost first: the declaration, then the
 statement instantiating each enclosing module instance, outward to the
-root's member; `/` has an empty trace. Entities replicated by a module
+root's member; `/` has an empty trace. An interface's trace is its
+declaration, then its owning instance's trace. Entities replicated by a module
 instantiated more than once share a declaration span and differ in
 their traces. Two declarations are therefore either the same span or
 disjoint, never partially overlapping.

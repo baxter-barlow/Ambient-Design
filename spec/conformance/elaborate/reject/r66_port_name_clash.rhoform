@@ -1,0 +1,17 @@
+# RHO3011: `x.y` must name one thing, so a bundle port takes no member's
+# name, and a view no pin's.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 1
+    pin vout power_out 3
+    port vout = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = vout
+
+module Top:
+    port r = new rhoform.lib.iface.Logic
+    r = new rhoform.lib.passive.Resistor
+    reg = new Ldo
+    r.a ~ reg.gnd
+    r.b ~ reg.vout

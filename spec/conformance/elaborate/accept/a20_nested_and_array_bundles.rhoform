@@ -1,0 +1,39 @@
+# Nested and array bundles (T1): a bundle port array, `Logic[4]`, joined
+# element by element to another of its shape by one chain; members reached
+# by index, a loop variable's included, each element its own bundle in the
+# IR; and a nested member, the `bus` of `Spi`, reached through its bundle
+# and joined as a whole to a bundle port of its own interface.
+#pragma rhoform-syntax 0.3
+
+module Bar:
+    port leds = new rhoform.lib.iface.Logic[4]
+    d = new rhoform.lib.semiconductor.Led[4]
+    r = new rhoform.lib.passive.Resistor[4](resistance = 1kohm)
+    for i in range(4):
+        leds[i].line ~ r[i].a
+        r[i].b ~ d[i].a
+        d[i].k ~ leds[i].ref
+
+module Sensor:
+    port bus = new rhoform.lib.iface.SpiBus
+    port cs passive
+    chip = new acme.Bme280:
+        pin csb input 2
+        pin gnd passive 1
+        pin sck input 4
+        pin sdi input 3
+        pin sdo tri_state 5
+    chip.csb ~ cs
+    chip.gnd ~ bus.ref
+    chip.sck ~ bus.sck
+    chip.sdi ~ bus.mosi
+    chip.sdo ~ bus.miso
+
+module Panel:
+    port leds = new rhoform.lib.iface.Logic[4]
+    port spi = new rhoform.lib.iface.Spi
+    bar = new Bar
+    sensor = new Sensor
+    leds ~ bar.leds
+    spi.bus ~ sensor.bus
+    spi.cs ~ sensor.cs

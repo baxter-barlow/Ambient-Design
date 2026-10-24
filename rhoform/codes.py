@@ -343,8 +343,9 @@ CORE: tuple[CodeDef, ...] = (
         code="RHO2005", slug="unknown-definition", severity="error",
         message=(
             "`{name}` names no definition visible in this file; a "
-            "single-word definition must be a module or component defined "
-            "here (a dotted name is a library component)."
+            "single-word name must be a module, component or interface "
+            "defined in this file or imported into it (a dotted name is a "
+            "library definition or an ad-hoc component)."
         ),
         params=("name",),
         rule="L2",
@@ -489,8 +490,9 @@ CORE: tuple[CodeDef, ...] = (
         code="RHO2022", slug="unknown-port", severity="error",
         message=(
             "instance `{instance}` of `{definition}` has no port `{port}`; "
-            "a component's ports are its `pin` statements and a module's "
-            "are its `port` declarations."
+            "a component's ports are its definition's pins and views (an "
+            "ad-hoc component's, its own `pin` statements), and a module's "
+            "are its `port` declarations, bundle ports included."
         ),
         params=("instance", "definition", "port"),
         rule="T2",
@@ -842,8 +844,9 @@ CORE: tuple[CodeDef, ...] = (
     CodeDef(
         code="RHO2065", slug="unknown-imported-name", severity="error",
         message=(
-            "`{name}` is not a module or component defined in `{file}`; an "
-            "import names definitions of the file it imports from."
+            "`{name}` is not a module, component or interface defined in "
+            "`{file}`; an import names definitions of the file it imports "
+            "from."
         ),
         params=("name", "file"),
         rule="L4/L7",

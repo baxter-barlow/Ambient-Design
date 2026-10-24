@@ -1,11 +1,13 @@
 """The bundled standard library (rhoform/lib/) and E-5 name resolution.
 
 Two halves. The library's own files: each module is a canonical syntax 0.2
-file of `component` definitions only, and every definition can be
-instantiated. And what elaboration does with them: a name under the
-reserved prefix `rhoform.lib.` resolves to a definition or is RHO2067,
-only the modules a compilation names are read and listed (E-8), and a
-module the toolchain ships broken is reported rather than raised.
+file of `component` definitions only, but for `iface`, a syntax 0.3 file of
+the standard interfaces only (spec 05/03), and every definition can be
+instantiated, every interface given a bundle port. And what elaboration
+does with them: a name under the reserved prefix `rhoform.lib.` resolves to
+a definition or is RHO2067, only the modules a compilation names are read
+and listed (E-8), and a module the toolchain ships broken is reported rather
+than raised.
 """
 
 import json
@@ -23,6 +25,20 @@ except ImportError:  # pragma: no cover - exercised by absence
 ROOT = Path(__file__).resolve().parents[2]
 LIBRARY = ROOT / "rhoform" / "lib"
 P = "#pragma rhoform-syntax 0.1\n\n"
+P_0_3 = "#pragma rhoform-syntax 0.3\n\n"
+
+# The one library module of interfaces, and what spec 05/03's table says
+# each standard interface is: (parameters, members) as written there.
+INTERFACES = "iface"
+STANDARD = {
+    "Power": ((("v", "voltage"),), ("gnd", "hv")),
+    "Logic": ((), ("line", "ref")),
+    "DiffPair": ((("impedance", "resistance"),), ("n", "p")),
+    "I2C": ((("addr", "int"), ("freq", "frequency")),
+            ("ref", "scl", "sda")),
+    "SpiBus": ((), ("miso", "mosi", "ref", "sck")),
+    "Spi": ((), ("bus", "cs")),
+}
 
 # One value per param_type, to instantiate a definition with a list.
 SAMPLE = {"string": '"x"', "int": "1", "bool": "true",
@@ -71,6 +87,8 @@ class LibraryFilesTest(unittest.TestCase):
         self.assertIn("passive", BUNDLED.modules())
 
     def test_each_module_is_canonical_0_2_component_definitions(self):
+        # Or, for the interfaces' module alone, canonical 0.3 interface
+        # definitions: what a module holds is one kind of definition.
         from rhoform import elaborate as E
         from rhoform.fmt import format_source
 
@@ -81,10 +99,12 @@ class LibraryFilesTest(unittest.TestCase):
                 self.assertEqual(result.file, f"rhoform/lib/{module}.rhoform")
                 pragma = next(c for c in result.tree.children
                               if not E._is_tree(c) and c.type == "PRAGMA")
-                self.assertEqual(str(pragma).split()[-1], "0.2")
+                interfaces = module == INTERFACES
+                self.assertEqual(str(pragma).split()[-1],
+                                 "0.3" if interfaces else "0.2")
                 self.assertEqual(
                     {c.data for c in result.tree.children if E._is_tree(c)},
-                    {"component_def"})
+                    {"interface_def" if interfaces else "component_def"})
                 text = result.data.decode("utf-8")
                 self.assertEqual(format_source(text, file=result.file).text,
                                  text)
@@ -118,7 +138,70 @@ class LibraryFilesTest(unittest.TestCase):
         self.assertEqual(
             [f.path for f in result.design.files],
             ["probe.rhoform"] + [f"rhoform/lib/{m}.rhoform"
-                                 for m in BUNDLED.modules()])
+                                 for m in BUNDLED.modules()
+                                 if m != INTERFACES])
+
+    def test_every_interface_types_a_bundle_port(self):
+        # iface.rhoform elaborates under its own pragma, 0.3: a bundle port
+        # of each standard interface, a sample argument for each of its
+        # parameters, and the bundles in the IR are the interfaces spec
+        # 05/03 tabulates, member for member.
+        from rhoform.elaborate import elaborate_source
+
+        lines = ["module Probe:"]
+        for name, (params, _members) in sorted(STANDARD.items()):
+            arguments = ", ".join(f"{p} = {SAMPLE[t]}" for p, t in params)
+            lines.append(f"    port {name.lower()} = new "
+                         f"rhoform.lib.iface.{name}"
+                         + (f"({arguments})" if arguments else ""))
+        result = elaborate_source(P_0_3 + "\n".join(lines) + "\n",
+                                  "probe.rhoform")
+        self.assertEqual(result.diagnostics.render(), "")
+        bundles = {b.port: b for b in result.design.bundles}
+        for name, (params, members) in STANDARD.items():
+            with self.subTest(interface=name):
+                bundle = bundles[name.lower()]
+                self.assertEqual(bundle.definition,
+                                 f"rhoform.lib.iface.{name}")
+                self.assertEqual(sorted(bundle.parameters),
+                                 sorted(p for p, _t in params))
+                self.assertEqual(
+                    sorted({leaf.split(".")[0]
+                            for leaf, _node in bundle.members}),
+                    sorted(members))
+        # Spi nests SpiBus: its `bus` is a bundle of its own.
+        self.assertEqual(bundles["spi.bus"].definition,
+                         "rhoform.lib.iface.SpiBus")
+        self.assertEqual([f.path for f in result.design.files],
+                         ["probe.rhoform", "rhoform/lib/iface.rhoform"])
+
+    def test_the_standard_interfaces_are_spec_05_03s(self):
+        # The library's definitions, read from its tree: exactly the six,
+        # with the parameters and members the spec states, and `ref` a
+        # leaf wherever it is a member (GA-1).
+        from rhoform import elaborate as E
+
+        result = E.BUNDLED.load(INTERFACES)
+        found = {}
+        for node in result.tree.children:
+            if not (E._is_tree(node) and node.data == "interface_def"):
+                continue
+            params = E._tree(node, "params")
+            declared = () if params is None else tuple(
+                (str(E._tokens(p, "FREE_NAME")[0]),
+                 str(E._tokens(p, "NAME")[0]))
+                for p in E._trees(params, "param"))
+            members = tuple(str(E._tokens(m, "FREE_NAME")[0])
+                            for m in E._trees(node, "member_decl"))
+            found[str(node.children[1])] = (declared, members)
+            for member in E._trees(node, "member_decl"):
+                if str(E._tokens(member, "FREE_NAME")[0]) == "ref":
+                    self.assertIsNone(E._tree(member, "qualified_name"))
+        self.assertEqual(found, STANDARD)
+        # No library component has a view in M2 (decision D15).
+        for module in E.BUNDLED.modules():
+            tree = E.BUNDLED.load(module).tree
+            self.assertEqual(list(tree.find_data("view_decl")), [], module)
 
     def test_the_hardware_kinds_have_the_arity_spec_04_requires(self):
         # E-11 against the library itself: the pinless kinds' definitions

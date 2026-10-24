@@ -1,0 +1,12 @@
+# An interface defined in this file, and a module with a bundle port of it.
+#pragma rhoform-syntax 0.3
+
+interface Probe:
+    port ref
+    port tip
+
+module Tip:
+    port probe = new Probe
+    r = new rhoform.lib.passive.Resistor(resistance = 10kohm)
+    probe.ref ~ r.b
+    probe.tip ~ r.a

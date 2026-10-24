@@ -1,0 +1,16 @@
+# RHO3008: a view binds members to pins its component declares, with the
+# one close pin as a needs-review fix-it.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 1
+    pin vin power_in 2
+    pin vout power_out 3
+    port input = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = vni
+
+module Top:
+    port gnd passive
+    reg = new Ldo
+    reg.gnd ~ gnd

@@ -16,8 +16,8 @@ goldens: a later landing that deliberately moves version 1 content in them
 rows it moves, in the same change, and says so in its review. Library rules
 are not version 1 content, and the oracle strips them.
 
-DETERMINISM. A design using every 0.3 source fact emits the same bytes
-under any hash seed.
+DETERMINISM. A design using every 0.3 source fact, and designs using
+interfaces, emit the same bytes under any hash seed.
 """
 
 import importlib.util
@@ -103,8 +103,15 @@ V1_DESIGN_HASHES = {
 }
 
 # Goldens that came with version 2 and have no version 1 to be held to:
-# their sources use syntax 0.3.
-V2_ONLY = {ELABORATE + "a17_syntax_0_3_source_facts.expected.ir.json"}
+# their sources use syntax 0.3, its source facts or its interfaces (L2a).
+V2_ONLY = {
+    ELABORATE + "a17_syntax_0_3_source_facts.expected.ir.json",
+    ELABORATE + "a18_power_bundle_chain.expected.ir.json",
+    ELABORATE + "a19_component_view.expected.ir.json",
+    ELABORATE + "a20_nested_and_array_bundles.expected.ir.json",
+    ELABORATE + "a21_unset_parameters.expected.ir.json",
+    PACKAGES + "a06_interface_import/expected.ir.json",
+}
 
 
 def _goldens() -> set:
@@ -190,7 +197,10 @@ class PreservationOracleTest(unittest.TestCase):
             with self.subTest(name):
                 document = json.loads((ROOT / name).read_text(
                     encoding="utf-8"))
-                self.assertTrue(document["annotations"])
+                self.assertTrue(document["annotations"]
+                                or document["interfaces"])
+                # Every order the schema declares, interface members too.
+                self.assertEqual(GATE.sort_problems(document, name), [])
                 self.assertEqual(GATE.design_hash_of(document),
                                  document["header"]["design_hash"])
                 self.assertEqual(ir.design_hash_of(document),
@@ -199,31 +209,37 @@ class PreservationOracleTest(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_LARK, "lark required")
 class DeterminismTest(unittest.TestCase):
+    SCRIPT = (
+        "import hashlib, sys\n"
+        "from pathlib import Path\n"
+        "from rhoform import compile as pipeline\n"
+        "from rhoform.diagnostics import Diagnostics\n"
+        "from rhoform.ir import emit\n"
+        "root = Path(sys.argv[1]) / 'spec/conformance/elaborate/accept'\n"
+        "sink = Diagnostics()\n"
+        "compiled = pipeline.compile(sys.argv[2], root, "
+        "stage='elaborate', sink=sink)\n"
+        "assert not sink.render(), sink.render()\n"
+        "ir_bytes, map_bytes = emit(compiled.design)[:2]\n"
+        "connects = repr(compiled.design.bundle_connects).encode()\n"
+        "print(hashlib.sha256(ir_bytes + map_bytes + connects).hexdigest())\n"
+    )
+
     def test_a_0_3_design_emits_the_same_bytes_under_any_hash_seed(self):
-        script = (
-            "import hashlib, sys\n"
-            "from pathlib import Path\n"
-            "from rhoform import compile as pipeline\n"
-            "from rhoform.diagnostics import Diagnostics\n"
-            "from rhoform.ir import emit\n"
-            "root = Path(sys.argv[1]) / 'spec/conformance/elaborate/accept'\n"
-            "sink = Diagnostics()\n"
-            "compiled = pipeline.compile("
-            "'a17_syntax_0_3_source_facts.rhoform', root, "
-            "stage='elaborate', sink=sink)\n"
-            "assert not sink.render(), sink.render()\n"
-            "ir_bytes, map_bytes = emit(compiled.design)[:2]\n"
-            "print(hashlib.sha256(ir_bytes + map_bytes).hexdigest())\n"
-        )
-        digests = set()
-        for seed in ("0", "1", "4242"):
-            run = subprocess.run(
-                [sys.executable, "-c", script, str(ROOT)], cwd=ROOT,
-                env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
-                capture_output=True, text=True, check=False)
-            self.assertEqual(run.returncode, 0, run.stderr)
-            digests.add(run.stdout.strip())
-        self.assertEqual(len(digests), 1)
+        # The in-memory bundle connects too, which the IR does not hold.
+        for case in ("a17_syntax_0_3_source_facts.rhoform",
+                     "a19_component_view.rhoform",
+                     "a20_nested_and_array_bundles.rhoform"):
+            digests = set()
+            for seed in ("0", "1", "4242"):
+                run = subprocess.run(
+                    [sys.executable, "-c", self.SCRIPT, str(ROOT), case],
+                    cwd=ROOT,
+                    env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
+                    capture_output=True, text=True, check=False)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                digests.add(run.stdout.strip())
+            self.assertEqual(len(digests), 1, case)
 
 
 if __name__ == "__main__":

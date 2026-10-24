@@ -1,0 +1,27 @@
+# Bundles (T1): three modules with a Power bundle port each, joined by one
+# chain member by member. A bundle port's leaves are ports of every instance
+# of its module, `power.gnd` and `power.hv`, role passive; each leaf path is
+# one net, and the chain adds no net and no label beyond them. `v` is
+# carried by the bundle that sets it, and the IR's `interfaces` holds one
+# entry per bundle.
+#pragma rhoform-syntax 0.3
+
+module Battery:
+    port power = new rhoform.lib.iface.Power(v = 9V +/- 10%)
+    j = new rhoform.lib.connector.BatteryConnector9V
+    j.neg ~ power.gnd
+    j.pos ~ power.hv
+
+module Indicator:
+    port power = new rhoform.lib.iface.Power
+    led = new rhoform.lib.semiconductor.Led
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    led.a ~ r.b
+    led.k ~ power.gnd
+    power.hv ~ r.a
+
+module Lamp:
+    bat = new Battery
+    ind1 = new Indicator
+    ind2 = new Indicator
+    bat.power ~ ind1.power ~ ind2.power

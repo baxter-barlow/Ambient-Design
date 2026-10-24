@@ -1,0 +1,9 @@
+# RHO3003: a member path names a member its bundle does not have, with the
+# one close member as a needs-review fix-it.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port power = new rhoform.lib.iface.Power
+    r = new rhoform.lib.passive.Resistor
+    power.hv ~ r.a
+    r.b ~ power.gdn

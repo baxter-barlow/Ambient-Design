@@ -1,0 +1,15 @@
+# RHO3007: a view binds every leaf member of its interface to a pin; one
+# left unbound is reported once, naming every member it leaves out.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 1
+    pin vin power_in 2
+    pin vout power_out 3
+    port output = new rhoform.lib.iface.Power:
+        hv = vout
+
+module Top:
+    port gnd passive
+    reg = new Ldo
+    reg.gnd ~ gnd

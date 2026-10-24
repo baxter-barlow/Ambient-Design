@@ -1,0 +1,10 @@
+# RHO3014: an index into a bundle port array is in range, and the endpoint
+# is spelled with the index evaluated.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port leds = new rhoform.lib.iface.Logic[2]
+    r = new rhoform.lib.passive.Resistor
+    for i in range(1, 3):
+        leds[i].line ~ r.a
+    r.b ~ leds[0].ref

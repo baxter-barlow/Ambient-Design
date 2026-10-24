@@ -1,0 +1,19 @@
+# RHO3004: interfaces are nominal. `Rail` has exactly the members of the
+# library's `Power`, and a bundle of one still does not connect to a bundle
+# of the other: structural typing is rejected (T1).
+#pragma rhoform-syntax 0.3
+
+interface Rail:
+    port gnd
+    port hv
+
+module Load:
+    port power = new Rail
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    power.gnd ~ r.b
+    power.hv ~ r.a
+
+module Top:
+    port power = new rhoform.lib.iface.Power
+    load = new Load
+    power ~ load.power

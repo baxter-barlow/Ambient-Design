@@ -10,14 +10,18 @@ report the consequences of text the author never wrote.
 
 THE PASSES, in order, each total over its input:
 
-  A. definitions: every `module` and (0.2) `component` per file, named
+  A. definitions: every `module`, (0.2) `component` and (0.3) `interface`
+     per file, named
      `<module path>.<Name>` where the module path is the file's path
      relative to the compile root with `/` turned into `.` and each
      segment made an identifier — or, for a file a manifest governs, the
      package layer's name for it, its package's identity before its
      package-relative path (`modules`); then each definition's parameter
      list;
-  B. each module's own ports, each component's pins;
+  B. each module's own ports, each component's pins, each interface's
+     members; then (0.3) the interfaces' nesting, which must be acyclic,
+     and each module's bundle ports and each component's views, which
+     need the interfaces' shapes;
   C. imports bind names (each imported name must be a definition of the
      file it comes from, and binds once per file); then the instantiation
      graph: a single-word definition must be a module or component of the
@@ -87,6 +91,19 @@ assertion's severity; and a net's authored `ground_kind`. Elaborating them
 checks only what needs no electrical meaning: that a target names
 something, that a fact is stated once, that a rule names pins its
 component has. What they MEAN is the check stage's (spec 05).
+
+INTERFACES (syntax 0.3, T1; spec 05/03 is normative). An interface is a
+nominal record of members, leaves or nested interfaces, either of which
+may be an array of literal size, so its shape is fixed by its definition.
+A bundle exists only as a port: a module's bundle port, whose leaves
+become ports of every instance of the module, named by their member path
+(`power.hv`, `leds[2].line`) with role passive, and a component's view,
+an alias over pins it has that adds no node. An endpoint may reach into a
+bundle (`j1.power.hv`), or name a whole one; a chain of whole bundles of
+one interface and one shape joins them member by member, which makes no
+net and no label of its own. ElaboratedDesign.bundles holds one Bundle per
+bundle node, and bundle_connects each member-wise union, in memory only,
+for the ground architecture to read.
 
 FOR THE CHECKER, IN MEMORY ONLY. The static stage (`rhoform.check`) reads
 this design, never the IR, so the design carries source facts the IR does
@@ -291,6 +308,42 @@ class Annotation:
 
 
 @dataclass(frozen=True)
+class Bundle:
+    """One bundle node (syntax 0.3, T1): an interface-typed port of an
+    instance, at any nesting level. `port` is its member path within the
+    instance (`power`, `leds[2]`, `spi.bus`): of a module's bundle port,
+    whose leaves are ports of the module instance, or of a component's
+    view, whose leaves are pins the component has. `parameters` are the
+    interface's evaluated parameters, one left unset omitted. `members` are
+    (leaf path relative to this bundle, (instance path, port)), bytewise by
+    leaf path. A port of `Spi` is two entries, itself and its `bus`."""
+
+    instance: str
+    port: str
+    definition: str
+    parameters: dict
+    members: tuple
+    declaration: Span | None = field(default=None, compare=False)
+    trace: tuple = field(default=(), compare=False)
+
+
+@dataclass(frozen=True)
+class BundleConnect:
+    """One member-wise union of bundles (syntax 0.3), in memory only: the
+    bundles of one interface a chain joins, each (instance path, port) as
+    in Bundle, in the order written, and the nodes joined at each leaf path
+    in the interface's leaf order. `scope` is the module instance whose body
+    states the chain; a chain of bundle arrays is one record per element.
+    It is the provenance the ground architecture reads (GA-14, GA-16)."""
+
+    definition: str
+    endpoints: tuple
+    scope: str
+    leaf_unions: tuple  # ((leaf path, ((instance path, port), ...)), ...)
+    span: Span | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True)
 class SourceFile:
     path: str  # POSIX, relative to the compile root
     data: bytes
@@ -310,6 +363,10 @@ class ElaboratedDesign:
     files: list[SourceFile]  # sorted by path; every source file read
     # Syntax 0.3, sorted by scope, kind, then target.
     annotations: list[Annotation] = field(default_factory=list)
+    # Syntax 0.3 interfaces: every bundle node, sorted by (instance, port),
+    # and every member-wise union, by scope, then where its chain stands.
+    bundles: list[Bundle] = field(default_factory=list)
+    bundle_connects: list[BundleConnect] = field(default_factory=list)
 
     def connections(self) -> list[tuple[str, str, str]]:
         """(net, instance path, port), in the IR's sort order."""
@@ -396,9 +453,12 @@ def library_modules(results) -> list:
     return sorted(found)
 
 
-def _component_names(result) -> list:
+def _definition_names(result) -> list:
+    """The names a library module defines: its components and (0.3)
+    interfaces."""
     return [str(node.children[1]) for node in result.tree.children
-            if _is_tree(node) and node.data == "component_def"]
+            if _is_tree(node)
+            and node.data in ("component_def", "interface_def")]
 
 
 # ---- names ------------------------------------------------------------------
@@ -430,6 +490,41 @@ def member_spelling(path: str, port: str) -> str:
 
 def _qualified_label(path: str, label: str) -> str:
     return label if path == "/" else f"{path[1:]}/{label}"
+
+
+def _join(prefix: str, path: str) -> str:
+    """A member path below another, `power` and `hv` giving `power.hv`; the
+    empty path is the bundle itself."""
+    if not prefix:
+        return path
+    return f"{prefix}.{path}" if path else prefix
+
+
+def _elements(name: str, size: int | None) -> list[str]:
+    """A member's paths: itself, or each element when it is an array."""
+    return [name] if size is None else [f"{name}[{i}]" for i in range(size)]
+
+
+# A definition by kind, as RHO3001 names what a name was found to be.
+_KINDS = {"module": "a module", "component": "a component",
+          "interface": "an interface"}
+
+
+def _shape_definition(shape) -> str | None:
+    """The interface a whole-bundle endpoint's shape is of, or None for an
+    array of leaves."""
+    if shape[0] == "array":
+        shape = shape[2]
+    return shape[1] if shape[0] == "bundle" else None
+
+
+def _shape_text(shape) -> str:
+    """A whole-bundle endpoint's shape, as RHO3005 spells it."""
+    if shape[0] == "bundle":
+        return f"a bundle of `{shape[1]}`"
+    if shape[2][0] == "leaf":
+        return f"an array of {shape[1]} members"
+    return f"an array of {shape[1]} bundles of `{shape[2][1]}`"
 
 
 # ---- tree access (lark trees, duck-typed: no lark import here) --------------
@@ -484,6 +579,18 @@ def _rule_parts(body):
         else:
             other = child
     return word, pins, relation, other, value
+
+
+def _segments(node) -> list:
+    """An endpoint's names, each with the index after it or None:
+    `cells[i].power.hv` is [(cells, [i]), (power, None), (hv, None)]."""
+    out = []
+    for child in node.children:
+        if _is_tree(child):
+            out[-1] = (out[-1][0], child)
+        else:
+            out.append((child, None))
+    return out
 
 
 def _block_statements(block) -> list:
@@ -708,7 +815,7 @@ class _Definition:
     header: Span
     definition: str
     order: int
-    kind: str = "module"  # "module" | "component"
+    kind: str = "module"  # "module" | "component" | "interface"
     params: list | None = None  # _Param, source order; None: no list
     ports: list = field(default_factory=list)  # Port, source order
     roles: dict = field(default_factory=dict)  # port name -> role
@@ -722,12 +829,56 @@ class _Definition:
     # whose `value` is the evaluated literal, or ("reference", name) for a
     # parameter the instance's environment supplies.
     rules: list = field(default_factory=list)
+    # Syntax 0.3 interfaces. An interface's members (name -> _MemberDecl,
+    # source order), and once its nesting is known its shape: how many
+    # leaves it has, and, when that is within the replication budget, its
+    # leaf paths and its nested bundle nodes, each bytewise. `broken`: its
+    # shape is unknown, because a defect of its own was reported.
+    members: dict = field(default_factory=dict)
+    leaf_count: int | None = None
+    leaves: tuple | None = None
+    nodes: tuple | None = None  # (relative path, interface _Definition)
+    broken: bool = False
+    # A module's bundle ports and a component's views (name -> _BundlePort);
+    # a module's bundle-port costs against the replication budget (span,
+    # leaves); and the names of bundle ports and views refused or misplaced,
+    # which endpoints naming them stay quiet about.
+    bundle_ports: dict = field(default_factory=dict)
+    views: dict = field(default_factory=dict)
+    bundle_costs: list = field(default_factory=list)
+    quiet_bundles: set = field(default_factory=set)
 
     @property
     def spelled(self) -> str:
         """The definition as a source names it: a library one by its
         dotted name, which is how every source spells it."""
         return self.definition if self.library else self.name
+
+
+@dataclass
+class _MemberDecl:
+    """One member of an interface definition (syntax 0.3): a leaf, or with
+    `target` a nested interface; `size` makes either an array."""
+
+    name: str
+    target: "_Definition | None"
+    size: int | None
+    span: Span
+
+
+@dataclass
+class _BundlePort:
+    """A module's bundle port, or a component's view (syntax 0.3): its
+    interface, its array size (a view has none), its arguments (a literal's
+    value, or ("reference", name) for a parameter of the definition that
+    declares it), and for a view the pin each leaf member is."""
+
+    name: str
+    target: _Definition
+    size: int | None
+    arguments: dict
+    span: Span
+    pins: dict | None = None  # a view: leaf path -> pin
 
 
 @dataclass
@@ -748,12 +899,25 @@ class _Member:
 
 
 @dataclass
+class _Value:
+    """What an endpoint naming a whole bundle names (syntax 0.3): its shape,
+    ("bundle", definition) or ("array", size, element) whose element is a
+    ("bundle", definition) or ("leaf",), and its units, the bundles or (in
+    an array of leaves) the leaves it holds, in order: (the bundle's port,
+    or None for a leaf, [(leaf path relative to it, port)])."""
+
+    shape: tuple
+    units: list
+
+
+@dataclass
 class _Endpoint:
     member: str | None  # None: one of the module's own ports
-    port: str
+    port: str  # a whole bundle (syntax 0.3): its member path
     text: str  # as evaluated: `leds[2].a`
     span: Span
     written: str = ""  # as written: `leds[i].a`
+    value: _Value | None = None  # set when it names a whole bundle (0.3)
 
 
 @dataclass
@@ -833,6 +997,9 @@ class _Model:
     paths: list = field(default_factory=list)  # instance paths using it
     overrides: dict = field(default_factory=dict)  # member -> [Rule] (0.3)
     notes: list = field(default_factory=list)  # _Note (0.3)
+    # (definition, [(member, port)], span, [(leaf path, [(member, port)])])
+    # per member-wise union of bundles (0.3), for BundleConnect.
+    links: list = field(default_factory=list)
 
 
 def _annotation_key(annotation) -> tuple:
@@ -942,6 +1109,7 @@ class _Elaborator:
         self.elaborated: set[str] = set()  # instance paths the walk built
         self.spare_roots: list = []  # root candidates, when several
         self.unresolved_news: list = []  # (defn, qualified), taken or not
+        self.bundles: list = []  # Bundle, as the walk builds instances (0.3)
 
     # -- reporting
 
@@ -1020,6 +1188,12 @@ class _Elaborator:
             self.within(defn, self.collect_params, defn)
         for defn in self.defs:
             self.within(defn, self.collect_ports, defn)
+        self.interface_shapes()
+        for defn in self.defs:
+            if defn.kind == "module":
+                self.within(defn, self.collect_bundle_ports, defn)
+            elif defn.kind == "component":
+                self.within(defn, self.collect_views, defn)
         for defn in self.defs:
             if defn.kind == "module":
                 self.collect_edges(defn)
@@ -1082,10 +1256,10 @@ class _Elaborator:
         mpath = self.modules.get(result.file) or module_path(result.file)
         table = self.visible.setdefault(result.file, {})
         for node in result.tree.children:
-            if not (_is_tree(node)
-                    and node.data in ("module_def", "component_def")):
+            if not (_is_tree(node) and node.data in (
+                    "module_def", "component_def", "interface_def")):
                 continue
-            kind = "module" if node.data == "module_def" else "component"
+            kind = node.data.split("_")[0]
             keyword, name_token = node.children[0], node.children[1]
             name = str(name_token)
             params = _tree(node, "params")
@@ -1221,6 +1395,9 @@ class _Elaborator:
         if defn.kind == "component":
             self.collect_pins(defn)
             return
+        if defn.kind == "interface":
+            self.collect_members(defn)
+            return
         spans = {}
         for stmt in self.statements(defn):
             if stmt.data != "port_decl":
@@ -1339,6 +1516,431 @@ class _Elaborator:
                                                        span))
         return known
 
+    # -- pass B, syntax 0.3: interfaces, bundle ports and views
+
+    def collect_members(self, defn: _Definition) -> None:
+        """An interface's members: each named once (RHO2007), a size a
+        literal (RHO3012) of at least one (RHO2042), a nested member an
+        interface (RHO3001), and `ref` a leaf (RHO3015, GA-1). A member whose
+        own defect was reported leaves the interface's shape unknown
+        (`broken`), and what names it stays quiet."""
+        result = defn.result
+        for node in _trees(defn.tree, "member_decl"):
+            name = str(_tokens(node, "FREE_NAME")[0])
+            span = result.span_of(node)
+            if name in defn.members:
+                self.report(
+                    "RHO2007",
+                    {"kind": "member", "name": name,
+                     "scope": f"interface `{defn.name}`"},
+                    span, secondary=((defn.members[name].span,
+                                      "first declared here"),))
+                continue
+            size = self.literal_size(defn, _tree(node, "array_size"), name)
+            qualified = _tree(node, "qualified_name")
+            target = None
+            if qualified is not None:
+                target = self.interface_of(defn, qualified)
+                if name == "ref":
+                    self.report("RHO3015", {"interface": defn.name}, span)
+            if size is UNKNOWN or (qualified is not None and target is None):
+                defn.broken = True
+                size = None
+            defn.members[name] = _MemberDecl(name, target, size, span)
+
+    def literal_size(self, defn, node, name):
+        """A bundle port's or an interface member's array size: None when
+        it has none, UNKNOWN when it is refused (reported): a parameter
+        reference (RHO3012), since a port set and an interface's shape do
+        not depend on parameter values, an integer past 2^53 (RHO2017), or
+        one below 1 (RHO2042)."""
+        if node is None:
+            return None
+        token = node.children[0]
+        span = defn.result.span_of(node)
+        if token.type == "FREE_NAME":
+            self.report("RHO3012", {"name": name, "size": str(token)}, span)
+            return UNKNOWN
+        self.check_integer(defn, node, token)
+        if id(node) in self.bad:
+            return UNKNOWN
+        size = int(str(token))
+        if size < 1:
+            self.report("RHO2042", {"array": name, "size": size}, span)
+            return UNKNOWN
+        return size
+
+    def interface_of(self, defn, qualified):
+        """The interface a qualified name names where one is required: a
+        bundle port, a view, a nested member. None (reported) when it names
+        no definition (RHO2005, RHO2067) or one of another kind (RHO3001)."""
+        resolved = self.resolve(defn, qualified)
+        if resolved is None:
+            self.unresolved(defn, qualified)
+            return None
+        kind, target, _definition = resolved
+        if kind != "interface":
+            self.kind_mismatch(defn, qualified, kind, target, "an interface")
+            return None
+        return target
+
+    def kind_mismatch(self, defn, qualified, kind, target, expected) -> None:
+        """RHO3001: a definition named where another kind is required."""
+        found = _KINDS[kind] if target is not None \
+            else "an ad-hoc component (a dotted name outside `rhoform.lib.`)"
+        self.report("RHO3001", {"name": ".".join(_words(qualified)),
+                                "found": found, "expected": expected},
+                    defn.result.span_of(qualified))
+
+    def interface_shapes(self) -> None:
+        """The interfaces' nesting must be acyclic (RHO3002, once per
+        cycle, as RHO2004 is for modules); then each interface's shape, from
+        its members', nested interfaces first. An interface in a cycle, or
+        holding a broken one, is broken itself. A shape is counted before it
+        is spelled out, so an interface whose leaves would pass the
+        replication budget is never enumerated."""
+        interfaces = [d for d in self.defs if d.kind == "interface"]
+        edges = {id(d): [(m.name, m.target, m.span)
+                         for m in d.members.values() if m.target is not None]
+                 for d in interfaces}
+        for component in self.report_cycles("RHO3002", edges, interfaces):
+            for defn in component:
+                defn.broken = True
+        entered, done = set(), set()
+        for start in interfaces:
+            work = [(start, False)]
+            while work:
+                defn, expanded = work.pop()
+                if id(defn) in done:
+                    continue
+                if expanded:
+                    done.add(id(defn))
+                    self.shape(defn)
+                    continue
+                if id(defn) in entered:
+                    continue
+                entered.add(id(defn))
+                work.append((defn, True))
+                work += [(target, False) for _n, target, _s
+                         in reversed(edges[id(defn)])
+                         if id(target) not in entered]
+
+    @staticmethod
+    def shape(defn: _Definition) -> None:
+        """One interface's leaf count, and within the budget its leaf paths
+        and nested bundle nodes, from its members' (already shaped)."""
+        members = list(defn.members.values())
+        if defn.broken or any(m.target is not None and m.target.broken
+                              for m in members):
+            defn.broken = True
+            return
+        defn.leaf_count = sum(
+            (m.size or 1) * (1 if m.target is None else m.target.leaf_count)
+            for m in members)
+        if defn.leaf_count > EXPANSION_LIMIT:
+            return
+        leaves, nodes = [], []
+        for member in members:
+            for element in _elements(member.name, member.size):
+                if member.target is None:
+                    leaves.append(element)
+                    continue
+                leaves += [_join(element, leaf)
+                           for leaf in member.target.leaves]
+                nodes.append((element, member.target))
+                nodes += [(_join(element, rel), target)
+                          for rel, target in member.target.nodes]
+        defn.leaves = tuple(sorted(leaves))
+        defn.nodes = tuple(sorted(nodes, key=lambda node: node[0]))
+
+    def member_spans(self, defn: _Definition) -> dict:
+        """Every member name a module body declares, taken branches or not,
+        with where it is first declared."""
+        found = {}
+        work = list(reversed(self.statements(defn)))
+        while work:
+            stmt = work.pop()
+            if stmt.data in ("if_stmt", "for_stmt"):
+                for block in reversed(_trees(stmt, "block")):
+                    work += list(reversed(_block_statements(block)))
+            elif stmt.data == "instance_decl":
+                found.setdefault(str(stmt.children[0]),
+                                 defn.result.span_of(stmt))
+            elif stmt.data == "table_decl":
+                for row in _trees(stmt, "table_row"):
+                    found.setdefault(str(row.children[0]),
+                                     defn.result.span_of(row))
+        return found
+
+    def bundle_arguments(self, defn, stmt, target, scope) -> dict:
+        """A bundle port's or a view's arguments against its interface's
+        parameters, checked once per definition: each names one of them
+        (RHO2036) and has its type (RHO2038), and a reference names a
+        parameter of the declaring definition (RHO2039). A parameter given
+        no value is unset, which is no error for an interface (spec 05/03).
+        Returns {name: a literal's value, or ("reference", name)} for each
+        argument that passed."""
+        node = _tree(stmt, "arguments")
+        declared = {} if target is None \
+            else {p.name: p for p in target.params or ()}
+        out, spans = {}, {}
+        for argument in _trees(node, "argument") if node else ():
+            token, value = _tokens(argument, "NAME")[0], _tree(argument,
+                                                               "value")
+            name = str(token)
+            span = defn.result.span_of(argument)
+            if name in spans:
+                self.report(
+                    "RHO2007",
+                    {"kind": "argument", "name": name,
+                     "scope": f"port `{_tokens(stmt, 'FREE_NAME')[0]}`"},
+                    span, secondary=((spans[name], "first given here"),))
+                continue
+            spans[name] = span
+            if target is None:
+                self.check_value(defn, value, scope, None, None)
+                continue
+            if name not in declared:
+                tspan = defn.result.span_of(token)
+                self.report(
+                    "RHO2036",
+                    {"name": name, "definition": target.spelled,
+                     "parameters": [p.name for p in target.params or ()]},
+                    tspan, fixits=_did_you_mean(name, declared, tspan))
+                continue
+            self.check_value(defn, value, scope, declared[name].type,
+                             f"parameter `{name}` of `{target.spelled}`")
+            if id(value) in self.bad:
+                continue
+            first = value.children[0]
+            if first.type == "FREE_NAME":
+                out[name] = ("reference", str(first))
+                continue
+            evaluated = self.value(defn, value, name, EMPTY_ENV)
+            if evaluated is not UNKNOWN:
+                out[name] = evaluated
+        return out
+
+    def collect_bundle_ports(self, defn: _Definition) -> None:
+        """A module's bundle ports, at its body's top level: a name no other
+        port of the module has (RHO2007) and no member either (RHO3011,
+        since `x.y` would be ambiguous), an interface (RHO3001), a literal
+        size (RHO3012), and arguments its parameters take. Each adds its
+        leaves to the module's ports, role passive, named by member path:
+        non-physical nodes, as every module port is. A bundle port whose own
+        defect was reported is no port, and what names it stays quiet."""
+        result = defn.result
+        declared = {port.name: port.declaration for port in defn.ports}
+        members = self.member_spans(defn)
+        scope = {p.name: p.type for p in defn.params or ()}
+        for stmt in self.statements(defn):
+            if stmt.data != "bundle_port_decl":
+                continue
+            name = str(_tokens(stmt, "FREE_NAME")[0])
+            span = result.span_of(stmt)
+            if name in declared:
+                self.report(
+                    "RHO2007",
+                    {"kind": "port", "name": name,
+                     "scope": f"module `{defn.name}`"},
+                    span, secondary=((declared[name], "first declared here"),))
+                continue
+            declared[name] = span
+            defn.quiet_bundles.add(name)
+            if name in members:
+                self.report("RHO3011", {"name": name, "other": "an instance"},
+                            span, secondary=((members[name], "the instance"),))
+                continue
+            target = self.interface_of(defn, _tree(stmt, "qualified_name"))
+            size = self.literal_size(defn, _tree(stmt, "array_size"), name)
+            arguments = self.bundle_arguments(defn, stmt, target, scope)
+            if target is None or target.broken or size is UNKNOWN:
+                continue
+            count = (size or 1) * target.leaf_count
+            defn.bundle_costs.append((span, count))
+            if count > EXPANSION_LIMIT:
+                continue  # check_body's charge reports it (RHO2046)
+            defn.quiet_bundles.discard(name)
+            defn.bundle_ports[name] = _BundlePort(name, target, size,
+                                                  arguments, span)
+            for element in _elements(name, size):
+                for leaf in target.leaves:
+                    port = _join(element, leaf)
+                    defn.ports.append(Port(port, "passive", declaration=span))
+                    defn.roles[port] = "passive"
+
+    def collect_views(self, defn: _Definition) -> None:
+        """A component's views: each named once (RHO2007) and by no pin's
+        name (RHO3011), an interface (RHO3001), with arguments checked as a
+        bundle port's, against the component's parameters, and bindings
+        that bind each leaf member to a pin (view_pins). A view adds no
+        port: its leaves are pins the component has. A view with a defect
+        of its own is none."""
+        result = defn.result
+        scope = {p.name: p.type for p in defn.params or ()}
+        seen = {}
+        for node in _trees(defn.tree, "view_decl"):
+            name = str(_tokens(node, "FREE_NAME")[0])
+            span = result.span_of(node)
+            if name in seen:
+                self.report(
+                    "RHO2007",
+                    {"kind": "view", "name": name,
+                     "scope": f"component `{defn.name}`"},
+                    span, secondary=((seen[name], "first declared here"),))
+                continue
+            seen[name] = span
+            defn.quiet_bundles.add(name)
+            if name in defn.roles:
+                self.report("RHO3011", {"name": name, "other": "a pin"}, span,
+                            secondary=((defn.pin_spans[name], "the pin"),))
+                continue
+            qualified = _tree(node, "qualified_name")
+            target = self.interface_of(defn, qualified)
+            arguments = self.bundle_arguments(defn, node, target, scope)
+            if target is None or target.broken:
+                continue
+            if target.leaves is None:
+                # Its bindings could never be complete within the budget.
+                if not self.limit_reported:
+                    self.limit_reported = True
+                    self.sink.add("RHO2046", {"construct": "a view",
+                                              "limit": EXPANSION_LIMIT},
+                                  primary=span, entity=None)
+                continue
+            last = _tree(node, "arguments") or qualified
+            header = _span_through(result, span.byte_start,
+                                   result.span_of(last).byte_end, b":")
+            pins = self.view_pins(defn, name, node, target, header)
+            if pins is None:
+                continue
+            defn.quiet_bundles.discard(name)
+            defn.views[name] = _BundlePort(name, target, None, arguments,
+                                           span, pins)
+
+    def view_pins(self, defn, view, node, target, header):
+        """A view's bindings, as {leaf path: pin}: each names one leaf
+        member of the interface (binding_leaf) once (RHO2007), and a pin the
+        component declares (RHO3008) whose role is not `nc` (RHO3009); every
+        leaf is bound (RHO3007, once per view, unless a binding whose leaf
+        is unknown was refused already), and no two to one pin (RHO3010,
+        since that would join them). None when any is refused."""
+        result = defn.result
+        pins, spans, ok, lost = {}, {}, True, False
+        for binding in _trees(node, "binding"):
+            leaf = self.binding_leaf(defn, view, _tree(binding, "member_path"),
+                                     target)
+            if leaf is None:
+                ok, lost = False, True
+                continue
+            span = result.span_of(binding)
+            if leaf in spans:
+                self.report(
+                    "RHO2007",
+                    {"kind": "binding", "name": leaf,
+                     "scope": f"view `{view}`"},
+                    span, secondary=((spans[leaf], "first bound here"),))
+                ok = False
+                continue
+            spans[leaf] = span
+            token = _tokens(binding, "NAME")[0]
+            pin = str(token)
+            role = defn.roles.get(pin)
+            pspan = result.span_of(token)
+            if role is None:
+                self.report(
+                    "RHO3008",
+                    {"view": view, "member": leaf, "pin": pin,
+                     "component": defn.spelled},
+                    pspan, fixits=_did_you_mean(pin, defn.roles, pspan))
+                ok = False
+            elif role == "nc":
+                self.report("RHO3009", {"view": view, "member": leaf,
+                                        "pin": pin}, pspan)
+                ok = False
+            else:
+                pins[leaf] = pin
+        unbound = [leaf for leaf in target.leaves if leaf not in spans]
+        if unbound and not lost:
+            self.report("RHO3007", {"view": view, "component": defn.spelled,
+                                    "members": unbound}, header)
+            ok = False
+        shared = {}
+        for leaf in sorted(pins):
+            shared.setdefault(pins[leaf], []).append(leaf)
+        for pin, leaves in sorted(shared.items()):
+            if len(leaves) > 1:
+                self.report(
+                    "RHO3010", {"view": view, "pin": pin, "members": leaves},
+                    spans[leaves[1]], secondary=((spans[leaves[0]],
+                                                  "also bound here"),))
+                ok = False
+        return pins if ok else None
+
+    def binding_leaf(self, defn, view, node, target):
+        """The leaf a view binding's member path names, relative to the
+        view (`hv`, `bus.sck`, `d[3]`), or None (reported): each name a
+        member of the bundle it is in (RHO3003; RHO3016 after an array not
+        indexed), an index only on an array (RHO3013) and inside it
+        (RHO3014), and the path ending at a leaf, not a bundle (RHO3006)."""
+        result = defn.result
+        tokens = [c for c in node.children if not _is_tree(c)]
+        current, size, path = target, None, ""
+        position = 0
+        while position < len(tokens):
+            token = tokens[position]
+            position += 1
+            index = None
+            if position < len(tokens) and tokens[position].type == "INTEGER":
+                index = tokens[position]
+                position += 1
+            name, tspan = str(token), result.span_of(token)
+            shown = _join(view, path)
+            if size is not None:
+                self.report("RHO3016", {"path": shown, "size": size,
+                                        "member": name}, tspan)
+                return None
+            if current is None or name not in current.members:
+                choices = [] if current is None else sorted(current.members)
+                self.report("RHO3003", {"path": shown, "member": name,
+                                        "members": choices},
+                            tspan, fixits=_did_you_mean(name, choices, tspan))
+                return None
+            decl = current.members[name]
+            current, size, path = decl.target, decl.size, _join(path, name)
+            if index is None:
+                continue
+            ispan = _span_through(result, tspan.byte_start,
+                                  result.span_of(index).byte_end, b"]")
+            if size is None:
+                self.report("RHO3013", {"path": _join(view, path)}, ispan)
+                return None
+            self.check_integer(defn, node, index)
+            if id(node) in self.bad:
+                return None
+            selected = int(str(index))
+            if not 0 <= selected < size:
+                self.report(
+                    "RHO3014",
+                    {"endpoint": f"{_join(view, path)}[{selected}]",
+                     "index": selected, "array": _join(view, path),
+                     "last": size - 1}, ispan)
+                return None
+            path, size = f"{path}[{selected}]", None
+        if current is None and size is None:
+            return path
+        shown = _join(view, path)
+        if current is None:
+            members = [f"{shown}[{i}]" for i in range(size)]
+        elif size is None:
+            members = [_join(shown, leaf) for leaf in current.leaves]
+        else:
+            members = [f"{shown}[{i}]" for i in range(size)]
+        self.report("RHO3006", {"endpoint": shown,
+                                "statement": "a view binding",
+                                "members": members}, result.span_of(node))
+        return None
+
     # -- pass C: the instantiation graph
 
     def resolve(self, defn: _Definition, qualified):
@@ -1399,7 +2001,7 @@ class _Elaborator:
             if module is None:
                 return ()
         result = self.library.load(module)
-        names = _component_names(result) if result is not None \
+        names = _definition_names(result) if result is not None \
             and result.ok else []
         if name not in names:
             name = _one_close(name, names)
@@ -1447,14 +2049,18 @@ class _Elaborator:
 
     # -- pass D: cycles, root
 
-    def report_cycles(self) -> bool:
+    def report_cycles(self, code="RHO2004", edges=None, defs=None) -> list:
         """Report every instantiation cycle once per strongly connected
-        component; True when any exists. Iterative Tarjan, so a long
-        chain of modules cannot exhaust the interpreter's stack."""
+        component, and return those components (none: no cycle). Iterative
+        Tarjan, so a long chain of modules cannot exhaust the interpreter's
+        stack. Syntax 0.3 runs it over interfaces too, whose `edges` are
+        their nested members, with RHO3002."""
+        if edges is None:
+            edges = {id(defn): defn.edges for defn in self.defs}
         index, low, on_stack, stack = {}, {}, set(), []
         components = []
         counter = 0
-        for start in self.defs:
+        for start in self.defs if defs is None else defs:
             if id(start) in index:
                 continue
             work = [(start, 0)]
@@ -1466,15 +2072,15 @@ class _Elaborator:
                     counter += 1
                     stack.append(node)
                     on_stack.add(key)
-                if position < len(node.edges):
+                if position < len(edges[key]):
                     work.append((node, position + 1))
-                    target = node.edges[position][1]
+                    target = edges[key][position][1]
                     if id(target) not in index:
                         work.append((target, 0))
                     elif id(target) in on_stack:
                         low[key] = min(low[key], index[id(target)])
                     continue
-                for _name, target, _span in node.edges:
+                for _name, target, _span in edges[key]:
                     if id(target) in on_stack:
                         low[key] = min(low[key], low[id(target)])
                 if low[key] == index[key]:
@@ -1486,20 +2092,20 @@ class _Elaborator:
                         if member is node:
                             break
                     components.append(component)
-        cyclic = False
+        cyclic = []
         for component in components:
             members = {id(d) for d in component}
             closing = [(defn.order, span.byte_start, span)
                        for defn in component
-                       for _name, target, span in defn.edges
+                       for _name, target, span in edges[id(defn)]
                        if id(target) in members]
             if not closing:
                 continue
-            cyclic = True
+            cyclic.append(component)
             closing.sort(key=lambda item: (item[0], item[1]))
             names = [d.name for d in sorted(component, key=lambda d: d.order)]
             self.report(
-                "RHO2004", {"cycle": names}, closing[0][2],
+                code, {"cycle": names}, closing[0][2],
                 secondary=tuple((span, "also part of the cycle")
                                 for _o, _b, span in closing[1:]))
         return cyclic
@@ -1588,8 +2194,10 @@ class _Elaborator:
             stmt, loops, inner, loop = work.pop()
             scope = dict(params, **loops)
             data = stmt.data
-            if data == "port_decl" and inner is not None:
-                defn.quiet_ports.add(str(_tokens(stmt, "FREE_NAME")[0]))
+            if data in ("port_decl", "bundle_port_decl") and inner is not None:
+                quiet = defn.quiet_ports if data == "port_decl" \
+                    else defn.quiet_bundles
+                quiet.add(str(_tokens(stmt, "FREE_NAME")[0]))
                 self.misplace(defn, stmt, "a `port` declaration", inner,
                               "a definition's ports do not depend on its "
                               "parameters")
@@ -1616,8 +2224,8 @@ class _Elaborator:
             elif data in ("net_decl", "chain", "isolated_decl"):
                 for node in _trees(stmt, "endpoint") + _trees(
                         stmt, "chain_head"):
-                    index = _tree(node, "index")
-                    if index is not None:
+                    # Since 0.3 an endpoint may hold an index per name.
+                    for index in _trees(node, "index"):
                         # The base, then the offset of `i + 1`.
                         for token in index.children[::2]:
                             self.check_int(defn, index, token, scope,
@@ -1753,7 +2361,8 @@ class _Elaborator:
         target = resolved[1] if resolved is not None else None
         arguments = _tree(stmt, "arguments")
         nodes = _trees(arguments, "argument") if arguments else []
-        if target is not None and target.params is not None:
+        if target is not None and target.kind != "interface" \
+                and target.params is not None:
             about = name if size is None else None
             self.check_arguments(
                 defn, target,
@@ -1897,6 +2506,7 @@ class _Elaborator:
             parameters=parameters, ports=tuple(root_def.ports), dnp=False,
             exclude_from_bom=False, board_only=False, hardware_kind=None,
             part=None, declaration=root_def.header, trace=())]
+        self.bundles += self.bundles_of("/", root_def, env, ())
         visits = []
         total = 0
         work = [(root_def, env, "/", 0, (), dict.fromkeys(FLAGS, False))]
@@ -1925,11 +2535,58 @@ class _Elaborator:
                     hardware_kind=member.hardware_kind, part=member.part,
                     declaration=member.span, trace=itrace,
                     rules=self.member_rules(member, model), **flags))
+                if member.target is not None:
+                    self.bundles += self.bundles_of(
+                        ipath, member.target, member.env
+                        if member.kind == "module" else member.parameters,
+                        itrace)
                 if member.kind == "module":
                     work.append((member.target, member.env, ipath,
                                  depth + 1, itrace, flags))
             visits.append((model, path, depth, trace))
         return instances, visits
+
+    def bundles_of(self, path, defn, values, trace) -> list:
+        """A Bundle for every bundle node of one instance: its definition's
+        bundle ports (a module) or views (a component), each argument that
+        names a parameter evaluated in `values`, the instance's own; a
+        nested node carries its interface's defaults. A parameter left
+        unset, or whose value an error left unknown, is absent."""
+        view = defn.kind == "component"
+        out = []
+        for bundle in (defn.views if view else defn.bundle_ports).values():
+            given = {name: values.get(value[1], UNKNOWN)
+                     if isinstance(value, tuple) else value
+                     for name, value in bundle.arguments.items()}
+            btrace = (bundle.span,) + tuple(trace)
+            nodes = [("", bundle.target, given)] + [
+                (rel, interface, {}) for rel, interface in bundle.target.nodes]
+            for element in _elements(bundle.name, bundle.size):
+                for rel, interface, arguments in nodes:
+                    def port(leaf, element=element, rel=rel):
+                        within = _join(rel, leaf)
+                        return bundle.pins[within] if view \
+                            else _join(element, within)
+
+                    out.append(Bundle(
+                        path, _join(element, rel), interface.definition,
+                        self.carried(interface, arguments),
+                        tuple((leaf, (path, port(leaf)))
+                              for leaf in interface.leaves),
+                        bundle.span, btrace))
+        return out
+
+    def carried(self, interface, given) -> dict:
+        """An interface's parameters as a bundle carries them: each given
+        or defaulted value, and nothing for one left unset (spec 05/03)."""
+        if interface.params is None:
+            return {}
+        declared = {p.name for p in interface.params}
+        env = self.bind_values(interface, {name: value for name, value
+                                           in given.items()
+                                           if name in declared})
+        return {name: value for name, value in env.values
+                if value is not UNKNOWN}
 
     @staticmethod
     def member_rules(member: _Member, model: _Model) -> tuple:
@@ -2134,6 +2791,10 @@ class _Elaborator:
         return live
 
     def check_body(self, defn: _Definition, model: _Model) -> None:
+        # Syntax 0.3: a bundle port's leaves are nodes every instance of the
+        # module replicates, so they count against the budget, first.
+        for span, count in defn.bundle_costs:
+            self.spend(model, span, count, "a bundle port")
         live = self.expand(defn, model)
         first_seen: dict[str, Span] = {}
         for stmt, _loops in live:
@@ -2209,6 +2870,17 @@ class _Elaborator:
                 model.arrays[name] = None
             return
         kind, target, definition = resolved
+        if kind == "interface":
+            # An interface types a port; it is never instantiated (T1).
+            self.kind_mismatch(defn, qualified, kind, target,
+                               "a module or component")
+            if size is None:
+                model.members[name] = _Member(
+                    name, "component", definition, None, {}, {}, span=span,
+                    broken=True)
+            else:
+                model.arrays[name] = None
+            return
         parameters, env = self.bind(defn, model, target,
                                     _tree(stmt, "arguments"), name)
         body = _tree(stmt, "instance_body")
@@ -2515,6 +3187,10 @@ class _Elaborator:
             self.report("RHO2006", {"name": qname},
                         result.span_of(qualified))
             broken = True
+        elif resolved[0] == "interface":
+            self.kind_mismatch(defn, qualified, resolved[0], resolved[1],
+                               "a component")
+            broken = True
         else:
             target, definition = resolved[1], resolved[2]
         typed = target is not None and target.params is not None
@@ -2606,16 +3282,25 @@ class _Elaborator:
 
     def endpoint(self, defn, model, node, loops):
         """Resolve one endpoint, or None (reported, or quiet when it names
-        something that already failed to resolve)."""
+        something that already failed to resolve). Since syntax 0.3 the
+        port it names may be a bundle port or a view, which bundle() takes
+        from there; a name that is no member of the module may be one of its
+        own bundle ports."""
         result = defn.result
-        tokens = [c for c in node.children if not _is_tree(c)]
-        index = _tree(node, "index")
+        segments = _segments(node)
+        (head_token, index), rest = segments[0], segments[1:]
         span = result.span_of(node)
-        head = str(tokens[0])
+        head = str(head_token)
         written_head = head
         if index is not None:
             written_head = head + _text_of(result, index)
-        if len(tokens) == 1:
+        if not rest:
+            own = defn.bundle_ports.get(head)
+            if own is not None:
+                return self.bundle(defn, model, None, own, segments, loops,
+                                   span, "", "")
+            if head in defn.quiet_bundles:
+                return None
             if index is not None:
                 self.report("RHO2023", {"name": written_head,
                                         "module": defn.name}, span)
@@ -2625,17 +3310,26 @@ class _Elaborator:
                 if head in defn.quiet_ports:
                     return None
                 self.report("RHO2023", {"name": head, "module": defn.name},
-                            span, fixits=_did_you_mean(head, defn.roles,
-                                                       span))
+                            span, fixits=_did_you_mean(
+                                head, self.port_names(defn), span))
                 return None
             if role == "nc":
                 self.report("RHO2024", {"endpoint": head}, span)
                 return None
             return _Endpoint(None, head, head, span, head)
-        port = str(tokens[1])
+        port_token, port_index = rest[0]
+        port = str(port_token)
         written = f"{written_head}.{port}"
-        hspan = result.span_of(tokens[0])
+        hspan = result.span_of(head_token)
         quiet = head in model.quiet or head in defn.quiet_members
+        if head not in model.members and head not in model.arrays \
+                and not quiet:
+            own = defn.bundle_ports.get(head)
+            if own is not None:
+                return self.bundle(defn, model, None, own, segments, loops,
+                                   span, "", "")
+            if head in defn.quiet_bundles:
+                return None
         if index is None:
             if head in model.arrays:
                 size = model.arrays[head]
@@ -2679,25 +3373,142 @@ class _Elaborator:
                 self.report("RHO2021", {"instance": owner,
                                         "module": defn.name},
                             hspan, fixits=_did_you_mean(
-                                owner, self.member_names(model), hspan))
+                                owner, self.member_names(model)
+                                + list(defn.bundle_ports), hspan))
             return None
         if member.broken:
+            return None
+        target = member.target
+        bundles = {} if target is None else (
+            target.bundle_ports if member.kind == "module" else target.views)
+        if port in bundles:
+            return self.bundle(defn, model, owner, bundles[port], rest, loops,
+                               span, f"{written_head}.", f"{owner}.")
+        if target is not None and port in target.quiet_bundles:
             return None
         text = f"{owner}.{port}"
         role = member.roles.get(port)
         if role is None:
-            pspan = result.span_of(tokens[1])
+            pspan = result.span_of(port_token)
             self.report(
                 "RHO2022",
                 {"instance": written_head, "definition": member.definition,
                  "port": port},
                 pspan, about=owner,
-                fixits=_did_you_mean(port, member.roles, pspan))
+                fixits=_did_you_mean(port, [name for name in member.roles
+                                            if "." not in name]
+                                     + list(bundles), pspan))
+            return None
+        if port_index is not None:
+            # A pin, or a module's own port, is one node: no index...
+            self.report(
+                "RHO3013", {"path": written},
+                _span_through(result, result.span_of(port_token).byte_start,
+                              result.span_of(port_index).byte_end, b"]"),
+                about=owner)
+            return None
+        if len(rest) > 1:
+            # ...and no members.
+            member_token = rest[1][0]
+            self.report("RHO3003", {"path": written,
+                                    "member": str(member_token),
+                                    "members": []},
+                        result.span_of(member_token), about=owner)
             return None
         if role == "nc":
             self.report("RHO2024", {"endpoint": written}, span, about=owner)
             return None
         return _Endpoint(owner, port, text, span, written)
+
+    def bundle(self, defn, model, owner, bundle, steps, loops, span, written,
+               text):
+        """An endpoint from the bundle port or view it names on (syntax
+        0.3): `steps` are that port's name and the names after it, each with
+        its index. An index selects an element of an array (RHO3013 on
+        anything else, RHO3014 outside it), and each later name a member of
+        the bundle it is in (RHO3003; RHO3016 after an array not indexed).
+        It ends at a leaf, which is the port it is (a module's bundle leaf
+        is its member path, a view's leaf the pin bound to it), or at a
+        whole bundle or array, a _Value. None when reported."""
+        result = defn.result
+        view = bundle.pins is not None
+        current, size, path = bundle.target, bundle.size, bundle.name
+        written += bundle.name
+        text += bundle.name
+        for number, (token, index) in enumerate(steps):
+            tspan = result.span_of(token)
+            if number:
+                name = str(token)
+                if size is not None:
+                    self.report("RHO3016", {"path": written, "size": size,
+                                            "member": name}, tspan,
+                                about=owner)
+                    return None
+                if current is None or name not in current.members:
+                    choices = [] if current is None \
+                        else sorted(current.members)
+                    self.report("RHO3003", {"path": written, "member": name,
+                                            "members": choices},
+                                tspan, about=owner,
+                                fixits=_did_you_mean(name, choices, tspan))
+                    return None
+                decl = current.members[name]
+                current, size = decl.target, decl.size
+                path = _join(path, name)
+                written += "." + name
+                text += "." + name
+            if index is None:
+                continue
+            if size is None:
+                self.report("RHO3013", {"path": written},
+                            _span_through(result, tspan.byte_start,
+                                          result.span_of(index).byte_end,
+                                          b"]"),
+                            about=owner)
+                return None
+            position = self.position(model, index, loops)
+            if position is None:
+                return None
+            if not 0 <= position < size:
+                self.report(
+                    "RHO3014",
+                    {"endpoint": f"{text}[{position}]", "index": position,
+                     "array": written, "last": size - 1},
+                    span, about=owner)
+                return None
+            path = f"{path}[{position}]"
+            written += _text_of(result, index)
+            text += f"[{position}]"
+            size = None
+
+        def port_of(leaf):
+            return bundle.pins[leaf[len(bundle.name) + 1:]] if view else leaf
+
+        if current is None and size is None:
+            return _Endpoint(owner, port_of(path), text, span, written)
+        if current is None:
+            value = _Value(("array", size, ("leaf",)),
+                           [(None, [("", port_of(f"{path}[{i}]"))])
+                            for i in range(size)])
+        else:
+            def unit(node):
+                return (node, [(leaf, port_of(_join(node, leaf)))
+                               for leaf in current.leaves])
+
+            shape = ("bundle", current.definition)
+            if size is None:
+                value = _Value(shape, [unit(path)])
+            else:
+                value = _Value(("array", size, shape),
+                               [unit(f"{path}[{i}]") for i in range(size)])
+        return _Endpoint(owner, path, text, span, written, value)
+
+    @staticmethod
+    def port_names(defn) -> list:
+        """A module's own ports as a bare endpoint names them: its `port`
+        declarations and (0.3) bundle ports, not the leaves of the latter."""
+        return [name for name in defn.roles if "." not in name] \
+            + list(defn.bundle_ports)
 
     @staticmethod
     def member_names(model) -> list:
@@ -2751,11 +3562,89 @@ class _Elaborator:
                 continue
             seen.add(key)
             endpoints.append(endpoint)
+        endpoints = self.join_bundles(model, kind, endpoints, span, stmt)
         connect = _Connect(kind, endpoints, span, label, attributes, stmt,
                            attribute_spans)
         model.connects.append(connect)
         if label is not None and label not in model.labels:
             model.labels[label] = connect
+
+    def join_bundles(self, model, kind, endpoints, span, stmt) -> list:
+        """The endpoints of a connecting statement that name whole bundles
+        (syntax 0.3). A net block or `isolated` joins single nodes, and so
+        does a chain holding any single node (RHO3006 for each bundle in
+        one). A chain of bundles joins them member by member: each must have
+        the first one's interface (RHO3004: nominal, so two definitions with
+        the same members are still two) and shape (RHO3005), and each leaf
+        path is then a chain of its own over the leaves there. That makes no
+        net and no label beyond the leaves' own, and a BundleConnect per
+        bundle joined (model.links). Returns the statement's single-node
+        endpoints."""
+        bundles = [e for e in endpoints if e.value is not None]
+        if not bundles:
+            return endpoints
+        nodes = [e for e in endpoints if e.value is None]
+        if kind != "chain" or nodes:
+            statement = {
+                "net": "a net block", "isolated": "an `isolated` statement",
+                "chain": "a chain that also names a single node"}[kind]
+            for endpoint in bundles:
+                units = endpoint.value.units
+                if endpoint.value.shape[0] == "bundle":
+                    members = [_join(endpoint.written, leaf)
+                               for leaf, _port in units[0][1]]
+                else:
+                    members = [f"{endpoint.written}[{i}]"
+                               for i in range(len(units))]
+                fixits = ()
+                if endpoint.value.shape[0] == "bundle":
+                    fixits = tuple(
+                        FixIt(f"name the member `{member}`", "needs-review",
+                              (Edit(endpoint.span, member),))
+                        for member in members)
+                self.report("RHO3006", {"endpoint": endpoint.written,
+                                        "statement": statement,
+                                        "members": members},
+                            endpoint.span, fixits=fixits)
+            return nodes
+        first, joined = bundles[0], [bundles[0]]
+        for endpoint in bundles[1:]:
+            if endpoint.value.shape == first.value.shape:
+                joined.append(endpoint)
+                continue
+            a = _shape_definition(first.value.shape)
+            b = _shape_definition(endpoint.value.shape)
+            if a is not None and b is not None and a != b:
+                self.report("RHO3004", {"endpoint_a": first.written,
+                                        "interface_a": a,
+                                        "endpoint_b": endpoint.written,
+                                        "interface_b": b}, endpoint.span)
+            else:
+                self.report("RHO3005", {
+                    "endpoint_a": first.written,
+                    "shape_a": _shape_text(first.value.shape),
+                    "endpoint_b": endpoint.written,
+                    "shape_b": _shape_text(endpoint.value.shape)},
+                    endpoint.span)
+        definition = _shape_definition(first.value.shape)
+        for number, (port, leaves) in enumerate(first.value.units):
+            groups = []
+            for position, (leaf, _port) in enumerate(leaves):
+                members = [(e.member, e.value.units[number][1][position][1])
+                           for e in joined]
+                model.connects.append(_Connect(
+                    "chain",
+                    [_Endpoint(member, leaf_port, _join(e.text, leaf), e.span,
+                               _join(e.written, leaf))
+                     for e, (member, leaf_port) in zip(joined, members)],
+                    span, node=stmt))
+                groups.append((leaf, members))
+            if port is not None:  # a bundle, not a leaf of a leaf array
+                model.links.append((
+                    definition,
+                    [(e.member, e.value.units[number][0]) for e in joined],
+                    span, groups))
+        return []
 
     def net_attributes(self, defn, stmt, label) -> tuple[dict, dict]:
         """({attribute: value}, {attribute: its span}) of a net block."""
@@ -3088,7 +3977,17 @@ class _Elaborator:
         labels, statements, isolated, checks = [], [], [], []
         notes = []  # (scope path, _Note, the IR target or a label's node)
         endpoint_sites = {}  # node -> [(site key, span)], for the checker
+        bundle_connects = []
         for model, path, depth, trace in visits:
+            def node_of(member, port, path=path):
+                return (path if member is None
+                        else child_path(path, member), port)
+
+            for definition, ids, span, groups in model.links:
+                bundle_connects.append(BundleConnect(
+                    definition, tuple(node_of(*i) for i in ids), path,
+                    tuple((leaf, tuple(node_of(*m) for m in members))
+                          for leaf, members in groups), span))
             labelled = {}  # label -> a node of its net, in this instance
             for connect in model.connects:
                 nodes = [(path if ep.member is None
@@ -3284,4 +4183,9 @@ class _Elaborator:
             files=sorted((SourceFile(r.file, r.data) for r in self.results),
                          key=lambda f: f.path),
             annotations=annotations,
+            bundles=sorted(self.bundles, key=lambda b: (b.instance, b.port)),
+            bundle_connects=sorted(
+                bundle_connects,
+                key=lambda c: (c.scope, c.span.file, c.span.byte_start,
+                               c.span.byte_end, c.endpoints)),
         )

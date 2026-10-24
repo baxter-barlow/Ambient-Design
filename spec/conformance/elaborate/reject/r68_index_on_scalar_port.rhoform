@@ -1,0 +1,9 @@
+# RHO3013: an index selects an element of an array, and a single bundle,
+# like a single pin, has none.
+#pragma rhoform-syntax 0.3
+
+module Top:
+    port power = new rhoform.lib.iface.Power
+    r = new rhoform.lib.passive.Resistor
+    power[0].hv ~ r.a
+    r.b ~ power.gnd
