@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# A component with no pins that is no L9 hardware: nothing a connectivity
+# check reads can see it, so the model records an actionable row and the
+# compilation draws its one coverage note (RHO3901).
+component Sensor
+
+module Board:
+    port vin power_in
+    u = new Sensor
+    net VIN:
+        vin

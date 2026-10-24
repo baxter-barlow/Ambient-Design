@@ -1,17 +1,24 @@
 """The command line (R18): `python3 -m rhoform check|fmt`.
 
 `check PATH...` compiles each PATH as the entry file of its own
-compilation: the package layer (rhoform/package.py) reads the entry, the
-files it imports and the rhoform.toml files that govern them, then the
-compilation is parsed, checked, elaborated, and its IR validated against
-ir/netlist-ir.v1.schema.json, the schema of the version it writes. A directory stands for its ENTRY files, in
+compilation, through rhoform.compile: the package layer
+(rhoform/package.py) reads the entry, the files it imports and the
+rhoform.toml files that govern them, then the compilation is parsed,
+checked, elaborated, its IR validated against the IR schema of the
+version it writes, and the elaborated design checked by the static stage
+(rhoform.check, spec 05). A directory stands for its ENTRY files, in
 sorted order: every `*.rhoform` under it except a file that another file
 named on the command line reaches through imports without being reached
 back (a library is checked through the files that import it; a file
 imported only within a cycle is still an entry, so the cycle is
-reported). It never writes, except that `--emit-ir DIR` writes
-`<stem>.ir.json` and `<stem>.sourcemap.json` for every entry that
-elaborates, the names the benchmark goldens use.
+reported); a directory that cannot be listed stops the run (exit 2)
+rather than be skipped. It never writes, except that `--emit-ir DIR`
+writes `<stem>.ir.json` and `<stem>.sourcemap.json` for every entry that
+elaborates, whatever the check stage finds, the names the benchmark
+goldens use, and `--emit-report DIR` writes `<stem>.check.json`, the
+check report, for every entry the check stage ran on. Two entries whose
+stems differ only in letter case are refused, as one stem: a
+case-insensitive file system would give them one file.
 
 `fmt PATH...` rewrites each file to its canonical form, in place and only
 when the bytes change; a file that does not parse is refused and left
@@ -35,8 +42,10 @@ internal error such as a formatter self-check failure or IR the schema
 rejects. Operational complaints go to stderr, never stdout.
 
 PATHS (spec 04, E-8). Each compilation's compile root is `--compile-root`,
-else the nearest ancestor of the entry file holding `rhoform.toml`, else
-the entry file's directory. Span files, the source map's `files[].path`
+else the nearest ancestor of the entry file holding `rhoform.lock` (the
+workspace root, AMB-144), else the nearest holding `rhoform.toml`, else
+the entry file's directory; each name matched exactly, letter case
+included. Span files, the source map's `files[].path`
 and definition names are POSIX paths relative to it, so a span names the
 same file the source map does. The standard library modules a compilation
 reads are the exception: they are the toolchain's own files, listed as
@@ -46,11 +55,14 @@ HERMETIC (I3, C-6). No network module is imported and nothing reads the
 environment or the clock. Reads: the input files and their import
 closures, the rhoform.toml files governing them, the standard library
 modules their qualified names mention (rhoform/lib/, no others), the
-grammar artifacts the parser loads, and the IR schema. Nothing outside a
-compile root is read as an author's source, and a directory is listed only
-to check the exact spelling of a name the file system resolved (a manifest
-or a path being imported). Writes: fmt's targets and
---emit-ir's files, each through a temporary file in the target's own
+grammar artifacts the parser loads, the IR schema, and with
+--emit-report the check report's schema. A `rhoform.lock` decides the
+compile root by its presence; its contents are not read until the
+lockfile lands (AMB-59). Nothing outside a compile root is read as an
+author's source, and a directory is listed only to check the exact
+spelling of a name the file system resolved (a manifest, a lockfile or a
+path being imported). Writes: fmt's targets and --emit-ir's and
+--emit-report's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.
 """
@@ -65,13 +77,15 @@ import tempfile
 import traceback
 from pathlib import Path
 
-from . import elaborate as elaborator
+from . import compile as pipeline
 from . import fmt as formatter
 from . import ir
 from . import package
 from . import parser as rhoparser
+from .check import report as check_report
 from .diagnostics import Diagnostics, span_from_bytes
 
+LOCKFILE = "rhoform.lock"
 MANIFEST = "rhoform.toml"
 SUFFIX = ".rhoform"
 IR_SCHEMA = (Path(__file__).resolve().parents[1] / "ir"
@@ -113,27 +127,31 @@ def _absolute(path) -> Path:
     return Path(os.path.normpath(os.path.abspath(path)))
 
 
-def _has_manifest(directory: Path) -> bool:
-    """Whether `directory` holds a file named rhoform.toml exactly: a
+def _holds(directory: Path, name: str) -> bool:
+    """Whether `directory` holds a file named `name` exactly: a
     case-insensitive file system also answers for RHOFORM.TOML, and the
     compile root must not depend on the host. Only a directory that
     answers is listed, to check the name."""
-    if not (directory / MANIFEST).is_file():
+    if not (directory / name).is_file():
         return False
     try:
-        return MANIFEST in os.listdir(directory)
+        return name in os.listdir(directory)
     except OSError:
         return False
 
 
 def compile_root(entry, explicit=None) -> Path:
-    """The compile root of a compilation whose entry file is `entry`."""
+    """The compile root of a compilation whose entry file is `entry`: the
+    explicit root, else the nearest ancestor holding rhoform.lock (the
+    workspace root, above any package in it), else the nearest holding
+    rhoform.toml, else the entry's own directory."""
     if explicit is not None:
         return _absolute(explicit)
     directory = _absolute(entry).parent
-    for candidate in (directory, *directory.parents):
-        if _has_manifest(candidate):
-            return candidate
+    for marker in (LOCKFILE, MANIFEST):
+        for candidate in (directory, *directory.parents):
+            if _holds(candidate, marker):
+                return candidate
     return directory
 
 
@@ -149,6 +167,25 @@ def root_relative(entry, root: Path) -> str:
     raise UsageError(f"{entry} is not under the compile root {root}")
 
 
+def _sources_under(directory: Path) -> list[Path]:
+    """Every *.rhoform file under `directory`, descending into no symbolic
+    link to a directory. A subdirectory that cannot be listed is a usage
+    error naming it: skipping it, as a glob does, would let a check pass
+    over files it never read."""
+    def refuse(exc):
+        raise UsageError(
+            f"cannot list {exc.filename}: {exc.strerror}; a check that "
+            "skipped it would pass over files it never read")
+
+    found = []
+    for folder, _subdirectories, names in os.walk(directory, onerror=refuse):
+        for name in names:
+            path = Path(folder) / name
+            if name.endswith(SUFFIX) and path.is_file():
+                found.append(path)
+    return found
+
+
 def expand(given, swept=None) -> list[Path]:
     """Files in argument order, each directory replaced by its *.rhoform
     files sorted by path; a file named twice is compiled once. The keys of
@@ -158,9 +195,7 @@ def expand(given, swept=None) -> list[Path]:
     for text in given:
         path = Path(text)
         if path.is_dir():
-            found = sorted(
-                (p for p in path.rglob("*" + SUFFIX) if p.is_file()),
-                key=lambda p: p.as_posix())
+            found = sorted(_sources_under(path), key=lambda p: p.as_posix())
             if not found:
                 raise UsageError(
                     f"{text}: no *{SUFFIX} file under this directory; a "
@@ -194,6 +229,22 @@ def _plan(given, explicit_root, swept=None) -> list[tuple[Path, Path, str]]:
 
 def stem(path: Path) -> str:
     return path.name.removesuffix(SUFFIX)
+
+
+def _claim_stems(plan, flag: str, out: Path, suffix: str) -> None:
+    """Refuse two entries that would write one `<stem><suffix>` into `out`,
+    letter case ignored: on a case-insensitive file system `M` and `m`
+    are one file, and one entry's output would silently replace the
+    other's."""
+    if out.exists() and not out.is_dir():
+        raise UsageError(f"{flag} {out} is not a directory")
+    claimed = {}
+    for path, _root, _file in plan:
+        other = claimed.setdefault(stem(path).casefold(), path)
+        if other is not path:
+            raise UsageError(
+                f"{flag} would write {stem(path)}{suffix} for both {other} "
+                f"and {path}")
 
 
 # ---- writing ----------------------------------------------------------------
@@ -254,11 +305,12 @@ def _closure(root: Path, file: str) -> set:
     """Every file the compilation entered at `file` reads, by real path;
     what it reports is discarded (the real compilation reports it)."""
     try:
-        compilation = package.load(file, root, Diagnostics())
+        compilation = pipeline.compile(file, root, stage="load",
+                                       sink=Diagnostics())
     except package.ReadFailure:
         return set()
     return {os.path.realpath(root / result.file)
-            for result in compilation.results}
+            for result in compilation.loaded.results}
 
 
 def entries(plan, swept) -> list:
@@ -282,40 +334,58 @@ def entries(plan, swept) -> list:
     return kept
 
 
+def _write_report(run: _Run, path, compilation, design_hash: str,
+                  directory: Path) -> None:
+    """Validate and write one entry's check report as <stem>.check.json."""
+    document = compilation.report.document(design_hash)
+    try:
+        problem = check_report.schema_problem(document)
+    except ImportError:
+        run.complain(
+            f"UNAVAILABLE: jsonschema is not installed, so the check report "
+            f"of {path} could not be validated against "
+            "rhoform/check-report.schema.json. Install the pin from "
+            "toolchain/versions.yaml: python3 -m pip install "
+            "jsonschema==4.26.0")
+        return
+    if problem is not None:
+        run.complain(f"INTERNAL: the check report of {path} does not "
+                     "validate against rhoform/check-report.schema.json: "
+                     f"{problem}")
+        return
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        write_atomically(directory / f"{stem(path)}.check.json",
+                         ir.canonical_bytes(document))
+    except OSError as exc:
+        run.complain(f"FAIL: cannot write the check report of {path} to "
+                     f"{directory}: {exc}")
+
+
 def run_check(args) -> int:
     run = _Run("check")
     swept = set()
     plan = entries(_plan(args.paths, args.compile_root, swept), swept)
-    out = None
+    out = reports = None
     if args.emit_ir is not None:
         out = Path(args.emit_ir)
-        if out.exists() and not out.is_dir():
-            raise UsageError(f"--emit-ir {out} is not a directory")
-        claimed = {}
-        for path, _root, _file in plan:
-            other = claimed.setdefault(stem(path), path)
-            if other is not path:
-                raise UsageError(
-                    f"--emit-ir would write {stem(path)}.ir.json for both "
-                    f"{other} and {path}")
+        _claim_stems(plan, "--emit-ir", out, ".ir.json")
+    if args.emit_report is not None:
+        reports = Path(args.emit_report)
+        _claim_stems(plan, "--emit-report", reports, ".check.json")
     for path, root, file in plan:
         sink = Diagnostics()
         try:
-            compilation = package.load(file, root, sink)
+            compilation = pipeline.compile(file, root, sink=sink,
+                                           root_module=args.root_module)
         except package.ReadFailure as exc:
             run.report.merge(sink)
             run.complain(f"FAIL: {exc}")
             continue
-        if not compilation.ok:
-            run.report.merge(sink)
-            continue
-        elaboration = elaborator.elaborate(
-            compilation.results, root=args.root_module, sink=sink,
-            imports=compilation.imports)
         run.report.merge(sink)
-        if not elaboration.ok:
+        if compilation.design is None:
             continue
-        ir_bytes, map_bytes = ir.emit(elaboration.design)
+        ir_bytes, map_bytes = ir.emit(compilation.design)
         try:
             problem = schema_problem(json.loads(ir_bytes))
         except ImportError:
@@ -331,6 +401,10 @@ def run_check(args) -> int:
                          f"validate against ir/netlist-ir.v1.schema.json: "
                          f"{problem}")
             continue
+        if reports is not None:
+            _write_report(run, path, compilation,
+                          json.loads(ir_bytes)["header"]["design_hash"],
+                          reports)
         if out is not None:
             try:
                 out.mkdir(parents=True, exist_ok=True)
@@ -464,12 +538,12 @@ def _parser() -> argparse.ArgumentParser:
     common.add_argument(
         "--compile-root", metavar="DIR",
         help="the compile root every path is relative to (default: the "
-             "nearest ancestor holding rhoform.toml, else the file's "
-             "directory)")
+             "nearest ancestor holding rhoform.lock, else the nearest "
+             "holding rhoform.toml, else the file's directory)")
 
     check = commands.add_parser(
         "check", parents=[common],
-        help="parse, check, elaborate and validate; writes nothing",
+        help="parse, elaborate, validate and check; writes nothing",
         description="Compile each PATH as its own entry file, with the "
                     "files it imports (a directory stands for its *.rhoform "
                     "files, less those another named file imports).")
@@ -480,6 +554,9 @@ def _parser() -> argparse.ArgumentParser:
     check.add_argument("--emit-ir", metavar="DIR",
                        help="write <stem>.ir.json and <stem>.sourcemap.json "
                             "here for every entry that elaborates")
+    check.add_argument("--emit-report", metavar="DIR",
+                       help="write <stem>.check.json, the check report, "
+                            "here for every entry the check stage ran on")
     check.set_defaults(run=run_check)
 
     fmt = commands.add_parser(

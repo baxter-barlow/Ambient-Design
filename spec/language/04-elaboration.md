@@ -84,10 +84,16 @@ byte-identical IR, source map and diagnostic stream.
 Every path elaboration records is a POSIX path relative to the
 **compile root**: the root given explicitly (the reference CLI's
 `--compile-root DIR`), else the nearest ancestor directory of the entry
-file that holds a `rhoform.toml`, else the entry file's directory. These
-paths name the source map's `files`, feed `source_hash`, derive
-definition names (below) and are the `file` of every diagnostic span, so
-a compilation moved to another directory or machine elaborates to the
+file that holds a `rhoform.lock` — the workspace root, above every
+package in it, so sibling path dependencies compile without an explicit
+root — else the nearest that holds a `rhoform.toml`, else the entry
+file's directory. Each of those names matches exactly, letter case
+included. A `rhoform.lock` decides the root by its presence; this
+version does not read it (the lockfile is R55,
+[08](08-packages.md#deviations-recorded)). These paths name the source
+map's `files`, feed `source_hash`, derive the definition names of files
+no manifest governs (below) and are the `file` of every diagnostic span,
+so a compilation moved to another directory or machine elaborates to the
 same bytes. Every file an author writes into a compilation lies under
 its compile root ([08](08-packages.md#the-compilation)). A
 [standard library](#the-standard-library) module is the one exception:
@@ -97,22 +103,30 @@ Absolute paths MUST NOT appear in the IR or the source map.
 
 ## Definitions and the root
 
-A module's or component's IR `definition` is `<module path>.<Name>`,
-where the module
-path is its file's compile-root-relative path without `.rhoform`, with
-`/` turned into `.`, and with each segment made an identifier: every
-character outside `[A-Za-z0-9_]` becomes `_`, and a segment that would
-start with a digit is prefixed with `_`. `boards/blinker-555.rhoform`
-gives the module path `boards.blinker_555`; `555/main.rhoform` gives
-`_555.main`. Two definitions of one file MUST NOT share a name: two
-modules are RHO2001, and a clash involving a `component` is RHO2034.
+A module's or component's IR `definition` is `<module name>.<Name>`.
+A file's **module path** is its path without `.rhoform`, with `/` turned
+into `.`, and with each segment made an identifier: every character
+outside `[A-Za-z0-9_]` becomes `_`, and a segment that would start with
+a digit is prefixed with `_`. `boards/blinker-555.rhoform` gives the
+module path `boards.blinker_555`; `555/main.rhoform` gives `_555.main`.
+The path is the file's path within its package
+([08](08-packages.md#the-compilation)), and its **module name** is the
+package's identity, each segment of the package name made an identifier
+the same way, then the module path: `lib/divider.rhoform` of the package
+`acme/app` is `acme.app.lib.divider`, wherever the package sits under
+the compile root, so a package keeps its names whether it is compiled on
+its own or as a dependency, and vendoring or moving it renames nothing
+(AMB-144). No package name holds `_`, so two packages never share a
+module name. A file no manifest governs has its compile-root-relative
+module path as its module name: the benchmarks, which have no manifest,
+are named as before. Two definitions of one file MUST NOT share a name:
+two modules are RHO2001, and a clash involving a `component` is RHO2034.
 The rule maps several paths to one module path — `a-b/x.rhoform` and
-`a_b/x.rhoform` are both `a_b.x` — so two files of one compilation MUST
-NOT share one: a `Divider` in each would be two definitions named
-`a_b.x.Divider`. The package layer refuses the second of the two files
-read, at the import that brings it in (RHO2069,
-[08](08-packages.md#imports)), so within a compilation one definition
-name names one definition.
+`a_b/x.rhoform` are both `a_b.x` — so two files of one package MUST NOT
+share one: a `Divider` in each would be two definitions with one name.
+The package layer refuses the second of the two files read, at the
+import that brings it in (RHO2069, [08](08-packages.md#imports)), so
+within a compilation one definition name names one definition.
 
 The **root** is the unique module of the entry file that no module of
 the compilation instantiates; a module of an imported file is never a
@@ -321,11 +335,12 @@ Because a library module holds component definitions only, it imports
 nothing: no author's file is ever read on the library's behalf. No
 author's file is compiled whose module path falls under the reserved
 prefix — `rhoform/lib.rhoform`, or any file under `rhoform/lib/`,
-relative to the compile root: its definitions would take the library's
-names, and one path cannot name two files. Such a file is refused
-before it is read (RHO2068), at the import that names it or, as the
-entry, at its start, so a library path always means the toolchain's
-file.
+relative to the compile root — or whose module name does, as every file
+of a package named `rhoform/lib` would: its definitions would take the
+library's names, and one name cannot name two definitions. Such a file
+is refused before it is read (RHO2068), at the import that names it or,
+as the entry, at its start, so a library name always means the
+toolchain's definition.
 
 ## Values
 
@@ -548,7 +563,10 @@ endpoint twice within one statement is a warning (RHO2025).
 
 The port an `isolated` statement names MUST be the only member of its
 flattened net, also when another member would reach it through a
-module port (RHO2026).
+module port (RHO2026). The net it makes is thereby declared an
+intentional single-member net: the elaborated design records that, for
+the check stage's single-pin-net rule (L9b,
+[05](05-static-types.md)), and IR version 1 does not carry it.
 
 Every net a connecting statement creates is emitted, a single-member
 net included. Every node of a net is one IR connection, module-port
@@ -634,10 +652,12 @@ holds one reject case for every block-2 code a source can trigger.
   no instance takes, so a default that is invalid on its own (an array
   size of 0, say) is reported even when every `new` of the module passes
   a valid value; give such a parameter a valid default. This is a known
-  limitation of the current rule, not a promise. A
-  defect found under every environment of its module — every defect of a
-  v0.1 body — is reported once per module, however many times the module
-  is instantiated. A defect found under some environments only depends
+  limitation of the current rule, not a promise. Nothing of that defaults
+  run reaches the check stage, which checks only the instances the walk
+  from the root built ([05](05-static-types.md#what-a-pass-never-sees)).
+  A defect found under every environment of its module — every defect of
+  a v0.1 body — is reported once per module, however many times the
+  module is instantiated. A defect found under some environments only depends
   on the parameter values, and is reported once per instance whose
   environment shows it, in path order.
 - The same rule holds for a defect of a flattened net (RHO2026 to

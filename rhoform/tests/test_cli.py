@@ -4,10 +4,20 @@ Most cases run `rhoform.cli.main` in-process with stdout and stderr
 captured; a few run `python3 -m rhoform` as a real subprocess, where only a
 process boundary can show the property (concurrent writers, and an audit
 hook watching every file the run opens). The command line is held to the
-reference implementation through the committed artifacts: `check` must
-reproduce every elaboration reject case's expected stream and every accept
-case's expected IR, and `check --emit-ir` every benchmark golden, byte for
-byte.
+reference implementation through the committed artifacts: `check --emit-ir`
+must reproduce every elaboration accept case's expected IR and every
+benchmark golden byte for byte, and its stream must be exactly what
+rhoform.compile reports. What the elaboration cases pin is the elaborator's,
+so the tests that compare streams and IR with them compile in-process at
+stage=elaborate; `check` runs the static stage too, whose coverage note
+every check-stage run carries until M2's passes land (amendment OD1), and
+whose benchmark output is pinned in test_benchmarks.py alone.
+
+Every compilation here has its compile root inside the test's temporary
+directory: the root is passed with --compile-root, or found by a walk
+bounded to that directory, so a rhoform.toml or rhoform.lock above the
+checkout cannot move it (AMB-142 #12). A benchmark is copied into a
+compile root of its own, as its directory is.
 
 Every test skips without lark, as test_parser.py does; the cases that
 compile need jsonschema too, which the CI job running rhoform/tests pins.
@@ -44,6 +54,8 @@ SKIP = "lark and jsonschema (pinned in toolchain/versions.yaml) are required"
 ROOT = Path(__file__).resolve().parents[2]
 ELABORATE = ROOT / "spec" / "conformance" / "elaborate"
 
+COVERAGE_NOTE = "RHO3901"
+
 P = "#pragma rhoform-syntax 0.1\n"
 CLEAN = P + "\nmodule M:\n    port p passive\n"
 NONCANONICAL = P + "module M:\n  port p passive\n"
@@ -56,6 +68,10 @@ P2 = "#pragma rhoform-syntax 0.2\n"
 LIBRARY = P2 + "\ncomponent Led:\n    pin a passive\n    pin k passive\n"
 IMPORTER = (P2 + '\nimport Led from "./lib"\n\nmodule {name}:\n'
             "    d = new Led\n    d.a ~ d.k\n")
+STATIC_ASSERTION = (P + "\nmodule M:\n    port vin power_in\n"
+                    "    net VIN:\n        vin\n"
+                    "    assert vin_ok static operating_point(VIN) "
+                    "within 4.5V to 5.5V\n")
 
 
 def run(*argv, stdin: bytes | None = None):
@@ -77,6 +93,34 @@ def lines(stdout: str) -> list[dict]:
     return [json.loads(line) for line in stdout.splitlines()]
 
 
+def checked(stdout: str) -> list[dict]:
+    """The stream less the static stage's coverage note, which every
+    check-stage run carries while passes are unimplemented."""
+    return [d for d in lines(stdout) if d["code"] != COVERAGE_NOTE]
+
+
+def exit_of(stdout: str) -> int:
+    """The exit code a stream implies: 1 with an error in it, else 0."""
+    return int(any(d["severity"] == "error" for d in lines(stdout)))
+
+
+def copy_benchmarks(directory: Path) -> list[tuple[Path, Path]]:
+    """Each benchmark copied into a compile root of its own under
+    `directory`, as it compiles in place: (root, entry) pairs. The
+    benchmark's rhoform.lock comes along when it has one."""
+    from rhoform.tests.test_benchmarks import sources
+
+    copied = []
+    for source in sources():
+        root = directory / source.parent.name
+        root.mkdir(parents=True)
+        shutil.copy(source, root / source.name)
+        if (source.parent / "rhoform.lock").is_file():
+            shutil.copy(source.parent / "rhoform.lock", root)
+        copied.append((root, root / source.name))
+    return copied
+
+
 def snapshot(directory: Path) -> dict:
     """Every file under `directory` with its bytes, mode and mtime."""
     found = {}
@@ -91,8 +135,22 @@ def snapshot(directory: Path) -> dict:
 
 class _Tmp(unittest.TestCase):
     def setUp(self):
+        from rhoform import cli
+
         self.tmp = Path(tempfile.mkdtemp(prefix="rhoform-cli-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        # The compile-root walk stops at this directory: a manifest or
+        # lockfile above it belongs to the host, not to the test.
+        real, top = cli._holds, os.path.realpath(self.tmp)
+
+        def bounded(directory, name):
+            here = os.path.realpath(directory)
+            return (here == top or here.startswith(top + os.sep)) \
+                and real(directory, name)
+
+        patcher = mock.patch.object(cli, "_holds", bounded)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def write(self, rel: str, text: str) -> Path:
         path = self.tmp / rel
@@ -101,14 +159,39 @@ class _Tmp(unittest.TestCase):
         return path
 
 
+def compiled(case: Path, stage: str):
+    """(stream, Compilation) of one elaboration case compiled in-process,
+    its directory the compile root, as the conformance suite compiles it."""
+    from rhoform import compile as pipeline
+    from rhoform.diagnostics import Diagnostics
+
+    sink = Diagnostics()
+    compilation = pipeline.compile(case.name, case.parent, stage=stage,
+                                   sink=sink)
+    return sink.render(), compilation
+
+
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)
 class CheckTest(_Tmp):
-    def test_clean_file_exits_zero_with_an_empty_stream(self):
-        self.assertEqual(run("check", self.write("m.rhoform", CLEAN)),
-                         (0, "", ""))
+    def test_clean_file_exits_zero_with_only_the_coverage_note(self):
+        code, out, err = run("check", "--compile-root", self.tmp,
+                             self.write("m.rhoform", CLEAN))
+        self.assertEqual((code, err, checked(out)), (0, "", []))
+        self.assertEqual([(d["code"], d["severity"]) for d in lines(out)],
+                         [(COVERAGE_NOTE, "note")])
+
+    def test_a_clean_file_elaborates_with_an_empty_stream(self):
+        # The M1-era form of the test above: through elaboration the
+        # stream of a clean file is empty, and the design is there.
+        stream, compilation = compiled(self.write("m.rhoform", CLEAN),
+                                       "elaborate")
+        self.assertEqual(stream, "")
+        self.assertIsNotNone(compilation.design)
+        self.assertIsNone(compilation.report)
 
     def test_errors_exit_one_as_ndjson_with_root_relative_files(self):
-        code, out, err = run("check", self.write("sub/m.rhoform", BROKEN))
+        code, out, err = run("check", "--compile-root", self.tmp / "sub",
+                             self.write("sub/m.rhoform", BROKEN))
         self.assertEqual((code, err), (1, ""))
         self.assertEqual([d["code"] for d in lines(out)], ["RHO1009"])
         self.assertEqual(lines(out)[0]["spans"][0]["file"], "m.rhoform")
@@ -118,35 +201,72 @@ class CheckTest(_Tmp):
         self.assertTrue(cases)
         for case in cases:
             with self.subTest(case=case.name):
-                code, out, _err = run("check", case)
+                stream, _compilation = compiled(case, "elaborate")
                 expected = case.with_name(
                     case.name[:-len(".rhoform")] + ".expected.ndjson")
-                self.assertEqual(out, expected.read_text(encoding="utf-8"))
-                # Exit 1 needs an error; a warnings-only case exits 0.
-                self.assertEqual(code, int(any(
-                    d["severity"] == "error" for d in lines(out))))
+                self.assertEqual(stream, expected.read_text(encoding="utf-8"))
 
-    def test_accept_cases_emit_their_expected_ir(self):
+    def test_check_reports_exactly_what_the_pipeline_does(self):
+        # The command line is a shell over rhoform.compile: its stream for
+        # each reject case is the pipeline's at stage=check (a warnings-only
+        # case elaborates, so its check stage runs too), and its exit code
+        # is what that stream implies.
+        for case in sorted((ELABORATE / "reject").glob("*.rhoform")):
+            with self.subTest(case=case.name):
+                code, out, _err = run("check", "--compile-root", case.parent,
+                                      case)
+                stream, _compilation = compiled(case, "check")
+                self.assertEqual(out, stream)
+                self.assertEqual(code, exit_of(out))
+
+    def test_accept_cases_elaborate_to_their_expected_ir(self):
+        from rhoform import ir
+
         cases = sorted((ELABORATE / "accept").glob("*.rhoform"))
         self.assertTrue(cases)
-        code, out, err = run("check", "--emit-ir", self.tmp, *cases)
-        self.assertEqual((code, out, err), (0, "", ""))
         for case in cases:
             stem = case.name[:-len(".rhoform")]
             with self.subTest(case=stem):
+                stream, compilation = compiled(case, "elaborate")
+                self.assertEqual(stream, "")
                 self.assertEqual(
-                    (self.tmp / f"{stem}.ir.json").read_bytes(),
+                    ir.emit(compilation.design)[0],
                     case.with_name(f"{stem}.expected.ir.json").read_bytes())
 
+    def test_emit_ir_writes_the_ir_whatever_the_check_stage_finds(self):
+        # A declared static-tier assertion is an RHO3553 error while the
+        # assertions pass is unimplemented (pinned as such here, whatever
+        # the pass's state): the run exits 1, and the IR of the design,
+        # which elaborated, is still written.
+        from rhoform import compile as pipeline
+        from rhoform.diagnostics import Diagnostics
+
+        entry = self.write("m.rhoform", STATIC_ASSERTION)
+        with mock.patch("rhoform.check.assertions.IMPLEMENTED", False):
+            code, out, err = run("check", "--compile-root", self.tmp,
+                                 "--emit-ir", self.tmp / "out", entry)
+            compilation = pipeline.compile("m.rhoform", self.tmp,
+                                           sink=Diagnostics())
+        self.assertEqual((code, err), (1, ""))
+        self.assertIn(("RHO3553", "/vin_ok", "static"),
+                      [(d["code"], d["entity"], d["tier"])
+                       for d in lines(out)])
+        from rhoform import ir
+
+        self.assertEqual((self.tmp / "out" / "m.ir.json").read_bytes(),
+                         ir.emit(compilation.design)[0])
+
     def test_emit_ir_reproduces_every_benchmark_golden(self):
-        from rhoform.tests.test_benchmarks import (emit_argv, goldens,
-                                                   sources)
+        from rhoform.tests.test_benchmarks import goldens, sources
 
         self.assertTrue(sources())
-        for source in sources():
-            out = self.tmp / source.parent.name
+        for (root, entry), source in zip(copy_benchmarks(self.tmp / "src"),
+                                         sources()):
+            out = self.tmp / "ir" / source.parent.name
             with self.subTest(benchmark=source.parent.name):
-                self.assertEqual(run(*emit_argv(source, out)), (0, "", ""))
+                code, stdout, err = run("check", "--compile-root", root,
+                                        "--emit-ir", out, entry)
+                self.assertEqual((code, err), (exit_of(stdout), ""))
                 written = sorted(p.name for p in out.iterdir())
                 self.assertEqual(written, sorted(g.name for g in
                                                  goldens(source)))
@@ -156,13 +276,55 @@ class CheckTest(_Tmp):
                                     f"{golden.name} differs")
 
     def test_check_never_writes_without_emit_ir(self):
-        for source in sorted((ROOT / "benchmarks").glob("*/*.rhoform")):
-            shutil.copy(source, self.tmp / source.name)
+        copy_benchmarks(self.tmp)
         self.write("bad.rhoform", BROKEN)
         before = snapshot(self.tmp)
         code, _out, _err = run("check", self.tmp)
         self.assertEqual(code, 1)
         self.assertEqual(snapshot(self.tmp), before)
+
+    def test_emit_report_writes_each_check_report(self):
+        from rhoform import ir
+        from rhoform.check import report as check_report
+
+        entry = self.write("m.rhoform", CLEAN)
+        bad = self.write("bad.rhoform", BROKEN)
+        code, out, err = run("check", "--compile-root", self.tmp,
+                             "--emit-report", self.tmp / "reports",
+                             "--emit-ir", self.tmp / "ir", entry, bad)
+        self.assertEqual((code, err), (1, ""))
+        # Only the entry the check stage ran on has a report.
+        self.assertEqual(sorted(p.name for p in
+                                (self.tmp / "reports").iterdir()),
+                         ["m.check.json"])
+        data = (self.tmp / "reports" / "m.check.json").read_bytes()
+        document = json.loads(data)
+        self.assertEqual(data, ir.canonical_bytes(document))
+        self.assertIsNone(check_report.schema_problem(document))
+        self.assertEqual(
+            document["design_hash"],
+            json.loads((self.tmp / "ir" / "m.ir.json").read_bytes())
+            ["header"]["design_hash"])
+
+    def test_a_check_report_the_schema_rejects_is_internal_never_written(self):
+        entry = self.write("m.rhoform", CLEAN)
+        with mock.patch("rhoform.check.report.schema_problem",
+                        return_value="planted"):
+            code, _out, err = run("check", "--compile-root", self.tmp,
+                                  "--emit-report", self.tmp / "out", entry)
+        self.assertEqual(code, 2)
+        self.assertIn("INTERNAL: the check report", err)
+        self.assertFalse((self.tmp / "out").exists())
+
+    def test_a_report_without_jsonschema_is_unavailable(self):
+        entry = self.write("m.rhoform", CLEAN)
+        with mock.patch("rhoform.check.report.schema_problem",
+                        side_effect=ImportError("planted")):
+            code, _out, err = run("check", "--compile-root", self.tmp,
+                                  "--emit-report", self.tmp / "out", entry)
+        self.assertEqual(code, 2)
+        self.assertIn("UNAVAILABLE", err)
+        self.assertFalse((self.tmp / "out").exists())
 
     def test_a_directory_expands_to_its_sources_in_sorted_order(self):
         self.write("d/b/z.rhoform", BROKEN)
@@ -189,8 +351,10 @@ class CheckTest(_Tmp):
             (self.tmp / "out" / "main.sourcemap.json").read_text())
         self.assertEqual([f["path"] for f in source_map["files"]],
                          ["boards/main.rhoform"])
+        # A file a manifest governs is named by its package's identity
+        # first (AMB-144 item 1).
         self.assertEqual(document["instances"][0]["definition"],
-                         "boards.main.M")
+                         "acme.app.boards.main.M")
         code, out, _err = run("check", self.write("pkg/boards/bad.rhoform",
                                                   BROKEN))
         self.assertEqual(lines(out)[0]["spans"][0]["file"],
@@ -203,6 +367,39 @@ class CheckTest(_Tmp):
 
         self.write("pkg/RHOFORM.TOML", MANIFEST)
         entry = self.write("pkg/boards/main.rhoform", CLEAN)
+        self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
+
+    def test_a_lockfile_ancestor_is_the_compile_root_ahead_of_a_manifest(self):
+        # The workspace root (AMB-144 item 2): the nearest rhoform.lock wins
+        # over a nearer rhoform.toml, so sibling path dependencies compile
+        # without --compile-root. Only its presence counts: it is not read.
+        from rhoform import cli
+
+        self.write("ws/rhoform.lock", "not read\n")
+        self.write("ws/app/rhoform.toml", MANIFEST)
+        entry = self.write("ws/app/boards/main.rhoform", CLEAN)
+        self.assertEqual(cli.compile_root(entry), cli._absolute(self.tmp / "ws"))
+        code, out, _err = run("check", self.write("ws/app/boards/bad.rhoform",
+                                                  BROKEN))
+        self.assertEqual(code, 1)
+        self.assertEqual(lines(out)[0]["spans"][0]["file"],
+                         "app/boards/bad.rhoform")
+        # Without the lockfile, the manifest's directory is the root again,
+        # and without either, the entry's own directory.
+        (self.tmp / "ws" / "rhoform.lock").unlink()
+        self.assertEqual(cli.compile_root(entry),
+                         cli._absolute(self.tmp / "ws" / "app"))
+        (self.tmp / "ws" / "app" / "rhoform.toml").unlink()
+        self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
+
+    def test_only_a_file_named_rhoform_lock_exactly_marks_the_workspace(self):
+        from rhoform import cli
+
+        self.write("ws/RHOFORM.LOCK", "not read\n")
+        entry = self.write("ws/app/main.rhoform", CLEAN)
+        self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
+        # A directory named rhoform.lock is no lockfile either.
+        (self.tmp / "ws" / "app" / "rhoform.lock").mkdir()
         self.assertEqual(cli.compile_root(entry), cli._absolute(entry.parent))
 
     def test_explicit_compile_root_wins_and_must_contain_the_entry(self):
@@ -236,7 +433,7 @@ class CheckTest(_Tmp):
         self.assertEqual([d["code"] for d in lines(out)], ["RHO2002"])
         code, out, _err = run("check", "--root-module", "B", "--emit-ir",
                               self.tmp / "out", entry)
-        self.assertEqual((code, out), (0, ""))
+        self.assertEqual((code, checked(out)), (0, []))
         document = json.loads((self.tmp / "out" / "two.ir.json").read_text())
         self.assertEqual(document["header"]["design_name"], "B")
         code, out, _err = run("check", "--root-module", "C", entry)
@@ -255,7 +452,7 @@ class CheckTest(_Tmp):
         with mock.patch.dict(sys.modules, {"jsonschema": None}):
             code, out, err = run("check", "--emit-ir", self.tmp / "out",
                                  entry)
-            self.assertEqual((code, out), (2, ""))
+            self.assertEqual((code, checked(out)), (2, []))
             self.assertIn("UNAVAILABLE", err)
             self.assertFalse((self.tmp / "out").exists())
             # No IR, nothing to validate: the errors are the whole answer.
@@ -267,7 +464,7 @@ class CheckTest(_Tmp):
         with mock.patch("rhoform.ir.emit", return_value=(b"{}\n", b"{}\n")):
             code, out, err = run("check", "--emit-ir", self.tmp / "out",
                                  entry)
-        self.assertEqual((code, out), (2, ""))
+        self.assertEqual((code, checked(out)), (2, []))
         self.assertIn("does not validate", err)
         self.assertFalse((self.tmp / "out").exists())
 
@@ -288,12 +485,42 @@ class CheckTest(_Tmp):
         self.assertIn("m.ir.json", err)
         self.assertFalse((self.tmp / "out").exists())
 
+    def test_stems_that_differ_only_in_case_are_one_stem(self):
+        # On a case-insensitive file system M.ir.json and m.ir.json are one
+        # file (AMB-142 item 11), and so are two check reports.
+        for flag, suffix in (("--emit-ir", ".ir.json"),
+                             ("--emit-report", ".check.json")):
+            with self.subTest(flag=flag):
+                code, out, err = run("check", flag, self.tmp / "out",
+                                     self.write("a/m.rhoform", CLEAN),
+                                     self.write("b/M.rhoform", CLEAN))
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn(f"M{suffix} for both", err)
+                self.assertFalse((self.tmp / "out").exists())
+
+    def test_an_unreadable_subdirectory_stops_the_run_naming_it(self):
+        # A sweep that skipped it would pass over files it never read
+        # (AMB-142 item 10): `check DIR` and `fmt --check DIR` exit 2.
+        self.write("d/a.rhoform", CLEAN)
+        self.write("d/locked/b.rhoform", BROKEN)
+        locked = self.tmp / "d" / "locked"
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o755)
+        if os.access(locked, os.R_OK):
+            self.skipTest("this user can read a mode-0 directory (root)")
+        for argv in (("check", self.tmp / "d"),
+                     ("fmt", "--check", self.tmp / "d")):
+            with self.subTest(command=argv[0]):
+                code, out, err = run(*argv)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn(f"cannot list {locked}", err)
+
     def test_an_entry_compiles_with_the_files_it_imports(self):
         self.write("pkg/rhoform.toml", MANIFEST.replace("^0.1.0", "^0.2.0"))
         self.write("pkg/lib.rhoform", LIBRARY)
         entry = self.write("pkg/main.rhoform", IMPORTER.format(name="Main"))
         code, out, _err = run("check", "--emit-ir", self.tmp / "out", entry)
-        self.assertEqual((code, out), (0, ""))
+        self.assertEqual((code, checked(out)), (0, []))
         source_map = json.loads(
             (self.tmp / "out" / "main.sourcemap.json").read_text())
         self.assertEqual([f["path"] for f in source_map["files"]],
@@ -324,7 +551,7 @@ class CheckTest(_Tmp):
         self.write("d/lib.rhoform", LIBRARY)
         code, out, _err = run("check", "--emit-ir", self.tmp / "out",
                               self.tmp / "d")
-        self.assertEqual((code, out), (0, ""))
+        self.assertEqual((code, checked(out)), (0, []))
         self.assertEqual(sorted(p.name for p in (self.tmp / "out").iterdir()),
                          ["a.ir.json", "a.sourcemap.json", "b.ir.json",
                           "b.sourcemap.json"])
@@ -559,44 +786,50 @@ atexit.register(lambda: sys.stderr.write(
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)
 class HermeticTest(_Tmp):
     """C-6: no network, no reads beyond the input closure (the sources and
-    the standard library modules they name) plus the grammar, the IR schema
-    and the interpreter's own files, no writes except targets and
-    --emit-ir."""
+    the standard library modules they name) plus the grammar, the IR
+    schema, the check report's schema and the interpreter's own files, no
+    writes except targets, --emit-ir and --emit-report."""
 
     def test_no_network_and_no_stray_files(self):
         def refuse(*_args, **_kwargs):
             raise AssertionError("the CLI attempted network use")
 
-        sources = sorted((ROOT / "benchmarks").glob("*/*.rhoform"))
-        for source in sources:
-            shutil.copy(source, self.tmp / source.name)
+        copied = copy_benchmarks(self.tmp / "src")
         self.write("draft.rhoform", NONCANONICAL)
         with mock.patch.object(socket, "socket", refuse), \
                 mock.patch.object(socket, "create_connection", refuse):
-            code, _out, _err = run("check", "--emit-ir", self.tmp / "ir",
-                                   *(self.tmp / s.name for s in sources))
-            self.assertEqual(code, 0)
+            for root, entry in copied:
+                code, out, _err = run("check", "--compile-root", root,
+                                      "--emit-ir", self.tmp / "ir",
+                                      "--emit-report", self.tmp / "reports",
+                                      entry)
+                self.assertEqual(code, exit_of(out))
             self.assertEqual(run("fmt", self.tmp / "draft.rhoform")[0], 0)
             self.assertEqual(run("fmt", "--stdin", self.tmp / "gate.rhoform",
                                  stdin=NONCANONICAL.encode())[0], 0)
-        stems = [s.name[:-len(".rhoform")] for s in sources]
+        stems = [entry.name[:-len(".rhoform")] for _root, entry in copied]
         self.assertEqual(sorted(snapshot(self.tmp)), sorted(
             ["draft.rhoform", "gate.rhoform"]
-            + [s.name for s in sources]
+            + [entry.relative_to(self.tmp).as_posix()
+               for _root, entry in copied]
             + [f"ir/{stem}.{kind}" for stem in stems
-               for kind in ("ir.json", "sourcemap.json")]))
+               for kind in ("ir.json", "sourcemap.json")]
+            + [f"reports/{stem}.check.json" for stem in stems]))
 
-    def _audited_check(self, names):
+    def _audited_check(self, names, root=".", cwd=None):
         """(opened paths, the interpreter's own locations) of one audited
-        `check --emit-ir ir NAMES...` run in self.tmp."""
-        done = _subprocess(["check", "--emit-ir", "ir", *names], self.tmp,
+        `check --compile-root ROOT --emit-ir ir --emit-report reports
+        NAMES...` run in `cwd` (self.tmp by default)."""
+        cwd = self.tmp if cwd is None else cwd
+        done = _subprocess(["check", "--compile-root", root, "--emit-ir",
+                            "ir", "--emit-report", "reports", *names], cwd,
                            prelude=_AUDIT)
         self.assertEqual(done.returncode, 0, done.stderr.decode())
         report = json.loads(next(
             line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
             if line.startswith("AUDIT ")))
         real = os.path.realpath
-        return ([real(os.path.join(self.tmp, path))
+        return ([real(os.path.join(cwd, path))
                  for path in report["opened"]],
                 [real(p) for p in report["python"]])
 
@@ -605,32 +838,54 @@ class HermeticTest(_Tmp):
         return path == root or path.startswith(root + os.sep)
 
     def test_a_check_opens_only_its_closure(self):
-        # The package's code, the grammar, the IR schema, the sources, the
-        # --emit-ir directory, and of the standard library exactly the
-        # modules the sources name (E-8): nothing else under rhoform/lib/.
+        # The package's code, the grammar, the IR schema, the check report's
+        # schema, the source, the --emit-ir and --emit-report directories,
+        # and of the standard library exactly the modules the source names
+        # (E-8): nothing else under rhoform/lib/. Each benchmark is its own
+        # compile root, as in place.
         real = os.path.realpath
-        sources = sorted((ROOT / "benchmarks").glob("*/*.rhoform"))
-        for source in sources:
-            shutil.copy(source, self.tmp / source.name)
-        opened, python = self._audited_check([s.name for s in sources])
         library = real(ROOT / "rhoform" / "lib")
-        named = set()
-        for source in sources:
-            named.update(re.findall(r"rhoform\.lib\.(\w+)\.",
-                                    source.read_text(encoding="utf-8")))
-        self.assertTrue(named)
-        self.assertEqual(
-            sorted({path for path in opened if self._within(path, library)}),
-            sorted(real(ROOT / "rhoform" / "lib" / f"{module}.rhoform")
-                   for module in named))
-        allowed = [real(ROOT / "rhoform"), real(ROOT / "lang" / "grammar"),
-                   real(ROOT / "ir" / "netlist-ir.v1.schema.json"),
-                   real(self.tmp / "ir")]
-        allowed += [real(self.tmp / s.name) for s in sources]
-        allowed += python
-        stray = [path for path in opened
-                 if not any(self._within(path, root) for root in allowed)]
-        self.assertEqual(stray, [])
+        for root, entry in copy_benchmarks(self.tmp):
+            with self.subTest(benchmark=root.name):
+                opened, python = self._audited_check([entry.name], cwd=root)
+                named = set(re.findall(r"rhoform\.lib\.(\w+)\.",
+                                       entry.read_text(encoding="utf-8")))
+                self.assertTrue(named)
+                self.assertEqual(
+                    sorted({path for path in opened
+                            if self._within(path, library)}),
+                    sorted(real(ROOT / "rhoform" / "lib" / f"{module}"
+                                ".rhoform") for module in named))
+                allowed = [real(ROOT / "rhoform"),
+                           real(ROOT / "lang" / "grammar"),
+                           real(ROOT / "ir" / "netlist-ir.v1.schema.json"),
+                           real(root / "ir"), real(root / "reports"),
+                           real(entry)]
+                allowed += python
+                stray = [path for path in opened if not any(
+                    self._within(path, place) for place in allowed)]
+                self.assertEqual(stray, [])
+
+    def test_a_lockfile_decides_the_root_and_is_not_read(self):
+        # Until the lockfile lands (AMB-59), rhoform.lock is a marker: its
+        # directory is the compile root, and the check stage opens nothing,
+        # it included.
+        real = os.path.realpath
+        self.write("rhoform.lock", "{not even json\n")
+        self.write("boards/main.rhoform", CLEAN)
+        done = _subprocess(["check", "--emit-ir", "ir", "boards/main.rhoform"],
+                           self.tmp, prelude=_AUDIT)
+        self.assertEqual(done.returncode, 0, done.stderr.decode())
+        report = json.loads(next(
+            line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
+            if line.startswith("AUDIT ")))
+        opened = [real(os.path.join(self.tmp, path))
+                  for path in report["opened"]]
+        self.assertNotIn(real(self.tmp / "rhoform.lock"), opened)
+        source_map = json.loads(
+            (self.tmp / "ir" / "main.sourcemap.json").read_text())
+        self.assertEqual([entry["path"] for entry in source_map["files"]],
+                         ["boards/main.rhoform"])
 
     def test_a_check_reads_only_the_library_modules_it_names(self):
         # One module named, one module read: adding or editing any other

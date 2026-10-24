@@ -51,20 +51,17 @@ class _Tree(unittest.TestCase):
         return self.tmp
 
     def compile(self, files: dict, entry="main.rhoform"):
-        """(diagnostics as dicts, compilation, elaboration or None)."""
-        from rhoform import package
+        """(diagnostics as dicts, the package layer's compilation, the
+        pipeline's, whose `design` is None unless it elaborated), through
+        rhoform.compile at stage=elaborate."""
+        from rhoform import compile as pipeline
         from rhoform.diagnostics import Diagnostics
-        from rhoform.elaborate import elaborate
 
         root = self.plant(files)
         sink = Diagnostics()
-        compilation = package.load(entry, root, sink)
-        elaboration = None
-        if compilation.ok:
-            elaboration = elaborate(compilation.results, sink=sink,
-                                    imports=compilation.imports)
+        compiled = pipeline.compile(entry, root, stage="elaborate", sink=sink)
         found = [json.loads(line) for line in sink.render().splitlines()]
-        return found, compilation, elaboration
+        return found, compiled.loaded, compiled
 
     def only(self, files, code, entry="main.rhoform"):
         """The one diagnostic `files` draws, which must be `code`, and the
@@ -283,8 +280,11 @@ class CompilationTest(_Tree):
             "main.rhoform": TOP.replace("./leds", "./lib/leds")})
         self.assertEqual(found, [])
         design = elaboration.design
+        # The first call's rhoform.toml still governs the tree, so the
+        # names carry its package's identity (AMB-144 item 1).
         self.assertEqual({i.path: i.definition for i in design.instances},
-                         {"/": "main.Top", "/led": "lib.leds.Led"})
+                         {"/": "acme.app.main.Top",
+                          "/led": "acme.app.lib.leds.Led"})
         self.assertEqual([f.path for f in design.files],
                          ["lib/leds.rhoform", "main.rhoform"])
         self.assertEqual([r.file for r in compilation.results],
@@ -316,7 +316,43 @@ class CompilationTest(_Tree):
         self.assertEqual(found, [])
         self.assertEqual(
             {i.path: i.definition for i in elaboration.design.instances},
-            {"/": "app.main.Top", "/led": "parts.leds.Led"})
+            {"/": "acme.app.main.Top", "/led": "acme.parts.leds.Led"})
+
+    def test_a_package_keeps_its_names_wherever_it_sits(self):
+        # AMB-144 item 1: definitions are named by package identity, so
+        # moving or vendoring a dependency renames nothing and leaves the
+        # consumer's design_hash where it was.
+        from rhoform import ir
+
+        hashes, names = [], []
+        for where in ("parts", "vendor/acme-parts"):
+            shutil.rmtree(self.tmp, ignore_errors=True)
+            self.tmp.mkdir()
+            found, _c, compiled = self.compile({
+                "app/rhoform.toml": MANIFEST + '[deps]\n"acme/parts" = '
+                f'{{ version = "^1.0.0", path = "../{where}" }}\n',
+                "app/main.rhoform": TOP.replace("./leds", "acme/parts/leds"),
+                f"{where}/rhoform.toml": PARTS, f"{where}/leds.rhoform": LED},
+                entry="app/main.rhoform")
+            self.assertEqual(found, [])
+            names.append(sorted(i.definition
+                                for i in compiled.design.instances))
+            hashes.append(ir.to_ir(compiled.design)["header"]["design_hash"])
+        self.assertEqual(names[0], names[1])
+        self.assertEqual(names[0], ["acme.app.main.Top",
+                                    "acme.parts.leds.Led"])
+        self.assertEqual(hashes[0], hashes[1])
+
+    def test_module_names_prefix_a_governed_file_with_its_identity(self):
+        from rhoform.package import Package, module_name
+
+        package = Package(root="pkgs/app", manifest="pkgs/app/rhoform.toml",
+                          name="acme-co/app-core")
+        self.assertEqual(module_name("pkgs/app/lib/x-y.rhoform", package),
+                         "acme_co.app_core.lib.x_y")
+        self.assertEqual(module_name("lib/x-y.rhoform", None), "lib.x_y")
+        loose = Package(root="", manifest=None)
+        self.assertEqual(module_name("a/b.rhoform", loose), "a.b")
 
     def test_roots_come_from_the_entry_file_only(self):
         library = (P2 + "\nmodule Spare:\n    port p passive\n"
@@ -682,7 +718,8 @@ class LibraryTest(_Tree):
         self.assertEqual(found, [])
         design = elaboration.design
         self.assertEqual({i.path: i.definition for i in design.instances},
-                         {"/": "main.Main", "/d": "divider.Divider",
+                         {"/": "acme.app.main.Main",
+                          "/d": "acme.app.divider.Divider",
                           "/d/r1": "rhoform.lib.passive.Resistor"})
         resistor = next(i for i in design.instances if i.path == "/d/r1")
         self.assertEqual([p.name for p in resistor.ports], ["a", "b"])
@@ -829,6 +866,55 @@ class CodesTest(_Tree):
         self.assertNotIn("a-b/x.rhoform",
                          [r.file for r in compilation.results])
         self.assertFalse(compilation.ok)
+
+    def test_rho2068_a_package_named_into_the_reserved_prefix(self):
+        # A file is named by its package's identity, so a package
+        # `rhoform/lib` (its namespace acknowledged) would name its files
+        # into the library's prefix: refused as the entry and at an import.
+        manifest = MANIFEST.replace('"acme/app"', '"rhoform/lib"') \
+            + "reserved-namespace-ack = true\n"
+        found, compilation, _e = self.compile({
+            "rhoform.toml": manifest, "main.rhoform": TOP,
+            "leds.rhoform": LED})
+        self.assertEqual([(d["code"], d["params"]) for d in found], [(
+            "RHO2068", {"file": "main.rhoform",
+                        "module": "rhoform.lib.main"})])
+        self.assertEqual(compilation.results, [])
+        shutil.rmtree(self.tmp)
+        self.tmp.mkdir()
+        found, compilation, _e = self.compile({
+            "app/rhoform.toml": MANIFEST + '[deps]\n"rhoform/lib" = '
+            '{ version = "^0.1.0", path = "../lib" }\n',
+            "app/main.rhoform": TOP.replace("./leds", "rhoform/lib/leds"),
+            "lib/rhoform.toml": manifest, "lib/leds.rhoform": LED},
+            entry="app/main.rhoform")
+        self.assertEqual([(d["code"], d["params"]) for d in found], [(
+            "RHO2068", {"file": "lib/leds.rhoform",
+                        "module": "rhoform.lib.leds"})])
+        self.assertNotIn("lib/leds.rhoform",
+                         [r.file for r in compilation.results])
+
+    def test_two_packages_never_share_a_module_path(self):
+        # Each package's module paths are its own (RHO2069 is a rule within
+        # one package): app's leds and parts' leds are two names.
+        found, _c, compiled = self.compile({
+            "app/rhoform.toml": MANIFEST + '[deps]\n"acme/parts" = '
+            '{ version = "^1.0.0", path = "../parts" }\n',
+            "app/main.rhoform": (P2 + 'import Led from "acme/parts/leds"\n'
+                                 'import Lamp from "./leds"\n\n'
+                                 "module Top:\n    led = new Led\n"
+                                 "    lamp = new Lamp\n"
+                                 "    isolated led.a\n    isolated led.k\n"
+                                 "    isolated lamp.a\n"
+                                 "    isolated lamp.k\n"),
+            "app/leds.rhoform": LED.replace("component Led", "component Lamp"),
+            "parts/rhoform.toml": PARTS, "parts/leds.rhoform": LED},
+            entry="app/main.rhoform")
+        self.assertEqual(found, [])
+        self.assertEqual(sorted(i.definition
+                                for i in compiled.design.instances),
+                         ["acme.app.leds.Lamp", "acme.app.main.Top",
+                          "acme.parts.leds.Led"])
 
     def test_a_module_path_collision_among_files_in_hand(self):
         # elaborate() over parse results it is given resolves their imports

@@ -1,0 +1,11 @@
+#pragma rhoform-syntax 0.1
+
+# Pinless L9 hardware is no coverage gap, and a dynamic-tier assertion is
+# the dynamic tier's, which `check` never runs: the stream is empty.
+module Board:
+    port vin power_in
+    mh = new acme.hw.Hole:
+        hardware mounting_hole
+    net VIN:
+        vin
+    assert vin_ripple dynamic ripple(VIN) at most 50mV

@@ -15,8 +15,26 @@ state only what the library cannot know (parts, hardware, flags). Writing
 those pins back inline -- the explicit form the sources had before the
 library existed -- must elaborate to the same design_hash; a test below
 holds every benchmark to that.
+
+THE CHECK STAGE'S OUTPUT ON THE BENCHMARKS IS PINNED HERE AND NOWHERE ELSE.
+From the M2 foundation to the landing that empties it (L5b), each
+benchmark's check-stage stream must equal the KNOWN_FINDINGS ledger: the
+union of rhoform/tests/benchmark_findings/<landing>.json, one file per
+landing so parallel landings never edit one file. Each entry names the
+benchmark, the code and the entity of one finding, why it is there and
+which landing resolves it. A finding the ledger does not list fails, and
+so does an entry no finding matches, so neither a new false positive nor
+a resolved gap can sit unnoticed. Every benchmark compiles from a copy in
+a compile root of its own, as it does in place.
 """
 
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -28,6 +46,8 @@ except ImportError:  # pragma: no cover - exercised by absence
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = ROOT / "benchmarks"
+FINDINGS = Path(__file__).resolve().parent / "benchmark_findings"
+LEDGER_KEYS = ("benchmark", "code", "entity", "reason", "resolving_landing")
 
 # The benchmarks that must have a living source. Discovery below finds
 # whatever is on disk; this list makes a deleted source a failure rather
@@ -44,16 +64,34 @@ def sources():
                   if path.name == path.parent.name + ".rhoform")
 
 
-def build(source: Path):
-    """(ParseResult, Elaboration) for one source, its directory the
-    compile root. Bytes are decoded here rather than read as text, so the
+def build(source: Path, stage: str = "elaborate"):
+    """(stream, Compilation) for one source through rhoform.compile, its
+    directory the compile root. The package layer reads the bytes, so the
     hashed bytes are the file's, with no newline translation between."""
-    from rhoform.elaborate import elaborate
-    from rhoform.parser import parse
+    from rhoform import compile as pipeline
+    from rhoform.diagnostics import Diagnostics
 
-    data = source.read_bytes()
-    result = parse(data.decode("utf-8", "surrogateescape"), file=source.name)
-    return result, elaborate([result])
+    sink = Diagnostics()
+    compilation = pipeline.compile(source.name, source.parent, stage=stage,
+                                   sink=sink)
+    return sink.render(), compilation
+
+
+def isolated_copy(source: Path, directory: Path) -> Path:
+    """The benchmark copied into a compile root of its own under
+    `directory` (its rhoform.lock with it, once it has one): the entry."""
+    root = directory / source.parent.name
+    root.mkdir(parents=True)
+    shutil.copy(source, root / source.name)
+    if (source.parent / "rhoform.lock").is_file():
+        shutil.copy(source.parent / "rhoform.lock", root)
+    return root / source.name
+
+
+def known_findings() -> dict:
+    """{landing: [entries]} from every ledger file, in file-name order."""
+    return {path.stem: json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(FINDINGS.glob("*.json"))}
 
 
 def goldens(source: Path) -> tuple[Path, Path]:
@@ -79,10 +117,16 @@ def regenerate() -> None:
     from rhoform import cli
 
     for source in sources():
+        stream, compilation = build(source)
+        if compilation.design is None:
+            raise SystemExit(f"{source.relative_to(ROOT)} does not "
+                             f"elaborate; its diagnostics:\n{stream}")
+        # Exit 1 may be the check stage's: the IR of a design that
+        # elaborates is written whatever the checks find.
         status = cli.main(emit_argv(source, source.parent))
-        if status != 0:
-            raise SystemExit(f"{source.relative_to(ROOT)} did not compile "
-                             f"(exit {status}); its diagnostics are above")
+        if status == 2:
+            raise SystemExit(f"{source.relative_to(ROOT)} could not be "
+                             "compiled (exit 2); the reason is above")
         ir_path, map_path = goldens(source)
         print(f"wrote {ir_path.relative_to(ROOT)} and "
               f"{map_path.relative_to(ROOT)}")
@@ -106,20 +150,18 @@ class BenchmarkGoldenTest(unittest.TestCase):
     def test_sources_parse_and_elaborate_with_no_diagnostics(self):
         for source in sources():
             with self.subTest(benchmark=source.parent.name):
-                result, elaboration = build(source)
-                self.assertEqual(result.diagnostics.render(), "")
-                self.assertTrue(elaboration.ok)
-                self.assertEqual(elaboration.diagnostics.render(), "")
+                stream, compilation = build(source)
+                self.assertEqual(stream, "")
+                self.assertIsNotNone(compilation.design)
 
     def test_elaborating_each_source_reproduces_its_goldens(self):
         from rhoform import ir
 
         for source in sources():
             with self.subTest(benchmark=source.parent.name):
-                _result, elaboration = build(source)
-                self.assertTrue(elaboration.ok,
-                                elaboration.diagnostics.render())
-                emitted = ir.emit(elaboration.design)
+                stream, compilation = build(source)
+                self.assertIsNotNone(compilation.design, stream)
+                emitted = ir.emit(compilation.design)
                 for golden, produced in zip(goldens(source), emitted):
                     self.assertTrue(
                         golden.is_file(),
@@ -151,11 +193,12 @@ class BenchmarkGoldenTest(unittest.TestCase):
 
         for source in sources():
             with self.subTest(benchmark=source.parent.name):
-                result, elaboration = build(source)
-                document = ir.to_ir(elaboration.design)
+                _stream, compilation = build(source)
+                document = ir.to_ir(compilation.design)
                 source_map = ir.to_source_map(
-                    elaboration.design, document["header"]["design_hash"])
-                modules = elaborator.library_modules([result])
+                    compilation.design, document["header"]["design_hash"])
+                modules = elaborator.library_modules(
+                    compilation.loaded.results)
                 self.assertTrue(modules)
                 self.assertEqual(
                     [entry["path"] for entry in source_map["files"]],
@@ -229,21 +272,128 @@ class LibraryFormTest(unittest.TestCase):
 
     def test_restating_library_pins_inline_keeps_the_design_hash(self):
         from rhoform import ir
-        from rhoform.elaborate import elaborate
-        from rhoform.parser import parse
 
         for source in sources():
-            with self.subTest(benchmark=source.parent.name):
+            with self.subTest(benchmark=source.parent.name), \
+                    tempfile.TemporaryDirectory() as tmp:
                 explicit = explicit_form(source)
                 self.assertGreater(explicit.count("\n"),
                                    source.read_text().count("\n"))
-                result = parse(explicit, file=source.name)
-                elaboration = elaborate([result])
-                self.assertEqual(elaboration.diagnostics.render(), "")
-                design_hash = ir.to_ir(elaboration.design)["header"][
+                restated = Path(tmp) / source.name
+                restated.write_text(explicit, encoding="utf-8")
+                stream, compilation = build(restated)
+                self.assertEqual(stream, "")
+                design_hash = ir.to_ir(compilation.design)["header"][
                     "design_hash"]
                 golden = goldens(source)[0].read_text(encoding="utf-8")
                 self.assertIn(f'"design_hash":"{design_hash}"', golden)
+
+
+# Each benchmark's check-stage stream and check report, by digest, from a
+# process of its own: run under several PYTHONHASHSEED values, they must
+# agree byte for byte (the M1 evidence standard for the IR, extended to the
+# check stage).
+_SEED_PROBE = r'''
+import hashlib, json, sys
+from pathlib import Path
+from rhoform import compile as pipeline, ir
+from rhoform.check import report as check_report
+from rhoform.diagnostics import Diagnostics
+out = {}
+for entry in map(Path, sys.argv[1:]):
+    sink = Diagnostics()
+    c = pipeline.compile(entry.name, entry.parent, sink=sink)
+    ir_bytes = ir.emit(c.design)[0]
+    document = c.report.document(json.loads(ir_bytes)["header"]["design_hash"])
+    out[entry.name] = {
+        "stream": hashlib.sha256(sink.render().encode()).hexdigest(),
+        "ir": hashlib.sha256(ir_bytes).hexdigest(),
+        "report": hashlib.sha256(ir.canonical_bytes(document)).hexdigest(),
+        "valid": check_report.schema_problem(document) is None}
+print(json.dumps(out, sort_keys=True))
+'''
+
+
+@unittest.skipUnless(HAVE_LARK, "lark (pinned in toolchain/versions.yaml) "
+                     "is required")
+class BenchmarkCheckTest(unittest.TestCase):
+    """The check stage on the benchmarks, against the KNOWN_FINDINGS
+    ledger. The foundation's entries: each benchmark carries exactly one
+    RHO3901, because every pass is a stub (amendment OD1)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="rhoform-benchmarks-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_the_ledger_is_well_formed_and_each_finding_has_one_owner(self):
+        from rhoform import codes
+
+        names = {source.parent.name for source in sources()}
+        owners = {}
+        ledger = known_findings()
+        self.assertTrue(ledger)
+        for landing, entries in ledger.items():
+            with self.subTest(ledger=landing):
+                self.assertIsInstance(entries, list)
+                for entry in entries:
+                    self.assertEqual(sorted(entry), sorted(LEDGER_KEYS))
+                    self.assertIn(entry["benchmark"], names)
+                    codes.lookup(entry["code"])
+                    self.assertTrue(entry["reason"].strip())
+                    self.assertTrue(entry["resolving_landing"].strip())
+                    key = (entry["benchmark"], entry["code"], entry["entity"])
+                    self.assertNotIn(
+                        key, owners, f"{key} is claimed by both "
+                        f"{owners.get(key)} and {landing}; one finding has "
+                        "one ledger entry")
+                    owners[key] = landing
+            path = FINDINGS / f"{landing}.json"
+            self.assertEqual(path.read_bytes(), (json.dumps(
+                entries, indent=2, sort_keys=True) + "\n").encode(),
+                f"{path.name} is not in canonical layout")
+
+    def test_each_check_stream_is_exactly_the_known_findings(self):
+        expected = {}
+        for entries in known_findings().values():
+            for entry in entries:
+                expected.setdefault(entry["benchmark"], []).append(
+                    (entry["code"], entry["entity"]))
+        for source in sources():
+            name = source.parent.name
+            with self.subTest(benchmark=name):
+                stream, compilation = build(
+                    isolated_copy(source, self.tmp), stage="check")
+                self.assertIsNotNone(compilation.report)
+                found = sorted((d["code"], d["entity"]) for d in
+                               map(json.loads, stream.splitlines()))
+                self.assertEqual(found, sorted(expected.get(name, [])),
+                                 "the check stage's findings and the "
+                                 "KNOWN_FINDINGS ledger disagree")
+
+    def test_check_reports_are_canonical_schema_valid_and_seed_independent(
+            self):
+        entries = [str(isolated_copy(source, self.tmp))
+                   for source in sources()]
+        runs = []
+        for seed in ("0", "1", "4242"):
+            done = subprocess.run(
+                [sys.executable, "-c", _SEED_PROBE, *entries],
+                env=dict(os.environ, PYTHONHASHSEED=seed,
+                         PYTHONPATH=str(ROOT)),
+                capture_output=True, text=True, timeout=300)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            runs.append(json.loads(done.stdout))
+        self.assertEqual(runs[0], runs[1])
+        self.assertEqual(runs[0], runs[2])
+        self.assertEqual(sorted(runs[0]), sorted(
+            Path(entry).name for entry in entries))
+        for name, digests in runs[0].items():
+            with self.subTest(benchmark=name):
+                self.assertTrue(digests["valid"])
+                golden = BENCHMARKS / name[:-len(".rhoform")] / (
+                    name[:-len(".rhoform")] + ".ir.json")
+                self.assertEqual(digests["ir"], hashlib.sha256(
+                    golden.read_bytes()).hexdigest())
 
 
 class BlinkerOracleTest(unittest.TestCase):

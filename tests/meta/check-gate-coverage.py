@@ -118,7 +118,7 @@ CEILINGS = {
     "tests/benchmarks/check-hand-assertions.py": (61, 15),
     "tests/benchmarks/run-sim.sh": (22, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
-    "tests/conformance/check-conformance.py": (69, 0),
+    "tests/conformance/check-conformance.py": (88, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
     "tests/diagnostics/check-registry.py": (12, 0),
@@ -172,9 +172,9 @@ OWNERS = {
         {"problems"}, {"cases"}),
     "tests/conformance/check-conformance.py": (
         # `body` collects a spec section's lines, `words` a bullet list's
-        # entries, and `detail` one message's clause list; none reports
-        # anything.
-        {"problems"}, {"cases", "body", "detail", "words"}),
+        # entries, `detail` one message's clause list, and `rows` the body
+        # rows of a table under a reconcile marker; none reports anything.
+        {"problems"}, {"cases", "body", "detail", "words", "rows"}),
     "tests/corpus/check-classification.py": (
         {"problems"}, {"lines", "checks", "results", "alone_fails"}),
     "tests/corpus/check-corpus.py": (

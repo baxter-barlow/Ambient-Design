@@ -1791,3 +1791,106 @@ class Determinism02Test(unittest.TestCase):
                 check=True)
             outputs.add(completed.stdout)
         self.assertEqual(len(outputs), 1)
+
+
+@unittest.skipUnless(HAVE_LARK, "lark required")
+class CheckerFactsTest(unittest.TestCase):
+    """The source facts the design keeps for the static stage, in memory
+    only (L0): none of them reaches the IR, whose bytes stay what they
+    were, which test_benchmarks.py and the conformance cases pin."""
+
+    SOURCE = (
+        "module Probe:\n"
+        "    port sig passive\n"
+        "    t = new lib.T:\n"
+        "        pin a passive\n"
+        "    net SIG(ground_domain = \"gnd\"):\n"
+        "        sig\n"
+        "        t.a\n"
+        "\n"
+        "module Top:\n"
+        "    port spare passive\n"
+        "    port gnd passive\n"
+        "    p = new Probe\n"
+        "    r = new lib.R(resistance = 1kohm):\n"
+        "        pin a passive 1\n"
+        "        pin b passive 2\n"
+        "        part abstract:\n"
+        "            resistance = 1kohm +/- 1%\n"
+        "            power_rating = 100mW\n"
+        "    net GND(ground_domain = \"gnd\"):\n"
+        "        gnd\n"
+        "        p.sig\n"
+        "        r.a\n"
+        "    r.b ~ p.sig\n"
+        "    isolated spare\n"
+        "    assert sig_ok dynamic operating_point(GND) at most 1V\n")
+
+    def setUp(self):
+        result = _elaborate(self.SOURCE)
+        self.assertTrue(result.ok, result.diagnostics.render())
+        self.design = result.design
+        self.nets = _by_name(self.design)
+        self.instances = _by_path(self.design)
+
+    def text(self, span):
+        return _text(self.SOURCE, span.as_dict())
+
+    def test_isolated_marks_only_the_net_an_isolated_statement_made(self):
+        self.assertEqual({n.name for n in self.design.nets if n.isolated},
+                         {"N_.spare"})
+
+    def test_every_site_of_an_attribute_is_kept(self):
+        sites = self.nets["GND"].attribute_sites["ground_domain"]
+        self.assertEqual([(value, self.text(span)) for value, span in sites],
+                         [("gnd", 'ground_domain = "gnd"')] * 2)
+        # Shallowest label first: Top's GND, then Probe's SIG above it.
+        self.assertGreater(sites[0][1].byte_start, sites[1][1].byte_start)
+
+    def test_every_connecting_statement_naming_a_node_is_kept(self):
+        spans = self.nets["GND"].endpoint_spans
+        self.assertEqual([self.text(span) for span in spans[("/p", "sig")]],
+                         ["p.sig", "p.sig", "sig"])
+        self.assertEqual(sorted(spans), sorted(self.nets["GND"].members))
+
+    def test_ports_constraints_and_bounds_keep_their_spans(self):
+        resistor = self.instances["/r"]
+        ports = {port.name: port for port in resistor.ports}
+        self.assertEqual(self.text(ports["a"].declaration),
+                         "pin a passive 1")
+        root = {port.name: port for port in self.instances["/"].ports}
+        self.assertEqual(self.text(root["spare"].declaration),
+                         "port spare passive")
+        sites = resistor.part.sites
+        self.assertEqual(
+            {name: (site.form, site.origin, self.text(site.span))
+             for name, site in sites.items()},
+            {"resistance": ("toleranced", "literal", "1kohm +/- 1%"),
+             "power_rating": ("exact", "literal", "100mW")})
+        assertion = self.design.assertions[0]
+        self.assertEqual(self.text(assertion.bound_span), "at most 1V")
+
+    def test_the_declaration_span_does_not_make_two_pins_differ(self):
+        from rhoform.elaborate import Port
+
+        self.assertEqual(Port("a", "passive"),
+                         Port("a", "passive", declaration=_span_of(1)))
+
+    def test_the_package_layers_names_name_the_definitions(self):
+        from rhoform.elaborate import elaborate
+        from rhoform.parser import parse
+
+        result = parse(PRAGMA + "\nmodule M:\n    port p passive\n",
+                       file="boards/m.rhoform")
+        design = elaborate([result], modules={
+            "boards/m.rhoform": "acme.app.boards.m"}).design
+        self.assertEqual(design.instances[0].definition,
+                         "acme.app.boards.m.M")
+        design = elaborate([result]).design
+        self.assertEqual(design.instances[0].definition, "boards.m.M")
+
+
+def _span_of(offset):
+    from rhoform.diagnostics import Span
+
+    return Span("x.rhoform", offset, offset, 1, 1, 1, 1)
