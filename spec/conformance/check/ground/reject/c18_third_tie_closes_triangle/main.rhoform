@@ -1,0 +1,62 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 8.1: two ties in series across three grounds are a path, a
+# tree; a ferrite closing the physical triangle unifies an already-unified
+# domain and adds no edge. A third tie, agnd to pgnd, closes a cycle in
+# the tie graph although no pair is tied twice: RHO4002.
+component Adc:
+    pin agnd power_in
+    pin avdd power_in
+    ground agnd
+
+component Ferrite:
+    pin a passive
+    pin b passive
+    pass a b
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    adc = new Adc
+    fb = new Ferrite
+    mcu = new Load
+    t1 = new NetTie
+    t2 = new NetTie
+    t3 = new NetTie
+    u = new Ldo
+    net AGND(ground_kind = "signal"):
+        adc.agnd
+        fb.a
+        t1.a
+        t3.a
+    net DGND(ground_kind = "signal"):
+        mcu.gnd
+        t1.b
+        t2.a
+    net PGND(ground_kind = "power"):
+        fb.b
+        t2.b
+        t3.b
+        u.gnd
+    net V3:
+        adc.avdd
+        mcu.vdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

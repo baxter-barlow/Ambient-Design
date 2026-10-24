@@ -1,0 +1,60 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 4.2's good half: an isolated converter whose feedback crosses
+# the barrier through an optocoupler, both declared with sides. The sides
+# seed the primary and secondary isolation domains, every other part's
+# pins land in one of them, and the barriers relate the two: no
+# diagnostic. The two grounds are unrelated ground domains, as GA-13 says
+# they must be.
+component IsoDcDc:
+    pin fb input
+    pin gnd_in power_in
+    pin gnd_out power_out
+    pin vin power_in
+    pin vout power_out
+    ground gnd_in gnd_out
+    side pri: fb gnd_in vin
+    side sec: gnd_out vout
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component Opto:
+    pin a passive
+    pin c passive
+    pin e passive
+    pin k passive
+    side detector: c e
+    side emitter: a k
+
+module Board:
+    port vin power_in
+    dcdc = new IsoDcDc
+    load = new Load
+    opto = new Opto
+    r_led = new rhoform.lib.passive.Resistor
+    r_pu = new rhoform.lib.passive.Resistor
+    net FB:
+        dcdc.fb
+        opto.c
+        r_pu.b
+    net GND_PRI(ground_domain = "pri"):
+        dcdc.gnd_in
+        opto.e
+    net GND_SEC(ground_domain = "sec"):
+        dcdc.gnd_out
+        load.gnd
+        opto.k
+    net LED:
+        opto.a
+        r_led.b
+    net VIN:
+        dcdc.vin
+        r_pu.a
+        vin
+    net VOUT:
+        dcdc.vout
+        load.vdd
+        r_led.a

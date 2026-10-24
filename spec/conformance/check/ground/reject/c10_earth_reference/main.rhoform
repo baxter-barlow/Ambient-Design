@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.3
+
+# GA-10: earth is never a reference. A sensor whose ground pin lands on the
+# protective earth uses it as its return: RHO4003.
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component Inlet:
+    pin l passive
+    pin n passive
+    pin pe passive
+    connector
+
+module Board:
+    inlet = new Inlet
+    sensor = new Load
+    net PE(ground_kind = "earth"):
+        inlet.pe
+        sensor.gnd

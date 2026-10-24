@@ -1,0 +1,33 @@
+#pragma rhoform-syntax 0.3
+
+# GA-2: a signal ground a sub-module labels and the power ground its parent
+# connects it to are one net by direct connection, and signal meets power
+# at bottom. RHO4001 carries both attribute sites.
+component Adc:
+    pin agnd power_in
+    pin avdd power_in
+    ground agnd
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+module Front:
+    port gnd passive
+    adc = new Adc
+    net AGND(ground_kind = "signal"):
+        adc.agnd
+        gnd
+
+module Board:
+    port vin power_in
+    f = new Front
+    u = new Ldo
+    net PGND(ground_kind = "power"):
+        f.gnd
+        u.gnd
+    net VIN:
+        u.vin
+        vin

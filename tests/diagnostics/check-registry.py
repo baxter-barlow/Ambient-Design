@@ -18,7 +18,10 @@ Three legs, each of which failed somewhere before it was checked here:
      The registry must carry exactly that block; the table below is an
      INDEPENDENT transcription of the spec's section 6, so the registry
      agreeing with it is two documents agreeing, not one document quoted
-     twice.
+     twice. Which codes are still reserved is held to the ground pass
+     itself: a code is active exactly when rhoform/check/ground.py can
+     report it, so a code cannot be unreserved ahead of its emitter
+     (RHO4006 waits for interfaces, L3) nor left reserved behind one.
   3. SCHEMA SYNC. rhoform/diagnostic.schema.json restates the severity,
      category, and applicability vocabularies and the format
      discriminator as enums. Restatements drift; this leg holds each enum
@@ -28,7 +31,9 @@ Exit 0 pass, 1 violation, 2 only when the gate cannot run at all.
 Usage: check-registry.py [--self-test]
 """
 
+import ast
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -39,6 +44,7 @@ from rhoform import codes as codes_module          # noqa: E402
 from rhoform import diagnostics as diag_module     # noqa: E402
 
 SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
+GROUND_PASS = ROOT / "rhoform" / "check" / "ground.py"
 
 # The GA spec section 6 catalog, transcribed here from the spec (Notion:
 # "Rhoform Ground-Architecture Semantics", CC-BY-4.0), NOT imported from
@@ -70,12 +76,26 @@ GA_CATALOG = (
 )
 
 
-def transcription_problems(registry, catalog=GA_CATALOG):
+def emitted_ga_codes(path=GROUND_PASS):
+    """The block-4 codes the ground pass can report: every string constant
+    of its source that is exactly a code. Read as syntax and never run, so
+    a docstring or comment that names a code is no emitter."""
+    tree = ast.parse(Path(path).read_text(encoding="utf-8"))
+    return {node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and re.fullmatch(r"RHO4[0-9]{3}", node.value)}
+
+
+def transcription_problems(registry, catalog=GA_CATALOG, emitted=None):
     """The registry's GA block equals the spec's catalog, exactly.
 
     Set equality on codes first (a missing or extra code is its own
     finding), then field equality per code — slug, severity, params IN
-    ORDER (the spec's table states them in order), and the GA rule id."""
+    ORDER (the spec's table states them in order), and the GA rule id —
+    and a code is reserved exactly when the ground pass (`emitted`, read
+    from its source by default) does not report it."""
+    if emitted is None:
+        emitted = emitted_ga_codes()
     problems = []
     in_registry = {e.code: e for e in registry if e.code.startswith("RHO4")}
     expected = {row[0]: row for row in catalog}
@@ -106,11 +126,16 @@ def transcription_problems(registry, catalog=GA_CATALOG):
                     "structured-parameter shapes are stable from that "
                     "document forward"
                 )
-        if not entry.reserved:
+        if not entry.reserved and code not in emitted:
             problems.append(
-                f"{code}: not marked reserved, but no checker emits GA "
-                "diagnostics yet; unreserving a code is the checker "
-                "issue's move, made when the emitter lands"
+                f"{code}: not marked reserved, but no checker emits it; "
+                "unreserving a code is the checker issue's move, made when "
+                "the emitter lands"
+            )
+        if entry.reserved and code in emitted:
+            problems.append(
+                f"{code}: marked reserved, but the ground pass reports it; "
+                "the landing that adds an emitter activates its code"
             )
     return problems
 
@@ -285,10 +310,30 @@ def self_test() -> int:
     cases.append(("a reordered GA param shape is caught", any(
         "params" in p for p in transcription_problems(reordered))))
 
-    unreserved = replaced("RHO4001", reserved=False)
+    unreserved = replaced("RHO4006", reserved=False)
     cases.append(("an unreserved GA code with no emitter is caught", any(
-        "not marked reserved" in p
+        "RHO4006" in p and "not marked reserved" in p
         for p in transcription_problems(unreserved))))
+
+    rereserved = replaced("RHO4001", reserved=True)
+    cases.append(("a reserved GA code the ground pass reports is caught", any(
+        "RHO4001" in p and "marked reserved, but the ground pass" in p
+        for p in transcription_problems(rereserved))))
+
+    cases.append(("the ground pass emits every active GA code and no "
+                  "reserved one", emitted_ga_codes() == {
+                      e.code for e in registry
+                      if e.code.startswith("RHO4") and not e.reserved}))
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        planted_pass = Path(tmp) / "ground.py"
+        planted_pass.write_text(
+            '"""Mentions RHO4006, which L3 emits."""\n'
+            "# RHO4005 in a comment\n"
+            'CODE = "RHO4001"\nTEXT = "see RHO4002"\n', encoding="utf-8")
+        cases.append(("only a code constant counts as an emitter",
+                      emitted_ga_codes(planted_pass) == {"RHO4001"}))
 
     cases.append(("the shipped schema is in sync",
                   schema_sync_problems(schema) == []))

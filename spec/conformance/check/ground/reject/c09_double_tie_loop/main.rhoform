@@ -1,0 +1,41 @@
+#pragma rhoform-syntax 0.3
+
+# GA-6: two net-ties between the same pair of grounds are the two-node
+# cycle of the tie graph, a ground loop. The tie that closes it is
+# reported, with the cycle in its params.
+component Adc:
+    pin agnd power_in
+    pin avdd power_in
+    ground agnd
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    adc = new Adc
+    nt1 = new NetTie
+    nt2 = new NetTie
+    u = new Ldo
+    net AGND(ground_kind = "signal"):
+        adc.agnd
+        nt1.a
+        nt2.a
+    net PGND(ground_kind = "power"):
+        nt1.b
+        nt2.b
+        u.gnd
+    net VA:
+        adc.avdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

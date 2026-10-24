@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.3
+
+# GA-16: no label, no kind, no tie and no side. The parts declare their
+# ground pins with `ground` rules, and the net those pins land on is the
+# design's default ground: one ground domain, of kind unspecified, in one
+# isolation domain, and nothing to report.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    c_out = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    load = new Load
+    u = new Ldo
+    net GND:
+        c_in.b
+        c_out.b
+        j.neg
+        load.gnd
+        u.gnd
+    net VBAT:
+        c_in.a
+        j.pos
+        u.vin
+    net VOUT:
+        c_out.a
+        load.vdd
+        u.vout

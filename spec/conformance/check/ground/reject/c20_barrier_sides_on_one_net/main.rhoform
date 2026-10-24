@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.3
+
+# An optocoupler's two sides wired to one ground: no component spans the
+# barrier, the net itself does, so it is the net that is reported
+# (RHO4005), its one isolation domain both of the domain params.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Opto:
+    pin a passive
+    pin c passive
+    pin e passive
+    pin k passive
+    side detector: c e
+    side emitter: a k
+
+module Board:
+    port vin power_in
+    opto = new Opto
+    r_led = new rhoform.lib.passive.Resistor
+    u = new Ldo
+    net GND:
+        opto.e
+        opto.k
+        u.gnd
+    net LED:
+        opto.a
+        r_led.b
+    net V3:
+        r_led.a
+        u.vout
+    net VIN:
+        u.vin
+        vin

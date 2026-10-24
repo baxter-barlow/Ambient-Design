@@ -1,0 +1,61 @@
+#pragma rhoform-syntax 0.3
+
+# A footprint across the isolation barrier that is not fitted: a DNP part
+# adds no conduction, so it spans nothing, and the check report records
+# that fitting it would join the two isolation domains.
+component IsoDcDc:
+    pin fb input
+    pin gnd_in power_in
+    pin gnd_out power_out
+    pin vin power_in
+    pin vout power_out
+    ground gnd_in gnd_out
+    side pri: fb gnd_in vin
+    side sec: gnd_out vout
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component Opto:
+    pin a passive
+    pin c passive
+    pin e passive
+    pin k passive
+    side detector: c e
+    side emitter: a k
+
+module Board:
+    port vin power_in
+    dcdc = new IsoDcDc
+    load = new Load
+    opto = new Opto
+    r_fit = new rhoform.lib.passive.Resistor:
+        dnp
+    r_led = new rhoform.lib.passive.Resistor
+    r_pu = new rhoform.lib.passive.Resistor
+    net FB:
+        dcdc.fb
+        opto.c
+        r_fit.b
+        r_pu.b
+    net GND_PRI(ground_domain = "pri"):
+        dcdc.gnd_in
+        opto.e
+    net GND_SEC(ground_domain = "sec"):
+        dcdc.gnd_out
+        load.gnd
+        opto.k
+        r_fit.a
+    net LED:
+        opto.a
+        r_led.b
+    net VIN:
+        dcdc.vin
+        r_pu.a
+        vin
+    net VOUT:
+        dcdc.vout
+        load.vdd
+        r_led.a

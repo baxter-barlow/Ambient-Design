@@ -1,0 +1,36 @@
+#pragma rhoform-syntax 0.3
+
+# GA-9: a net-tie with both ports on one net joins nothing: RHO4009, a
+# warning.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    load = new Load
+    nt = new NetTie
+    u = new Ldo
+    net GND:
+        load.gnd
+        nt.a
+        nt.b
+        u.gnd
+    net V3:
+        load.vdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

@@ -1,0 +1,50 @@
+#pragma rhoform-syntax 0.3
+
+# GA-7: star grounding is N ties to one star point. Two signal grounds
+# each tie to the power ground, the supply return: one ground domain over
+# three nets, and a tie graph that is a tree.
+component Adc:
+    pin agnd power_in
+    pin avdd power_in
+    ground agnd
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    adc = new Adc
+    mcu = new Load
+    t1 = new NetTie
+    t2 = new NetTie
+    u = new Ldo
+    net AGND(ground_kind = "signal"):
+        adc.agnd
+        t1.a
+    net DGND(ground_kind = "signal"):
+        mcu.gnd
+        t2.a
+    net PGND(ground_kind = "power"):
+        t1.b
+        t2.b
+        u.gnd
+    net V3:
+        adc.avdd
+        mcu.vdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

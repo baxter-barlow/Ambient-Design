@@ -1,0 +1,34 @@
+#pragma rhoform-syntax 0.3
+
+# GA-14c: a converter whose analog and digital grounds land on two ground
+# nets that nothing relates, no direct connection, net-tie or galvanic
+# passive. They are one isolation domain, through the part, and two
+# ground domains with no voltage comparison between them: RHO4010. The
+# fix is a single-point tie.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Codec:
+    pin agnd power_in
+    pin dgnd power_in
+    pin vdd power_in
+    ground agnd dgnd
+
+module Board:
+    port vin power_in
+    codec = new Codec
+    u = new Ldo
+    net AGND(ground_kind = "signal"):
+        codec.agnd
+    net DGND(ground_kind = "signal"):
+        codec.dgnd
+        u.gnd
+    net V3:
+        codec.vdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

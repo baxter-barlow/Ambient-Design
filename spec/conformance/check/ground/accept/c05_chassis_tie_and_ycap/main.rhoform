@@ -1,0 +1,44 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 8.2's first sub-case: the chassis bonded to circuit ground at
+# one point by a net-tie, with a declared safety capacitor across the same
+# pair. The capacitor unifies nothing and adds no tie edge, so the tie
+# graph is a tree; each bond is safety-relevant, a note (GA-11). Two
+# grounded mounting holes on the chassis are pads of one net, not a loop.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+component YCap:
+    pin a passive
+    pin b passive
+    bridge a b
+
+module Board:
+    port vin power_in
+    bond = new NetTie
+    mh1 = new rhoform.lib.mech.TestPoint:
+        hardware grounded_mounting_hole
+    mh2 = new rhoform.lib.mech.TestPoint:
+        hardware grounded_mounting_hole
+    u = new Ldo
+    ycap = new YCap
+    net CHASSIS(ground_kind = "chassis"):
+        bond.a
+        mh1.p
+        mh2.p
+        ycap.a
+    net GND:
+        bond.b
+        u.gnd
+        ycap.b
+    net VIN:
+        u.vin
+        vin

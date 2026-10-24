@@ -1,0 +1,65 @@
+#pragma rhoform-syntax 0.3
+
+# GA-12: a plain capacitor spanning the isolation barrier, primary ground to
+# secondary ground, must be a declared safety capacitor: RHO4004, boundary
+# isolation.
+component Cap:
+    pin a passive
+    pin b passive
+    open a b
+
+component IsoDcDc:
+    pin fb input
+    pin gnd_in power_in
+    pin gnd_out power_out
+    pin vin power_in
+    pin vout power_out
+    ground gnd_in gnd_out
+    side pri: fb gnd_in vin
+    side sec: gnd_out vout
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component Opto:
+    pin a passive
+    pin c passive
+    pin e passive
+    pin k passive
+    side detector: c e
+    side emitter: a k
+
+module Board:
+    port vin power_in
+    c_y = new Cap
+    dcdc = new IsoDcDc
+    load = new Load
+    opto = new Opto
+    r_led = new rhoform.lib.passive.Resistor
+    r_pu = new rhoform.lib.passive.Resistor
+    net FB:
+        dcdc.fb
+        opto.c
+        r_pu.b
+    net GND_PRI(ground_domain = "pri"):
+        c_y.a
+        dcdc.gnd_in
+        opto.e
+    net GND_SEC(ground_domain = "sec"):
+        c_y.b
+        dcdc.gnd_out
+        load.gnd
+        opto.k
+    net LED:
+        opto.a
+        r_led.b
+    net VIN:
+        dcdc.vin
+        r_pu.a
+        vin
+    net VOUT:
+        dcdc.vout
+        load.vdd
+        r_led.a

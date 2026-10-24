@@ -1,0 +1,61 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 8.3: a resistor from the secondary ground to the primary's
+# feedback node. The isolation partition leaves the converter out, so the
+# resistor cannot merge the two domains and erase the barrier: they stay
+# apart as declared, and the resistor spans them (RHO4005).
+component IsoDcDc:
+    pin fb input
+    pin gnd_in power_in
+    pin gnd_out power_out
+    pin vin power_in
+    pin vout power_out
+    ground gnd_in gnd_out
+    side pri: fb gnd_in vin
+    side sec: gnd_out vout
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+component Opto:
+    pin a passive
+    pin c passive
+    pin e passive
+    pin k passive
+    side detector: c e
+    side emitter: a k
+
+module Board:
+    port vin power_in
+    dcdc = new IsoDcDc
+    fbr = new rhoform.lib.passive.Resistor
+    load = new Load
+    opto = new Opto
+    r_led = new rhoform.lib.passive.Resistor
+    r_pu = new rhoform.lib.passive.Resistor
+    net FB:
+        dcdc.fb
+        fbr.b
+        opto.c
+        r_pu.b
+    net GND_PRI(ground_domain = "pri"):
+        dcdc.gnd_in
+        opto.e
+    net GND_SEC(ground_domain = "sec"):
+        dcdc.gnd_out
+        fbr.a
+        load.gnd
+        opto.k
+    net LED:
+        opto.a
+        r_led.b
+    net VIN:
+        dcdc.vin
+        r_pu.a
+        vin
+    net VOUT:
+        dcdc.vout
+        load.vdd
+        r_led.a

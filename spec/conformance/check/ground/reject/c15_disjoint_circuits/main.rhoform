@@ -1,0 +1,44 @@
+#pragma rhoform-syntax 0.3
+
+# GA-15: two circuits with nothing at all between them are two isolation
+# domains no barrier relates, usually a forgotten connection: RHO4007, a
+# warning. A carrier board for two independent circuits is legitimate,
+# which is why it does not gate.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+    ground gnd
+
+module Board:
+    j_a = new rhoform.lib.connector.BatteryConnector9V
+    j_b = new rhoform.lib.connector.BatteryConnector9V
+    load_a = new Load
+    load_b = new Load
+    u_a = new Ldo
+    u_b = new Ldo
+    net GND_A:
+        j_a.neg
+        load_a.gnd
+        u_a.gnd
+    net GND_B:
+        j_b.neg
+        load_b.gnd
+        u_b.gnd
+    net VA:
+        load_a.vdd
+        u_a.vout
+    net VB:
+        load_b.vdd
+        u_b.vout
+    net VBAT_A:
+        j_a.pos
+        u_a.vin
+    net VBAT_B:
+        j_b.pos
+        u_b.vin

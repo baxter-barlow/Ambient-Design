@@ -1,0 +1,31 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 8.2: two net-ties bonding the chassis to the same circuit
+# ground are a two-node cycle, RHO4002, and each bond is safety-relevant,
+# a note on both (GA-11).
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    bond1 = new NetTie
+    bond2 = new NetTie
+    u = new Ldo
+    net CHASSIS(ground_kind = "chassis"):
+        bond1.a
+        bond2.a
+    net GND:
+        bond1.b
+        bond2.b
+        u.gnd
+    net VIN:
+        u.vin
+        vin

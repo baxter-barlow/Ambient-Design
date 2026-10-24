@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.3
+
+# GA-12: a plain capacitor bridging the chassis to circuit ground must be a
+# declared safety capacitor, though it conducts no DC: RHO4004, by
+# position. The net-tie bonding the same pair is legal and safety-relevant
+# (GA-11), a note.
+component Cap:
+    pin a passive
+    pin b passive
+    open a b
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    bond = new NetTie
+    oops = new Cap
+    u = new Ldo
+    net CHASSIS(ground_kind = "chassis"):
+        bond.a
+        oops.a
+    net GND:
+        bond.b
+        oops.b
+        u.gnd
+    net VIN:
+        u.vin
+        vin

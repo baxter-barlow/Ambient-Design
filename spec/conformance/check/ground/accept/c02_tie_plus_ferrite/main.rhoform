@@ -1,0 +1,48 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 2.2's trace: a signal ground and a power ground joined at one
+# point by a net-tie, with a ferrite bead across them too. Both unify the
+# two nets into one ground domain, and only the tie is an edge of the tie
+# graph, which is a tree: no ground loop. A passive joining two distinct
+# kinds is the uncoded section 1.4 warning, a row of the report only.
+component Adc:
+    pin agnd power_in
+    pin avdd power_in
+    ground agnd
+
+component Ferrite:
+    pin a passive
+    pin b passive
+    pass a b
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    adc = new Adc
+    fb = new Ferrite
+    nt = new NetTie
+    u = new Ldo
+    net AGND(ground_kind = "signal"):
+        adc.agnd
+        fb.a
+        nt.a
+    net PGND(ground_kind = "power"):
+        fb.b
+        nt.b
+        u.gnd
+    net VA:
+        adc.avdd
+        u.vout
+    net VIN:
+        u.vin
+        vin

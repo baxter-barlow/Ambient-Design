@@ -1,7 +1,8 @@
-"""The ground-architecture block (GA-1..GA-17): L2c (AMB-54) activates
-RHO4001-4005 and RHO4007-4011 with GA passes 1-4, L3 activates RHO4006,
-and the GA follow-ons (the uncoded section 1.4 passive-between-kinds
-warning) take numbers after the catalog.
+"""The ground-architecture block (GA-1..GA-17): L2c (AMB-54) activated
+RHO4001-4005 and RHO4007-4011 with GA passes 1-4 (rhoform/check/ground.py
+emits them), L3 activates RHO4006, which needs interfaces, and the GA
+follow-ons (the uncoded section 1.4 passive-between-kinds warning) take
+numbers after the catalog.
 
 Its ranges: RHO4001-RHO4011, the catalog, and RHO4012-RHO4099, its
 follow-ons (rhoform.codes.RANGES). The registry gate pins the catalog's
@@ -26,13 +27,13 @@ CODES: tuple[CodeDef, ...] = (
             "{kind_b}."
         ),
         params=("net_a", "kind_a", "net_b", "kind_b"),
-        rule="GA-2", reserved=True,
+        rule="GA-2",
     ),
     CodeDef(
         code="RHO4002", slug="ground-loop", severity="error",
         message="ground loop: the tie graph must be acyclic; cycle: {cycle}.",
         params=("cycle",),
-        rule="GA-6", reserved=True,
+        rule="GA-6",
     ),
     CodeDef(
         code="RHO4003", slug="earth-as-reference", severity="error",
@@ -41,7 +42,7 @@ CODES: tuple[CodeDef, ...] = (
             "path; referenced by {referencing_entity}."
         ),
         params=("net", "referencing_entity"),
-        rule="GA-10", reserved=True,
+        rule="GA-10",
     ),
     CodeDef(
         code="RHO4004", slug="undeclared-chassis-bridge", severity="error",
@@ -50,7 +51,7 @@ CODES: tuple[CodeDef, ...] = (
             "{boundary} boundary and is not a declared SafetyCapacitor."
         ),
         params=("component", "net_a", "net_b", "boundary"),
-        rule="GA-12", reserved=True,
+        rule="GA-12",
     ),
     CodeDef(
         code="RHO4005", slug="isolation-spanning-component", severity="error",
@@ -60,7 +61,7 @@ CODES: tuple[CodeDef, ...] = (
             "{domain_b})."
         ),
         params=("component", "domain_a", "domain_b", "barrier_component"),
-        rule="GA-14", reserved=True,
+        rule="GA-14",
     ),
     CodeDef(
         code="RHO4006", slug="isolation-spanning-interface", severity="error",
@@ -80,7 +81,7 @@ CODES: tuple[CodeDef, ...] = (
             "isolation component; usually a forgotten connection."
         ),
         params=("domain_ids",),
-        rule="GA-15", reserved=True,
+        rule="GA-15",
     ),
     CodeDef(
         code="RHO4008", slug="isolation-defeating-bond", severity="error",
@@ -89,13 +90,13 @@ CODES: tuple[CodeDef, ...] = (
             "`{barrier_component}`, defeating the isolation."
         ),
         params=("tie", "barrier_component"),
-        rule="GA-14b", reserved=True,
+        rule="GA-14b",
     ),
     CodeDef(
         code="RHO4009", slug="redundant-net-tie", severity="warning",
         message="both ports of `{tie}` are on `{net}`; the tie is redundant.",
         params=("tie", "net"),
-        rule="GA-9", reserved=True,
+        rule="GA-9",
     ),
     CodeDef(
         code="RHO4010", slug="undeclared-ground-domain-crossing",
@@ -105,7 +106,7 @@ CODES: tuple[CodeDef, ...] = (
             "{domain_b}; no voltage comparison across it exists."
         ),
         params=("entity", "domain_a", "domain_b"),
-        rule="GA-14c", reserved=True,
+        rule="GA-14c",
     ),
     # GA-11's safety note had a category and no number in the GA spec —
     # "the diagnostic stream MUST tag the bond with a `safety` category
@@ -118,6 +119,6 @@ CODES: tuple[CodeDef, ...] = (
             "surfaced in the report's safety section (GA-11)."
         ),
         params=("bond", "boundary"),
-        rule="GA-11", reserved=True,
+        rule="GA-11",
     ),
 )

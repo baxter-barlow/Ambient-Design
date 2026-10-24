@@ -135,7 +135,7 @@ CEILINGS = {
     "tests/conformance/check-conformance.py": (91, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
-    "tests/diagnostics/check-registry.py": (12, 0),
+    "tests/diagnostics/check-registry.py": (13, 0),
     "tests/eval/check-run-records.py": (62, 9),
     # 23 -> 24 sites with the Interface.members order (L2a, IR2-5), caught
     # by its own self-test case.

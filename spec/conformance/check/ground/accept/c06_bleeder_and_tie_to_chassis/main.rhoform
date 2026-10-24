@@ -1,0 +1,33 @@
+#pragma rhoform-syntax 0.3
+
+# GA section 8.2's third sub-case: a bleeder resistor from the chassis to
+# circuit ground, and a net-tie in the same position. The resistor unifies
+# the two ground domains but is no tie-graph edge, so the tie closes no
+# loop. Both bonds are safety-relevant notes; the resistor, an off-list
+# bond joining two kinds, is the uncoded section 1.4 warning, a row.
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+component NetTie:
+    pin a passive
+    pin b passive
+    tie a b
+
+module Board:
+    port vin power_in
+    bond = new NetTie
+    r_bleed = new rhoform.lib.passive.Resistor
+    u = new Ldo
+    net CHASSIS(ground_kind = "chassis"):
+        bond.a
+        r_bleed.a
+    net GND(ground_kind = "power"):
+        bond.b
+        r_bleed.b
+        u.gnd
+    net VIN:
+        u.vin
+        vin
