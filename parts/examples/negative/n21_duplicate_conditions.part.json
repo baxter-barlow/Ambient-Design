@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "parameters": {
+    "resistance": [
+      {
+        "unit": "ohm",
+        "min": 9.9,
+        "max": 10.1,
+        "conditions": {
+          "ta": {
+            "unit": "degC",
+            "typ": 25
+          }
+        }
+      },
+      {
+        "unit": "ohm",
+        "min": 9.8,
+        "max": 10.2,
+        "conditions": {
+          "ta": {
+            "unit": "degC",
+            "typ": 25
+          }
+        }
+      }
+    ]
+  },
+  "x_negative_control": "LINT-REJECTED by L19 at /parameters/resistance/1/conditions: a condition array holds one quantity at several operating points, and these two elements state the same point with different numbers. A consumer selecting by conditions could take either, so the array is refused."
+}

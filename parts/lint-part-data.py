@@ -1,388 +1,79 @@
 #!/usr/bin/env python3
 """Lint Rhoform part-data (D3) records for invariants JSON Schema cannot express.
 
-The schema in part-data.schema.json checks SHAPE. A meaningful part record
-also has to be internally consistent, and several of those consistency
-rules are cross-references between distant parts of the document, which
-JSON Schema has no vocabulary for. Every place the schema says "the
-part-library linter does" refers to a check implemented here.
+The schemas (part-data.schema.json for version 0, part-data.v1.schema.json
+for version 1) check SHAPE. A meaningful part record also has to be
+internally consistent, and several of those consistency rules are
+cross-references between distant parts of the document, which JSON Schema
+has no vocabulary for. Every place a schema says "the part-data linter does"
+refers to a check run here.
 
-Checks (each is a real defect that shape validation would let through):
+THE CHECKS LIVE IN rhoform/partdata.py (`lint_problems`, which lists L1-L22),
+because the compiler runs the same rules on every record it loads and two
+copies of a rule are two rules. This gate runs them over the repository's
+records and adds what only the repository can check:
 
-  L1  provenance keys resolve to a location that exists in the document.
-      An unresolvable pointer means the field it was meant to cover is
-      silently unsourced, which is the exact failure per-field provenance
-      exists to prevent.
-  L2  every provenance source_id names a declared source.
-  L3  source_id values are unique within the record.
-  L4  modes[].draw[].pin names a declared pin whose role is power_in.
-      Attributing supply draw to a signal pin would corrupt the T10 budget.
-  L5  multi-unit consistency: unit pin membership exists, is disjoint from
-      shared_pins, is disjoint between units, every pin's `unit` matches a
-      declared unit, and on a multi-unit part every pin is accounted for.
-  L6  shared_pins names declared pins.
-  L7  pin names are unique, and no physical designator is claimed twice.
-  L8  determinism: pins, modes, sources and draw entries are sorted as the
-      schema requires, so records diff cleanly and hash reproducibly.
-  L9  Measure bounds are ordered: min <= typ <= max where all are numeric.
-  L10 the record's license_class is at least as restrictive as every
-      source it cites, so republishing the record cannot leak a fact out
-      of the licence it arrived under.
-  L11 a provenance pointer addressing an element of a SORTED array echoes
-      that element's identity. Without it, renaming one mode re-sorts the
-      array and silently re-points every index-based citation at a
-      different element - the pointer still resolves, so L1 cannot see it.
-  L12 a pin's recommended window sits inside its absolute-maximum window.
-      This containment is what makes abs_max mean anything; JSON Schema
-      cannot compare two sibling objects.
-  L13 physical designators are in ascending order, matching the ordering
-      the schema documents. Documented and unchecked is how an ordering
-      rule quietly stops being true.
+  - every record under parts/examples/ and in the bundled store
+    rhoform/parts/ lints clean, and a record a benchmark picks (see
+    BENCHMARK_PICKED) is held to the R29a field families;
+  - every store record is in canonical layout (L22) -- its revision is the
+    hash of its bytes -- sits at the path its part_id names, and implements
+    at least one definition, since the store exists to be joined to one;
+  - every LINT control under parts/examples/negative/ (one whose
+    `x_negative_control` starts `LINT-REJECTED by <check> at <pointer>:`)
+    fails with that check at those pointers and nothing else, the way
+    tests/schemas/validate-schemas.py holds the schema controls;
+  - NOTICE's provenance-coverage numbers are the records';
+  - the named records are present, and the unperformable-check ceiling
+    holds.
 
 Usage:
-    lint-part-data.py [path ...]      lint records (default: parts/examples)
+    lint-part-data.py [path ...]      lint records (default: parts/examples
+                                      and rhoform/parts)
     lint-part-data.py --self-test     verify every check above actually fires
 
 Exit codes: 0 pass, 1 lint failure, 2 usage/environment error.
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
-DEFAULT_TARGET = Path(__file__).resolve().parent / "examples"
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from rhoform import partdata  # noqa: E402
 
-# Restrictiveness ordering for L10. Higher means more restrictive.
-LICENSE_RANK = {"open-cc": 0, "vendor-public": 1, "vendor-agreement": 2}
+EXAMPLES = ROOT / "parts" / "examples"
+STORE = partdata.STORE
+DEFAULT_TARGETS = (EXAMPLES, STORE)
 
+# The lint core, re-exported under the names this gate has always used: the
+# self-test plants `lint` to prove main() is wired to it.
+lint = partdata.lint
+walk_measures = partdata.walk_measures
 
-def unescape_token(token):
-    """RFC 6901: ~1 is '/', ~0 is '~', and ~1 must be decoded first."""
-    return token.replace("~1", "/").replace("~0", "~")
+# Records a benchmark picks, on which `not-transcribed` is refused for pin
+# roles, abs-max and supply-current-per-mode (R29a). Today these are the
+# three benchmark records the store holds. The landing that commits the
+# benchmarks' lockfiles should derive this set from their picks rather than
+# keep a list.
+BENCHMARK_PICKED = (
+    "diodes/ap7361c-33e-13",
+    "espressif/esp32-s3-wroom-1-n8r2",
+    "ti/ne555p",
+)
 
-
-def pointer_resolves(doc, pointer):
-    """True if an RFC 6901 pointer names an existing location in doc."""
-    if pointer == "":
-        return True
-    if not pointer.startswith("/"):
-        return False
-    node = doc
-    for raw in pointer.split("/")[1:]:
-        token = unescape_token(raw)
-        if isinstance(node, dict):
-            if token not in node:
-                return False
-            node = node[token]
-        elif isinstance(node, list):
-            if not token.isdigit():
-                return False
-            index = int(token)
-            if index >= len(node):
-                return False
-            node = node[index]
-        else:
-            return False
-    return True
-
-
-def pointer_target(doc, pointer):
-    """Resolve a pointer and return the node, or None if it does not resolve."""
-    if pointer == "":
-        return doc
-    if not pointer.startswith("/"):
-        return None
-    node = doc
-    for raw in pointer.split("/")[1:]:
-        token = unescape_token(raw)
-        if isinstance(node, dict):
-            if token not in node:
-                return None
-            node = node[token]
-        elif isinstance(node, list):
-            if not token.isdigit() or int(token) >= len(node):
-                return None
-            node = node[int(token)]
-        else:
-            return None
-    return node
-
-
-def identity_of(node):
-    """The identity field of an addressable array element, if it has one."""
-    if isinstance(node, dict):
-        for key in ("id", "name", "source_id"):
-            if key in node and isinstance(node[key], str):
-                return node[key]
-    return None
-
-
-def walk_measures(node, path=""):
-    """Yield (path, measure) for every object that looks like a Measure."""
-    if isinstance(node, dict):
-        if "unit" in node and any(k in node for k in ("min", "typ", "max", "peak")):
-            yield path, node
-        for key, value in node.items():
-            yield from walk_measures(value, f"{path}/{key}")
-    elif isinstance(node, list):
-        for i, value in enumerate(node):
-            yield from walk_measures(value, f"{path}/{i}")
-
-
-def lint(doc, label, unchecked=None):
-    """Return a list of human-readable defects.
-
-    `unchecked` collects checks that could not be PERFORMED on this record, as
-    distinct from checks that failed. The two must not be conflated in either
-    direction: reporting an unresolvable bound as a defect blames the record
-    for a limitation of the data model, and skipping it silently — which is
-    what happened until AMB-123 — leaves a containment gate covering some pins
-    and not others with no way to tell which.
-    """
-    problems = []
-    unchecked = problems if unchecked is None else unchecked
-
-    def bad(check, message):
-        problems.append(f"{label}: {check}: {message}")
-
-    def cannot_check(check, message):
-        unchecked.append(f"{label}: {check}: {message}")
-
-    pins = doc.get("pins", [])
-    pin_names = [p.get("name") for p in pins]
-    pin_by_name = {p.get("name"): p for p in pins}
-    sources = doc.get("sources", [])
-    source_ids = [s.get("source_id") for s in sources]
-
-    # L3 first: later checks reference source ids.
-    if len(set(source_ids)) != len(source_ids):
-        bad("L3", "duplicate source_id values in sources[]")
-
-    # L1, L2, L11
-    indexed_arrays = ("pins", "modes", "sources")
-    for pointer, entry in sorted(doc.get("provenance", {}).items()):
-        if not pointer_resolves(doc, pointer):
-            bad("L1", f"provenance pointer {pointer!r} does not resolve to any location")
-        sid = entry.get("source_id")
-        if sid not in source_ids:
-            bad("L2", f"provenance {pointer!r} cites unknown source_id {sid!r}")
-
-        # L11: an index-addressed element of a sorted array must echo its
-        # identity, or a re-sort silently re-points the citation.
-        parts_ = pointer.split("/")
-        if len(parts_) >= 3 and parts_[1] in indexed_arrays and parts_[2].isdigit():
-            element = pointer_target(doc, "/".join(parts_[:3]))
-            actual = identity_of(element)
-            declared = entry.get("target")
-            if actual is None:
-                continue
-            if declared is None:
-                bad(
-                    "L11",
-                    f"provenance {pointer!r} addresses {parts_[1]}[{parts_[2]}] by index "
-                    f"but declares no target; add \"target\": {actual!r} so a re-sort of "
-                    "the array cannot silently re-point this citation",
-                )
-            elif declared != actual:
-                bad(
-                    "L11",
-                    f"provenance {pointer!r} declares target {declared!r} but resolves to "
-                    f"{actual!r}; the array was reordered without updating the citation",
-                )
-
-    # L4
-    for i, mode in enumerate(doc.get("modes", [])):
-        for j, draw in enumerate(mode.get("draw", [])):
-            pin_name = draw.get("pin")
-            pin = pin_by_name.get(pin_name)
-            if pin is None:
-                bad("L4", f"modes[{i}].draw[{j}] names unknown pin {pin_name!r}")
-            elif pin.get("role") != "power_in":
-                bad(
-                    "L4",
-                    f"modes[{i}].draw[{j}] attributes supply current to pin "
-                    f"{pin_name!r} whose role is {pin.get('role')!r}, not power_in",
-                )
-
-    # L5, L6
-    units = doc.get("units", [])
-    shared = doc.get("shared_pins", [])
-    for name in shared:
-        if name not in pin_by_name:
-            bad("L6", f"shared_pins names unknown pin {name!r}")
-
-    if units:
-        unit_ids = {u.get("id") for u in units}
-        claimed = {}
-        for unit in units:
-            for name in unit.get("pins", []):
-                if name not in pin_by_name:
-                    bad("L5", f"unit {unit.get('id')!r} names unknown pin {name!r}")
-                if name in shared:
-                    bad(
-                        "L5",
-                        f"pin {name!r} is claimed by unit {unit.get('id')!r} and also "
-                        "listed in shared_pins; a pin belongs to one or the other",
-                    )
-                if name in claimed:
-                    bad(
-                        "L5",
-                        f"pin {name!r} is claimed by both unit {claimed[name]!r} "
-                        f"and unit {unit.get('id')!r}",
-                    )
-                claimed[name] = unit.get("id")
-        for pin in pins:
-            name, declared = pin.get("name"), pin.get("unit")
-            if declared is not None and declared not in unit_ids:
-                bad("L5", f"pin {name!r} declares unit {declared!r}, which is not in units[]")
-            if declared is None and name not in shared:
-                bad(
-                    "L5",
-                    f"pin {name!r} on a multi-unit part belongs to no unit and is not "
-                    "in shared_pins; every pin must be accounted for",
-                )
-            if declared is not None and claimed.get(name) != declared:
-                bad(
-                    "L5",
-                    f"pin {name!r} declares unit {declared!r} but that unit does not "
-                    "list it as a member",
-                )
-    else:
-        for pin in pins:
-            if pin.get("unit") is not None:
-                bad("L5", f"pin {pin.get('name')!r} declares a unit but units[] is absent")
-
-    # L7
-    if len(set(pin_names)) != len(pin_names):
-        bad("L7", "duplicate pin names")
-    seen_designators = {}
-    for pin in pins:
-        for number in pin.get("numbers", []):
-            if number in seen_designators:
-                bad(
-                    "L7",
-                    f"physical designator {number!r} is claimed by both pin "
-                    f"{seen_designators[number]!r} and pin {pin.get('name')!r}",
-                )
-            seen_designators[number] = pin.get("name")
-
-    # L8
-    def check_sorted(values, what):
-        if values != sorted(values):
-            bad("L8", f"{what} are not sorted bytewise-ascending (determinism contract)")
-
-    check_sorted(pin_names, "pins[].name")
-    check_sorted([m.get("id") for m in doc.get("modes", [])], "modes[].id")
-    check_sorted(source_ids, "sources[].source_id")
-    for i, mode in enumerate(doc.get("modes", [])):
-        check_sorted([d.get("pin") for d in mode.get("draw", [])], f"modes[{i}].draw[].pin")
-
-    # L9
-    for path, measure in walk_measures(doc):
-        ordered = [
-            (key, measure[key])
-            for key in ("min", "typ", "max")
-            if isinstance(measure.get(key), (int, float))
-        ]
-        for (ka, va), (kb, vb) in zip(ordered, ordered[1:]):
-            if va > vb:
-                bad("L9", f"{path}: {ka}={va} exceeds {kb}={vb}")
-        # `peak` sits outside the min/typ/max ordering because it is not a
-        # guaranteed bound, but it still cannot fall below a guaranteed
-        # minimum: an observed peak under the floor the vendor promises is
-        # a transcription error, not a fact about the part.
-        peak, lo = measure.get("peak"), measure.get("min")
-        if isinstance(peak, (int, float)) and isinstance(lo, (int, float)) and peak < lo:
-            bad("L9", f"{path}: peak={peak} is below the guaranteed min={lo}")
-
-    # L12: a recommended window must sit inside its absolute-maximum window.
-    # This is the containment that makes abs_max meaningful at all - a part
-    # recommended to operate outside its own damage threshold is a defect in
-    # the record, and no schema keyword can compare two sibling objects.
-    for pin in pins:
-        limits_abs, limits_rec = pin.get("abs_max") or {}, pin.get("recommended") or {}
-        for quantity in ("voltage", "current"):
-            a, r = limits_abs.get(quantity), limits_rec.get(quantity)
-            if isinstance(r, dict) and not isinstance(a, dict):
-                # A recommended window with NO absolute maximum to contain it.
-                # This was `continue`d silently, so the shipped AP7361C accepted
-                # a recommended current of -1000 A on a 1 A part. Same rule as
-                # the relative-bound case: reported, never skipped.
-                cannot_check("L12", f"pin {pin.get('name')!r}: recommended "
-                                    f"{quantity} has no abs_max {quantity} to be "
-                                    "contained by, so nothing bounds it")
-                continue
-            if not (isinstance(a, dict) and isinstance(r, dict)):
-                continue
-            # Never compare across units. Millivolts against volts would
-            # both false-positive on a legitimate record and, worse, miss
-            # real over-stress by a factor of a thousand.
-            if a.get("unit") != r.get("unit"):
-                bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} is in "
-                           f"{r.get('unit')!r} but abs_max is in {a.get('unit')!r}; "
-                           "containment cannot be checked across units")
-                continue
-            a_lo, a_hi = a.get("min"), a.get("max")
-            # A RelativeBound (`{reference, offset}`) is not a number, and this
-            # loop's `isinstance(..., (int, float))` guards silently skipped
-            # every one of them — including the case parts/README.md presents
-            # as the interesting one. On the shipped AP7361C, whose
-            # OUT.abs_max.voltage.max is `IN + 0.3 V`, a recommended maximum of
-            # 100 V passed cleanly while the numeric sibling pin correctly
-            # rejected 60 V against 6.5 V.
-            #
-            # Resolving the reference needs a supply value the record does not
-            # carry, so this cannot be checked here. It is REPORTED as
-            # unchecked rather than skipped: a containment gate that quietly
-            # covers some pins and not others, with no way to tell which, is
-            # the shape of gap this file exists to close.
-            for endpoint, side in ((a_lo, "min"), (a_hi, "max")):
-                if isinstance(endpoint, dict) and "reference" in endpoint:
-                    cannot_check("L12", f"pin {pin.get('name')!r}: abs_max {quantity} "
-                               f"{side} is a relative bound "
-                               f"({endpoint.get('reference')}"
-                               f"{endpoint.get('offset', 0):+g}), so containment "
-                               "cannot be checked without a value for that "
-                               "reference. Either state the bound numerically or "
-                               "record the reference's value in the same record; "
-                               "an unresolvable limit checks nothing.")
-            for key in ("min", "typ", "max"):
-                value = r.get(key)
-                if not isinstance(value, (int, float)):
-                    continue
-                if isinstance(a_lo, (int, float)) and value < a_lo:
-                    bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} "
-                               f"{key}={value} is below abs_max min={a_lo}")
-                if isinstance(a_hi, (int, float)) and value > a_hi:
-                    bad("L12", f"pin {pin.get('name')!r}: recommended {quantity} "
-                               f"{key}={value} exceeds abs_max max={a_hi}")
-
-    # L13: physical designators are documented as sorted ascending, for the
-    # same determinism reason as every other ordering here. Documented and
-    # unchecked is how an ordering rule quietly stops being true.
-    for pin in pins:
-        numbers = pin.get("numbers", [])
-        if numbers != sorted(numbers, key=lambda n: (len(str(n)), str(n))):
-            bad(
-                "L13",
-                f"pin {pin.get('name')!r}: numbers {numbers} are not in ascending "
-                "order (natural sort: shorter designators first, then bytewise)",
-            )
-
-    # L10
-    record_rank = LICENSE_RANK.get(doc.get("license_class"))
-    if record_rank is not None:
-        for source in sources:
-            source_rank = LICENSE_RANK.get(source.get("license_class"))
-            if source_rank is not None and source_rank > record_rank:
-                bad(
-                    "L10",
-                    f"source {source.get('source_id')!r} is licensed "
-                    f"{source.get('license_class')!r}, which is more restrictive than "
-                    f"the record's {doc.get('license_class')!r}",
-                )
-
-    return problems
+# Controls cite sources at the reserved .example domain, which no vendor
+# list may contain; the lint controls are linted against the real lists plus
+# that one fixture vendor.
+FIXTURE_DOMAINS = {**partdata.VENDOR_DOMAINS, "acme": ("acme.example",)}
+LINT_CONTROL = re.compile(
+    r"^LINT-REJECTED by (?P<check>L\d+) at (?P<locs>[^:]+):")
+# EQUAL to the population, as the floors elsewhere are: a lint control that
+# vanished, or stopped being recognised as one, must not leave this gate
+# green with less evidence behind it.
+MINIMUM_LINT_CONTROLS = 5
 
 
 def valid_multi_unit_record():
@@ -431,24 +122,172 @@ def valid_multi_unit_record():
     }
 
 
+def valid_v1_record():
+    """A v1 record using every member v1 adds; it lints clean, and the
+    self-test mutates it once per v1 check clause."""
+    gpio = {"vih": {"unit": "V", "min": {"reference": "VDD", "factor": 0.75}}}
+    return {
+        "schema_version": 1,
+        "stability": "unstable",
+        "part_id": "acme/mcu",
+        "manufacturer": "Acme",
+        "mpn": "MCU-1",
+        "package": {"name": "QFN-6", "pin_count": 6},
+        "pins": [
+            {"name": "BOOT", "numbers": ["1"], "role": "bidirectional",
+             "class": "gpio",
+             "strap": {"function": "boot select", "default": "pull_up"}},
+            {"name": "GND", "numbers": ["2"], "role": "power_in"},
+            {"name": "MODE", "numbers": ["3"], "role": "bidirectional",
+             "class": "gpio",
+             "strap": {"function": "mode select", "default": "floating"}},
+            {"name": "NC", "numbers": ["4"], "role": "nc"},
+            {"name": "VDD", "numbers": ["5"], "role": "power_in",
+             "abs_max": {"voltage": {"unit": "V", "max": 4}}},
+            {"name": "VOUT", "numbers": ["6"], "role": "power_out",
+             "output": {"voltage": [
+                 {"unit": "V", "min": 1.7, "max": 1.9,
+                  "conditions": {"iout": {"unit": "mA", "typ": 1}}},
+                 {"unit": "V", "min": 1.6, "max": 1.9,
+                  "conditions": {"iout": {"unit": "mA", "typ": 10}}}]}},
+        ],
+        "pin_classes": [
+            {"id": "gpio", "role": "bidirectional", "characteristics": gpio},
+        ],
+        "implements": [
+            {"definition": "acme.lib.Mcu",
+             "pins": {"boot": "BOOT", "gnd": "GND", "mode": "MODE",
+                      "vdd": "VDD"},
+             "unbound": ["VOUT"]},
+        ],
+        "straps": [
+            {"id": "flash", "kind": "valid", "when": {"BOOT": "1", "MODE": "x"}},
+            {"id": "rom", "kind": "valid", "when": {"BOOT": "0", "MODE": "0"}},
+        ],
+        "absent": [
+            {"pointer": "/parameters", "reason": "not-transcribed"},
+            {"pointer": "/pin_classes/0/abs_max", "reason": "vendor-unpublished",
+             "target": "gpio"},
+        ],
+        "sources": [
+            {
+                "source_id": "acme-ds",
+                "vendor": "acme",
+                "url": "https://acme.example/ds.pdf",
+                "state": "source-unreachable",
+                "origin": "vendor-direct",
+                "license_class": "vendor-public",
+            }
+        ],
+        "provenance": {
+            "": {"source_id": "acme-ds", "confidence": "datasheet-stated", "method": "manual"}
+        },
+        "license_class": "vendor-public",
+    }
+
+
+def record_files():
+    """Every record NOTICE's paragraph describes: the teaching set and the
+    store, never the controls."""
+    return sorted(EXAMPLES.glob("*.part.json")) + \
+        sorted(STORE.glob("*/*.part.json"))
+
+
+def _rel(path):
+    path = Path(path).resolve()
+    return path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) \
+        else str(path)
+
+
+def store_problems(path, data, doc, problems):
+    """A bundled store record is pinned by its revision -- the hash of its
+    bytes -- and found by its part_id, so both must be exact."""
+    for problem in partdata.layout_problems(data):
+        problems.append(f"{path}: {problem.check}: {problem.message}")
+    part_id = doc.get("part_id")
+    expected = partdata.store_path(part_id) if isinstance(part_id, str) \
+        and part_id.count("/") == 1 else None
+    if expected is None or Path(path).resolve() != expected.resolve():
+        problems.append(
+            f"{path}: store: part_id {part_id!r} belongs at "
+            f"{_rel(expected) if expected else '<no valid path>'}; the store "
+            "has no index, so a record anywhere else is one no lookup finds")
+    if not doc.get("implements"):
+        problems.append(
+            f"{path}: store: implements no definition, so no design port can "
+            "join it; the store holds records for definitions to bind to")
+    return problems
+
+
+def lint_control_problems(path, doc, problems, domains=None):
+    """True if `doc` is a lint control; its failures go to `problems`.
+
+    A control must fail with the check it names, at the pointers it names,
+    and nowhere else. One that fails somewhere it does not declare would
+    stay red with its own guarantee deleted, which is the gap the schema
+    gate's location rule closed for the schema controls."""
+    declaration = doc.get("x_negative_control") if isinstance(doc, dict) else None
+    if not isinstance(declaration, str) or \
+            not declaration.startswith("LINT-REJECTED"):
+        return False
+    match = LINT_CONTROL.match(declaration.strip())
+    if match is None:
+        problems.append(
+            f"{path}: lint control does not declare where it fails; its "
+            "x_negative_control must start `LINT-REJECTED by <check> at "
+            "<pointer>[ + <pointer>...]: `")
+        return True
+    declared = {(match.group("check"), loc.strip())
+                for loc in match.group("locs").split("+") if loc.strip()}
+    found = {(p.check, p.pointer) for p in partdata.lint_problems(
+        doc, [], domains=FIXTURE_DOMAINS if domains is None else domains)}
+    if not found:
+        problems.append(
+            f"{path}: lint control declares {sorted(declared)} and lints "
+            "clean, so the check it exists to prove no longer fires")
+    elif found != declared:
+        problems.append(
+            f"{path}: lint control declares it fails at {sorted(declared)} "
+            f"but actually fails at {sorted(found)}")
+    return True
+
+
+def lint_control_floor_problems(count, problems, minimum=None):
+    """The lint-control population may not shrink by accident."""
+    minimum = MINIMUM_LINT_CONTROLS if minimum is None else minimum
+    if count < minimum:
+        problems.append(
+            f"{count} lint control(s), below the floor of {minimum}. They are "
+            "the fixtures showing the cross-reference checks reject a whole "
+            "record, not only a mutated dict in this file.")
+    return problems
+
+
 def self_test():
     """Every check must fire on a document that violates it, and the clean
     record must produce no findings. A linter whose checks are never shown
     to fire is indistinguishable from a linter that does nothing."""
     import copy
+    import tempfile
 
-    clean = valid_multi_unit_record()
-    findings = lint(clean, "clean")
-    if findings:
-        print("self-test FAIL: the reference record should lint clean but did not:")
-        for f in findings:
-            print(f"  {f}")
-        return 1
+    hosts = FIXTURE_DOMAINS
+    for name, clean in (("v0", valid_multi_unit_record()),
+                        ("v1", valid_v1_record())):
+        findings = lint(clean, "clean", domains=hosts)
+        if findings:
+            print(f"self-test FAIL: the {name} reference record should lint "
+                  "clean but did not:")
+            for f in findings:
+                print(f"  {f}")
+            return 1
 
-    def mutate(fn):
-        doc = copy.deepcopy(clean)
+    def mutate(fn, base=valid_multi_unit_record):
+        doc = copy.deepcopy(base())
         fn(doc)
         return doc
+
+    def v1(fn):
+        return mutate(fn, valid_v1_record)
 
     def set_provenance_key(doc, key):
         doc["provenance"][key] = {
@@ -457,9 +296,16 @@ def self_test():
             "method": "manual",
         }
 
+    def put(doc, pointer, value):
+        *head, last = pointer.split("/")[1:]
+        node = doc
+        for token in head:
+            node = node[int(token)] if isinstance(node, list) else node[token]
+        node[last] = value
+
     # EQUAL to the case count, not one below it: a floor with slack in it
     # permits exactly the silent drift it exists to name.
-    MINIMUM_CASES = 27  # raise deliberately; drifting below is not a decision
+    MINIMUM_CASES = 56  # raise deliberately; drifting below is not a decision
     cases = [
         ("L1", "unresolvable provenance pointer", mutate(lambda d: set_provenance_key(d, "/pins/99/role"))),
         ("L2", "provenance cites unknown source", mutate(lambda d: d["provenance"].__setitem__("", {"source_id": "nope", "confidence": "unverified", "method": "manual"}))),
@@ -476,6 +322,7 @@ def self_test():
         ("L5", "pin declares a unit that does not list it",
          mutate(lambda d: d["pins"][0].__setitem__("unit", d["units"][1]["id"])),
          "does not list it as a member"),
+        ("L5", "a unit pin claimed by two units", mutate(lambda d: d["units"][1]["pins"].append("1A")), "claimed by both unit"),
         ("L6", "shared_pins names an unknown pin", mutate(lambda d: d["shared_pins"].append("GHOST"))),
         ("L7", "duplicate physical designator", mutate(lambda d: d["pins"][1]["numbers"].__setitem__(0, "1"))),
         ("L8", "pins out of sort order", mutate(lambda d: d["pins"].reverse())),
@@ -494,15 +341,46 @@ def self_test():
         ("L5", "pin declares a unit while units[] is absent", mutate(lambda d: (d.pop("units"), d.pop("shared_pins", None)))),
         ("L8", "modes[] out of sort order", mutate(lambda d: d["modes"].insert(0, dict(d["modes"][0], id="zzz_last_by_id")))),
         ("L8", "sources[] out of sort order", mutate(lambda d: d["sources"].append(dict(d["sources"][0], source_id="aaa-first")))),
+        ("L8", "draw[] out of sort order", mutate(lambda d: d["modes"][0]["draw"].append({"pin": "GND", "current": {"unit": "mA", "typ": 1}})), "draw[].pin"),
         ("L12", "recommended voltage below the absolute minimum", mutate(lambda d: d["pins"][5].update({"abs_max": {"voltage": {"unit": "V", "min": 0, "max": 7}}, "recommended": {"voltage": {"unit": "V", "min": -3, "max": 5}}}))),
         ("L13", "physical designators out of ascending order", mutate(lambda d: d["pins"][0].__setitem__("numbers", ["9", "3"]))),
+        # v1. One case per clause of each check v1 adds (L14-L21).
+        ("L14", "implements[] with a definition twice", v1(lambda d: d["implements"].append(copy.deepcopy(d["implements"][0]))), "sorted bytewise-ascending by definition"),
+        ("L14", "a definition pin mapped to no record pin", v1(lambda d: d["implements"][0]["pins"].__setitem__("vdd", "VCC")), "which is not a pin of this record"),
+        ("L14", "two definition pins on one record pin", v1(lambda d: d["implements"][0]["pins"].__setitem__("vdd2", "VDD")), "must be injective"),
+        ("L14", "unbound[] out of sort order", v1(lambda d: d["implements"][0].__setitem__("unbound", ["VOUT", "NC"])), "unbound[] is not sorted"),
+        ("L14", "unbound names no record pin", v1(lambda d: d["implements"][0]["unbound"].append("ZZZ")), "unbound names 'ZZZ'"),
+        ("L14", "a pin both mapped and unbound", v1(lambda d: d["implements"][0]["unbound"].insert(0, "BOOT")), "both mapped and listed as unbound"),
+        ("L14", "a record pin the map does not account for", v1(lambda d: d["implements"][0]["unbound"].clear() or d["implements"][0].pop("unbound")), "neither mapped, listed as unbound, nor of role nc"),
+        ("L15", "pin_classes[] with an id twice", v1(lambda d: d["pin_classes"].append(dict(d["pin_classes"][0]))), "pin_classes[] must be sorted"),
+        ("L15", "a pin naming an undeclared class", v1(lambda d: d["pins"][2].__setitem__("class", "adc")), "which pin_classes[] does not declare"),
+        ("L15", "a member re-typed by its class", v1(lambda d: d["pin_classes"][0].__setitem__("role", "input")), "never re-types a pin"),
+        ("L15", "a class with no member", v1(lambda d: d["pin_classes"].append({"id": "spare", "role": "input"})), "has no member pin"),
+        ("L16", "straps[] out of sort order", v1(lambda d: d["straps"].reverse()), "straps[] must be sorted"),
+        ("L16", "a combination needing a pin with no strap", v1(lambda d: d["straps"][0]["when"].__setitem__("GND", "0")), "carries no strap block"),
+        ("L16", "a combination needing a pin that does not exist", v1(lambda d: d["straps"][0]["when"].__setitem__("GHOST", "0")), "does not exist"),
+        ("L16", "two combinations requiring the same levels", v1(lambda d: d["straps"][1].__setitem__("when", dict(d["straps"][0]["when"]))), "require the same levels"),
+        ("L17", "a power_out pin restating accuracy as recommended", v1(lambda d: d["pins"][5].__setitem__("recommended", {"voltage": {"unit": "V", "min": 1.7, "max": 1.9}})), "carries a recommended voltage"),
+        ("L18", "absent[] out of sort order", v1(lambda d: d["absent"].reverse()), "absent[] must be sorted"),
+        ("L18", "an absence alongside a value", v1(lambda d: d["absent"].append({"pointer": "/pins/4/abs_max", "reason": "vendor-unpublished", "target": "VDD"})), "also carries a value"),
+        ("L18", "an absence whose parent does not resolve", v1(lambda d: d["absent"].append({"pointer": "/pins/9/abs_max", "reason": "vendor-unpublished"})), "does not resolve, so the absence names no field"),
+        ("L18", "an indexed absence with no target echo", v1(lambda d: d["absent"][1].pop("target")), "declares no target"),
+        ("L18", "an indexed absence whose target no longer matches", v1(lambda d: d["absent"][1].__setitem__("target", "adc")), "but resolves to 'gpio'"),
+        ("L19", "a condition array stating one operating point twice", v1(lambda d: put(d, "/pins/5/output/voltage/1/conditions", {"iout": {"unit": "mA", "typ": 1}})), "state the same conditions"),
+        ("L21", "a source vendor with no host allowlist", v1(lambda d: d["sources"][0].__setitem__("vendor", "unlisted")), "has no host allowlist"),
+        ("L21", "a source URL off its vendor's hosts", v1(lambda d: d["sources"][0].__setitem__("url", "https://parts-distributor.example/ds.pdf")), "is not one of acme's hosts"),
+        # The allowlist matches the vendor's own domain and its subdomains,
+        # not any host that merely ENDS in its letters.
+        ("L21", "a lookalike domain that ends in the vendor's", v1(lambda d: d["sources"][0].__setitem__("url", "https://evilacme.example/ds.pdf")), "is not one of acme's hosts"),
+        ("L12", "a class window outside the pin's abs_max", v1(lambda d: d["pin_classes"][0].__setitem__("recommended", {"voltage": {"unit": "V", "min": 0, "max": 9}}) or d["pins"][0].__setitem__("abs_max", {"voltage": {"unit": "V", "min": 0, "max": 4}})), "exceeds abs_max max=4"),
+        ("L17", "a class window making a power_out pin restate accuracy", v1(lambda d: d["pins"][5].__setitem__("class", "pwr") or d["pin_classes"].append({"id": "pwr", "role": "power_out", "recommended": {"voltage": {"unit": "V", "max": 2}}})), "carries a recommended voltage"),
     ]
 
     failures = 0
     for entry in cases:
         check, description, doc = entry[0], entry[1], entry[2]
         fragment = entry[3] if len(entry) > 3 else None
-        found = lint(doc, "case")
+        found = lint(doc, "case", domains=hosts)
         # Match on the MESSAGE, not just the check ID. Matching on the ID meant
         # any L5 branch satisfied any L5 case, so three L5 clauses could be
         # deleted with the suite green — and for one of them the defect then
@@ -513,6 +391,26 @@ def self_test():
         else:
             print(f"self-test FAIL: {check} did NOT fire on {description}")
             failures += 1
+
+    # PICKED records. The same not-transcribed absence is legal on a record no
+    # benchmark picks and refused on one that is, only for R29a's families.
+    picked = v1(lambda d: d["absent"].insert(0, {"pointer": "/modes", "reason": "not-transcribed"}))
+    # An absence COVERING an R29a field is refused as well: "/ratings" hides
+    # "/ratings/abs_max" exactly as well as naming it would.
+    covering = v1(lambda d: d["absent"].append({"pointer": "/ratings", "reason": "not-transcribed"}))
+    for name, ok in (
+            ("not-transcribed on an R29a family is refused on a picked record",
+             any(": L18: " in f and "required data there (R29a)" in f
+                 for f in lint(picked, "case", domains=hosts, picked=True))),
+            ("an absence covering an R29a family is refused on a picked record",
+             any(": L18: " in f and "required data there (R29a)" in f
+                 for f in lint(covering, "case", domains=hosts, picked=True))),
+            ("the same absence is legal on a record nobody picks",
+             lint(picked, "case", domains=hosts) == []),
+            ("not-transcribed outside the R29a families stays legal when picked",
+             lint(valid_v1_record(), "case", domains=hosts, picked=True) == [])):
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} {name}")
+        failures += 0 if ok else 1
 
     # The UNCHECKED channel, which the `cases` loop above cannot see because it
     # only asks whether a PROBLEM was produced. Its two branches were deletable
@@ -532,12 +430,128 @@ def self_test():
          "no abs_max"),
     ):
         notes = []
-        lint(mutate(mutation), "probe", notes)
+        lint(mutate(mutation), "probe", notes, domains=hosts)
         if any(fragment in note for note in notes):
             print(f"self-test ok:   L12 reports {description} as unchecked")
         else:
             print(f"self-test FAIL: L12 did NOT report {description} as unchecked")
             failures += 1
+
+    # CANONICAL LAYOUT (L22), on bytes. Numbers are kept as written, so `4.0`
+    # and `1e3` are canonical; whitespace, key order, CR and the trailing LF
+    # are not negotiable.
+    layout_doc = {"b": [1, {"x": "y"}], "a": 4.0, "c": {}, "d": []}
+    canonical = (json.dumps(layout_doc, indent=2, sort_keys=True,
+                            ensure_ascii=False) + "\n").encode("utf-8")
+    exotic = canonical.replace(b'"a": 4.0', b'"a": 4.00e0')
+    for name, data, want in (
+            ("canonical bytes pass", canonical, False),
+            ("a number spelled differently but laid out canonically passes",
+             exotic, False),
+            ("unsorted keys are caught",
+             (json.dumps(layout_doc, indent=2) + "\n").encode(), True),
+            ("a four-space indent is caught",
+             (json.dumps(layout_doc, indent=4, sort_keys=True) + "\n").encode(),
+             True),
+            ("CRLF line ends are caught", canonical.replace(b"\n", b"\r\n"), True),
+            ("a missing trailing LF is caught", canonical[:-1], True),
+            ("an escaped non-ASCII character is caught",
+             canonical.replace(b'"y"', b'"\\u00b5"'), True)):
+        found = partdata.layout_problems(data)
+        ok = bool(found) == want and (not want or found[0].check == "L22")
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} L22: {name}")
+        failures += 0 if ok else 1
+
+    # STORE, and the lint controls: the checks this gate makes itself.
+    good = valid_v1_record()
+    good["part_id"] = "acme/mcu"
+    for name, probe, fragment in (
+            ("a store record off its part_id's path is caught",
+             lambda: store_problems(STORE / "acme" / "elsewhere.part.json",
+                                    canonical, good, []), "belongs at rhoform/parts/acme/mcu.part.json"),
+            ("a non-canonical store record is caught",
+             lambda: store_problems(STORE / "acme" / "mcu.part.json",
+                                    canonical.replace(b"\n", b"\r\n"), good,
+                                    []), ": L22: "),
+            ("a store record implementing nothing is caught",
+             lambda: store_problems(STORE / "acme" / "mcu.part.json", canonical,
+                                    dict(good, implements=[]), []),
+             "implements no definition"),
+            ("a lint control with no location is caught",
+             lambda: _control_probe("LINT-REJECTED: nowhere"),
+             "does not declare where it fails"),
+            ("a lint control that lints clean is caught",
+             lambda: _control_probe("LINT-REJECTED by L14 at /implements/0/pins/vdd: clean"),
+             "lints clean"),
+            ("a lint control failing somewhere it does not declare is caught",
+             lambda: _control_probe("LINT-REJECTED by L19 at /x: wrong place",
+                                    lambda d: d["implements"][0]["pins"].__setitem__("vdd", "BOOT")),
+             "but actually fails at"),
+            ("a lint control population under its floor is caught",
+             lambda: lint_control_floor_problems(4, [], minimum=5),
+             "below the floor of 5")):
+        found = probe()
+        ok = any(fragment in x for x in found)
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} {name}")
+        failures += 0 if ok else 1
+    # NOTICE, and a record that does not parse: the paths the real tree never
+    # takes, each driven once so blanking its report goes red.
+    records, total, gaps, ratings = provenance_coverage()
+    stated = (f"{gaps} of the {total} measured values across the {records} "
+              f"records, of which {ratings} are ratings")
+    with tempfile.TemporaryDirectory() as tmp:
+        notice = Path(tmp) / "NOTICE"
+        outcomes = {"missing": []}
+        notice_problems(outcomes["missing"], notice)
+        for name, text in (("silent", "nothing about records\n"),
+                           ("stale", stated.replace(f"{total} measured",
+                                                    f"{total + 1} measured")),
+                           ("current", "...\n    " + stated.replace(
+                               " records,", "\n    records,") + ".\n")):
+            notice.write_text(text, encoding="utf-8")
+            found = []
+            notice_problems(found, notice)
+            outcomes[name] = found
+        broken = Path(tmp) / "broken.part.json"
+        broken.write_bytes(b'{"schema_version": 1,')
+        argv = sys.argv
+        sys.argv = ["lint-part-data.py", str(broken)]
+        try:
+            import contextlib, io
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                unparsed = main()
+        finally:
+            sys.argv = argv
+    for name, ok in (
+            ("a missing NOTICE is caught",
+             outcomes["missing"] == ["NOTICE is missing"]),
+            ("a NOTICE that no longer states the numbers is caught",
+             any("no longer states its provenance-coverage" in x
+                 for x in outcomes["silent"])),
+            ("a NOTICE publishing stale numbers is caught",
+             any("NOTICE publishes" in x for x in outcomes["stale"])),
+            ("a NOTICE stating the records' numbers, wrapped, passes",
+             outcomes["current"] == []),
+            ("a record that does not parse fails the run",
+             unparsed == 1 and "does not parse as JSON" in err.getvalue())):
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} {name}")
+        failures += 0 if ok else 1
+
+    exact = []
+    _control_probe("LINT-REJECTED by L14 at /implements/0/pins/vdd2: twice",
+                   lambda d: d["implements"][0]["pins"].__setitem__("vdd2", "VDD"),
+                   exact)
+    clean_store = store_problems(STORE / "acme" / "mcu.part.json", canonical,
+                                 good, [])
+    for name, ok in (("a lint control failing exactly where it declares passes",
+                      exact == []),
+                     ("a canonical store record at its path passes",
+                      clean_store == []),
+                     ("a population at its floor passes",
+                      lint_control_floor_problems(5, [], minimum=5) == [])):
+        print(f"self-test {'ok:  ' if ok else 'FAIL:'} {name}")
+        failures += 0 if ok else 1
 
     # WIRING. self_test() called lint() and nothing else, so main()'s exit
     # branch was untested — and with it dead, every committed part record went
@@ -562,33 +576,48 @@ def self_test():
     # out of itself was deletable with everything green (round 21).
     _over = unchecked_ceiling_problems(["a", "b", "c"], maximum=2)
     _at = unchecked_ceiling_problems(["a", "b"], maximum=2)
-    _real_ceiling = unchecked_ceiling_problems
-    def _plant_ceiling(*_a, problems=None, **_k):
-        (problems if problems is not None else []).append("planted-ceiling")
-        return problems
-    globals()["unchecked_ceiling_problems"] = _plant_ceiling
-    try:
-        sys.argv = ["lint-part-data.py"]
-        with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
-            _ceiling_wired = main()
-    finally:
-        globals()["unchecked_ceiling_problems"] = _real_ceiling
-        sys.argv = _argv
+    wired = {}
+    for planted_name in ("unchecked_ceiling_problems", "store_problems",
+                         "lint_control_problems", "lint_control_floor_problems"):
+        _real_fn = globals()[planted_name]
+
+        def _plant(*args, _fn=_real_fn, **kwargs):
+            result = _fn(*args, **kwargs)
+            for value in args + tuple(kwargs.values()):
+                if isinstance(value, list) and value is not args[0]:
+                    value.append("planted")
+                    break
+            return result
+
+        globals()[planted_name] = _plant
+        try:
+            sys.argv = ["lint-part-data.py"]
+            with _c.redirect_stdout(_i.StringIO()), _c.redirect_stderr(_i.StringIO()):
+                wired[planted_name] = main()
+        finally:
+            globals()[planted_name] = _real_fn
+            sys.argv = _argv
     for _name, _ok in (("main() exits non-zero when lint reports a problem", _planted == 1),
                        ("main() exits zero when it does not", _clean == 0),
                        ("more unperformable checks than the ceiling is caught",
                         any("above the ceiling of 2" in x for x in _over)),
                        ("a record set at the ceiling passes", _at == []),
                        ("the unperformable-check ceiling is WIRED into main()",
-                        _ceiling_wired == 1),
+                        wired["unchecked_ceiling_problems"] == 1),
+                       ("the store checks are WIRED into main()",
+                        wired["store_problems"] == 1),
+                       ("the lint-control checks are WIRED into main()",
+                        wired["lint_control_problems"] == 1),
+                       ("the lint-control floor is WIRED into main()",
+                        wired["lint_control_floor_problems"] == 1),
                        ("a required record that vanished is caught",
                         any("named as required" in x for x in
                             required_records_problems(
-                                [], required=("gone.part.json",)))),
+                                [], required=("parts/examples/gone.part.json",)))),
                        ("a present required record is not reported",
                         required_records_problems(
-                            [Path("here.part.json")],
-                            required=("here.part.json",)) == [])):
+                            [ROOT / "parts" / "examples" / "here.part.json"],
+                            required=("parts/examples/here.part.json",)) == [])):
         print(f"self-test {'ok:  ' if _ok else 'FAIL:'} {_name}")
         failures += 0 if _ok else 1
 
@@ -600,28 +629,53 @@ def self_test():
     if failures:
         print(f"\nself-test: {failures} check(s) did not fire.")
         return 1
-    # THE MEASURE PREDICATE used by provenance_coverage(), whose three numbers
+    # THE MEASURE PREDICATE used by provenance_coverage(), whose numbers
     # NOTICE publishes. It had its own weaker copy -- `"unit" in node` -- ten
     # lines from walk_measures, which correctly also requires one of
     # min/typ/max/peak. That counted the SN74HC00D's twelve PIN objects (whose
     # `unit` is the L5 gate id) and returned before the 24 real measures inside
     # them, so the published total was wrong by exactly 24 - 12.
-    import json as _json
-    _hc = _json.loads((DEFAULT_TARGET / "ti-sn74hc00d.part.json").read_text(
-        encoding="utf-8"))
+    _hc = partdata.parse((EXAMPLES / "ti-sn74hc00d.part.json").read_bytes())
     _pin_paths = {f"/pins/{i}" for i in range(len(_hc.get("pins") or []))}
     _measured = {path for path, _ in walk_measures(_hc)}
     if _pin_paths & _measured:
         print(f"FAIL pin objects counted as measured values: "
               f"{sorted(_pin_paths & _measured)}", file=sys.stderr)
         return 1
-    _total, _default, _ratings = provenance_coverage()
-    if (_total, _default, _ratings) != (132, 5, 4):
-        print(f"FAIL provenance_coverage() gives {(_total, _default, _ratings)}, "
-              "expected (132, 5, 4). NOTICE publishes these; if the records "
-              "legitimately changed, update both in one commit.", file=sys.stderr)
+    # THE COUNT, pinned on a fixture whose answer is worked out by hand rather
+    # than on the real records, whose numbers move every time one is added:
+    # six measures, two of them inside `conditions` (excluded); of the four
+    # counted, the two elements of a condition array sit under a provenance
+    # entry with a locator, and the other two fall to the locator-less
+    # default, one of them a rating. So (4, 2, 1).
+    _fixture = {
+        "pins": [{"name": "P", "characteristics": {
+            "a": {"unit": "V", "typ": 1},
+            "b": [{"unit": "V", "typ": 1, "conditions": {
+                      "t": {"unit": "degC", "typ": 25}}},
+                  {"unit": "V", "typ": 2, "conditions": {
+                      "t": {"unit": "degC", "typ": 85}}}]}}],
+        "ratings": {"abs_max": {"t": {"unit": "degC", "max": 150}}},
+        "provenance": {"": {"source_id": "s"},
+                       "/pins/0/characteristics/b": {"source_id": "s",
+                                                     "locator": "Table 1"}},
+    }
+    if document_locator_gaps(_fixture) != (4, 2, 1):
+        print(f"FAIL document_locator_gaps() gives "
+              f"{document_locator_gaps(_fixture)} on the hand-counted fixture, "
+              "expected (4, 2, 1).", file=sys.stderr)
         return 1
-    print("ok   provenance coverage counts only real Measures (132, 5, 4)")
+    print("ok   provenance coverage counts real Measures, each once (4, 2, 1)")
+    # THE POPULATION NOTICE speaks for is the teaching set plus the store, and
+    # never the controls; a record that left either directory must leave it.
+    _named = {_rel(path) for path in record_files()}
+    if not (set(REQUIRED_RECORDS) <= _named) or any(
+            "/negative/" in name for name in _named):
+        print(f"FAIL record_files() gives {sorted(_named)}; it must include "
+              f"every required record and no control", file=sys.stderr)
+        return 1
+    print(f"ok   NOTICE's population is {len(_named)} record(s) across "
+          "parts/examples and rhoform/parts")
 
     # THE GAP PREDICATE reads the locator field, not the provenance key. The
     # previous predicate counted default-fallthrough, which agrees with "names
@@ -629,10 +683,9 @@ def self_test():
     # carry a locator and no default does. Both drift directions were silent:
     # a locator-less specific entry hid every value under it from the count,
     # and a default gaining a locator kept counting values that now have one.
-    _ne = _json.loads((DEFAULT_TARGET / "ti-ne555p.part.json").read_text(
-        encoding="utf-8"))
+    _ne = partdata.parse((STORE / "ti" / "ne555p.part.json").read_bytes())
     _t0, _g0, _r0 = document_locator_gaps(_hc)
-    _hc_mut = _json.loads(_json.dumps(_hc))
+    _hc_mut = copy.deepcopy(_hc)
     del _hc_mut["provenance"]["/ratings/abs_max"]["locator"]
     _t1, _g1, _r1 = document_locator_gaps(_hc_mut)
     if not (_g1 > _g0 and _t1 == _t0):
@@ -641,7 +694,7 @@ def self_test():
               file=sys.stderr)
         return 1
     print("ok   a locator-less specific entry counts as a table gap")
-    _ne_mut = _json.loads(_json.dumps(_ne))
+    _ne_mut = copy.deepcopy(_ne)
     _ne_mut["provenance"][""]["locator"] = "planted table, page 1"
     _tn, _gn, _rn = document_locator_gaps(_ne)
     _tm, _gm, _rm = document_locator_gaps(_ne_mut)
@@ -651,30 +704,44 @@ def self_test():
         return 1
     print("ok   a default that names a table stops counting as a gap")
 
-    print(f"\nself-test PASS: reference record lints clean; {len(cases)} defect cases all detected.")
+    print(f"\nself-test PASS: reference records lint clean; {len(cases)} defect cases all detected.")
     return 0
 
 
+def _control_probe(declaration, mutation=None, problems=None):
+    """lint_control_problems() over the v1 reference record, mutated."""
+    import copy
+    doc = copy.deepcopy(valid_v1_record())
+    if mutation is not None:
+        mutation(doc)
+    doc["x_negative_control"] = declaration
+    problems = [] if problems is None else problems
+    lint_control_problems("probe", doc, problems)
+    return problems
+
+
 # How many checks may legitimately be unperformable across the whole record set.
-# Today: two, both on diodes-ap7361c-33e-13 pin OUT -- one relative abs_max
-# bound, one recommended current with no abs_max sibling. (This comment said
-# "four NE555 pins", which is a different record and a different number.)
-# Raise it
+# Today: one, on diodes/ap7361c-33e-13 pin OUT -- a recommended current with no
+# abs_max current sibling (the vendor rates OUT's voltage, relative to IN, and
+# no OUT current). v0 had a second on the same pin, the relative abs_max
+# voltage bound checked against OUT's recommended voltage; v1 moved that
+# figure to output.voltage (L17), so nothing is left to contain it. Raise it
 # deliberately and name the record; drifting up is how a rule opts out of
 # itself.
-MAXIMUM_UNCHECKED = 2
+MAXIMUM_UNCHECKED = 1
 
 
 def required_records_problems(files, required=None, problems=None):
     """Every named record must be among the files being linted."""
     problems = [] if problems is None else problems
-    present = {path.name for path in files}
+    present = {_rel(path) for path in files}
     gone = [name for name in (REQUIRED_RECORDS if required is None
                               else required) if name not in present]
     if gone:
         problems.append(
             f"record(s) {gone} are named as required and are not present. "
-            "Deleting one took the reported count from 5 to 4 and exited 0.")
+            "Deleting one took the reported record count down by one and "
+            "exited 0.")
     return problems
 
 
@@ -695,14 +762,16 @@ def unchecked_ceiling_problems(unchecked, maximum=None, problems=None):
             + "; ".join(unchecked))
     return problems
 
-# Records that must exist. Deleting one took `5 record(s)` to `4` and exited 0:
-# a linter with fewer things to lint is indistinguishable from a clean tree.
+# Records that must exist, by repository path. Deleting one took the record
+# count down by one and exited 0: a linter with fewer things to lint is
+# indistinguishable from a clean tree. The teaching set's two exemplars, and
+# the store's three benchmark records.
 REQUIRED_RECORDS = (
-    "ti-ne555p.part.json",
-    "ti-sn74hc00d.part.json",
-    "espressif-esp32-s3-wroom-1-n8r2.part.json",
-    "diodes-ap7361c-33e-13.part.json",
-    "vishay-crcw040210k0fked.part.json",
+    "parts/examples/ti-sn74hc00d.part.json",
+    "parts/examples/vishay-crcw040210k0fked.part.json",
+    "rhoform/parts/diodes/ap7361c-33e-13.part.json",
+    "rhoform/parts/espressif/esp32-s3-wroom-1-n8r2.part.json",
+    "rhoform/parts/ti/ne555p.part.json",
 )
 
 
@@ -711,40 +780,28 @@ def document_locator_gaps(document):
     which ratings) for one parsed record.
 
     THE PREDICATE IS "names no locator", NOT "falls to the record default".
-    Those coincide across today's five records -- every specific entry carries a
-    locator and no default does -- but the coincidence is load-bearing in both
-    directions. Counting default-fallthrough meant a locator-less SPECIFIC
-    entry would have hidden every value under it from the count, and a default
-    that gained a locator would have kept counting values that now have a
-    table. NOTICE's claim is about tables, so the gate reads the locator field.
+    Those coincided across the first five records -- every specific entry
+    carried a locator and no default did -- but the coincidence is
+    load-bearing in both directions. Counting default-fallthrough meant a
+    locator-less SPECIFIC entry would have hidden every value under it from the
+    count, and a default that gained a locator would have kept counting values
+    that now have a table. NOTICE's claim is about tables, so the gate reads
+    the locator field.
     """
     entries = document.get("provenance", {})
-    pointers = list(entries)
-
-    def effective(pointer):
-        best = None
-        for candidate in pointers:
-            if (candidate == "" or pointer == candidate
-                    or pointer.startswith(candidate + "/")):
-                if best is None or len(candidate) > len(best):
-                    best = candidate
-        return best
-
     total = gaps = ratings = 0
-    # USE THE FILE'S OWN MEASURE PREDICATE. I wrote a second one here --
-    # `"unit" in node` -- ten lines from `walk_measures`, which correctly
-    # also requires one of min/typ/max/peak. The SN74HC00D's twelve PIN
-    # objects carry `unit` as the L5 gate id ("1".."4"), so each was counted
-    # as a measured value AND the walk returned before reaching the 24 real
+    # USE THE MODULE'S OWN MEASURE PREDICATE. A second one here -- `"unit" in
+    # node` -- counted the SN74HC00D's twelve PIN objects (whose `unit` is the
+    # L5 gate id) as measured values AND returned before reaching the 24 real
     # measures inside them: 130 - 24 + 12 = 118, exactly the number NOTICE
     # published. The paragraph's whole defence is that the numbers are
-    # computed rather than hand-maintained, and nobody hand-checks a
-    # computed number.
+    # computed rather than hand-maintained, and nobody hand-checks a computed
+    # number.
     for pointer, _measure in walk_measures(document):
         if "/conditions/" in pointer:
             continue
         total += 1
-        key = effective(pointer)
+        key = partdata.covering(entries, pointer)
         entry = entries.get(key, {}) if key is not None else {}
         if not entry.get("locator"):
             gaps += 1
@@ -753,61 +810,61 @@ def document_locator_gaps(document):
     return total, gaps, ratings
 
 
-def provenance_coverage():
-    """(measured values, values whose provenance names no table, of which ratings).
+def provenance_coverage(files=None):
+    """(records, measured values, values whose provenance names no table, of
+    which ratings).
 
-    NOTICE publishes these three numbers. They have now been wrong in three
-    successive revisions -- a table-per-field claim, a generalisation of one
-    record's shape to all five, and a count that was internally unsatisfiable.
-    The paragraph even carries a recount procedure, and following it did not
-    reproduce the number it guards. So the gate computes them and holds NOTICE
-    to the result. The per-record predicate lives in document_locator_gaps().
+    NOTICE publishes these numbers. They were wrong in three successive
+    revisions -- a table-per-field claim, a generalisation of one record's
+    shape to all of them, and a count that was internally unsatisfiable. The
+    paragraph even carried a recount procedure, and following it did not
+    reproduce the number it guarded. So the gate computes them and holds NOTICE
+    to the result, the record count included. The per-record predicate lives
+    in document_locator_gaps().
 
     `conditions` sub-objects are EXCLUDED: they state the operating point at
     which a value was measured, not a transcribed rating, and counting them
     made "measured values" mean something no reader would guess.
     """
-    import json
+    files = record_files() if files is None else files
     total = gaps = ratings = 0
-    for path in sorted(DEFAULT_TARGET.glob("*.part.json")):
-        document = json.loads(path.read_text(encoding="utf-8"))
-        t, g, r = document_locator_gaps(document)
+    for path in files:
+        t, g, r = document_locator_gaps(partdata.parse(path.read_bytes()))
         total, gaps, ratings = total + t, gaps + g, ratings + r
-    return total, gaps, ratings
+    return len(files), total, gaps, ratings
 
 
-def notice_problems(problems):
+def notice_problems(problems, notice=None):
     """Hold NOTICE's provenance-coverage numbers to the records."""
-    import re
-    notice = DEFAULT_TARGET.parents[1] / "NOTICE"
+    notice = ROOT / "NOTICE" if notice is None else notice
     if not notice.is_file():
         problems.append("NOTICE is missing")
         return 0
-    total, gaps, ratings = provenance_coverage()
+    records, total, gaps, ratings = provenance_coverage()
     text = notice.read_text(encoding="utf-8")
     # Whitespace-tolerant: the sentence wraps, and the first version of this
     # regex missed its own text because of a line break.
     collapsed = re.sub(r"\s+", " ", text)
     found = re.search(
-        r"(\d+) of the (\d+) measured values across the five records, "
+        r"(\d+) of the (\d+) measured values across the (\d+) records, "
         r"of which (\d+) are ratings", collapsed)
     if found is None:
         problems.append(
             "NOTICE no longer states its provenance-coverage numbers in the form "
             "this gate reads. That paragraph has been wrong three times; it is "
             "gated on purpose. Publish: "
-            f"{gaps} of the {total} measured values across the five "
+            f"{gaps} of the {total} measured values across the {records} "
             f"records, of which {ratings} are ratings.")
         return 0
     published = tuple(int(g) for g in found.groups())
-    if published != (gaps, total, ratings):
+    if published != (gaps, total, records, ratings):
         problems.append(
             f"NOTICE publishes {published[0]} of {published[1]} measured values "
-            f"whose provenance names no table, {published[2]} of them "
-            f"ratings. The records give {gaps} of {total}, {ratings} "
-            "ratings.")
+            f"across {published[2]} records whose provenance names no table, "
+            f"{published[3]} of them ratings. The records give {gaps} of "
+            f"{total} across {records}, {ratings} ratings.")
         return 0
-    return 3
+    return 4
 
 
 def main() -> int:
@@ -815,7 +872,7 @@ def main() -> int:
     if "--self-test" in args:
         return self_test()
 
-    targets = [Path(a) for a in args] or [DEFAULT_TARGET]
+    targets = [Path(a) for a in args] or list(DEFAULT_TARGETS)
     files = []
     for target in targets:
         if target.is_dir():
@@ -846,6 +903,7 @@ def main() -> int:
             return 1
 
     problems, unchecked = [], []
+    controls = stored = 0
     # Each named record must be among the files being linted. A count that can
     # shrink silently is the same defect as a floor with slack in it. Reported
     # through `problems`, like the unperformable-check ceiling beside it and
@@ -853,30 +911,37 @@ def main() -> int:
     if not args:
         required_records_problems(files, problems=problems)
     for path in files:
+        data = path.read_bytes()
         try:
-            doc = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            problems.append(f"{path}: does not parse as JSON: {exc}")
+            doc = partdata.parse(data)
+        except partdata.PartDataError as exc:
+            problems.append(f"{path}: does not parse as JSON: "
+                            f"{exc.problems[0].message}")
             continue
-        # Expected-invalid schema fixtures are not lint subjects: they are
-        # deliberately malformed, and linting them would report noise.
+        # Schema controls are not lint subjects: they are deliberately
+        # malformed, and linting them would report noise. Lint controls are
+        # schema-valid records with one cross-reference defect, held to it.
         if "negative" in path.parts:
+            if lint_control_problems(path, doc, problems):
+                controls += 1
             continue
-        found = lint(doc, str(path), unchecked)
+        if path.resolve().is_relative_to(STORE.resolve()):
+            stored += 1
+            store_problems(path, data, doc, problems)
+        found = lint(doc, str(path), unchecked,
+                     picked=doc.get("part_id") in BENCHMARK_PICKED)
         problems.extend(found)
         if not found:
             print(f"lint: {path}: clean.")
+    if not args:
+        lint_control_floor_problems(controls, problems)
 
     # Printed on every run, and counted in the pass line, so a growing set of
     # unresolvable bounds is visible rather than silently shrinking coverage.
     # A CEILING on unperformable checks. L12's containment rule becomes a
     # printed note whenever an abs_max is relative ({"reference": "VCC"}), and
     # nothing bounded how many checks could become notes -- so rewriting a
-    # numeric abs_max as a relative one turned a firing L12 into silence, and
-    # a +/-999 V recommended range on a pin whose abs_max is already relative
-    # is indistinguishable from correct data. Two checks are unperformable
-    # today, both on diodes-ap7361c-33e-13 pin OUT; that is the number this
-    # ceiling encodes.
+    # numeric abs_max as a relative one turned a firing L12 into silence.
     #
     # Reported through `problems` like every other check here. A bare
     # `print(...); return 1` is outside the coverage meta-gate's counted
@@ -897,9 +962,10 @@ def main() -> int:
 
     print(
         f"lint: PASS: {len([f for f in files if 'negative' not in f.parts])} "
-        f"record(s) consistent, NOTICE's provenance-coverage numbers verified, "
-        f"{len(unchecked)} check(s) not performable on the "
-        "data as modelled."
+        f"record(s) consistent ({stored} in the store, canonical and at their "
+        f"part_id's path), {controls} lint control(s) failing exactly where "
+        "they declare, NOTICE's provenance-coverage numbers verified, "
+        f"{len(unchecked)} check(s) not performable on the data as modelled."
     )
     return 0
 

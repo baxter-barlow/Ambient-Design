@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "implements": [
+    {
+      "definition": "acme.lib.Widget",
+      "pins": {
+        "p": "1",
+        "q": "1"
+      },
+      "unbound": [
+        "2"
+      ]
+    }
+  ],
+  "x_negative_control": "LINT-REJECTED by L14 at /implements/0/pins/q: two definition pins land on one record pin. The map is the only join between a design's ports and the part's terminals, so a non-injective map silently shorts two ports together at the part; JSON Schema cannot compare map values with each other."
+}
