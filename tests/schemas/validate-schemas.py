@@ -186,9 +186,10 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # wire-format schema landed with its ten controls (AMB-48), 59 -> 61 with its
 # n11 and n12, 61 -> 64 when D3 v1 added the part-data schema controls
 # n17, n23 and n24 (AMB-127; n18-n22 are lint controls, counted by
-# parts/lint-part-data.py), and 64 -> 72 when IR version 2 landed with its
-# eight (ir/examples/negative/n10-n17). Equal to the population, as measured.
-MINIMUM_NEGATIVE_CONTROLS = 72
+# parts/lint-part-data.py), 64 -> 72 when IR version 2 landed with its
+# eight (ir/examples/negative/n10-n17), and 72 -> 74 when interfaces added
+# n18 and n19 to IR v2 (AMB-51). Equal to the population, as measured.
+MINIMUM_NEGATIVE_CONTROLS = 74
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.

@@ -2730,7 +2730,7 @@ def self_test() -> int:
 
         grammar_md = spec_copy / "02-grammar.md"
         grammar_md.write_text(grammar_md.read_text().replace(
-            "The 31 words the grammar spells", "The 30 words the grammar spells"))
+            "The 32 words the grammar spells", "The 30 words the grammar spells"))
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a drifted keyword count is caught",
                       any("keyword count" in p for p in problems)))
@@ -2760,7 +2760,7 @@ def self_test() -> int:
 
         grammar_md = spec_copy / "02-grammar.md"
         grammar_md.write_text(grammar_md.read_text().replace(
-            "The 31 words the grammar spells as literals",
+            "The 32 words the grammar spells as literals",
             "the grammar's literal words"))
         problems = doc_sync_problems(spec_dir=spec_copy)
         cases.append(("a deleted keyword-count sentence is caught",
@@ -2828,7 +2828,7 @@ def self_test() -> int:
              "02-grammar.md param_type", "a drifted param_type list"),
             ("02-grammar.md", "\n`range`\n", "\n`rnage`\n",
              "02-grammar.md loop_iterator", "a drifted loop_iterator list"),
-            ("02-grammar.md", "The 1 word reserved", "The 8 words reserved",
+            ("02-grammar.md", "The 0 words reserved", "The 8 words reserved",
              "reserved-word count", "a drifted reserved-word count"),
             ("01-lexical-structure.md", "`~` `[` `]` ", "`~` ",
              "punctuation tokens", "a drifted punctuation list"),

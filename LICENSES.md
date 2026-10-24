@@ -43,8 +43,7 @@ Rhoform's surface syntax adopts constructs from
 adopted is the shape of the surface, not text:
 
 - the definition nouns `module`, `component` and `interface` (syntax 0.2
-  defines `component`; `interface` remains a reserved word whose definition
-  arrives in a later syntax version);
+  defines `component`, and syntax 0.3 `interface`);
 - the `new` keyword;
 - the `~` connection operator.
 
