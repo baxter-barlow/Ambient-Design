@@ -340,6 +340,17 @@ class CompatibilityTest(unittest.TestCase):
             with self.subTest(record=record, definition=definition):
                 self.assertEqual(partdata.compatible(record, definition), want)
 
+    def test_a_part_specific_definition_admits_only_the_same_role(self):
+        for record, definition, want in (
+                ("input", "input", True),
+                ("bidirectional", "bidirectional", True),
+                ("bidirectional", "input", False),
+                ("passive", "power_out", False),
+                ("passive", "nc", False)):
+            with self.subTest(record=record, definition=definition):
+                self.assertEqual(partdata.compatible(record, definition,
+                                                     exact=True), want)
+
 
 @unittest.skipUnless(HAVE_LARK, "lark required")
 class BindTest(unittest.TestCase):
@@ -359,6 +370,69 @@ class BindTest(unittest.TestCase):
                     pins = {n for n, _r, _d in
                             _definition_pins(entry["definition"])}
                     self.assertEqual(set(entry["pins"]), pins)
+
+    # The one disagreement the store and the library are known to have. The
+    # library declares Ne555.ctl passive, and TI's Table 4-1 says CONT is an
+    # input/output; landing L3 changes the library. Tolerated rather than
+    # required, so that fix needs nothing from this test, and named, so no
+    # other drift can hide behind it.
+    KNOWN_ROLE_DRIFT = {("ti/ne555p", "rhoform.lib.timer.Ne555", "ctl")}
+
+    def test_part_specific_definitions_match_their_records_role_for_role(self):
+        # The lint half of the exact rule: the bundled store against the
+        # bundled library, pin by pin, without going through bind().
+        for path in sorted(STORE.glob("*/*.part.json")):
+            doc = _doc(path)
+            roles = {pin["name"]: pin["role"] for pin in doc["pins"]}
+            for entry in doc["implements"]:
+                if entry["definition"] not in partdata.PART_SPECIFIC:
+                    continue
+                for name, role, _d in _definition_pins(entry["definition"]):
+                    key = (doc["part_id"], entry["definition"], name)
+                    if key in self.KNOWN_ROLE_DRIFT:
+                        continue
+                    with self.subTest(pin=key):
+                        self.assertEqual(roles[entry["pins"][name]], role)
+
+    def test_every_store_record_binds_its_definitions_cleanly(self):
+        for path in sorted(STORE.glob("*/*.part.json")):
+            doc = _doc(path)
+            index = {pin["name"]: i for i, pin in enumerate(doc["pins"])}
+            for entry in doc["implements"]:
+                known = {("role-conflict",
+                          f"/pins/{index[entry['pins'][name]]}/role")
+                         for part_id, definition, name in self.KNOWN_ROLE_DRIFT
+                         if (part_id, definition)
+                         == (doc["part_id"], entry["definition"])}
+                with self.subTest(record=path.name,
+                                  definition=entry["definition"]):
+                    binding = self.bind(path, entry["definition"])
+                    self.assertLessEqual(
+                        {(p.check, p.pointer) for p in binding.problems},
+                        known)
+
+    def test_the_part_specific_names_are_bundled_definitions(self):
+        for qualified in sorted(partdata.PART_SPECIFIC):
+            with self.subTest(definition=qualified):
+                self.assertTrue(_definition_pins(qualified))
+
+    def test_a_part_specific_definition_may_not_narrow_a_role(self):
+        # Bidirectional admits input on a generic definition. On the module,
+        # which models this one part, a library edit narrowing io0 to input
+        # is drift, and it would have bound silently.
+        doc = _doc(ESP32)
+        pins = [(n, "input" if n == "io0" else r, d)
+                for n, r, d in _definition_pins(
+                    "rhoform.lib.module.Esp32S3Wroom1")]
+        binding = partdata.bind(doc, "rhoform.lib.module.Esp32S3Wroom1", pins)
+        io0 = [p["name"] for p in doc["pins"]].index("IO0")
+        self.assertEqual([(p.check, p.pointer) for p in binding.problems],
+                         [("role-conflict", f"/pins/{io0}/role")])
+        self.assertIn("models one part", binding.problems[0].message)
+        generic = copy.deepcopy(doc)
+        generic["implements"][0]["definition"] = "acme.lib.GenericModule"
+        self.assertEqual(
+            partdata.bind(generic, "acme.lib.GenericModule", pins).problems, ())
 
     def test_ne555_joins_every_pin_and_reports_the_ctl_conflict(self):
         binding = self.bind(NE555, "rhoform.lib.timer.Ne555")
