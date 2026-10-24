@@ -305,7 +305,11 @@ jobs:
   benchmarks-sim:
     name: Benchmark simulation
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The coverage meta-gate at the end of this job mutates every gate and
+    # re-runs its self-test per mutant, cold (no cache on CI). Its run time
+    # grows with the conformance suite: M2's check passes pushed it past 27
+    # minutes on PR #23, and 30 cancelled the job mid-census.
+    timeout-minutes: 90
     # Pinned by digest; the tag is documentation. Keep in sync with
     # toolchain/versions.yaml (ci.containers.simulation).
     container:
