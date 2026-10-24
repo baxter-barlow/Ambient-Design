@@ -219,6 +219,38 @@ class RecordTest(_Case):
                           for d in found],
                          [("RHO6006", [f"json at /: {NOT_JSON}"])])
 
+    def test_a_version_no_integer_or_a_record_no_object_is_rho6005(self):
+        # Neither crashes the pass: a record need not be an object, and a
+        # version written with a fraction or an exponent is a Decimal.
+        source = self.case("c01_keyed_pick_bound")
+        record = source / "parts" / "acme" / "widget.part.json"
+        data = record.read_bytes()
+        for written, declared in (
+                (b"null\n", "missing"), (b"5\n", "missing"),
+                (b'"schema_version"\n', "missing"), (b"[]\n", "missing"),
+                (data.replace(b'"schema_version": 1,',
+                              b'"schema_version": 1.0,'),
+                 "1.0 (written with a fraction or an exponent)"),
+                (data.replace(b'"schema_version": 1,',
+                              b'"schema_version": 1.5,'),
+                 "1.5 (written with a fraction or an exponent)"),
+                (data.replace(b'"schema_version": 1,',
+                              b'"schema_version": 1e0,'),
+                 "1 (written with a fraction or an exponent)")):
+            with self.subTest(written=written[:40]):
+                root = Path(tempfile.mkdtemp(dir=self.tmp)) / "case"
+                shutil.copytree(source, root)
+                (root / "parts" / "acme" / "widget.part.json").write_bytes(
+                    written)
+                lock = json.loads((root / "rhoform.lock").read_bytes())
+                lock["parts"]["inputs"][0]["sha256"] = lockfile.digest(
+                    written)
+                (root / "rhoform.lock").write_bytes(
+                    lockfile.canonical_bytes(lock))
+                found, _compiled = self.check(root)
+                self.assertEqual([(d["code"], d["params"]["version"])
+                                  for d in found], [("RHO6005", declared)])
+
     def test_one_broken_pick_several_instances_use_is_one_finding(self):
         root = self.case("c15_record_hash_mismatch")
         (root / "main.rhoform").write_text(WIDGET.format(

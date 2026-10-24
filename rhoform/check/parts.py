@@ -49,6 +49,7 @@ own, never a silent pass.
 
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from .. import lockfile
 from .. import partdata
@@ -278,10 +279,8 @@ class _Records:
         if not pick.record.startswith(lockfile.STORE_PREFIX):
             problems = [p for p in problems if p.check != "L21"]
         if any(p.check == "version" for p in problems):
-            declared = "missing" if "schema_version" not in document \
-                else lockfile.shown(document["schema_version"])
             return _Verdict(code="RHO6005", params={
-                "record": pick.record, "version": declared,
+                "record": pick.record, "version": _declared(document),
                 "supported": ", ".join(str(v) for v in
                                        sorted(partdata.SCHEMAS))},
                 pointer=entry)
@@ -293,6 +292,19 @@ class _Records:
                              for p in problems]}, pointer=entry)
         return _Verdict(document=document, unchecked=tuple(
             f"{p.check} at {p.pointer or '/'}" for p in unchecked))
+
+
+def _declared(document) -> str:
+    """The schema_version a record declares, as RHO6005 spells it. A record
+    need not be an object, and partdata reads a number with a fraction or
+    an exponent as a Decimal, which keeps its value and not always its
+    token (`1e0` is 1), so it says how it was written."""
+    if not isinstance(document, dict) or "schema_version" not in document:
+        return "missing"
+    version = document["schema_version"]
+    if isinstance(version, Decimal):
+        return f"{version} (written with a fraction or an exponent)"
+    return lockfile.shown(version)
 
 
 # ---- the pass ---------------------------------------------------------------
