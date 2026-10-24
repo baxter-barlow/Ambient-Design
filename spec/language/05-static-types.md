@@ -180,7 +180,8 @@ the note.
 A **declared static-tier assertion** that no evaluator measures gates,
 as V1 requires of an assertion that cannot be measured: until the static
 tier lands (section 8) every one is an `RHO3553`
-(`static-assertion-incomplete`) error, tier `static`. A dynamic-tier
+(`static-assertion-incomplete`) error, tier `static`, reported in the
+`assertions` pass's place. A dynamic-tier
 assertion is the dynamic tier's (M5): the check stage never evaluates
 it, and it is no incomplete here.
 
@@ -237,8 +238,11 @@ yet.
 ### Conformance
 
 The check cases ([`conformance/check/`](../conformance/README.md)) are
-grouped by area, and each area names the last pass it runs, so what an
-area pins is that pass's behaviour whatever the passes after it do; the
-command line always runs every pass. Across the suite's reject cases,
-every active code of blocks 1–4 and 6 a source can trigger is emitted by
-some case.
+grouped by area, and each area names the last pass it runs. An area's
+run stops after that pass, and its coverage note counts the actionable
+rows of `model` and of that pass alone, so neither a pass after it nor
+another pass's being still a stub can move an area's stream: what an
+area pins is its own pass's behaviour, and any finding a pass before it
+makes in its cases. The command line always runs every pass and counts
+every section. Across the suite's reject cases, every active code of
+blocks 1–4 and 6 a source can trigger is emitted by some case.

@@ -1,7 +1,9 @@
 #pragma rhoform-syntax 0.1
 
 # A declared static-tier assertion that no evaluator measures gates
-# (V1): while the static tier is unimplemented, every one is RHO3553.
+# (V1): while the static tier is unimplemented, the driver reports every
+# one as RHO3553 in the assertions pass's place, beside the coverage note
+# the stub's own row raises.
 module Board:
     port vin power_in
     net VIN:

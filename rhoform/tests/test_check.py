@@ -2,9 +2,12 @@
 the reporter's rules, the driver's pass order and mask, the coverage
 summary, and the check report.
 
-Every pass is still a stub, so what is pinned here is the machinery each
-M2 checker plugs into, not any checker's verdicts: the benchmarks' check
-output is pinned in test_benchmarks.py alone.
+What is pinned here is the machinery each M2 checker plugs into, not any
+checker's verdicts: the benchmarks' check output is pinned in
+test_benchmarks.py alone. The tests that pin what the driver does around
+a stub plant stand-in passes (`planted` below) rather than read the
+modules' own IMPLEMENTED flags, so a landing that implements its pass
+moves none of them.
 """
 
 import json
@@ -91,6 +94,25 @@ def compile_text(directory: Path, text: str, name="board.rhoform", **kw):
     (directory / name).write_text(text, encoding="utf-8")
     sink = Diagnostics()
     return sink, pipeline.compile(name, directory, sink=sink, **kw)
+
+
+def planted(implemented=()):
+    """rhoform.check.PASSES with every pass replaced by a stand-in of the
+    same name and owner that runs nothing, implemented exactly when its
+    name is in `implemented`. A test of the driver's machinery under it
+    holds whichever passes have landed; each pass's own tests pin what
+    the pass does."""
+    from types import SimpleNamespace
+
+    from rhoform import check as checker
+
+    def nothing(model, analysis, report):
+        return None
+
+    return mock.patch.object(checker, "PASSES", tuple(
+        SimpleNamespace(NAME=step.NAME, OWNER=step.OWNER,
+                        IMPLEMENTED=step.NAME in implemented, run=nothing)
+        for step in checker.PASSES))
 
 
 class _Design(unittest.TestCase):
@@ -360,7 +382,8 @@ class DriverTest(_Design):
         self.assertEqual(list(report.sections), list(checker.pass_names()))
 
     def test_every_stub_is_an_actionable_row_and_one_coverage_note(self):
-        sink, _analysis, report = self.check()
+        with planted():
+            sink, _analysis, report = self.check()
         for name, section in report.sections.items():
             if name == "model":
                 continue
@@ -374,6 +397,53 @@ class DriverTest(_Design):
         self.assertEqual(len(notes), 1)
         self.assertEqual(dict(notes[0].params)["classes"], (
             "component-without-pins: 1", "pass-not-implemented: 8"))
+        # The command line's note counts every section, so it moves as
+        # passes land.
+        with planted(("parts", "ground")):
+            sink, _analysis, _report = self.check()
+        self.assertEqual(
+            [dict(d.params)["classes"] for d in sink if d.code == "RHO3901"],
+            [("component-without-pins: 1", "pass-not-implemented: 6")])
+
+    def test_no_other_pass_landing_moves_an_areas_stream(self):
+        # An area's run (`through` given) counts only the model's and its
+        # own pass's actionable rows, and reports RHO3553 only once it
+        # reaches the assertions pass: which other passes are still stubs
+        # cannot move its stream, though the report keeps their rows.
+        from rhoform import check as checker
+
+        others = checker.pass_names()[1:]
+        expected = {
+            "model": ([], ("component-without-pins: 1",), ("model",)),
+            "erc": ([], ("component-without-pins: 1",
+                         "pass-not-implemented: 1"), ("model", "erc")),
+            "assertions": (["/vin_ok"], ("component-without-pins: 1",
+                                         "pass-not-implemented: 1"),
+                           ("model", "assertions")),
+        }
+        for through, (incomplete, classes, sections) in expected.items():
+            rest = tuple(name for name in others if name != through)
+            streams = set()
+            for landed in ((), rest) + tuple((name,) for name in rest):
+                with self.subTest(through=through, landed=landed), \
+                        planted(landed):
+                    sink, _analysis, report = self.check(through=through)
+                    streams.add(sink.render())
+                    self.assertEqual(
+                        [d.entity for d in sink if d.code == "RHO3553"],
+                        incomplete)
+                    note = dict(next(d for d in sink
+                                     if d.code == "RHO3901").params)
+                    self.assertEqual((note["classes"], note["sections"]),
+                                     (classes, sections))
+                    for name in report.sections:
+                        if name not in (checker.MODEL,) + landed:
+                            self.assertIn(
+                                ("/", "pass-not-implemented", True),
+                                [(r.entity, r.reason, r.actionable)
+                                 for r in report.sections[name]["rows"]])
+            with self.subTest(through=through):
+                self.assertEqual(len(streams), 1)
 
     def test_the_mask_runs_the_passes_up_to_the_named_one(self):
         _sink, _analysis, report = self.check(through="model")
@@ -386,6 +456,11 @@ class DriverTest(_Design):
             self.check(through="interfaces")
 
     def test_the_interim_ground_stub_types_labelled_nets(self):
+        from rhoform.check import ground
+
+        if ground.IMPLEMENTED:
+            self.skipTest("the ground pass is implemented, so its interim "
+                          "rule is gone; test_ground.py pins the real one")
         _sink, analysis, report = self.check(through="ground")
         self.assertEqual(analysis.ground.status, "interim")
         self.assertTrue(analysis.ground.is_ground("MID"))
@@ -398,14 +473,18 @@ class DriverTest(_Design):
 
     def test_a_declared_static_assertion_gates_while_nothing_evaluates_it(
             self):
-        with mock.patch("rhoform.check.assertions.IMPLEMENTED", False):
-            for through in ("model", "assertions"):
+        # In the assertions stub's place: a run that stops before it
+        # reports none.
+        with planted():
+            for through, reported in ((None, True), ("assertions", True),
+                                      ("domains_refine", False),
+                                      ("model", False)):
                 with self.subTest(through=through):
                     sink, _analysis, _report = self.check(through=through)
                     incomplete = [d for d in sink if d.code == "RHO3553"]
                     self.assertEqual(
                         [(d.entity, d.tier, d.severity) for d in incomplete],
-                        [("/vin_ok", "static", "error")])
+                        [("/vin_ok", "static", "error")] if reported else [])
                     # The dynamic assertion is the dynamic tier's: nothing.
                     self.assertNotIn("/vin_ripple",
                                      [d.entity for d in sink])
@@ -432,13 +511,18 @@ module Board(debug: bool = false):
     if debug:
         s = new Spare
 """
-        with mock.patch("rhoform.check.assertions.IMPLEMENTED", False):
-            sink, _analysis, report = self.check(spare, through="model")
-            self.assertEqual(len(sink), 0, sink.render())
+        with planted():
+            sink, _analysis, report = self.check(spare,
+                                                 through="assertions")
+            # The note is the assertions stub's own row, and nothing else.
+            self.assertEqual(
+                [(d.code, dict(d.params)["classes"]) for d in sink],
+                [("RHO3901", ("pass-not-implemented: 1",))], sink.render())
             self.assertEqual(report.sections["model"]["rows"], [])
             taken = spare.replace("debug: bool = false",
                                   "debug: bool = true")
-            sink, _analysis, report = self.check(taken, through="model")
+            sink, _analysis, report = self.check(taken,
+                                                 through="assertions")
             self.assertEqual(sorted((d.code, d.entity) for d in sink),
                              [("RHO3553", "/s/p_ok"), ("RHO3901", "/")])
 

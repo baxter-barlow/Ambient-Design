@@ -145,9 +145,12 @@ class Report:
                 for row in sorted(set(section["rows"]), key=Row.sort_key)
                 if row.actionable]
 
-    def summarize(self, owner: str) -> Diagnostic | None:
-        """The compilation's one RHO3901, when any row is actionable."""
-        rows = self.actionable()
+    def summarize(self, owner: str,
+                  sections: tuple | None = None) -> Diagnostic | None:
+        """The compilation's one RHO3901, when any row is actionable;
+        when `sections` is given (an area's run), any row of those."""
+        rows = [(name, row) for name, row in self.actionable()
+                if sections is None or name in sections]
         if not rows:
             return None
         by_class = Counter(row.reason for _section, row in rows)

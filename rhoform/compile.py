@@ -45,8 +45,9 @@ def compile(entry: str, root, *, sink, stage: str = "check",
     """Compile the entry file `entry` (its key, relative to the compile
     root `root`) up to and including `stage`. `root_module` names the root
     module explicitly; `through` stops the check stage after the named pass
-    (rhoform.check.pass_names()). Raises package.ReadFailure when a file
-    that exists cannot be read."""
+    (rhoform.check.pass_names()) and makes the run an area's, whose
+    coverage note counts that pass's rows and the model's alone. Raises
+    package.ReadFailure when a file that exists cannot be read."""
     if stage not in STAGES:
         raise ValueError(f"stage {stage!r} is not one of {STAGES}")
     loaded = package.load(entry, root, sink)

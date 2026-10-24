@@ -13,3 +13,7 @@ compile root with its entry `main.rhoform` and its pinned stream
 
 The area a landing owns is its own to add to; `model` is the checked
 design itself (the stage's foundation), and its cases run no pass.
+`assertions` is the static assertion tier's
+([05 section 8](../../language/05-static-types/08-waivers-and-static-assertions.md));
+until that pass lands it holds the `RHO3553` the driver reports in its
+place.

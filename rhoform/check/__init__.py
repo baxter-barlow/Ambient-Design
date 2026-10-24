@@ -28,14 +28,18 @@ later passes treat what it touches as unknown and record a row with the
 reason `upstream-defect`. A pass that is not implemented yet still runs
 (the ground stub supplies interim ground typing) and its section records
 it as an actionable row, so an unimplemented check is never a silent pass.
-Until the assertions pass is implemented, the driver reports every
-declared static-tier assertion as RHO3553 on its behalf: a declared
+Until the assertions pass is implemented, the driver reports, in its
+place, every declared static-tier assertion as RHO3553: a declared
 assertion that cannot be measured gates (V1, amendment OD1).
 
-`through` names the last pass to run (or `model`, the model build alone).
-The conformance suite uses it so each check area pins one pass's
-behaviour, whatever the passes after it do; the command line always runs
-them all.
+`through` makes the run an AREA's, as the conformance suite's check leg
+runs it: it names the last pass to run (or `model`, the model build
+alone), and the coverage note then counts only the actionable rows of
+`model` and of that pass's own section (the report keeps every row as
+written). An area's stream therefore moves with its own pass's rows and
+with the findings of the passes it runs, never with which other passes
+are still stubs, nor with any pass after it. The command line never
+passes `through`: it runs every pass, and its note counts every section.
 """
 
 from dataclasses import dataclass
@@ -90,6 +94,7 @@ def check(design, context: CheckContext | None = None, sink=None, *,
     """Check one elaborated design: (Analysis, Report). Findings reach
     `sink` (a rhoform.diagnostics.Diagnostics) when one is given."""
     names = pass_names()
+    scope = None if through is None else (MODEL, through)
     through = names[-1] if through is None else through
     if through not in names:
         raise ValueError(f"no pass is named {through!r}; the passes are "
@@ -107,17 +112,18 @@ def check(design, context: CheckContext | None = None, sink=None, *,
         if not step.IMPLEMENTED:
             report.row("/", "not-implemented", "pass-not-implemented",
                        actionable=True)
-    if not assertions.IMPLEMENTED:
-        report.owner = assertions.OWNER
-        for assertion in model.static_assertions():
-            report.finding(
-                "RHO3553",
-                {"assertion": assertion.path,
-                 "measurement": assertion.measurement,
-                 "reason": NO_STATIC_EVALUATOR},
-                entity=assertion.path, tier="static")
+            if step.NAME == assertions.NAME:
+                # In the stub's place, so only a run that reaches the
+                # assertions pass reports it.
+                for assertion in model.static_assertions():
+                    report.finding(
+                        "RHO3553",
+                        {"assertion": assertion.path,
+                         "measurement": assertion.measurement,
+                         "reason": NO_STATIC_EVALUATOR},
+                        entity=assertion.path, tier="static")
     report.findings = waivers.apply(model, report.findings)
-    report.summarize(OWNER)
+    report.summarize(OWNER, scope)
     if sink is not None:
         report.flush(sink)
     return analysis, report
