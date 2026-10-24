@@ -10,6 +10,12 @@ change could have moved. Both encoders compute it, the package's and the
 gate's (tests/ir/check-hashes.py, loaded by path), so a fault in one is not
 hidden by the same fault in the other.
 
+V1_DESIGN_HASHES is the record of the W1 regeneration, not a freeze of the
+goldens: a later landing that deliberately moves version 1 content in them
+(L3's reviewed role changes, L5b's benchmark edits) updates or retires the
+rows it moves, in the same change, and says so in its review. Library rules
+are not version 1 content, and the oracle strips them.
+
 DETERMINISM. A design using every 0.3 source fact emits the same bytes
 under any hash seed.
 """
@@ -149,8 +155,11 @@ class PreservationOracleTest(unittest.TestCase):
 
     def test_a_0_1_or_0_2_design_adds_no_0_3_fact(self):
         # What the oracle strips from these is exactly what version 2 says
-        # they hold: nothing a 0.3 statement states, and `isolated` only on
-        # the nets an `isolated` statement made.
+        # they hold: nothing a 0.3 statement of their own states, and
+        # `isolated` only on the nets an `isolated` statement made. A
+        # standard-library definition may carry rules (L3 gives it some),
+        # so only an instance of the design's own definitions is held to
+        # none.
         isolated = 0
         for name in sorted(V1_DESIGN_HASHES):
             with self.subTest(name):
@@ -158,8 +167,10 @@ class PreservationOracleTest(unittest.TestCase):
                     encoding="utf-8"))
                 self.assertEqual(document["interfaces"], [])
                 self.assertEqual(document["annotations"], [])
-                self.assertFalse(any("rules" in i
-                                     for i in document["instances"]))
+                self.assertFalse(any(
+                    "rules" in i
+                    and not i["definition"].startswith("rhoform.lib.")
+                    for i in document["instances"]))
                 self.assertFalse(any("ground_kind" in n
                                      for n in document["nets"]))
                 self.assertFalse(any("severity" in a
