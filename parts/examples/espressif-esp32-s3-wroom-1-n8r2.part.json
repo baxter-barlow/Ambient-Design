@@ -1,1013 +1,1013 @@
 {
-  "schema_version": 0,
-  "stability": "unstable",
-  "part_id": "espressif/esp32-s3-wroom-1-n8r2",
-  "manufacturer": "Espressif Systems",
-  "mpn": "ESP32-S3-WROOM-1-N8R2",
   "description": "2.4 GHz Wi-Fi (802.11 b/g/n) and Bluetooth LE 5 module, Xtensa dual-core 32-bit LX7, 8 MB flash, 2 MB quad SPI PSRAM, PCB antenna",
+  "license_class": "vendor-public",
   "lifecycle": "active",
-  "package": {
-    "name": "ESP32-S3-WROOM-1",
-    "pin_count": 41,
-    "footprint_ref": "rho:XCVR_ESP32-S3-WROOM-1",
-    "thermal_pad": true
-  },
-  "pins": [
+  "manufacturer": "Espressif Systems",
+  "modes": [
     {
-      "name": "3V3",
-      "numbers": [
-        "2"
-      ],
-      "role": "power_in",
-      "description": "Power supply (datasheet pin type P)",
-      "abs_max": {
-        "voltage": {
-          "unit": "V",
-          "min": -0.3,
-          "max": 3.6
+      "conditions": {
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
         }
       },
-      "recommended": {
-        "voltage": {
-          "unit": "V",
-          "min": 3.0,
+      "description": "Deep-sleep with RTC memory and RTC peripherals powered up",
+      "draw": [
+        {
+          "current": {
+            "typ": 8,
+            "unit": "uA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "deep_sleep_rtc_mem_and_periph",
+      "kind": "sleep"
+    },
+    {
+      "conditions": {
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
           "typ": 3.3,
-          "max": 3.6
+          "unit": "V"
+        }
+      },
+      "description": "Light-sleep: VDD_SPI and Wi-Fi powered down, all GPIOs high-impedance. Includes the added consumption of this part's 2 MB quad-line PSRAM.",
+      "draw": [
+        {
+          "current": {
+            "typ": 280,
+            "unit": "uA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "light_sleep",
+      "kind": "sleep"
+    },
+    {
+      "conditions": {
+        "cpu_frequency": {
+          "typ": 240,
+          "unit": "MHz"
+        },
+        "peripheral_clocks": "enabled",
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Modem-sleep, 240 MHz, dual core running 128-bit data access instructions, peripheral clocks enabled. Upper bound of the modem-sleep band.",
+      "draw": [
+        {
+          "current": {
+            "typ": 107.9,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "modem_sleep_240mhz_dualcore_128bit",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "cpu_frequency": {
+          "typ": 240,
+          "unit": "MHz"
+        },
+        "peripheral_clocks": "enabled",
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Modem-sleep, 240 MHz, both cores in WAITI (idle). Wi-Fi clock-gated.",
+      "draw": [
+        {
+          "current": {
+            "typ": 47.6,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "modem_sleep_240mhz_waiti",
+      "kind": "idle"
+    },
+    {
+      "conditions": {
+        "cpu_frequency": {
+          "typ": 240,
+          "unit": "MHz"
+        },
+        "peripheral_clocks": "disabled",
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Modem-sleep, 240 MHz, both cores in WAITI, all peripheral clocks disabled. Lower bound of the modem-sleep band.",
+      "draw": [
+        {
+          "current": {
+            "typ": 32.9,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "modem_sleep_240mhz_waiti_clocks_off",
+      "kind": "idle"
+    },
+    {
+      "conditions": {
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Power off: EN held low. RTC domain unpowered.",
+      "draw": [
+        {
+          "current": {
+            "typ": 1,
+            "unit": "uA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "power_off_en_low",
+      "kind": "sleep"
+    },
+    {
+      "conditions": {
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Wi-Fi receive, 802.11 b/g/n HT20, peripherals disabled and CPU idle",
+      "draw": [
+        {
+          "current": {
+            "peak": 95,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "wifi_rx_802_11bgn_ht20",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "duty_cycle": {
+          "typ": 1.0,
+          "unit": "1"
+        },
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "tx_power": {
+          "typ": 20.5,
+          "unit": "dBm"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Wi-Fi transmit, 802.11b 1 Mbps at 20.5 dBm. Highest-current mode of the part.",
+      "draw": [
+        {
+          "current": {
+            "peak": 355,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "wifi_tx_802_11b_1mbps",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "duty_cycle": {
+          "typ": 1.0,
+          "unit": "1"
+        },
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "tx_power": {
+          "typ": 18,
+          "unit": "dBm"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Wi-Fi transmit, 802.11g 54 Mbps at 18 dBm.",
+      "draw": [
+        {
+          "current": {
+            "peak": 297,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "wifi_tx_802_11g_54mbps",
+      "kind": "active"
+    },
+    {
+      "conditions": {
+        "duty_cycle": {
+          "typ": 1.0,
+          "unit": "1"
+        },
+        "ta": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "tx_power": {
+          "typ": 17.5,
+          "unit": "dBm"
+        },
+        "vdd": {
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "description": "Wi-Fi transmit, 802.11n HT20 MCS7 at 17.5 dBm.",
+      "draw": [
+        {
+          "current": {
+            "peak": 286,
+            "unit": "mA"
+          },
+          "pin": "3V3"
+        }
+      ],
+      "id": "wifi_tx_802_11n_ht20_mcs7",
+      "kind": "active"
+    }
+  ],
+  "mpn": "ESP32-S3-WROOM-1-N8R2",
+  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nKNOWN v0 SCHEMA LIMITATION exercised by this record: the datasheet states GPIO DC characteristics (VIH/VIL/VOH/VOL, IOH 40 mA typ, IOL 28 mA typ, leakage, pull resistors) once, for the GPIO pins as a CLASS. This schema has no pin-class or inheritance mechanism, so those values must be repeated on every pin. Rather than duplicate a 12-line block 36 times, this record populates capability and characteristics on the pins that benchmark (c) actually drives or loads (IO0, IO19, IO20, IO48, TXD0) and on the strapping pins it uses, and leaves the remainder with identity and role only. A consumer must therefore NOT read the absence of a capability block as 'this pin has no drive capability'. Adding a pin-class mechanism is the leading candidate for the first schema_version bump; see the freeze memo.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead. The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in each pin's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it.",
+  "package": {
+    "footprint_ref": "rho:XCVR_ESP32-S3-WROOM-1",
+    "name": "ESP32-S3-WROOM-1",
+    "pin_count": 41,
+    "thermal_pad": true
+  },
+  "part_id": "espressif/esp32-s3-wroom-1-n8r2",
+  "pins": [
+    {
+      "abs_max": {
+        "voltage": {
+          "max": 3.6,
+          "min": -0.3,
+          "unit": "V"
         }
       },
       "characteristics": {
         "supply_current_capability_required": {
-          "unit": "A",
-          "min": 0.5,
           "conditions": {
             "note": "IVDD, current the external supply must be able to deliver"
-          }
+          },
+          "min": 0.5,
+          "unit": "A"
         }
-      }
+      },
+      "description": "Power supply (datasheet pin type P)",
+      "name": "3V3",
+      "numbers": [
+        "2"
+      ],
+      "recommended": {
+        "voltage": {
+          "max": 3.6,
+          "min": 3.0,
+          "typ": 3.3,
+          "unit": "V"
+        }
+      },
+      "role": "power_in"
     },
     {
+      "characteristics": {
+        "vih_nrst": {
+          "max": {
+            "offset": 0.3,
+            "reference": "3V3"
+          },
+          "min": {
+            "factor": 0.75,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vil_nrst": {
+          "max": {
+            "factor": 0.25,
+            "reference": "3V3"
+          },
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "description": "Chip enable. High: on. Low: powers off. Must not be left floating.",
       "name": "EN",
       "numbers": [
         "3"
       ],
-      "role": "input",
-      "description": "Chip enable. High: on. Low: powers off. Must not be left floating.",
-      "characteristics": {
-        "vih_nrst": {
-          "unit": "V",
-          "min": {
-            "reference": "3V3",
-            "factor": 0.75
-          },
-          "max": {
-            "reference": "3V3",
-            "offset": 0.3
-          }
-        },
-        "vil_nrst": {
-          "unit": "V",
-          "min": -0.3,
-          "max": {
-            "reference": "3V3",
-            "factor": 0.25
-          }
-        }
-      }
+      "role": "input"
     },
     {
+      "description": "Ground. Pins 1 and 40 plus the exposed thermal pad (pin 41, EPAD), all internally common.",
       "name": "GND",
       "numbers": [
         "1",
         "40",
         "41"
       ],
-      "role": "power_in",
-      "description": "Ground. Pins 1 and 40 plus the exposed thermal pad (pin 41, EPAD), all internally common."
+      "role": "power_in"
     },
     {
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "characteristics": {
+        "capacitance": {
+          "typ": 2,
+          "unit": "pF"
+        },
+        "input_leakage_high": {
+          "max": 50,
+          "unit": "nA"
+        },
+        "input_leakage_low": {
+          "max": 50,
+          "unit": "nA"
+        },
+        "pull_down_resistance": {
+          "typ": 45,
+          "unit": "kohm"
+        },
+        "pull_up_resistance": {
+          "typ": 45,
+          "unit": "kohm"
+        },
+        "vih": {
+          "max": {
+            "offset": 0.3,
+            "reference": "3V3"
+          },
+          "min": {
+            "factor": 0.75,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vil": {
+          "max": {
+            "factor": 0.25,
+            "reference": "3V3"
+          },
+          "min": -0.3,
+          "unit": "V"
+        },
+        "voh": {
+          "min": {
+            "factor": 0.8,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        },
+        "vol": {
+          "max": {
+            "factor": 0.1,
+            "reference": "3V3"
+          },
+          "unit": "V"
+        }
+      },
+      "description": "RTC_GPIO0, GPIO0. Strapping pin: boot mode select.",
       "name": "IO0",
       "numbers": [
         "27"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO0, GPIO0. Strapping pin: boot mode select.",
-      "capability": {
-        "source_current": {
-          "unit": "mA",
-          "typ": 40,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "voh": {
-              "unit": "V",
-              "min": 2.64
-            },
-            "pad_driver": "3"
-          }
-        },
-        "sink_current": {
-          "unit": "mA",
-          "typ": 28,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "vol": {
-              "unit": "V",
-              "typ": 0.495
-            },
-            "pad_driver": "3"
-          }
-        }
-      },
-      "characteristics": {
-        "vih": {
-          "unit": "V",
-          "min": {
-            "reference": "3V3",
-            "factor": 0.75
-          },
-          "max": {
-            "reference": "3V3",
-            "offset": 0.3
-          }
-        },
-        "vil": {
-          "unit": "V",
-          "min": -0.3,
-          "max": {
-            "reference": "3V3",
-            "factor": 0.25
-          }
-        },
-        "voh": {
-          "unit": "V",
-          "min": {
-            "reference": "3V3",
-            "factor": 0.8
-          }
-        },
-        "vol": {
-          "unit": "V",
-          "max": {
-            "reference": "3V3",
-            "factor": 0.1
-          }
-        },
-        "input_leakage_high": {
-          "unit": "nA",
-          "max": 50
-        },
-        "input_leakage_low": {
-          "unit": "nA",
-          "max": 50
-        },
-        "pull_up_resistance": {
-          "unit": "kohm",
-          "typ": 45
-        },
-        "pull_down_resistance": {
-          "unit": "kohm",
-          "typ": 45
-        },
-        "capacitance": {
-          "unit": "pF",
-          "typ": 2
-        }
-      }
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO1, GPIO1, TOUCH1, ADC1_CH0",
       "name": "IO1",
       "numbers": [
         "39"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO1, GPIO1, TOUCH1, ADC1_CH0"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO10, GPIO10, TOUCH10, ADC1_CH9, FSPICS0, FSPIIO4, SUBSPICS0",
       "name": "IO10",
       "numbers": [
         "18"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO10, GPIO10, TOUCH10, ADC1_CH9, FSPICS0, FSPIIO4, SUBSPICS0"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO11, GPIO11, TOUCH11, ADC2_CH0, FSPID, FSPIIO5, SUBSPID",
       "name": "IO11",
       "numbers": [
         "19"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO11, GPIO11, TOUCH11, ADC2_CH0, FSPID, FSPIIO5, SUBSPID"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO12, GPIO12, TOUCH12, ADC2_CH1, FSPICLK, FSPIIO6, SUBSPICLK",
       "name": "IO12",
       "numbers": [
         "20"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO12, GPIO12, TOUCH12, ADC2_CH1, FSPICLK, FSPIIO6, SUBSPICLK"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO13, GPIO13, TOUCH13, ADC2_CH2, FSPIQ, FSPIIO7, SUBSPIQ",
       "name": "IO13",
       "numbers": [
         "21"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO13, GPIO13, TOUCH13, ADC2_CH2, FSPIQ, FSPIIO7, SUBSPIQ"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO14, GPIO14, TOUCH14, ADC2_CH3, FSPIWP, FSPIDQS, SUBSPIWP",
       "name": "IO14",
       "numbers": [
         "22"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO14, GPIO14, TOUCH14, ADC2_CH3, FSPIWP, FSPIDQS, SUBSPIWP"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO15, GPIO15, U0RTS, ADC2_CH4, XTAL_32K_P",
       "name": "IO15",
       "numbers": [
         "8"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO15, GPIO15, U0RTS, ADC2_CH4, XTAL_32K_P"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO16, GPIO16, U0CTS, ADC2_CH5, XTAL_32K_N",
       "name": "IO16",
       "numbers": [
         "9"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO16, GPIO16, U0CTS, ADC2_CH5, XTAL_32K_N"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO17, GPIO17, U1TXD, ADC2_CH6",
       "name": "IO17",
       "numbers": [
         "10"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO17, GPIO17, U1TXD, ADC2_CH6"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO18, GPIO18, U1RXD, ADC2_CH7, CLK_OUT3",
       "name": "IO18",
       "numbers": [
         "11"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO18, GPIO18, U1RXD, ADC2_CH7, CLK_OUT3"
+      "role": "bidirectional"
     },
     {
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "description": "RTC_GPIO19, GPIO19, U1RTS, ADC2_CH8, CLK_OUT2, USB_D-",
       "name": "IO19",
       "numbers": [
         "13"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO19, GPIO19, U1RTS, ADC2_CH8, CLK_OUT2, USB_D-",
-      "capability": {
-        "source_current": {
-          "unit": "mA",
-          "typ": 40,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "voh": {
-              "unit": "V",
-              "min": 2.64
-            },
-            "pad_driver": "3"
-          }
-        },
-        "sink_current": {
-          "unit": "mA",
-          "typ": 28,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "vol": {
-              "unit": "V",
-              "typ": 0.495
-            },
-            "pad_driver": "3"
-          }
-        }
-      }
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO2, GPIO2, TOUCH2, ADC1_CH1",
       "name": "IO2",
       "numbers": [
         "38"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO2, GPIO2, TOUCH2, ADC1_CH1"
+      "role": "bidirectional"
     },
     {
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "description": "RTC_GPIO20, GPIO20, U1CTS, ADC2_CH9, CLK_OUT1, USB_D+",
       "name": "IO20",
       "numbers": [
         "14"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO20, GPIO20, U1CTS, ADC2_CH9, CLK_OUT1, USB_D+",
-      "capability": {
-        "source_current": {
-          "unit": "mA",
-          "typ": 40,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "voh": {
-              "unit": "V",
-              "min": 2.64
-            },
-            "pad_driver": "3"
-          }
-        },
-        "sink_current": {
-          "unit": "mA",
-          "typ": 28,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "vol": {
-              "unit": "V",
-              "typ": 0.495
-            },
-            "pad_driver": "3"
-          }
-        }
-      }
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO21, GPIO21",
       "name": "IO21",
       "numbers": [
         "23"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO21, GPIO21"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select.",
       "name": "IO3",
       "numbers": [
         "15"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO3, GPIO3, TOUCH3, ADC1_CH2. Strapping pin: JTAG signal source select."
+      "role": "bidirectional"
     },
     {
+      "description": "SPIIO6, GPIO35, FSPID, SUBSPID. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants (R8, R16V). Default function of pins 28-30 is set by eFuse.",
       "name": "IO35",
       "numbers": [
         "28"
       ],
-      "role": "bidirectional",
-      "description": "SPIIO6, GPIO35, FSPID, SUBSPID. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants (R8, R16V). Default function of pins 28-30 is set by eFuse."
+      "role": "bidirectional"
     },
     {
+      "description": "SPIIO7, GPIO36, FSPICLK, SUBSPICLK. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants.",
       "name": "IO36",
       "numbers": [
         "29"
       ],
-      "role": "bidirectional",
-      "description": "SPIIO7, GPIO36, FSPICLK, SUBSPICLK. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants."
+      "role": "bidirectional"
     },
     {
+      "description": "SPIDQS, GPIO37, FSPIQ, SUBSPIQ. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants.",
       "name": "IO37",
       "numbers": [
         "30"
       ],
-      "role": "bidirectional",
-      "description": "SPIDQS, GPIO37, FSPIQ, SUBSPIQ. Available on this quad-PSRAM part; reserved on Octal SPI PSRAM variants."
+      "role": "bidirectional"
     },
     {
+      "description": "GPIO38, FSPIWP, SUBSPIWP",
       "name": "IO38",
       "numbers": [
         "31"
       ],
-      "role": "bidirectional",
-      "description": "GPIO38, FSPIWP, SUBSPIWP"
+      "role": "bidirectional"
     },
     {
+      "description": "MTCK, GPIO39, CLK_OUT3, SUBSPICS1",
       "name": "IO39",
       "numbers": [
         "32"
       ],
-      "role": "bidirectional",
-      "description": "MTCK, GPIO39, CLK_OUT3, SUBSPICS1"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO4, GPIO4, TOUCH4, ADC1_CH3",
       "name": "IO4",
       "numbers": [
         "4"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO4, GPIO4, TOUCH4, ADC1_CH3"
+      "role": "bidirectional"
     },
     {
+      "description": "MTDO, GPIO40, CLK_OUT2",
       "name": "IO40",
       "numbers": [
         "33"
       ],
-      "role": "bidirectional",
-      "description": "MTDO, GPIO40, CLK_OUT2"
+      "role": "bidirectional"
     },
     {
+      "description": "MTDI, GPIO41, CLK_OUT1",
       "name": "IO41",
       "numbers": [
         "34"
       ],
-      "role": "bidirectional",
-      "description": "MTDI, GPIO41, CLK_OUT1"
+      "role": "bidirectional"
     },
     {
+      "description": "MTMS, GPIO42",
       "name": "IO42",
       "numbers": [
         "35"
       ],
-      "role": "bidirectional",
-      "description": "MTMS, GPIO42"
+      "role": "bidirectional"
     },
     {
+      "description": "GPIO45. Strapping pin: VDD_SPI voltage select.",
       "name": "IO45",
       "numbers": [
         "26"
       ],
-      "role": "bidirectional",
-      "description": "GPIO45. Strapping pin: VDD_SPI voltage select."
+      "role": "bidirectional"
     },
     {
+      "description": "GPIO46. Strapping pin: ROM message printing control.",
       "name": "IO46",
       "numbers": [
         "16"
       ],
-      "role": "bidirectional",
-      "description": "GPIO46. Strapping pin: ROM message printing control."
+      "role": "bidirectional"
     },
     {
+      "description": "SPICLK_P_DIFF, GPIO47, SUBSPICLK_P_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
       "name": "IO47",
       "numbers": [
         "24"
       ],
-      "role": "bidirectional",
-      "description": "SPICLK_P_DIFF, GPIO47, SUBSPICLK_P_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it."
+      "role": "bidirectional"
     },
     {
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "description": "SPICLK_N_DIFF, GPIO48, SUBSPICLK_N_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
       "name": "IO48",
       "numbers": [
         "25"
       ],
-      "role": "bidirectional",
-      "description": "SPICLK_N_DIFF, GPIO48, SUBSPICLK_N_DIFF. Operates at 3.3 V on this part; on R16V modules VDD_SPI is 1.8 V and this pin follows it.",
-      "capability": {
-        "source_current": {
-          "unit": "mA",
-          "typ": 40,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "voh": {
-              "unit": "V",
-              "min": 2.64
-            },
-            "pad_driver": "3"
-          }
-        },
-        "sink_current": {
-          "unit": "mA",
-          "typ": 28,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "vol": {
-              "unit": "V",
-              "typ": 0.495
-            },
-            "pad_driver": "3"
-          }
-        }
-      }
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO5, GPIO5, TOUCH5, ADC1_CH4",
       "name": "IO5",
       "numbers": [
         "5"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO5, GPIO5, TOUCH5, ADC1_CH4"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO6, GPIO6, TOUCH6, ADC1_CH5",
       "name": "IO6",
       "numbers": [
         "6"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO6, GPIO6, TOUCH6, ADC1_CH5"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO7, GPIO7, TOUCH7, ADC1_CH6",
       "name": "IO7",
       "numbers": [
         "7"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO7, GPIO7, TOUCH7, ADC1_CH6"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO8, GPIO8, TOUCH8, ADC1_CH7, SUBSPICS1",
       "name": "IO8",
       "numbers": [
         "12"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO8, GPIO8, TOUCH8, ADC1_CH7, SUBSPICS1"
+      "role": "bidirectional"
     },
     {
+      "description": "RTC_GPIO9, GPIO9, TOUCH9, ADC1_CH8, FSPIHD, SUBSPIHD",
       "name": "IO9",
       "numbers": [
         "17"
       ],
-      "role": "bidirectional",
-      "description": "RTC_GPIO9, GPIO9, TOUCH9, ADC1_CH8, FSPIHD, SUBSPIHD"
+      "role": "bidirectional"
     },
     {
+      "description": "U0RXD, GPIO44, CLK_OUT2",
       "name": "RXD0",
       "numbers": [
         "36"
       ],
-      "role": "bidirectional",
-      "description": "U0RXD, GPIO44, CLK_OUT2"
+      "role": "bidirectional"
     },
     {
+      "capability": {
+        "sink_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "vol": {
+              "typ": 0.495,
+              "unit": "V"
+            }
+          },
+          "typ": 28,
+          "unit": "mA"
+        },
+        "source_current": {
+          "conditions": {
+            "pad_driver": "3",
+            "vdd": {
+              "typ": 3.3,
+              "unit": "V"
+            },
+            "voh": {
+              "min": 2.64,
+              "unit": "V"
+            }
+          },
+          "typ": 40,
+          "unit": "mA"
+        }
+      },
+      "description": "U0TXD, GPIO43, CLK_OUT1",
       "name": "TXD0",
       "numbers": [
         "37"
       ],
-      "role": "bidirectional",
-      "description": "U0TXD, GPIO43, CLK_OUT1",
-      "capability": {
-        "source_current": {
-          "unit": "mA",
-          "typ": 40,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "voh": {
-              "unit": "V",
-              "min": 2.64
-            },
-            "pad_driver": "3"
-          }
-        },
-        "sink_current": {
-          "unit": "mA",
-          "typ": 28,
-          "conditions": {
-            "vdd": {
-              "unit": "V",
-              "typ": 3.3
-            },
-            "vol": {
-              "unit": "V",
-              "typ": 0.495
-            },
-            "pad_driver": "3"
-          }
-        }
-      }
-    }
-  ],
-  "ratings": {
-    "abs_max": {
-      "storage_temperature": {
-        "unit": "degC",
-        "min": -40,
-        "max": 105
-      }
-    },
-    "recommended": {
-      "ambient_temperature": {
-        "unit": "degC",
-        "min": -40,
-        "max": 85,
-        "conditions": {
-          "part_number": "ESP32-S3-WROOM-1-N8R2 (quad-PSRAM); Octal SPI PSRAM variants R8/R16V are -40 to 65 C, and H4 is -40 to 105 C"
-        }
-      }
-    }
-  },
-  "modes": [
-    {
-      "id": "deep_sleep_rtc_mem_and_periph",
-      "description": "Deep-sleep with RTC memory and RTC peripherals powered up",
-      "kind": "sleep",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "uA",
-            "typ": 8
-          }
-        }
-      ]
-    },
-    {
-      "id": "light_sleep",
-      "description": "Light-sleep: VDD_SPI and Wi-Fi powered down, all GPIOs high-impedance. Includes the added consumption of this part's 2 MB quad-line PSRAM.",
-      "kind": "sleep",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "uA",
-            "typ": 280
-          }
-        }
-      ]
-    },
-    {
-      "id": "modem_sleep_240mhz_dualcore_128bit",
-      "description": "Modem-sleep, 240 MHz, dual core running 128-bit data access instructions, peripheral clocks enabled. Upper bound of the modem-sleep band.",
-      "kind": "active",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "cpu_frequency": {
-          "unit": "MHz",
-          "typ": 240
-        },
-        "peripheral_clocks": "enabled"
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "typ": 107.9
-          }
-        }
-      ]
-    },
-    {
-      "id": "modem_sleep_240mhz_waiti",
-      "description": "Modem-sleep, 240 MHz, both cores in WAITI (idle). Wi-Fi clock-gated.",
-      "kind": "idle",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "cpu_frequency": {
-          "unit": "MHz",
-          "typ": 240
-        },
-        "peripheral_clocks": "enabled"
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "typ": 47.6
-          }
-        }
-      ]
-    },
-    {
-      "id": "modem_sleep_240mhz_waiti_clocks_off",
-      "description": "Modem-sleep, 240 MHz, both cores in WAITI, all peripheral clocks disabled. Lower bound of the modem-sleep band.",
-      "kind": "idle",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "cpu_frequency": {
-          "unit": "MHz",
-          "typ": 240
-        },
-        "peripheral_clocks": "disabled"
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "typ": 32.9
-          }
-        }
-      ]
-    },
-    {
-      "id": "power_off_en_low",
-      "description": "Power off: EN held low. RTC domain unpowered.",
-      "kind": "sleep",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "uA",
-            "typ": 1
-          }
-        }
-      ]
-    },
-    {
-      "id": "wifi_rx_802_11bgn_ht20",
-      "description": "Wi-Fi receive, 802.11 b/g/n HT20, peripherals disabled and CPU idle",
-      "kind": "active",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "peak": 95
-          }
-        }
-      ]
-    },
-    {
-      "id": "wifi_tx_802_11b_1mbps",
-      "description": "Wi-Fi transmit, 802.11b 1 Mbps at 20.5 dBm. Highest-current mode of the part.",
-      "kind": "active",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "tx_power": {
-          "unit": "dBm",
-          "typ": 20.5
-        },
-        "duty_cycle": {
-          "unit": "1",
-          "typ": 1.0
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "peak": 355
-          }
-        }
-      ]
-    },
-    {
-      "id": "wifi_tx_802_11g_54mbps",
-      "description": "Wi-Fi transmit, 802.11g 54 Mbps at 18 dBm.",
-      "kind": "active",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "tx_power": {
-          "unit": "dBm",
-          "typ": 18
-        },
-        "duty_cycle": {
-          "unit": "1",
-          "typ": 1.0
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "peak": 297
-          }
-        }
-      ]
-    },
-    {
-      "id": "wifi_tx_802_11n_ht20_mcs7",
-      "description": "Wi-Fi transmit, 802.11n HT20 MCS7 at 17.5 dBm.",
-      "kind": "active",
-      "conditions": {
-        "vdd": {
-          "unit": "V",
-          "typ": 3.3
-        },
-        "ta": {
-          "unit": "degC",
-          "typ": 25
-        },
-        "tx_power": {
-          "unit": "dBm",
-          "typ": 17.5
-        },
-        "duty_cycle": {
-          "unit": "1",
-          "typ": 1.0
-        }
-      },
-      "draw": [
-        {
-          "pin": "3V3",
-          "current": {
-            "unit": "mA",
-            "peak": 286
-          }
-        }
-      ]
-    }
-  ],
-  "sources": [
-    {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "vendor": "espressif",
-      "url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
-      "doc_title": "ESP32-S3-WROOM-1 & ESP32-S3-WROOM-1U Datasheet",
-      "document_version": "v1.8",
-      "byte_sha256": "sha256:27d71971da07c280c6068d08c74720d1a25b8f20cf8494dc1765bdd28d40d435",
-      "content_hash": "sha256:090074464a1ded2bea73eb8f8717a232ee747e1466f9f9acd375d721279ccd70",
-      "identity_version": "chv1+reg2026.08.0",
-      "retrieved_at": "2026-08-15T05:40:00Z",
-      "state": "available",
-      "origin": "vendor-direct",
-      "license_class": "vendor-public"
+      "role": "bidirectional"
     }
   ],
   "provenance": {
     "": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "confidence": "datasheet-stated",
       "method": "manual",
-      "note": "Record default: every value is transcribed from the cited datasheet unless a more specific provenance entry overrides this one."
-    },
-    "/pins": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions); Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
-      "confidence": "datasheet-stated",
-      "method": "manual",
-      "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it."
+      "note": "Record default: every value is transcribed from the cited datasheet unless a more specific provenance entry overrides this one.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
     },
     "/modes/0": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-7 Current Consumption in Low-Power Modes, row 'RTC memory and RTC peripherals are powered up'",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-7 Current Consumption in Low-Power Modes, row 'RTC memory and RTC peripherals are powered up'",
       "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "deep_sleep_rtc_mem_and_periph"
     },
-    "/modes/2": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-6, 240 MHz 'Dual core running 128-bit data access instructions' row, Typ2 column",
-      "confidence": "datasheet-stated",
+    "/modes/1/draw/0/current": {
+      "confidence": "datasheet-derived",
+      "locator": "Table 6-7 Light-sleep row (240 uA) plus footnote 1 (add 40 uA for 2 MB 4-line PSRAM at 3.3 V)",
       "method": "manual",
+      "note": "240 uA + 40 uA = 280 uA. Derived by applying the datasheet's own PSRAM footnote to the base light-sleep figure, because this orderable part (N8R2) embeds 2 MB quad-line PSRAM. Neither number alone describes this part.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "target": "light_sleep"
+    },
+    "/modes/2": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-6, 240 MHz 'Dual core running 128-bit data access instructions' row, Typ2 column",
+      "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "modem_sleep_240mhz_dualcore_128bit"
     },
     "/modes/3": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-6 Current Consumption in Modem-sleep Mode, 240 MHz WAITI row, Typ2 column (peripheral clocks enabled)",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-6 Current Consumption in Modem-sleep Mode, 240 MHz WAITI row, Typ2 column (peripheral clocks enabled)",
       "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "modem_sleep_240mhz_waiti"
     },
     "/modes/4": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-6, 240 MHz WAITI row, Typ1 column (peripheral clocks disabled)",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-6, 240 MHz WAITI row, Typ1 column (peripheral clocks disabled)",
       "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "modem_sleep_240mhz_waiti_clocks_off"
     },
     "/modes/5": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-7 \"Current Consumption in Low-Power Modes\", power-off (EN low) row.",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-7 \"Current Consumption in Low-Power Modes\", power-off (EN low) row.",
       "method": "manual",
       "note": "Table 6-7's column is headed 'Typ (uA)', so this is recorded as typ. An earlier revision carried the RF-mode note here by copy, which cited Table 6-4 and called the value a peak; power-off is neither.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "power_off_en_low"
     },
     "/modes/6": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-4 Current Consumption for Wi-Fi (2.4 GHz) in Active Mode, RX 802.11b/g/n HT20 row",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-4 Current Consumption for Wi-Fi (2.4 GHz) in Active Mode, RX 802.11b/g/n HT20 row",
       "method": "manual",
       "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "wifi_rx_802_11bgn_ht20"
     },
     "/modes/7": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-4, TX 802.11b 1 Mbps @20.5 dBm row; TX current is rated at 100% duty cycle",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-4, TX 802.11b 1 Mbps @20.5 dBm row; TX current is rated at 100% duty cycle",
       "method": "manual",
       "note": "Recorded as peak for the same reason as the RX mode. A current budget that needs a guaranteed bound must add its own declared guardband on top of this figure.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "wifi_tx_802_11b_1mbps"
     },
     "/modes/8": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11g 54 Mbps 18 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11g 54 Mbps 18 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
       "method": "manual",
       "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "wifi_tx_802_11g_54mbps"
     },
     "/modes/9": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11n HT20 MCS7 17.5 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
       "confidence": "datasheet-stated",
+      "locator": "Table 6-4 \"Current Consumption for Wi-Fi (2.4 GHz) in Active Mode\", 802.11n HT20 MCS7 17.5 dBm row. Table 6-4 is a \"Peak (mA)\" column, so this is recorded as peak, not max.",
       "method": "manual",
       "note": "Table 6-4 is a 'Peak (mA)' column, so this is recorded as peak, not max. Espressif publishes no guaranteed maximum supply current for RF modes.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
       "target": "wifi_tx_802_11n_ht20_mcs7"
     },
-    "/ratings/abs_max": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-1 Absolute Maximum Ratings",
+    "/pins": {
       "confidence": "datasheet-stated",
-      "method": "manual"
+      "locator": "Table 3-1 Pin Definitions (pin names, numbers, functions); Table 6-1 Absolute Maximum Ratings; Table 6-2 Recommended Operating Conditions; Table 6-3 DC Characteristics (thresholds, drive, leakage, pull resistors)",
+      "method": "manual",
+      "note": "The locator names every section the values under /pins are read from. It previously named only the pin-function table and one electrical section, while abs-max and recommended-operating values under the same pointer come from other tables the record itself cites for sibling values -- so a reviewer following it landed in a table that does not contain the number. The first attempt at this spliced the new sections in ahead of Table 3-1's attribution clause and overwrote Table 3-1 with a second copy of Table 6-3, so the record asserted that pin names and numbers come from the DC characteristics table -- the same misdirection, produced by the fix for it.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
+    },
+    "/ratings/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 6-1 Absolute Maximum Ratings",
+      "method": "manual",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
     },
     "/ratings/recommended": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 1-1 ESP32-S3-WROOM-1 Series Comparison, ESP32-S3-WROOM-1-N8R2 row (Ambient Temp. column), and the prose above it",
       "confidence": "datasheet-stated",
+      "locator": "Table 1-1 ESP32-S3-WROOM-1 Series Comparison, ESP32-S3-WROOM-1-N8R2 row (Ambient Temp. column), and the prose above it",
       "method": "manual",
-      "note": "Taken from the PART-NUMBER table, not from Table 6-2. Table 6-2 lists the 65/85/105 C grades generically without saying which orderable part is which; reading a grade from there instead of Table 1-1 is how this record previously carried 65 C, which is the Octal-PSRAM band and wrong for N8R2."
-    },
-    "/modes/1/draw/0/current": {
-      "source_id": "esp32-s3-wroom-1-ds-v1.8",
-      "locator": "Table 6-7 Light-sleep row (240 uA) plus footnote 1 (add 40 uA for 2 MB 4-line PSRAM at 3.3 V)",
-      "confidence": "datasheet-derived",
-      "method": "manual",
-      "note": "240 uA + 40 uA = 280 uA. Derived by applying the datasheet's own PSRAM footnote to the base light-sleep figure, because this orderable part (N8R2) embeds 2 MB quad-line PSRAM. Neither number alone describes this part.",
-      "target": "light_sleep"
+      "note": "Taken from the PART-NUMBER table, not from Table 6-2. Table 6-2 lists the 65/85/105 C grades generically without saying which orderable part is which; reading a grade from there instead of Table 1-1 is how this record previously carried 65 C, which is the Octal-PSRAM band and wrong for N8R2.",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8"
     }
   },
-  "license_class": "vendor-public",
-  "notes": "Facts transcribed from datasheet v1.8; no value here is inferred from the module's silkscreen, vendor marketing pages, or distributor listings.\n\nKNOWN v0 SCHEMA LIMITATION exercised by this record: the datasheet states GPIO DC characteristics (VIH/VIL/VOH/VOL, IOH 40 mA typ, IOL 28 mA typ, leakage, pull resistors) once, for the GPIO pins as a CLASS. This schema has no pin-class or inheritance mechanism, so those values must be repeated on every pin. Rather than duplicate a 12-line block 36 times, this record populates capability and characteristics on the pins that benchmark (c) actually drives or loads (IO0, IO19, IO20, IO48, TXD0) and on the strapping pins it uses, and leaves the remainder with identity and role only. A consumer must therefore NOT read the absence of a capability block as 'this pin has no drive capability'. Adding a pin-class mechanism is the leading candidate for the first schema_version bump; see the freeze memo.\n\nNO PER-PIN ABSOLUTE MAXIMUM IS RECORDED FOR THE IO PINS. Table 6-1 Absolute Maximum Ratings has exactly two rows, VDD33 and storage temperature; Espressif publishes no absolute-maximum voltage window for individual GPIOs. An earlier draft of this record carried -0.3 to 3.6 V on nine of them, inferred from the supply rating and labelled datasheet-stated. That is the exact failure the confidence vocabulary exists to prevent, so the field is absent instead. The recommended-operation thresholds (VIH/VIL, referenced to the supply) ARE recorded in each pin's characteristics and are what a domain check should use.\n\nPin type legend from Table 3-1: P = power supply, I = input, O = output, T = high impedance. The I/O/T GPIOs are recorded with role 'bidirectional' rather than 'tri_state' because they are genuinely bidirectional; 'tri_state' in the T2 lattice denotes an output that can float, which is a narrower claim.\n\nIO35/IO36/IO37 are available on this orderable part. Datasheet footnote b reserves them only on modules embedding Octal SPI PSRAM (ESP32-S3R8, ESP32-S3R16V); N8R2 carries quad-line PSRAM. IO47/IO48 run at 3.3 V here for the same reason footnote c does not apply.\n\nNot recorded: RF characteristics (Section 7), flash and PSRAM timing (Tables 6-8, 6-9), and Bluetooth LE current (Table 6-5). None are consumed by the v1 static tier, and transcribing data no checker reads would create maintenance surface with no verification behind it."
+  "ratings": {
+    "abs_max": {
+      "storage_temperature": {
+        "max": 105,
+        "min": -40,
+        "unit": "degC"
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "conditions": {
+          "part_number": "ESP32-S3-WROOM-1-N8R2 (quad-PSRAM); Octal SPI PSRAM variants R8/R16V are -40 to 65 C, and H4 is -40 to 105 C"
+        },
+        "max": 85,
+        "min": -40,
+        "unit": "degC"
+      }
+    }
+  },
+  "schema_version": 0,
+  "sources": [
+    {
+      "byte_sha256": "sha256:27d71971da07c280c6068d08c74720d1a25b8f20cf8494dc1765bdd28d40d435",
+      "content_hash": "sha256:090074464a1ded2bea73eb8f8717a232ee747e1466f9f9acd375d721279ccd70",
+      "doc_title": "ESP32-S3-WROOM-1 & ESP32-S3-WROOM-1U Datasheet",
+      "document_version": "v1.8",
+      "identity_version": "chv1+reg2026.08.0",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-08-15T05:40:00Z",
+      "source_id": "esp32-s3-wroom-1-ds-v1.8",
+      "state": "available",
+      "url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
+      "vendor": "espressif"
+    }
+  ],
+  "stability": "unstable"
 }
