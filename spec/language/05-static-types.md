@@ -19,7 +19,7 @@ that checkers landing in parallel edit disjoint text:
 | [2 — Values and dimensions](05-static-types/02-values.md) | T3/T4 (AMB-53) | reserved |
 | [3 — Interfaces](05-static-types/03-interfaces.md) | T1 (AMB-51) | normative |
 | [4 — Pin roles](05-static-types/04-pin-roles.md) | T2, L9b (AMB-52) | reserved |
-| [5 — Ground architecture](05-static-types/05-ground.md) | GA-1..GA-17 (AMB-54) | reserved |
+| [5 — Ground architecture](05-static-types/05-ground.md) | GA-1..GA-17 (AMB-54) | normative |
 | [6 — Voltage domains](05-static-types/06-domains.md) | T5 (AMB-54) | reserved |
 | [7 — Budgets](05-static-types/07-budgets.md) | T10 (AMB-55) | reserved |
 | [8 — Waivers and static assertions](05-static-types/08-waivers-and-static-assertions.md) | T6, V1 (AMB-56) | reserved |
