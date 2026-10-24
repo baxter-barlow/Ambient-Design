@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "stability": "unstable",
+  "part_id": "acme/widget-1",
+  "manufacturer": "Acme Components",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive",
+      "strap": {
+        "function": "Mode select",
+        "default": "pull_high"
+      }
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "acme-ds",
+      "vendor": "acme",
+      "url": "https://acme.example/ds.pdf",
+      "state": "source-unreachable",
+      "origin": "vendor-direct",
+      "license_class": "vendor-public"
+    }
+  ],
+  "provenance": {
+    "": {
+      "source_id": "acme-ds",
+      "confidence": "datasheet-stated",
+      "method": "manual"
+    }
+  },
+  "license_class": "vendor-public",
+  "x_negative_control": "REJECTED at /pins/0/strap/default: a strap default is pull_up, pull_down or floating. It is what the pin latches with nothing connected, and a check that reads it to decide which configuration a board boots into needs one of three states it can reason about, not a free-text guess at one."
+}
