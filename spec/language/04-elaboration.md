@@ -96,9 +96,14 @@ file that holds a `rhoform.lock` — the workspace root, above every
 package in it, so sibling path dependencies compile without an explicit
 root — else the nearest that holds a `rhoform.toml`, else the entry
 file's directory. Each of those names matches exactly, letter case
-included. A `rhoform.lock` decides the root by its presence; this
-version does not read it (the lockfile is R55,
-[08](08-packages.md#deviations-recorded)). These paths name the source
+included. The ancestors searched end at the version-control checkout
+the entry file is in — the nearest of them, from the entry's own
+directory up, holding a `.git`, `.hg`, `.jj` or `.svn` entry — so a
+marker outside the checkout never decides the root; an entry in no
+checkout is searched to the file system's root
+([08](08-packages.md#the-compilation)). The `rhoform.lock` at the
+compile root is the compilation's lockfile, read and checked as
+[08](08-packages.md#the-lockfile) states. These paths name the source
 map's `files`, feed `source_hash`, derive the definition names of files
 no manifest governs (below) and are the `file` of every diagnostic span,
 so a compilation moved to another directory or machine elaborates to the

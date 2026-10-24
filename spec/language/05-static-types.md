@@ -53,8 +53,11 @@ context holding everything else they may read: the compile root's
 `rhoform.lock` (that spelling exactly) and the part records the picks the
 design uses name ([9](05-static-types/09-part-data.md)). Nothing else is
 read — no other file, no network, no environment, no clock — and nothing
-is written. Until the lockfile lands (AMB-59) the context holds the
-compile root alone, so the stage reads no file at all.
+is written. The context holds the compile root and the lockfile the
+package layer read and checked there, if there is one; with none, no
+part record is read.
+[9.1](05-static-types/09-part-data.md#91-what-the-pass-reads) states
+the read set exactly, the toolchain's own part-data schemas included.
 
 **The reading of "on the IR".** The ground-architecture semantics
 (section 0) and its checker notes (section 1) place the static tier "on

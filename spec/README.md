@@ -57,7 +57,7 @@ in this spec is either machine-reconciled or absent.
 | [05 — Static types and domains](language/05-static-types.md) | normative, v0.1 for section 1, the checking model (M2); sections 2–9 reserved, each landing with its checker (T5 transfer semantics with R22) |
 | [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes; param values and code ranges since M2) |
 | [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.2 (syntax versions 0.1 and 0.2; I1, AC6; the canonical form R16's formatter writes) |
-| [08 — Packages and imports](language/08-packages.md) | normative, v0.2 (R14b: the manifest, language versions and imports of the R14a package specification; M1 deviations recorded: no lockfile, path dependencies only) |
+| [08 — Packages and imports](language/08-packages.md) | normative, v0.2 (R14b: the manifest, language versions and imports of the R14a package specification; R55: lockfile v0, read and checked; deviations recorded: the lockfile optional and with no writer, staleness per input file, path dependencies only) |
 
 The milestone plan for growth is the roadmap's: each milestone that
 changes the language lands its spec section and its conformance cases in
