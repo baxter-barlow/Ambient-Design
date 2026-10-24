@@ -2103,14 +2103,24 @@ class SourceFacts03Test(unittest.TestCase):
                                 in vin.attribute_sites["ground_kind"]),
                          ["power", "signal"])
 
-    def test_the_check_stage_reads_none_of_them(self):
-        """Inert until their owners land: compiling with every 0.3 fact
-        and with none gives the same check-stage codes."""
+    def test_only_implemented_passes_read_them(self):
+        """Elaborated, and inert until their owners land: compiling with
+        every 0.3 fact and with none gives the same check-stage codes,
+        apart from the codes of an implemented pass that reads them. The
+        ground pass does (L2c): its GA-2 meet reads `ground_kind` sites,
+        which in RULED disagree on VIN."""
+        from rhoform import check, codes as registry
         from rhoform import compile as pipeline
         import tempfile
         from pathlib import Path
 
         from rhoform.diagnostics import Diagnostics
+
+        # The owners of the passes that read 0.3 facts so far. A stub never
+        # may: each one's owner must be an implemented pass's.
+        readers = {"ground"}
+        self.assertLessEqual(readers, {step.OWNER for step in check.PASSES
+                                       if step.IMPLEMENTED})
 
         bare = RULED
         for line in ("    ground gnd\n", "    regulate out from in = vout\n",
@@ -2125,17 +2135,30 @@ class SourceFacts03Test(unittest.TestCase):
             '(ground_kind = "signal")', "").replace(
             '(ground_kind = "power")', "")
 
-        def codes(source):
+        def compiled(source):
+            """(the check-stage codes of passes that read no 0.3 fact, the
+            design the stage was given)."""
             with tempfile.TemporaryDirectory() as tmp:
                 (Path(tmp) / "rail.rhoform").write_text(source)
                 sink = Diagnostics()
-                pipeline.compile("rail.rhoform", Path(tmp), sink=sink)
-                return sorted((json.loads(line)["code"],
-                               json.loads(line)["entity"])
-                              for line in sink.render().splitlines())
+                design = pipeline.compile("rail.rhoform", Path(tmp),
+                                          sink=sink).design
+                found = [json.loads(line)
+                         for line in sink.render().splitlines()]
+                return sorted((d["code"], d["entity"]) for d in found
+                              if registry.owner_of(d["code"])
+                              not in readers), design
 
-        self.assertEqual(codes(RULED), codes(bare))
-        self.assertTrue(codes(RULED))
+        codes, design = compiled(RULED)
+        bare_codes, bare_design = compiled(bare)
+        # The stage was given the facts, and the bare design has none.
+        for each, expected in ((design, True), (bare_design, False)):
+            self.assertEqual(bool(each.annotations), expected)
+            self.assertEqual(any(i.rules for i in each.instances), expected)
+            self.assertEqual(any("ground_kind" in n.attribute_sites
+                                 for n in each.nets), expected)
+        self.assertEqual(codes, bare_codes)
+        self.assertTrue(codes)
 
     def test_a_duplicate_side_is_rho2007(self):
         from rhoform.elaborate import elaborate_source

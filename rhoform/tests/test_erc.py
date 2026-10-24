@@ -545,8 +545,10 @@ module Board:
         found, _rows, _a, _r = self.run_erc(text)
         # Two power outputs on GND, an input and an open drain on a ground
         # net: fine. Two outputs on Y: contention. The isolated input
-        # floats.
-        self.assertEqual(sorted((d["code"], d["entity"]) for d in found),
+        # floats. Only ERC's codes: x straddles GND and GND2, which nothing
+        # relates, and that is the ground pass's RHO4010.
+        self.assertEqual(sorted((d["code"], d["entity"]) for d in found
+                                if d["code"].startswith("RHO31")),
                          [("RHO3101", "Y"), ("RHO3107", "N_z.a")])
         output_on_ground = BOARD + """\
     net GND2(ground_domain = "gnd"):
@@ -557,7 +559,8 @@ module Board:
     isolated z.y
     isolated z.od
 """
-        self.assertEqual(self.codes(output_on_ground),
+        self.assertEqual([c for c in self.codes(output_on_ground)
+                          if c[0].startswith("RHO31")],
                          [("RHO3101", "GND2"), ("RHO3106", "GND2"),
                           ("RHO3107", "N_x.a"), ("RHO3107", "N_z.a")])
 
