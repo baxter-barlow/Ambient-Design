@@ -10,7 +10,9 @@ rules rather than two that drift:
     `int`, so `0.3` is `Decimal("0.3")` and converts to `Fraction(3, 10)`
     with nothing lost. A float would make `0.1 A + 0.2 A <= 0.3 A` false,
     which is exactly the comparison a budget makes at its boundary.
-    Duplicate keys, NaN and Infinity are refused rather than resolved.
+    Duplicate keys, NaN and Infinity are refused rather than resolved, and
+    so are a lone surrogate escape and nesting past MAX_NESTING: whatever
+    a file holds, its bytes come back as a record or a PartDataError.
   - IDENTITY. A record's revision is the sha256 of its file's exact bytes.
     That is only a content identity if the bytes are a function of the
     content, so a record must be in CANONICAL LAYOUT (`layout_problems`):
@@ -157,15 +159,65 @@ def _text(data: bytes) -> str:
     return data.decode("utf-8")
 
 
-def parse(data: bytes):
-    """The record in `data`, with exact numbers. Raises PartDataError."""
+# Deeper than any record a schema version describes (version 1 nests nine
+# levels at most) and shallow enough for every recursive walk here. The
+# decoder alone is no bound: it accepts nesting far past Python's stack, and
+# where the layout, the schema or the lint then overflowed would depend on
+# the caller's stack depth, so the same bytes could be refused for different
+# reasons from different call sites.
+MAX_NESTING = 32
+
+
+def _unreadable(node):
+    """Why a decoded document is not a record's JSON, or None. Walked with
+    a stack, not recursion, because nothing has bounded its depth yet."""
+    stack = [(node, 0)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, str):
+            # The decoder joins a valid surrogate pair into one character, so
+            # anything left in this range came from a lone `\ud800`-style
+            # escape, which no UTF-8 byte sequence can spell back.
+            if any(0xD800 <= ord(ch) <= 0xDFFF for ch in item):
+                return ("a string in it holds a lone surrogate escape, which "
+                        "UTF-8 cannot carry")
+        elif isinstance(item, (dict, list)):
+            if depth == MAX_NESTING:
+                return f"it nests more than {MAX_NESTING} levels deep"
+            children = [*item, *item.values()] if isinstance(item, dict) \
+                else item
+            stack.extend((child, depth + 1) for child in children)
+    return None
+
+
+def _decode(data: bytes, parse_float, parse_int):
+    """One JSON document from `data`, or PartDataError with the reason.
+    Refused: bad UTF-8, a duplicate key, NaN or Infinity, a lone surrogate,
+    and nesting past MAX_NESTING. Each is a `json` problem, never an
+    exception the caller has not been told about."""
     try:
-        return json.loads(_text(data), parse_float=Decimal, parse_int=int,
-                          parse_constant=_refuse_constant,
+        node = json.loads(_text(data), parse_float=parse_float,
+                          parse_int=parse_int, parse_constant=_refuse_constant,
                           object_pairs_hook=_unique_pairs)
+        reason = _unreadable(node)
+        if reason is not None:
+            raise ValueError(reason)
+    except RecursionError:
+        # The decoder's own limit, which some interpreters reach first. The
+        # message is _unreadable's, so the reason does not depend on which
+        # of the two noticed.
+        raise PartDataError("<bytes>", [Problem(
+            "json", "", f"it nests more than {MAX_NESTING} levels deep")]) \
+            from None
     except (UnicodeDecodeError, ValueError) as exc:
         raise PartDataError("<bytes>", [Problem("json", "", str(exc))]) \
             from None
+    return node
+
+
+def parse(data: bytes):
+    """The record in `data`, with exact numbers. Raises PartDataError."""
+    return _decode(data, Decimal, int)
 
 
 def revision(data: bytes) -> str:
@@ -202,14 +254,7 @@ def _layout(node, depth=0) -> str:
 
 def canonical_layout(data: bytes) -> bytes:
     """The canonical bytes of the record in `data`. Raises PartDataError."""
-    try:
-        node = json.loads(_text(data), parse_float=_Number, parse_int=_Number,
-                          parse_constant=_refuse_constant,
-                          object_pairs_hook=_unique_pairs)
-    except (UnicodeDecodeError, ValueError) as exc:
-        raise PartDataError("<bytes>", [Problem("json", "", str(exc))]) \
-            from None
-    return (_layout(node) + "\n").encode("utf-8")
+    return (_layout(_decode(data, _Number, _Number)) + "\n").encode("utf-8")
 
 
 def layout_problems(data: bytes) -> list:

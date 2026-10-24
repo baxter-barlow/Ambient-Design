@@ -109,6 +109,49 @@ class ReadingTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             partdata.parse('{"a": 1}')
 
+    def test_lone_surrogates_and_deep_nesting_are_json_problems(self):
+        # Each of these escaped every reader as a bare exception: a lone
+        # surrogate decodes and then cannot be encoded back, and nesting
+        # the decoder accepts overflowed the layout's recursion.
+        limit = partdata.MAX_NESTING
+        for data in (b'{"a": "\\ud800"}\n', b'{"a": ["\\udfff"]}\n',
+                     b'{"\\ud800": 1}\n', b'"\\ud800"\n',
+                     b"[" * 100000 + b"]" * 100000,
+                     b'{"a": ' * 100000 + b"1" + b"}" * 100000,
+                     b"[" * (limit + 1) + b"]" * (limit + 1)):
+            for reader in (partdata.parse, partdata.canonical_layout):
+                with self.subTest(data=data[:24], reader=reader.__name__):
+                    with self.assertRaises(partdata.PartDataError) as caught:
+                        reader(data)
+                    self.assertEqual(
+                        [p.check for p in caught.exception.problems], ["json"])
+            with self.subTest(data=data[:24], reader="check"):
+                doc, problems, _ = partdata.check(data)
+                self.assertIsNone(doc)
+                self.assertEqual([p.check for p in problems], ["json"])
+            with self.subTest(data=data[:24], reader="load"), \
+                    tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "x.part.json"
+                path.write_bytes(data)
+                with self.assertRaises(partdata.PartDataError):
+                    partdata.load(path)
+
+    def test_the_nesting_limit_admits_its_own_depth_and_a_surrogate_pair(self):
+        want = []
+        for _level in range(partdata.MAX_NESTING - 1):
+            want = [want]
+        data = b"[" * partdata.MAX_NESTING + b"]" * partdata.MAX_NESTING
+        self.assertEqual(partdata.parse(data), want)
+        self.assertEqual(partdata.canonical_layout(data).count(b"["),
+                         partdata.MAX_NESTING)
+        self.assertEqual(partdata.parse(b'{"a": "\\ud83d\\ude00"}')["a"],
+                         "\U0001f600")
+        # Room to spare: no record of any version nests near the limit.
+        for path in sorted(STORE.glob("*/*.part.json")) + \
+                sorted(EXAMPLES.glob("**/*.part.json")):
+            with self.subTest(record=path.name):
+                partdata.parse(path.read_bytes())
+
 
 class IdentityTest(unittest.TestCase):
     def test_revision_is_the_sha256_of_the_exact_bytes(self):
