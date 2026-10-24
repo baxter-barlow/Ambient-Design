@@ -1,0 +1,42 @@
+#pragma rhoform-syntax 0.2
+
+# Two timer inputs on a node set only by a resistor and a capacitor (the
+# 555 threshold-and-trigger shape): passive pins drive an input, so the
+# node is driven though nothing on it is an output.
+component Timer:
+    pin gnd power_in
+    pin out output
+    pin thr input
+    pin trig input
+    pin vcc power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    c_t = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    led = new rhoform.lib.semiconductor.Led
+    r_led = new rhoform.lib.passive.Resistor
+    r_t = new rhoform.lib.passive.Resistor
+    t = new Timer
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        c_t.b
+        j.neg
+        led.k
+        t.gnd
+    net N_LED:
+        led.a
+        r_led.b
+    net N_TH:
+        c_t.a
+        r_t.b
+        t.thr
+        t.trig
+    net OUT:
+        r_led.a
+        t.out
+    net VCC:
+        c_bulk.a
+        j.pos
+        r_t.a
+        t.vcc

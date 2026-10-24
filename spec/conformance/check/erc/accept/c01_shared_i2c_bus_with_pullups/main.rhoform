@@ -1,0 +1,50 @@
+#pragma rhoform-syntax 0.2
+
+# Two open-drain sensors and a bidirectional MCU pin share SDA and SCL,
+# each line pulled up to the rail. Open drains pull low, the resistors
+# pull high, and no pair contends (open drain with open drain, and with
+# bidirectional, is ok): the stream is empty.
+component Mcu:
+    pin gnd power_in
+    pin scl bidirectional
+    pin sda bidirectional
+    pin vdd power_in
+
+component Sensor:
+    pin gnd power_in
+    pin scl open_drain
+    pin sda open_drain
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_scl = new rhoform.lib.passive.Resistor
+    r_sda = new rhoform.lib.passive.Resistor
+    s1 = new Sensor
+    s2 = new Sensor
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s1.gnd
+        s2.gnd
+        u.gnd
+    net SCL:
+        r_scl.b
+        s1.scl
+        s2.scl
+        u.scl
+    net SDA:
+        r_sda.b
+        s1.sda
+        s2.sda
+        u.sda
+    net VCC:
+        c_bulk.a
+        j.pos
+        r_scl.a
+        r_sda.a
+        s1.vdd
+        s2.vdd
+        u.vdd

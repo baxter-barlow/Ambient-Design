@@ -1,0 +1,22 @@
+#pragma rhoform-syntax 0.2
+
+# A pin whose role is nc appears in no net: it must not be connected
+# (RHO2024), so leaving it out is no unconnected pin.
+component Chip:
+    pin gnd power_in
+    pin nc1 nc
+    pin nc2 nc
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    u = new Chip
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        u.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        u.vdd

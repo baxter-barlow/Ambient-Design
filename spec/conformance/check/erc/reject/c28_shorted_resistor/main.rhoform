@@ -1,0 +1,35 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0036's double assignment: both pins of r1 land on one net, which
+# shorts the resistor out (RHO3109). Nothing else about the net is wrong.
+component Chip:
+    pin gnd power_in
+    pin out output
+    pin vdd power_in
+
+component Sink:
+    pin a input
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r1 = new rhoform.lib.passive.Resistor
+    s = new Sink
+    u = new Chip
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net SIG:
+        r1.a
+        r1.b
+        s.a
+        u.out
+    net VCC:
+        c_bulk.a
+        j.pos
+        s.vdd
+        u.vdd

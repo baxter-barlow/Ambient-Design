@@ -1,0 +1,23 @@
+#pragma rhoform-syntax 0.2
+
+# A push-pull output tied straight to ground: a ground-typed net carries
+# the reference, and an output driving high shorts against it (RHO3101),
+# though it is the only pin on the net that drives.
+component Mcu:
+    pin gnd power_in
+    pin spare output
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        u.gnd
+        u.spare
+    net VCC:
+        c_bulk.a
+        j.pos
+        u.vdd

@@ -1,0 +1,41 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0046's typo: the sensor's reset is meant to be on RESET, but its
+# net block says RSET, which makes a net of one pin (RHO3106) and leaves
+# the input on it undriven (RHO3103).
+component Mcu:
+    pin gnd power_in
+    pin nrst output
+    pin vdd power_in
+
+component Sensor:
+    pin gnd power_in
+    pin nrst input
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    led = new rhoform.lib.semiconductor.Led
+    r_led = new rhoform.lib.passive.Resistor
+    s = new Sensor
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        led.k
+        s.gnd
+        u.gnd
+    net N_LED:
+        led.a
+        r_led.b
+    net RESET:
+        r_led.a
+        u.nrst
+    net RSET:
+        s.nrst
+    net VCC:
+        c_bulk.a
+        j.pos
+        s.vdd
+        u.vdd

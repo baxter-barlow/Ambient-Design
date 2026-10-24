@@ -67,7 +67,8 @@ MANIFEST = ('[package]\nname = "acme/app"\nversion = "0.1.0"\n'
 P2 = "#pragma rhoform-syntax 0.2\n"
 LIBRARY = P2 + "\ncomponent Led:\n    pin a passive\n    pin k passive\n"
 IMPORTER = (P2 + '\nimport Led from "./lib"\n\nmodule {name}:\n'
-            "    d = new Led\n    d.a ~ d.k\n")
+            "    port a passive\n    port k passive\n    d = new Led\n"
+            "    a ~ d.a\n    k ~ d.k\n")
 STATIC_ASSERTION = (P + "\nmodule M:\n    port vin power_in\n"
                     "    net VIN:\n        vin\n"
                     "    assert vin_ok static operating_point(VIN) "
@@ -897,9 +898,9 @@ class HermeticTest(_Tmp):
         # library module cannot touch this design's source_hash.
         real = os.path.realpath
         self.write("divider.rhoform", P + "\nmodule Divider:\n"
-                   "    port top passive\n"
+                   "    port bottom passive\n    port top passive\n"
                    "    r1 = new rhoform.lib.passive.Resistor\n"
-                   "    top ~ r1.a\n")
+                   "    top ~ r1.a\n    bottom ~ r1.b\n")
         opened, _python = self._audited_check(["divider.rhoform"])
         library = real(ROOT / "rhoform" / "lib")
         self.assertEqual(
@@ -917,8 +918,9 @@ class HermeticTest(_Tmp):
         real = os.path.realpath
         self.write("rhoform.toml", MANIFEST.replace("^0.1.0", "^0.2.0"))
         self.write("src/main.rhoform", P2 + '\nimport Divider from '
-                   '"./divider"\n\nmodule Main:\n    d = new Divider\n'
-                   "    d.top ~ d.mid\n")
+                   '"./divider"\n\nmodule Main:\n    port mid passive\n'
+                   "    port top passive\n    d = new Divider\n"
+                   "    top ~ d.top\n    mid ~ d.mid\n")
         self.write("src/divider.rhoform", P2 + "\nmodule Divider:\n"
                    "    port top passive\n    port mid passive\n"
                    "    r1 = new rhoform.lib.passive.Resistor\n"
@@ -944,8 +946,9 @@ class HermeticTest(_Tmp):
                    '= { version = "^1.0.0", path = "../parts" }\n')
         self.write("ws/app/main.rhoform", P2 + '\nimport Led from '
                    '"acme/parts/leds"\nimport Spare from "./spare"\n\n'
-                   "module Main:\n    d = new Led\n    s = new Spare\n"
-                   "    d.a ~ d.k\n    isolated s.p\n")
+                   "module Main:\n    port a passive\n    port k passive\n"
+                   "    d = new Led\n    s = new Spare\n"
+                   "    a ~ d.a\n    k ~ d.k\n    isolated s.p\n")
         self.write("ws/app/spare.rhoform", P2 + "\ncomponent Spare:\n"
                    "    pin p passive\n")
         self.write("ws/app/sibling.rhoform", "not read")

@@ -1,0 +1,27 @@
+#pragma rhoform-syntax 0.2
+
+# The parent never connects the indicator's control port, whose inside
+# reaches one resistor pin: a net of one pin (RHO3106), whose secondary
+# span points at the instance whose port was left open.
+module Indicator:
+    port ctl passive
+    port gnd passive
+    led = new rhoform.lib.semiconductor.Led
+    r = new rhoform.lib.passive.Resistor
+    net N_LED:
+        led.a
+        r.b
+    ctl ~ r.a
+    gnd ~ led.k
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    ind = new Indicator
+    j = new rhoform.lib.connector.BatteryConnector9V
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        ind.gnd
+        j.neg
+    net VCC:
+        c_bulk.a
+        j.pos

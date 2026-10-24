@@ -1,0 +1,55 @@
+#pragma rhoform-syntax 0.2
+
+# Two tri-state buffers share a bus that two inputs read, each buffer
+# enabled by an output of the controller: tri-state with tri-state, and
+# with an input, is ok, and the buffers drive the inputs.
+component Buffer:
+    pin gnd power_in
+    pin oe input
+    pin vcc power_in
+    pin y tri_state
+
+component Controller:
+    pin d input
+    pin gnd power_in
+    pin oe1 output
+    pin oe2 output
+    pin vcc power_in
+
+component Receiver:
+    pin a input
+    pin gnd power_in
+    pin vcc power_in
+
+module Board:
+    b1 = new Buffer
+    b2 = new Buffer
+    c_bulk = new rhoform.lib.passive.Capacitor
+    ctl = new Controller
+    j = new rhoform.lib.connector.BatteryConnector9V
+    rx = new Receiver
+    net BUS:
+        b1.y
+        b2.y
+        ctl.d
+        rx.a
+    net GND(ground_domain = "gnd"):
+        b1.gnd
+        b2.gnd
+        c_bulk.b
+        ctl.gnd
+        j.neg
+        rx.gnd
+    net OE1:
+        b1.oe
+        ctl.oe1
+    net OE2:
+        b2.oe
+        ctl.oe2
+    net VCC:
+        b1.vcc
+        b2.vcc
+        c_bulk.a
+        ctl.vcc
+        j.pos
+        rx.vcc

@@ -1,0 +1,44 @@
+#pragma rhoform-syntax 0.2
+
+# Three open-collector fault outputs wired together, one pull-up and one
+# input reading the line: open collectors never contend with each other,
+# and the resistor both pulls the line high and drives the input.
+component Monitor:
+    pin flt open_collector
+    pin gnd power_in
+    pin vcc power_in
+
+component Logic:
+    pin a input
+    pin gnd power_in
+    pin vcc power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    g = new Logic
+    j = new rhoform.lib.connector.BatteryConnector9V
+    m1 = new Monitor
+    m2 = new Monitor
+    m3 = new Monitor
+    r_pu = new rhoform.lib.passive.Resistor
+    net FAULT:
+        g.a
+        m1.flt
+        m2.flt
+        m3.flt
+        r_pu.b
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        g.gnd
+        j.neg
+        m1.gnd
+        m2.gnd
+        m3.gnd
+    net VCC:
+        c_bulk.a
+        g.vcc
+        j.pos
+        m1.vcc
+        m2.vcc
+        m3.vcc
+        r_pu.a

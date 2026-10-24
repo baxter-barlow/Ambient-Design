@@ -1,0 +1,39 @@
+#pragma rhoform-syntax 0.2
+
+# Test points probe a rail and an output's net: single-pin hardware sits
+# on a real net, is no driver, and with the net's other pins is no
+# single-pin net.
+component Driver:
+    pin gnd power_in
+    pin out output
+    pin vdd power_in
+
+component Sink:
+    pin a input
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    s = new Sink
+    tp_out = new rhoform.lib.mech.TestPoint:
+        hardware test_point
+    tp_vcc = new rhoform.lib.mech.TestPoint:
+        hardware test_point
+    u = new Driver
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net OUT:
+        s.a
+        tp_out.p
+        u.out
+    net VCC:
+        c_bulk.a
+        j.pos
+        s.vdd
+        tp_vcc.p
+        u.vdd

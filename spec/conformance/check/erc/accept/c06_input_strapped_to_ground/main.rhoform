@@ -1,0 +1,23 @@
+#pragma rhoform-syntax 0.2
+
+# A mode input tied straight to ground: a ground-typed net carries the
+# reference, so an input on it is driven, with nothing else on the net
+# to drive it.
+component Chip:
+    pin gnd power_in
+    pin mode input
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    u = new Chip
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        u.gnd
+        u.mode
+    net VCC:
+        c_bulk.a
+        j.pos
+        u.vdd
