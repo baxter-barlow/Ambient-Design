@@ -113,9 +113,13 @@ CEILINGS = {
     "lang/tests/check_readme_numbers.py": (36, 16),
     # 32 -> 13 sites with D3 v1 (AMB-127): the lint core's per-clause report
     # sites moved into rhoform/partdata.py, which the compiler shares and this
-    # census cannot mutate. They are not dropped: this gate's self-test has a
-    # case per clause, and a one-off mutation of partdata.py's 54 sites left
-    # none surviving both it and rhoform/tests/test_partdata.py.
+    # census cannot mutate: it blanks a gate's own file and runs that file's
+    # self-test, and partdata.py is nobody's gate. So its 54 sites are OUTSIDE
+    # every measured population until the census can pair a mutated module
+    # with the self-test that covers it (an open review finding on AMB-127).
+    # A one-off mutation of them left none surviving both this gate's
+    # self-test and rhoform/tests/test_partdata.py, and 5, all in bind(),
+    # surviving the self-test alone. That is evidence, not a gate.
     "parts/lint-part-data.py": (13, 0),
     "tests/benchmarks/check-assertions.py": (33, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
