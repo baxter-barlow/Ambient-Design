@@ -1,0 +1,27 @@
+#pragma rhoform-syntax 0.2
+
+# An input whose net holds only a test point besides it: single-pin
+# hardware is a passive pad but drives nothing, so the input is undriven
+# (RHO3103).
+component Chip:
+    pin en input
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    tp = new rhoform.lib.mech.TestPoint:
+        hardware test_point
+    u = new Chip
+    net EN:
+        tp.p
+        u.en
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        u.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        u.vdd

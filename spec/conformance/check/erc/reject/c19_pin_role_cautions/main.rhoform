@@ -1,0 +1,35 @@
+#pragma rhoform-syntax 0.2
+
+# Two pairings the KiCad baseline warns about rather than refuses: an
+# output sharing a net with a tri-state pin, and a bidirectional pin tied
+# to a rail. Each is one RHO3102 warning, and nothing gates.
+component Mcu:
+    pin cs output
+    pin gnd power_in
+    pin io bidirectional
+    pin vdd power_in
+
+component Flash:
+    pin gnd power_in
+    pin so tri_state
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    f = new Flash
+    j = new rhoform.lib.connector.BatteryConnector9V
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        f.gnd
+        j.neg
+        u.gnd
+    net SO:
+        f.so
+        u.cs
+    net VCC:
+        c_bulk.a
+        f.vdd
+        j.pos
+        u.io
+        u.vdd

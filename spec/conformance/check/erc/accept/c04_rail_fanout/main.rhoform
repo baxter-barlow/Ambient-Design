@@ -1,0 +1,39 @@
+#pragma rhoform-syntax 0.2
+
+# One regulator output feeds several power inputs, an enable input
+# strapped straight to the rail and two decoupling capacitors: an input
+# with a rail is ok, and every power input on a rail has a capacitor to
+# ground.
+component Load:
+    pin en input
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    c_load = new rhoform.lib.passive.Capacitor
+    c_out = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    l1 = new Load
+    l2 = new Load
+    u = new rhoform.lib.regulator.LinearRegulator(output_current = 1A, output_voltage = 3.3V)
+    net GND(ground_domain = "gnd"):
+        c_in.b
+        c_load.b
+        c_out.b
+        j.neg
+        l1.gnd
+        l2.gnd
+        u.gnd
+    net V3:
+        c_load.a
+        c_out.a
+        l1.en
+        l1.vdd
+        l2.en
+        l2.vdd
+        u.vout
+    net VIN:
+        c_in.a
+        j.pos
+        u.vin

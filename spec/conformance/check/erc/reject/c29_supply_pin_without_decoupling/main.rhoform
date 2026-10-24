@@ -1,0 +1,28 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0042's board: a chip's supply pin on a rail with no capacitor to
+# ground (RHO3110, a warning). The only capacitor near it returns to the
+# chip's reference pin, a net that is not ground-typed, so it does not
+# count.
+component Chip:
+    pin gnd power_in
+    pin ref passive
+    pin vdd power_in
+
+module Board:
+    c_ref = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_ref = new rhoform.lib.passive.Resistor
+    u = new Chip
+    net GND(ground_domain = "gnd"):
+        j.neg
+        u.gnd
+    net REF:
+        c_ref.b
+        r_ref.b
+        u.ref
+    net VCC:
+        c_ref.a
+        j.pos
+        r_ref.a
+        u.vdd

@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.2
+
+# A power stage module declares its output port power_out, and that port
+# joins the rail its regulator drives: a module port is a hierarchical
+# node, not a pin, so the rail has one power output, not two. The
+# module's own capacitor decouples the load's power input.
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+
+module PowerStage:
+    port gnd power_in
+    port vin power_in
+    port vout power_out
+    c = new rhoform.lib.passive.Capacitor
+    u = new rhoform.lib.regulator.LinearRegulator(output_current = 1A, output_voltage = 3.3V)
+    vin ~ u.vin
+    vout ~ u.vout ~ c.a
+    gnd ~ u.gnd ~ c.b
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    load = new Load
+    p = new PowerStage
+    net GND(ground_domain = "gnd"):
+        c_in.b
+        j.neg
+        load.gnd
+        p.gnd
+    net V3:
+        load.vdd
+        p.vout
+    net VIN:
+        c_in.a
+        j.pos
+        p.vin

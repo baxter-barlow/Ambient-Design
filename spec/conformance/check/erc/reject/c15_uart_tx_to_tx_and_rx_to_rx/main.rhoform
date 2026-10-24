@@ -1,0 +1,32 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0020's straight-through UART: TX wired to TX and RX to RX. The two
+# push-pull outputs contend (RHO3101), and the two inputs have nothing to
+# drive them (RHO3103).
+component Uart:
+    pin gnd power_in
+    pin rx input
+    pin tx output
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    u1 = new Uart
+    u2 = new Uart
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        u1.gnd
+        u2.gnd
+    net RX:
+        u1.rx
+        u2.rx
+    net TX:
+        u1.tx
+        u2.tx
+    net VCC:
+        c_bulk.a
+        j.pos
+        u1.vdd
+        u2.vdd
