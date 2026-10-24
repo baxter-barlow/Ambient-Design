@@ -52,7 +52,8 @@ Eight legs:
      spec/conformance/check/ names, in its pass.json, the last pass it
      runs, and each case under its accept/ and reject/ is a directory
      compiled like a package case through the static stage, stopped after
-     that pass. Its stream equals its expected.ndjson byte for byte,
+     that pass, its coverage note counting that pass's rows and the
+     model's alone. Its stream equals its expected.ndjson byte for byte,
      each line valid on the wire schema; an accept case reports no error
      or warning, and every case source is in canonical form.
 
@@ -124,10 +125,10 @@ PACKAGE_ENTRY = "main.rhoform"
 
 # Check cases (leg 8): spec/conformance/check/<area>/{accept,reject}/<case>/,
 # each area's pass.json naming the last pass it runs. The M2 foundation
-# added the model area and its three cases.
+# added the model and assertions areas and their three cases.
 CHECK = CONFORMANCE / "check"
 PASS_FILE = "pass.json"
-MINIMUM_CHECK_AREAS = 1
+MINIMUM_CHECK_AREAS = 2
 MINIMUM_CHECK_CASES = 3
 
 # The blocks whose every active, source-triggered code some reject case
@@ -1894,7 +1895,10 @@ def check_self_test_cases(tmp):
     import contextlib
     import io
     import shutil
+    import types
     from unittest import mock
+
+    from rhoform import check as checker
 
     global SCHEMA_PATH
 
@@ -1914,8 +1918,19 @@ def check_self_test_cases(tmp):
         (case / name).write_text(text)
         return case
 
+    def nothing(model, analysis, report):
+        return None
+
+    # Every pass a stand-in stub that runs nothing, so these cases hold
+    # whichever real passes have landed: what a real pass does is its own
+    # area's to pin.
+    stubs = tuple(types.SimpleNamespace(NAME=step.NAME, OWNER=step.OWNER,
+                                        IMPLEMENTED=False, run=nothing)
+                  for step in checker.PASSES)
+
     def run(write=False):
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch.object(checker, "PASSES", stubs):
             return check_case_problems(check_dir, write=write)
 
     reject = plant(area / "reject" / "c01_pinless", pinless)
@@ -1943,7 +1958,7 @@ def check_self_test_cases(tmp):
     (reject / "expected.ndjson").write_text(stream)
 
     # The pass mask: the same case run through one more pass is another
-    # stream (the parts stub's actionable row joins the coverage note).
+    # stream (that stub's actionable row joins the coverage note).
     (area / PASS_FILE).write_text('{"last_pass": "parts"}\n')
     problems, _, _, _ = run()
     cases.append(("the area's pass mask decides which passes a case runs",
@@ -1963,16 +1978,20 @@ def check_self_test_cases(tmp):
     (accept / "expected.ndjson").write_text("")
     problems, _, _, _ = run()
     cases.append(("a clean accept case passes", problems == []))
-    plant(accept, pinless.replace("module M:", "module M:\n"
-                                  "    port vin power_in\n    net VIN:\n"
-                                  "        vin\n    assert ok static "
-                                  "operating_point(VIN) within 1V to 2V"))
+    # An error needs a pass that reports one: the assertions stub's
+    # RHO3553, in an area of its own that runs that far.
+    gated = check_dir / "assertions"
+    (gated / "accept").mkdir(parents=True)
+    (gated / PASS_FILE).write_text('{"last_pass": "assertions"}\n')
+    plant(gated / "accept" / "c05_gated",
+          clean.replace("port p passive", "port vin power_in\n"
+                        "    net VIN:\n        vin\n    assert ok static "
+                        "operating_point(VIN) within 1V to 2V"))
     problems, _, _, _ = run(write=True)
     cases.append(("an accept case that reports an error is caught",
-                  any("c02_clean: an accept case reports ['RHO3553']" in p
+                  any("c05_gated: an accept case reports ['RHO3553']" in p
                       for p in problems)))
-    plant(accept, clean)
-    (accept / "expected.ndjson").write_text("")
+    shutil.rmtree(gated)
 
     quiet = plant(area / "reject" / "c03_quiet", clean)
     problems, _, _, _ = run()

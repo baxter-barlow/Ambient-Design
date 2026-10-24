@@ -166,18 +166,25 @@ in **areas**, `check/<area>/`, one per checker. An area holds a
 `pass.json`, `{"last_pass": NAME}`, and its `accept/` and `reject/`
 directories, nothing else. NAME is the last pass the area's cases run
 (or `model`, the checked design alone): the check stage runs the passes
-up to and including it, so what an area pins is that pass's behaviour,
-whatever later passes do, and a later landing never moves another
-area's streams. One `integration` area, added with the last checker,
-runs every pass.
+up to and including it and no further, and the run's coverage note
+counts the actionable rows of `model` and of NAME's own section alone
+(the check report still holds every row). So no pass after NAME, and no
+other pass's being still a stub, can move an area's stream: it moves
+with what its own pass reports, and with a finding a pass before it
+makes in its cases, which are written to be clean for those passes. The
+`RHO3553` the driver reports while the static assertion tier is
+unimplemented ([05](../language/05-static-types.md#coverage)) stands in
+the `assertions` pass's place, so only an area that runs that pass
+reports it. One `integration` area, added with the last checker, runs
+every pass and counts every section, as the command line does.
 
 Each case is a directory and its own compile root, like a package case,
 its entry its one `main.rhoform`. It MUST reach the check stage — a case
 that stops at the parser or the elaborator belongs to their layers — and
 its stream MUST equal its `expected.ndjson` byte for byte, each line
 valid on the wire schema. An `accept/` case reports no error or warning;
-its notes, such as the coverage note every check-stage run carries while
-passes are unimplemented, are pinned like the rest. A `reject/` case
+its notes, such as the coverage note its own pass's stub row raises, are
+pinned like the rest. A `reject/` case
 reports something. Every source of a check case is in canonical form,
 which the gate checks itself. `--write` regenerates the streams; the
 diff is the review artifact.

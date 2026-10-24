@@ -174,8 +174,12 @@ def compiled(case: Path, stage: str):
 @unittest.skipUnless(HAVE_LARK and HAVE_JSONSCHEMA, SKIP)
 class CheckTest(_Tmp):
     def test_clean_file_exits_zero_with_only_the_coverage_note(self):
-        code, out, err = run("check", "--compile-root", self.tmp,
-                             self.write("m.rhoform", CLEAN))
+        # Every pass a stub, whichever have landed: the note is all.
+        from rhoform.tests.test_check import planted
+
+        with planted():
+            code, out, err = run("check", "--compile-root", self.tmp,
+                                 self.write("m.rhoform", CLEAN))
         self.assertEqual((code, err, checked(out)), (0, "", []))
         self.assertEqual([(d["code"], d["severity"]) for d in lines(out)],
                          [(COVERAGE_NOTE, "note")])
@@ -235,14 +239,15 @@ class CheckTest(_Tmp):
 
     def test_emit_ir_writes_the_ir_whatever_the_check_stage_finds(self):
         # A declared static-tier assertion is an RHO3553 error while the
-        # assertions pass is unimplemented (pinned as such here, whatever
-        # the pass's state): the run exits 1, and the IR of the design,
-        # which elaborated, is still written.
+        # assertions pass is unimplemented (pinned as such here, with
+        # stand-in passes, whatever the real passes' state): the run exits
+        # 1, and the IR of the design, which elaborated, is still written.
         from rhoform import compile as pipeline
         from rhoform.diagnostics import Diagnostics
+        from rhoform.tests.test_check import planted
 
         entry = self.write("m.rhoform", STATIC_ASSERTION)
-        with mock.patch("rhoform.check.assertions.IMPLEMENTED", False):
+        with planted():
             code, out, err = run("check", "--compile-root", self.tmp,
                                  "--emit-ir", self.tmp / "out", entry)
             compilation = pipeline.compile("m.rhoform", self.tmp,

@@ -59,7 +59,12 @@ class CompileTest(unittest.TestCase):
         self.assertIsNotNone(elaborated.design)
         self.assertEqual((elaborated.analysis, elaborated.report),
                          (None, None))
-        sink, checked = self.compile(CLEAN, "check")
+        # With every pass a stub, the check stage's whole stream is the
+        # coverage note, whichever passes have landed.
+        from rhoform.tests.test_check import planted
+
+        with planted():
+            sink, checked = self.compile(CLEAN, "check")
         self.assertIsNotNone(checked.design)
         self.assertIsNotNone(checked.analysis)
         self.assertIsNotNone(checked.report)
