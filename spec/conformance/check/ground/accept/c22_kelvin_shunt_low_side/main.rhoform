@@ -1,0 +1,46 @@
+#pragma rhoform-syntax 0.3
+
+# Low-side current sensing through a four-terminal Kelvin shunt with no
+# rules: the load's return and the amplifier's ground meet only through
+# the shunt, a galvanic passive by the rule-less default, so they are one
+# ground domain and nothing straddles two. The default is an actionable
+# row, as in c21.
+component Amp:
+    pin gnd power_in
+    pin inn input
+    pin inp input
+    pin out output
+    pin vdd power_in
+    ground gnd
+
+component Driver:
+    pin gnd power_in
+    pin out output
+    pin vdd power_in
+    ground gnd
+
+component Shunt4:
+    pin i1 passive
+    pin i2 passive
+    pin s1 passive
+    pin s2 passive
+
+module Board:
+    port vdd power_in
+    amp = new Amp
+    drv = new Driver
+    rs = new Shunt4
+    net GND:
+        amp.gnd
+        rs.i2
+        rs.s2
+    net GND_LOAD:
+        drv.gnd
+        rs.i1
+    net SENSE:
+        amp.inp
+        rs.s1
+    net VDD:
+        amp.vdd
+        drv.vdd
+        vdd

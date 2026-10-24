@@ -27,9 +27,10 @@ names, the default ground a design gets from its parts with no
 annotation at all (definition c). The GA-2 kind meet runs here over
 Net.attribute_sites, so RHO4001 carries both spans. PASS 3 keeps two
 union-finds over ground nets and never conflates them: ground domains
-(net-ties and galvanic passives unify) and the tie graph (net-ties
-alone), which must be a forest (RHO4002). PASS 4 scans for the rest of
-the catalog but RHO4006, which needs interfaces (L3).
+(net-ties and galvanic passives unify, but none across a barrier) and
+the tie graph (net-ties alone), which must be a forest (RHO4002). PASS 4
+scans for the rest of the catalog but RHO4006, which needs interfaces
+(L3).
 
 A DNP instance is absent (spec 05 section 1): it adds no union, types no
 net and is scanned for nothing; a DNP part that would relate or straddle
@@ -76,6 +77,8 @@ PASSIVE = "passive"
 
 DNP_REASON = "depends-on-dnp"
 NO_GROUND_REASON = "no-ground-domain"
+ASSUMED_REASON = "assumed-galvanic-passive"
+UNRELATED_REASON = "unrelated-ground-domains"
 
 
 def word_rows() -> tuple:
@@ -185,10 +188,12 @@ def conduction(instance) -> Conduction:
                 groups.union(joined[0], pin)
         if rule.word in GALVANIC and len(joined) > 1:
             galvanic.append(tuple(joined))
-    if not rules and len(pins) == 2 and all(
+    if not rules and len(pins) > 1 and all(
             port.role == PASSIVE for port in instance.ports):
-        # The GA default for a two-terminal passive with no rules yet: a
-        # galvanic passive (R, L, ferrite, fuse).
+        # The GA default for a passive with no rules yet, whatever its pin
+        # count: a galvanic passive (R, L, ferrite, fuse, a common-mode
+        # choke, a Kelvin shunt). An assumption, which the report names
+        # wherever it decides that two grounds are one domain.
         galvanic.append(tuple(pins))
     return Conduction(
         tuple(sorted(tuple(members) for members in groups.classes())),
@@ -445,6 +450,8 @@ class _Pass:
                 self.tie(path, model)
             elif not model.barrier:
                 for pins in model.galvanic:
+                    if self.spanned(path, pins) is not None:
+                        continue  # RHO4005's (the scan): no union, no bond
                     nets = [net for net in self.nets(path, pins)
                             if net in self.ground_nets]
                     if len(nets) > 1:
@@ -514,6 +521,7 @@ class _Pass:
     # -- pass 4: the scans
 
     def scan(self):
+        self.crossed = []  # (domain, domain) of each RHO4010
         for net, barrier in sorted(self.wires.items()):
             domain = self.isolation.find(net)
             self.report.finding(
@@ -622,6 +630,7 @@ class _Pass:
         for _isolation, domains in sorted(by_isolation.items()):
             if len(domains) > 1:
                 a, b = sorted(domains)[:2]
+                self.crossed.append((a, b))
                 self.report.finding(
                     "RHO4010", {"entity": path, "domain_a": a,
                                 "domain_b": b},
@@ -665,6 +674,22 @@ class _Pass:
                                    if any(self.isolation.find(net) == domain
                                           for _side, pins in barriers
                                           for net in self.nets(path, pins)))})
+            # Two references in one isolation domain that nothing relates
+            # and no RHO4010 named: what joins them is parts other than
+            # passives (two subcircuits sharing a signal net, a module whose
+            # ground was never connected), and whether a pin compares
+            # across them is T5's to decide from its references (L3).
+            references = sorted({result.ground_domain(net) for net in nets
+                                 if result.is_ground(net)
+                                 and self.kinds.get(net) != EARTH})
+            named = _Classes(references)
+            for a, b in self.crossed:
+                if a in named.parent and b in named.parent:
+                    named.union(a, b)
+            if len(named.classes()) > 1:
+                self.report.row(domain, "no-data", UNRELATED_REASON,
+                                actionable=True,
+                                detail={"ground_domains": references})
         for path, nets, how in self.bonds:
             kinds = [self.kinds.get(net) for net in nets]
             specific = {kind for kind in kinds if kind not in (None,
@@ -674,6 +699,12 @@ class _Pass:
                 # (GA notes section 5): a resistor is not a net-tie.
                 self.report.row(path, "pass", "passive-joins-distinct-kinds",
                                 detail={"nets": list(nets), "kinds": kinds})
+            if how == "galvanic" and not self.instances[path].rules:
+                # The rule-less default decided which grounds are one
+                # domain, and that this is a bond: a library capacitor in
+                # this position reads as one until its rules land (L3).
+                self.report.row(path, "no-data", ASSUMED_REASON,
+                                actionable=True, detail={"nets": list(nets)})
         for path in self.fitted:
             for pin in self.models[path].grounds:
                 net = self.model.net_of.get((path, pin))

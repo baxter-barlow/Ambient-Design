@@ -136,6 +136,14 @@ class ConductionTest(unittest.TestCase):
         self.assertEqual(self.groups(("a", "b"),
                                      roles={"a": "power_out"}).galvanic, ())
 
+    def test_a_passive_with_no_rule_is_galvanic_whatever_its_pin_count(self):
+        # A common-mode choke or a Kelvin shunt is one group, all passive.
+        pins = ("in1", "in2", "out1", "out2")
+        self.assertEqual(self.groups(pins).galvanic, (pins,))
+        self.assertEqual(self.groups(("a",)).galvanic, ())
+        self.assertEqual(self.groups(("a", "b", "c"),
+                                     roles={"c": "power_in"}).galvanic, ())
+
     def test_open_and_bridge_pins_are_groups_of_their_own(self):
         model = self.groups(("a", "b", "c"), [("open", ("a", "b"))])
         self.assertEqual(model.groups, (("a",), ("b",), ("c",)))
@@ -321,8 +329,10 @@ module Board:
         r.b
 """
         found, _compiled = self.run_text(base)
+        # Rule-less, its galvanic reading is the default: a row says so.
         self.assertEqual(sorted((d["code"], d["entity"]) for d in found),
-                         [("RHO4011", "/bond"), ("RHO4011", "/r")])
+                         [("RHO3901", "/"), ("RHO4011", "/bond"),
+                          ("RHO4011", "/r")])
         found, compiled = self.run_text(base.replace(
             "    r = new rhoform.lib.passive.Resistor\n",
             "    r = new rhoform.lib.passive.Resistor\n    rule r open a b\n"))
@@ -378,6 +388,187 @@ module Board:
         self.assertIn({"entity": "/", "status": "no-data",
                        "reason": "no-ground-domain", "actionable": True,
                        "detail": {"nets": ["X", "Y"]}}, self.rows(compiled))
+
+    def test_a_passive_across_a_barrier_unifies_no_grounds(self):
+        # GA section 4.2's `oops`: a resistor, or a library capacitor read
+        # as one, from the secondary ground to the primary's. It spans the
+        # barrier, and the grounds stay two ground domains, each within
+        # its own isolation domain (GA section 1.1, GA-13).
+        text = P + """\
+component IsoDcDc:
+    pin gnd_in power_in
+    pin gnd_out power_out
+    pin vin power_in
+    pin vout power_out
+    ground gnd_in gnd_out
+    side pri: gnd_in vin
+    side sec: gnd_out vout
+
+""" + LOAD + """\
+module Board:
+    port vin power_in
+    dcdc = new IsoDcDc
+    load = new Load
+    oops = new rhoform.lib.passive.PART
+    net GND_PRI:
+        dcdc.gnd_in
+        oops.b
+    net GND_SEC:
+        dcdc.gnd_out
+        load.gnd
+        oops.a
+    net VIN:
+        dcdc.vin
+        vin
+    net VOUT:
+        dcdc.vout
+        load.vdd
+"""
+        for part in ("Resistor", "Capacitor"):
+            with self.subTest(part=part):
+                found, compiled = self.run_text(text.replace("PART", part))
+                self.assertEqual([(d["code"], d["entity"]) for d in found],
+                                 [("RHO4005", "/oops")])
+                ground = compiled.analysis.ground
+                self.assertEqual(ground.ground_domains,
+                                 {"GND_PRI": ("GND_PRI",),
+                                  "GND_SEC": ("GND_SEC",)})
+                self.assertEqual(ground.isolation_domain("GND_SEC"),
+                                 "GND_SEC")
+                rows = {(r["entity"], r["reason"]): r["detail"]
+                        for r in self.rows(compiled)}
+                self.assertEqual(rows[("GND_SEC", "ground-domain")], {
+                    "nets": ["GND_SEC"], "kinds": ["unspecified"],
+                    "isolation_domain": "GND_SEC"})
+                self.assertNotIn(("/oops", "assumed-galvanic-passive"), rows)
+
+    def test_a_rule_less_passive_joining_grounds_is_an_assumed_row(self):
+        # The library capacitor has no rules yet, so from the chassis to
+        # GND it reads as a galvanic passive: one domain and a bond, where
+        # GA-12 makes a plain capacitor RHO4004. The default decided that,
+        # so the report says it was assumed and the coverage note counts it.
+        text = P + LOAD + TIE + """\
+module Board:
+    bond = new NetTie
+    cy = new rhoform.lib.passive.Capacitor
+    load = new Load
+    net CHASSIS(ground_kind = "chassis"):
+        bond.a
+        cy.a
+    net GND:
+        bond.b
+        cy.b
+        load.gnd
+    net V:
+        load.vdd
+"""
+        found, compiled = self.run_text(text)
+        self.assertEqual(sorted((d["code"], d["entity"]) for d in found),
+                         [("RHO3901", "/"), ("RHO4011", "/bond"),
+                          ("RHO4011", "/cy")])
+        self.assertEqual(found[0]["params"]["classes"],
+                         ["assumed-galvanic-passive: 1"])
+        self.assertIn({"entity": "/cy", "status": "no-data",
+                       "reason": "assumed-galvanic-passive",
+                       "actionable": True,
+                       "detail": {"nets": ["CHASSIS", "GND"]}},
+                      self.rows(compiled))
+        # Decoupling the supply to the one ground, it decides nothing.
+        found, compiled = self.run_text(text.replace(
+            "        cy.a\n", "").replace("        load.vdd\n",
+                                         "        cy.a\n        load.vdd\n"))
+        self.assertEqual([(d["code"], d["entity"]) for d in found],
+                         [("RHO4011", "/bond")])
+        # Declared DC-open, it is no assumption, and GA-12's position.
+        found, compiled = self.run_text(text.replace(
+            "    cy = new rhoform.lib.passive.Capacitor\n",
+            "    cy = new rhoform.lib.passive.Capacitor\n"
+            "    rule cy open a b\n"))
+        self.assertEqual(sorted((d["code"], d["entity"]) for d in found),
+                         [("RHO4004", "/cy"), ("RHO4011", "/bond")])
+
+    def test_a_multi_terminal_passive_with_no_rules_joins_its_grounds(self):
+        # GA section 1.4's galvanic passives with more than two pins, and
+        # no annotation: one ground domain, nothing straddled (GA-16).
+        for name, part, nets in (
+                ("c21_choke_on_ground_return", "/l1", ["GND_IN", "GND"]),
+                ("c22_kelvin_shunt_low_side", "/rs", ["GND_LOAD", "GND"])):
+            with self.subTest(case=name):
+                found, compiled = self.case(name)
+                self.assertEqual(
+                    [(d["code"], d["params"]["classes"]) for d in found],
+                    [("RHO3901", ["assumed-galvanic-passive: 1"])])
+                ground = compiled.analysis.ground
+                self.assertEqual(list(ground.ground_domains), ["GND"])
+                self.assertEqual(len(ground.isolation_domains), 1)
+                self.assertIn({"entity": part, "status": "no-data",
+                               "reason": "assumed-galvanic-passive",
+                               "actionable": True,
+                               "detail": {"nets": nets}},
+                              self.rows(compiled))
+
+    def test_unrelated_grounds_no_part_straddles_are_an_actionable_row(self):
+        # GA-14c's own example: two subcircuits that share a signal net
+        # and no ground relation. No part straddles both grounds, and what
+        # each signal pin is referenced to is T5's (L3): a row, not a pass.
+        text = P + """\
+component Mcu:
+    pin gnd power_in
+    pin tx output
+    pin vdd power_in
+    ground gnd
+
+component Sensor:
+    pin gnd power_in
+    pin rx input
+    pin vdd power_in
+    ground gnd
+
+""" + TIE + """\
+module Board:
+    port v1 power_in
+    port v2 power_in
+    m = new Mcu
+    s = new Sensor
+    net GND_A:
+        m.gnd
+    net GND_B:
+        s.gnd
+    net SIG:
+        m.tx
+        s.rx
+    net V1:
+        m.vdd
+        v1
+    net V2:
+        s.vdd
+        v2
+"""
+        found, compiled = self.run_text(text)
+        self.assertEqual(
+            [(d["code"], d["params"]["classes"]) for d in found],
+            [("RHO3901", ["unrelated-ground-domains: 1"])])
+        rows = self.rows(compiled)
+        self.assertIn({"entity": "GND_A", "status": "no-data",
+                       "reason": "unrelated-ground-domains",
+                       "actionable": True,
+                       "detail": {"ground_domains": ["GND_A", "GND_B"]}},
+                      rows)
+        # The command line's run counts it among every section's gaps.
+        found, _compiled = self.run_text(text, through=None)
+        (note,) = [d for d in found if d["code"] == "RHO3901"]
+        self.assertIn("unrelated-ground-domains: 1", note["params"]["classes"])
+        # Tied, the grounds are one domain and there is nothing to decide.
+        found, _compiled = self.run_text(text.replace(
+            "    s = new Sensor\n", "    s = new Sensor\n    nt = new NetTie\n"
+        ).replace("        m.gnd\n", "        m.gnd\n        nt.a\n").replace(
+            "        s.gnd\n", "        s.gnd\n        nt.b\n"))
+        self.assertEqual(found, [])
+        # A part straddling them is RHO4010, which names them: no row.
+        _found, compiled = self.case(
+            "c16_component_straddles_unrelated_grounds")
+        self.assertNotIn("unrelated-ground-domains",
+                         [r["reason"] for r in self.rows(compiled)])
 
 
 @unittest.skipUnless(HAVE_LARK, SKIP)

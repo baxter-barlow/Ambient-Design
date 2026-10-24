@@ -1,0 +1,41 @@
+#pragma rhoform-syntax 0.3
+
+# A common-mode choke on a DC input, its second winding in the return,
+# with no annotation at all. A passive with no rules is a galvanic
+# passive whatever its pin count, so the jack's return and the
+# regulator's ground are one ground domain and the choke straddles
+# nothing. That reading is the rule-less default, not a declaration: an
+# actionable row names it, and the coverage note counts it.
+component Cmc:
+    pin in1 passive
+    pin in2 passive
+    pin out1 passive
+    pin out2 passive
+
+component Jack:
+    pin gnd power_out
+    pin vin power_out
+    ground gnd
+
+component Ldo:
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+    ground gnd
+
+module Board:
+    j = new Jack
+    l1 = new Cmc
+    u = new Ldo
+    net GND:
+        l1.out2
+        u.gnd
+    net GND_IN:
+        j.gnd
+        l1.in2
+    net VIN:
+        l1.out1
+        u.vin
+    net VIN_RAW:
+        j.vin
+        l1.in1

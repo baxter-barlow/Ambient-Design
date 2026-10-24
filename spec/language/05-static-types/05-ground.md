@@ -36,7 +36,7 @@ its DNP flags. It reads no part data and no value.
 | GA-11 chassis and earth bonds | ties, safety capacitors, galvanic passives | 5.5 |
 | GA-12 safety capacitors | `bridge`; a plain capacitor is `open` | 5.2, 5.5 |
 | GA-13, GA-14, GA-14b isolation | `side` | 5.2, 5.5 |
-| GA-14c unrelated ground domains | per component | 5.5; per interface connection, L3 |
+| GA-14c unrelated ground domains | per component; a row where no part straddles them | 5.5; per interface connection and signal net, L3 |
 | GA-15 disjoint domains | | 5.5 |
 | GA-16, GA-17 the zero-annotation default | | 5.6 |
 
@@ -88,9 +88,13 @@ nothing here; its meaning is T5's ([section 6](06-domains.md)).
 
 A **galvanic passive** (GA section 1.4) unifies the ground domains of
 the ground nets it joins (5.4): the pins of a `conduct`, `pass` or
-`switch` rule, and a component with no rule at all, exactly two pins,
-both `passive` — GA's default for a resistor, an inductor, a ferrite or
-a fuse.
+`switch` rule, and a component with no rule at all and two or more
+pins, every one `passive` — GA's default for a resistor, an inductor, a
+ferrite or a fuse, and for a multi-terminal passive such as a
+common-mode choke or a Kelvin shunt, which is one group like any
+rule-less component. That reading is a default, not a declaration:
+wherever it decides that two ground nets are one domain, the component
+gets an actionable `assumed-galvanic-passive` row (5.11).
 
 **The isolation partition (pass 1)** is declared, not observed (GA
 section 1.1). It is a partition of the design's nets: each fitted
@@ -157,8 +161,12 @@ conflates them (GA notes section 2):
 
 - **Ground domains**, a union-find: ground nets joined by a direct
   connection (one net already), by a net-tie, or by a fitted galvanic
-  passive whose joined pins land on both. An `earth` net joins no
-  domain, as no reference does (GA-10), and stays a domain of its own.
+  passive whose joined pins land on both. A galvanic passive whose
+  joined pins land in two isolation domains a barrier keeps apart is
+  RHO4005's (5.5) and, like a tie across a barrier, unifies nothing: a
+  ground domain lies within one isolation domain (GA section 1.1), and
+  the barrier stands as declared. An `earth` net joins no domain, as no
+  reference does (GA-10), and stays a domain of its own.
 - **The tie graph**: nodes the ground nets, edges the fitted net-ties
   between two of them, and only those. A galvanic passive is never an
   edge, so it can never raise a ground loop.
@@ -232,17 +240,26 @@ Over fitted components:
   joining two grounds through it puts them in one isolation domain:
   an integrated circuit whose two ground pins land on two untied
   grounds is this finding. The test over an interface connection's
-  `ref` nets is L3's.
+  `ref` nets is L3's. Two unrelated ground domains in one isolation
+  domain that no part straddles — two subcircuits that share only a
+  signal net, GA-14c's own example, or a module whose ground port was
+  never connected — are joined by parts that are not passives, and
+  whether a pin compares across them depends on what each signal pin is
+  referenced to, which is T5's to decide (L3). Until it does, that
+  isolation domain gets an actionable `unrelated-ground-domains` row
+  naming its ground domains (5.11), unless the pairs RHO4010 names in
+  it already connect them all; it is never a silent pass.
 - **RHO4003** (GA-10): a component whose `ground` rule names a pin on an
   `earth` net uses earth as its reference: the component is the entity
   and `referencing_entity`.
 - **RHO4011** (GA-11): a fitted net-tie, safety capacitor or galvanic
   passive joining two ground nets one of which is `chassis` or `earth`
   is a bond, and safety-relevant: a note on the bond, `boundary` as for
-  RHO4004. A tie across a barrier is RHO4008's and no bond. A bond that
-  is neither a tie nor a safety capacitor — a bleeder resistor — is off
-  the list GA-11 sanctions; GA section 8.2 makes it a note, not a gate,
-  and the uncoded section 1.4 warning, which this pass writes as a row
+  RHO4004. A tie across a barrier is RHO4008's and no bond, and a
+  galvanic passive across one is RHO4005's and no bond. A bond that is
+  neither a tie nor a safety capacitor — a bleeder resistor — is off the
+  list GA-11 sanctions; GA section 8.2 makes it a note, not a gate, and
+  the uncoded section 1.4 warning, which this pass writes as a row
   (5.9).
 - **RHO4007** (GA-15), about the root `/`: the isolation domains holding
   a fitted pin fall into more than one cluster, where a fitted component
@@ -258,9 +275,15 @@ RHO4009 is no bond and no edge.
 ## 5.6 The zero-annotation default (GA-16, GA-17)
 
 A design with no label, no kind, no tie and no side, whose parts declare
-their ground pins, gets exactly one ground domain of kind `unspecified`,
-formed by those pins' net, in one isolation domain when it is connected.
-Naming that net `GND` is I2's, not this pass's. A design with no
+their ground pins, gets exactly one ground domain of kind `unspecified`
+when those pins are on one net, or on nets that passives join (a ferrite
+in the return, a common-mode choke, a shunt), in one isolation domain
+when it is connected; naming its net `GND` is I2's, not this pass's. A
+passive that joins them with no rules is read by the galvanic default
+(5.2), whose row says so. Ground pins on nets that only other parts
+join are references nothing relates, usually a forgotten ground
+connection: RHO4010 on a part straddling them, or an
+`unrelated-ground-domains` row (5.5). A design with no
 ground-typed net at all, labelled, kinded or declared, has no ground to
 synthesize: that is an actionable `no-ground-domain` row on `/` naming
 the nets with fitted pins, since nothing after this pass then has a
@@ -348,17 +371,30 @@ Stated, not hidden:
 - **The standard library carries no rules yet** (L3 adds them). Until it
   does, its parts are each one group, its capacitor is a galvanic
   passive rather than `open`, so a library capacitor across a chassis
-  boundary is a bond (RHO4011) where GA-12 wants RHO4004, and a library
-  header with pins on both sides of a barrier spans it (RHO4005) where a
-  `connector` would not. Designs that need these distinctions declare
-  their own components' rules, as the conformance cases do.
+  boundary is a bond (RHO4011) where GA-12 wants RHO4004 — its
+  `assumed-galvanic-passive` row keeps that from passing silently — and
+  a library header with pins on both sides of a barrier spans it
+  (RHO4005), and one with pins on two ground nets joins them, with that
+  row, where a `connector` would do neither. Designs that need these
+  distinctions declare their own components' rules, as the conformance
+  cases do.
+- **GA-14c across a shared signal net** is not decided here: which
+  ground a signal pin is referenced to is T5's (L3), so two unrelated
+  ground domains in one isolation domain that no part straddles are an
+  `unrelated-ground-domains` row, not RHO4010 (5.5).
 - **RHO4003** sees only a `ground` rule's pins; a `Power.gnd` or `ref`
   bound to earth is L3's.
 - **The safety section of the check report** stays empty: its entry
   shape is stated with the waivers that GA-11 echoes there (L5a). The
   RHO4011 notes are in the stream.
-- A net-tie is also a two-terminal part with both pins on one net when
-  it is redundant, which ERC's RHO3109 reports too.
+- **A redundant net-tie is reported twice.** It is also a two-terminal
+  part with both pins on one net, which ERC's RHO3109 reports too, as an
+  error, where GA-9 makes it this pass's warning (RHO4009). That breaks
+  section 1's rule that a defect is reported once, by the earliest pass
+  that sees it, and [04](04-pin-roles.md#48-net-topology)'s hand-off of
+  the case to RHO4009. The fix is ERC's: its RHO3109 rule skips the
+  components this pass hands on as `net_ties` (5.8). It is outside this
+  pass, and stands until ERC's owner lands it.
 
 ## 5.11 Coverage
 
@@ -368,8 +404,16 @@ domain (its nets, their kinds and its isolation domain) and one
 `isolation-domain` row per isolation domain holding a fitted pin (its
 nets, its ground domains and the barriers seeding it), with status
 `pass`; `passive-joins-distinct-kinds`, `chassis-as-reference` and
-`depends-on-dnp`, inherent; and `no-ground-domain`, `malformed-tie` and
-`malformed-bridge`, actionable.
+`depends-on-dnp`, inherent; and `no-ground-domain`, `malformed-tie`,
+`malformed-bridge`, `assumed-galvanic-passive` and
+`unrelated-ground-domains`, actionable, with status `no-data`.
+`assumed-galvanic-passive` is on a component with no rules whose
+galvanic default (5.2) joined two ground nets, naming them: a missing
+declaration decided that they are one ground domain, and, to a chassis
+or earth ground, that the component is a bond; a `conduct`, `pass` or
+`open` rule settles it. `unrelated-ground-domains` is on an isolation
+domain whose ground domains nothing relates and no RHO4010 named (5.5),
+naming them.
 
 ## 5.12 Conformance
 
@@ -380,11 +424,13 @@ default ground from `ground` rules, a tie plus a ferrite (GA section
 2.2), a star ground (GA-7), an isolated converter with optocoupler
 feedback (GA section 4.2), a chassis tie with a safety capacitor and two
 grounded mounting holes, a bleeder resistor with a tie in the same
-position (GA section 8.2), and a DNP resistor across a barrier. The
-reject cases give every code above at least one case and include each of
-GA section 8's adversarial traces: a resistor across a barrier, a tie
-across a barrier, a double-tie loop, a third tie closing a triangle,
-the chassis bonded twice, earth as a reference, a plain capacitor to
-the chassis and across a barrier, a redundant tie, disjoint circuits, a
-part straddling two untied grounds, and a barrier's two sides on one
-net.
+position (GA section 8.2), a DNP resistor across a barrier, and, with
+no annotation, a common-mode choke in a DC input's return and a
+four-terminal Kelvin shunt in a low-side return, each one ground domain
+by the galvanic default and its row. The reject cases give every code
+above at least one case and include each of GA section 8's adversarial
+traces: a resistor across a barrier, a tie across a barrier, a
+double-tie loop, a third tie closing a triangle, the chassis bonded
+twice, earth as a reference, a plain capacitor to the chassis and
+across a barrier, a redundant tie, disjoint circuits, a part straddling
+two untied grounds, and a barrier's two sides on one net.
