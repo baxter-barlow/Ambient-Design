@@ -255,7 +255,9 @@ Each is a reading the baseline does not make, and why:
    pull-up, though its passive pin drives an input under item 4: a
    soft-start pin with only a capacitor to ground is set by its part's
    current source, an open-drain reset with only a delay capacitor is
-   never released.
+   never released. A two-contact connector carrying the line off the
+   board, its other contact on ground, is such a part too: a pull-up at
+   the far end takes a T6 waiver that says where it is.
 8. **`isolated` is the no-connect flag** (4.7), and an unconnected pin
    is an error whatever its role (KiCad gives the same).
 9. **Net topology** (4.8): two rules from the AC2 corpus, outside the
