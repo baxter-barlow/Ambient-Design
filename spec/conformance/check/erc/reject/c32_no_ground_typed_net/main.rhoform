@@ -1,0 +1,23 @@
+#pragma rhoform-syntax 0.2
+
+# No net is ground-typed (the interim ground typing reads the
+# `ground_domain` label, and this design has none), so the decoupling
+# rule has no ground to decouple to and cannot decide: an actionable
+# coverage row, and the compilation's one coverage note, rather than a
+# warning on every supply net.
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    load = new Load
+    net RETURN:
+        c_bulk.b
+        j.neg
+        load.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        load.vdd

@@ -1,0 +1,29 @@
+#pragma rhoform-syntax 0.2
+
+# A reusable sensor module checked on its own: its ports are the root's,
+# external terminals. A port with one pin is no single-pin net, an input
+# a port reaches is driven from outside, and an open drain a port reaches
+# may be pulled up outside.
+component Chip:
+    pin en input
+    pin gnd power_in
+    pin sda open_drain
+    pin vdd power_in
+
+module Sensor:
+    port en passive
+    port gnd passive
+    port sda passive
+    port vdd passive
+    c = new rhoform.lib.passive.Capacitor
+    u = new Chip
+    net GND(ground_domain = "gnd"):
+        c.b
+        gnd
+        u.gnd
+    net VDD:
+        c.a
+        u.vdd
+        vdd
+    sda ~ u.sda
+    en ~ u.en

@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0034's enable and BUG-0030's exposed pad, both left out of every
+# net: an unconnected pin is an error whatever its role, input and
+# passive alike, reported once for the instance with a needs-review fix-it
+# declaring each pin isolated (RHO3105).
+component Regulator:
+    pin en input
+    pin ep passive
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    c_out = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    load = new Load
+    u = new Regulator
+    net GND(ground_domain = "gnd"):
+        c_in.b
+        c_out.b
+        j.neg
+        load.gnd
+        u.gnd
+    net VIN:
+        c_in.a
+        j.pos
+        u.vin
+    net VOUT:
+        c_out.a
+        load.vdd
+        u.vout

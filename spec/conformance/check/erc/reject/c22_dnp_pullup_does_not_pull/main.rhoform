@@ -1,0 +1,37 @@
+#pragma rhoform-syntax 0.2
+
+# The only pull-up on an open-drain line is not fitted: a DNP instance
+# adds no pull, so nothing brings the line high (RHO3104). Fitting the
+# resistor would clear it, which the check report records.
+component Sensor:
+    pin gnd power_in
+    pin int open_drain
+    pin vdd power_in
+
+component Mcu:
+    pin gnd power_in
+    pin irq input
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_pu = new rhoform.lib.passive.Resistor:
+        dnp
+    s = new Sensor
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net INT:
+        r_pu.b
+        s.int
+        u.irq
+    net VCC:
+        c_bulk.a
+        j.pos
+        r_pu.a
+        s.vdd
+        u.vdd

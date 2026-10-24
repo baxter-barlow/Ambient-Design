@@ -1,0 +1,35 @@
+#pragma rhoform-syntax 0.2
+
+# A clock's sync output that drives nothing, declared with `isolated`
+# (the buck SYNCOUT shape): an intentional single-pin net, and an output
+# left open floats nothing.
+component Clock:
+    pin gnd power_in
+    pin out output
+    pin sync output
+    pin vdd power_in
+
+component Sink:
+    pin clk input
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    s = new Sink
+    u = new Clock
+    net CLK:
+        s.clk
+        u.out
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        s.vdd
+        u.vdd
+    isolated u.sync

@@ -1,0 +1,29 @@
+#pragma rhoform-syntax 0.2
+
+# Two connector modules joined port to port, neither connecting that
+# port to anything inside: the net holds module ports alone, and no pin
+# of any component (RHO3108, a warning).
+module Header:
+    port gnd passive
+    port pwr passive
+    port sig passive
+    h = new rhoform.lib.connector.PinHeader1x2
+    pwr ~ h.p1
+    gnd ~ h.p2
+
+module Board:
+    a = new Header
+    b = new Header
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    net GND(ground_domain = "gnd"):
+        a.gnd
+        b.gnd
+        c_bulk.b
+        j.neg
+    net VCC:
+        a.pwr
+        b.pwr
+        c_bulk.a
+        j.pos
+    a.sig ~ b.sig
