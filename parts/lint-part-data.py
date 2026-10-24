@@ -227,15 +227,19 @@ def lint_control_problems(path, doc, problems, domains=None):
     stay red with its own guarantee deleted, which is the gap the schema
     gate's location rule closed for the schema controls."""
     declaration = doc.get("x_negative_control") if isinstance(doc, dict) else None
-    if not isinstance(declaration, str) or \
-            not declaration.startswith("LINT-REJECTED"):
+    # A declaration that merely MENTIONS the prefix is held to the form too:
+    # tests/schemas/validate-schemas.py exempts a control from the schema
+    # only when the prefix comes first, nothing stripped, and a variant this
+    # gate skipped silently would leave the two gates counting different
+    # populations.
+    if not isinstance(declaration, str) or "LINT-REJECTED" not in declaration:
         return False
-    match = LINT_CONTROL.match(declaration.strip())
+    match = LINT_CONTROL.match(declaration)
     if match is None:
         problems.append(
             f"{path}: lint control does not declare where it fails; its "
-            "x_negative_control must start `LINT-REJECTED by <check> at "
-            "<pointer>[ + <pointer>...]: `")
+            "x_negative_control must start, with nothing before it, "
+            "`LINT-REJECTED by <check> at <pointer>[ + <pointer>...]: `")
         return True
     declared = {(match.group("check"), loc.strip())
                 for loc in match.group("locs").split("+") if loc.strip()}
@@ -480,6 +484,12 @@ def self_test():
             ("a lint control with no location is caught",
              lambda: _control_probe("LINT-REJECTED: nowhere"),
              "does not declare where it fails"),
+            ("a lint declaration with leading space is caught, not skipped",
+             lambda: _control_probe(
+                 " LINT-REJECTED by L14 at /implements/0/pins/vdd2: twice",
+                 lambda d: d["implements"][0]["pins"].__setitem__("vdd2",
+                                                                 "VDD")),
+             "with nothing before it"),
             ("a lint control that lints clean is caught",
              lambda: _control_probe("LINT-REJECTED by L14 at /implements/0/pins/vdd: clean"),
              "lints clean"),

@@ -24,7 +24,8 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
     (its declaration starts `LINT-REJECTED`): it exists to prove a
     cross-reference check the schema cannot express, so it must VALIDATE,
     or it would fail for a reason other than the one it names. The part-data
-    linter holds it to its own check;
+    linter holds it to its own check, so the exception exists under parts/
+    only, and a lint control under any other root is a failure;
   - every other JSON file under <root>/examples/ must validate against its
     mapped schema;
   - any *.json under <root>/examples/ matched by no mapping rule is a hard
@@ -201,13 +202,22 @@ MINIMUM_NEGATIVE_CONTROLS = 61
 CONTROL_KEY = "x_negative_control"
 CONTROL_PREFIX = re.compile(r"^REJECTED at (?P<locs>[^:]+):")
 LINT_CONTROL_PREFIX = "LINT-REJECTED"
+# The roots whose linter holds each lint control to the check it names. A
+# lint control is exempt from schema rejection here because that linter
+# checks it; under any other root nothing would, so it fails instead.
+LINT_CONTROL_ROOTS = ("parts",)
 
 
 def is_lint_control(example):
-    """True for a control proving a cross-reference check, not the schema."""
+    """True for a control proving a cross-reference check, not the schema.
+
+    Read exactly as parts/lint-part-data.py reads it: the declaration starts
+    with the prefix, and nothing is stripped first. With a strip here and
+    none there, a declaration with a leading space was exempt from the
+    schema in this gate and invisible to the linter, and both passed while
+    counting different lint-control populations."""
     control = example.get(CONTROL_KEY) if isinstance(example, dict) else None
-    return isinstance(control, str) and \
-        control.strip().startswith(LINT_CONTROL_PREFIX)
+    return isinstance(control, str) and control.startswith(LINT_CONTROL_PREFIX)
 
 
 def declared_locations(example):
@@ -352,7 +362,15 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=(),
             continue
 
         errors = sorted(validator.iter_errors(example), key=str)
-        if expect_invalid and is_lint_control(example):
+        if expect_invalid and is_lint_control(example) and \
+                root_name not in LINT_CONTROL_ROOTS:
+            failures.append(
+                f"{rel}: declares a lint control, and no linter holds lint "
+                f"controls under {root_name}/ (only under "
+                f"{', '.join(r + '/' for r in LINT_CONTROL_ROOTS)}). Exempt "
+                "from the schema and checked by nothing, it proves nothing; "
+                "make it a `REJECTED at` schema control.")
+        elif expect_invalid and is_lint_control(example):
             lint_control_count += 1
             for error in errors:
                 path = "/".join(str(part) for part in error.absolute_path) or "<root>"
@@ -653,6 +671,17 @@ def self_test() -> int:
     cases.append(("a lint control that fails the schema is caught",
                   code == 1 and "n2.part.json: lint control is not "
                   "schema-valid (at stability" in text))
+    # One rule in both gates: the linter recognises a declaration that
+    # STARTS with the prefix, so a leading space makes this an ordinary
+    # schema control, and a schema-valid one of those fails here.
+    code, text = run_raw(lambda root: _parts_root(
+        root, negatives=(("n1.part.json", control),
+                         ("n2.part.json", dict(lint_control, x_negative_control=(
+                             " " + lint_control["x_negative_control"]))))))
+    cases.append(("a lint declaration with leading space is not exempt",
+                  code == 1 and "n2.part.json: negative control "
+                  "unexpectedly VALIDATES" in text))
+
 
     # GOLDENS: the elaborator's committed output for each benchmark source,
     # which sits outside every examples/ directory by design. Before they
@@ -682,6 +711,19 @@ def self_test() -> int:
     ir_good = dict(good, header={"ir_version": 1})
     map_good = dict(good, sourcemap_version=1)
     ir_bad = dict(ir_good, stability="stable")
+
+    # Under a root no linter reads, a lint declaration exempts nothing.
+    def _ir_lint_control(root):
+        _ir_root(root)
+        (root / "ir" / "examples" / "negative" / "n2.ir.json").write_text(
+            _json.dumps(dict(good, header={"ir_version": 0},
+                             x_negative_control=(
+                                 "LINT-REJECTED by L99 at /x: no linter here"))))
+    code, text = run_raw(_ir_lint_control)
+    cases.append(("a lint control outside parts/ is caught, not exempted",
+                  code == 1 and "n2.ir.json: declares a lint control, and no "
+                  "linter holds lint controls under ir/" in text
+                  and "lint control, valid against" not in text))
 
     def _golden(root, name, body):
         (root / "benchmarks" / "x").mkdir(parents=True, exist_ok=True)

@@ -133,7 +133,7 @@ CEILINGS = {
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
     "tests/meta/check-gate-coverage.py": (15, 6),
-    "tests/schemas/validate-schemas.py": (14, 2),
+    "tests/schemas/validate-schemas.py": (15, 2),
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
