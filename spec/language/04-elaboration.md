@@ -208,8 +208,10 @@ text: a `new` in any branch is an edge, whatever the parameters.
 
 A `component` definition declares a component's pins and nothing else.
 Its pins are its ports: name, role, and designators as `pin_numbers`,
-sorted. Pin names are unique per definition and a designator appears at
-most once per pin (RHO2007).
+sorted. A quoted designator (syntax 0.3) is its text without the
+quotes: `"01"` is the `pin_numbers` entry `01`, and `"3"` is the same
+designator as `3`. Pin names are unique per definition and a designator
+appears at most once per pin (RHO2007).
 
 An instance (or a table row) of a component definition — one of the
 file's own or one of the standard library's — gets its ports from the

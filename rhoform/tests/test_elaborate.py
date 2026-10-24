@@ -2120,6 +2120,29 @@ class SourceFacts03Test(unittest.TestCase):
             "module M:\n    c = new C\n")
         self.assertEqual(_codes(result), ["RHO2039"])
 
+    def test_a_quoted_designator_is_its_pad_without_the_quotes(self):
+        from rhoform.elaborate import elaborate_source
+
+        result = elaborate_source(
+            P3 + 'component H:\n    pin a passive "01" 1\nmodule M:\n'
+            '    h = new H\n    k = new H:\n        pin a passive "1" "01"\n')
+        self.assertTrue(result.ok, result.diagnostics.render())
+        instances = _by_path(result.design)
+        for path in ("/h", "/k"):
+            with self.subTest(path=path):
+                self.assertEqual(instances[path].ports[0].pin_numbers,
+                                 ("01", "1"))
+        # `"3"` and `3` are one pad, named twice, on either kind of pin.
+        for source in ('component H:\n    pin c passive 3 "3"\n'
+                       'module M:\n    h = new H\n',
+                       'module M:\n    r = new lib.R:\n'
+                       '        pin c passive 3 "3"\n'):
+            with self.subTest(source=source):
+                diagnostics = _diagnostics(elaborate_source(P3 + source))
+                self.assertEqual([d["code"] for d in diagnostics],
+                                 ["RHO2007"])
+                self.assertEqual(diagnostics[0]["params"]["name"], "3")
+
     def test_every_0_3_accept_case_elaborates_without_a_traceback(self):
         from pathlib import Path
 
