@@ -132,12 +132,12 @@ CEILINGS = {
     "tests/benchmarks/check-hand-assertions.py": (61, 15),
     "tests/benchmarks/run-sim.sh": (22, 0),
     "tests/benchmarks/derive-555-windows.py": (5, 0),
-    "tests/conformance/check-conformance.py": (88, 0),
+    "tests/conformance/check-conformance.py": (91, 0),
     "tests/corpus/check-classification.py": (54, 18),
     "tests/corpus/check-corpus.py": (37, 3),
     "tests/diagnostics/check-registry.py": (12, 0),
     "tests/eval/check-run-records.py": (62, 9),
-    "tests/ir/check-hashes.py": (22, 1),
+    "tests/ir/check-hashes.py": (23, 1),
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.

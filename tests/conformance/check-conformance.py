@@ -19,10 +19,12 @@ Eight legs:
      `+/-`, given before the literal is one token, are pinned by its unit
      tests (rhoform/tests/test_parser.py), not here.
   4. DOC RECONCILIATION: every closed list the spec restates (keywords,
-     the keywords syntax 0.2 added, reserved words, every closed
-     vocabulary, the punctuation tokens, the pragma versions, the unit
-     ladders, the diagnostic block table, the output cap, the formatter's
-     statement ranks and instance-body order, 03's five forms) equals the
+     the keywords syntax 0.2 added, reserved words, 0.3's soft keywords,
+     rule words and the words it reserves, every closed vocabulary, the
+     punctuation tokens, the pragma versions and which are unfrozen, the
+     unit ladders, the diagnostic block table, the output cap, the
+     formatter's statement ranks, instance-body order and component-body
+     order, 03's five forms) equals the
      source of truth it restates, and 07's collation sample is in natural
      order. A list a section restates under a reconcile marker,
      `<!-- reconcile: rhoform.module:NAME -->`, is held to the tuple that
@@ -33,11 +35,15 @@ Eight legs:
   5. FORMATTER: every spec/conformance/fmt input formats to its committed
      .expected.rhoform BYTE FOR BYTE, every expected file formats to
      itself (canonical output is a fixed point), and the formatter
-     refuses every parse reject case, returning no bytes.
+     refuses every parse reject case, returning no bytes. A case that is
+     a directory is a package: each of its sources is held to the
+     expected file beside it, and the package compiles to the same
+     design and codes before and after formatting (AMB-144 #9).
   6. ELABORATION CASES (spec/language/04-elaboration.md): every
      elaborate/accept case elaborates with zero diagnostics to IR equal to
      its .expected.ir.json BYTE FOR BYTE, and that IR validates against
-     ir/netlist-ir.v1.schema.json, the version the compiler writes; every elaborate/reject case parses clean
+     ir/netlist-ir.v2.schema.json, the version the compiler writes; every
+     elaborate/reject case parses clean
      and its elaboration diagnostic stream equals its .expected.ndjson
      byte for byte, each line valid on the wire schema. The closed lists
      04 restates are reconciled against the elaborator.
@@ -94,12 +100,14 @@ SCHEMA_PATH = ROOT / "rhoform" / "diagnostic.schema.json"
 # Today's populations. Cases may be added freely; a DROP below the floor
 # is the suite shrinking out from under the spec, and must be a decision
 # recorded here. Syntax 0.2 added a09-a16 and r17-r23, and its canonical
-# form f17-f24; bodyless component definitions added a17 and f25.
-MINIMUM_ACCEPT_CASES = 17
-MINIMUM_REJECT_CASES = 23
+# form f17-f24; bodyless component definitions added a17 and f25; r24-r27
+# pinned four lexical codes. Syntax 0.3 added a18-a20 and r28-r36, and f26
+# (AMB-140), f27 and the package case f28 (AMB-144 #9).
+MINIMUM_ACCEPT_CASES = 20
+MINIMUM_REJECT_CASES = 36
 MINIMUM_VECTORS = 30
 MINIMUM_ERROR_VECTORS = 11
-MINIMUM_FMT_CASES = 25
+MINIMUM_FMT_CASES = 28
 
 # Elaboration cases (leg 5). The reject floor is one case per block-2 code
 # a source can trigger; the coverage check below is what keeps that true
@@ -108,19 +116,20 @@ MINIMUM_FMT_CASES = 25
 ELABORATE = CONFORMANCE / "elaborate"
 # The schema of the IR version the compiler writes (ir/README.md,
 # "Versioning policy"); version 0's stays for the hand-written examples.
-IR_SCHEMA_NAME = "netlist-ir.v1.schema.json"
+IR_SCHEMA_NAME = "netlist-ir.v2.schema.json"
 IR_SCHEMA_PATH = ROOT / "ir" / IR_SCHEMA_NAME
 # r33 went with RHO2033, the interim refusal of imports, when the package
 # layer gave imports their semantics: 46 -> 45. The standard library added
-# a15-a16 and r49-r51.
-MINIMUM_ELABORATE_ACCEPT_CASES = 16
-MINIMUM_ELABORATE_REJECT_CASES = 48
+# a15-a16 and r49-r51. Syntax 0.3's source facts added a17 and r52-r54.
+MINIMUM_ELABORATE_ACCEPT_CASES = 17
+MINIMUM_ELABORATE_REJECT_CASES = 51
 
 # Package cases (leg 7): one directory per case, added with R14b; a05
-# came with the standard library, r22 with RHO2069.
+# came with the standard library, r22 with RHO2069, r13b with the unfrozen
+# syntax 0.3.
 PACKAGES = CONFORMANCE / "packages"
 MINIMUM_PACKAGE_ACCEPT_CASES = 5
-MINIMUM_PACKAGE_REJECT_CASES = 22
+MINIMUM_PACKAGE_REJECT_CASES = 23
 PACKAGE_ENTRY = "main.rhoform"
 
 # Check cases (leg 8): spec/conformance/check/<area>/{accept,reject}/<case>/,
@@ -207,6 +216,13 @@ def _case_sources(directory: Path) -> list[Path]:
     """Every case source in `directory`, escaped or not, sorted."""
     return sorted(list(directory.glob("*.rhoform"))
                   + list(directory.glob("*.rhoform.escaped")))
+
+
+def _case_sources_under(directory: Path) -> list[Path]:
+    """Every source of a package case, at any depth, sorted: its files
+    that are not expected outputs."""
+    return sorted(case for case in directory.rglob("*.rhoform")
+                  if not case.name.endswith(".expected.rhoform"))
 
 
 def _grammar_punctuation(sot) -> set[str]:
@@ -424,26 +440,69 @@ def _format_case(source: str, name: str):
     return "ok", result.text
 
 
+def _package_design(case: Path, texts: dict):
+    """(design_hash or None, sorted codes) of compiling the package case
+    `case` with each file of `texts` (path relative to the case -> source)
+    in place of its own bytes, through the pipeline, in a scratch copy.
+    Codes, not whole diagnostics: messages echo the author's spelling,
+    which formatting may change."""
+    import shutil
+    import tempfile
+
+    from rhoform import compile as pipeline
+    from rhoform import ir
+    from rhoform.diagnostics import Diagnostics
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / case.name
+        shutil.copytree(case, root, ignore=shutil.ignore_patterns(
+            "*.expected.rhoform"))
+        for relative, text in texts.items():
+            (root / relative).write_bytes(
+                text.encode("utf-8", errors="surrogateescape"))
+        sink = Diagnostics()
+        compiled = pipeline.compile(PACKAGE_ENTRY, root, stage="elaborate",
+                                    sink=sink)
+        design = (None if compiled.design is None else
+                  ir.design_hash_of(ir.to_ir(compiled.design)))
+        codes = sorted(json.loads(line)["code"]
+                       for line in sink.render().splitlines())
+    return design, codes
+
+
 def fmt_case_problems(fmt_dir, reject_dir, write=False):
-    """Leg 5. Returns (problems, case_count)."""
+    """Leg 5. Returns (problems, case_count).
+
+    A case is a file, or a directory holding a package (AMB-144 #9): each
+    of its sources formats to the `.expected.rhoform` beside it, as a file
+    case does, and the package compiles from its `main.rhoform` to the
+    same design and codes formatted as written."""
     from rhoform.fmt import first_difference
 
     problems = []
     inputs = [case for case in _case_sources(fmt_dir)
               if not case.name.endswith(".expected.rhoform")]
+    packages = sorted(p for p in fmt_dir.iterdir() if p.is_dir())
     expected_files = set(fmt_dir.glob("*.expected.rhoform"))
-    for case in inputs:
+    pairs = [(case, case.name) for case in inputs]
+    for package in packages:
+        expected_files |= set(package.rglob("*.expected.rhoform"))
+        pairs += [(case, case.relative_to(fmt_dir).as_posix())
+                  for case in _case_sources_under(package)]
+    formatted = {}
+    for case, name in pairs:
         stem = _case_stem(case)
         expected_path = case.with_name(stem + ".expected.rhoform")
         expected_files.discard(expected_path)
         state, output = _format_case(_read_case(case), stem + ".rhoform")
         if state != "ok":
             problems.append(
-                f"fmt/{case.name}: the input does not format ({state}: "
+                f"fmt/{name}: the input does not format ({state}: "
                 f"{output}); a formatter case must be a clean source the "
                 "formatter accepts"
             )
             continue
+        formatted[case] = output
         if write:
             expected_path.write_text(output, encoding="utf-8")
             shown = (expected_path.relative_to(ROOT)
@@ -452,14 +511,14 @@ def fmt_case_problems(fmt_dir, reject_dir, write=False):
             continue
         if not expected_path.is_file():
             problems.append(
-                f"fmt/{case.name}: no {expected_path.name}; run --write "
+                f"fmt/{name}: no {expected_path.name}; run --write "
                 "and review the diff"
             )
             continue
         expected = _read_case(expected_path)
         if output != expected:
             problems.append(
-                f"fmt/{case.name}: formats to bytes that diverge from "
+                f"fmt/{name}: formats to bytes that diverge from "
                 f"{expected_path.name} at character "
                 f"{first_difference(output, expected)} (if the change is "
                 "deliberate, --write and review the diff)"
@@ -470,13 +529,40 @@ def fmt_case_problems(fmt_dir, reject_dir, write=False):
                       f"formatting it changes character "
                       f"{first_difference(expected, again)}")
             problems.append(
-                f"fmt/{expected_path.name}: not a fixed point ({detail}); "
-                "canonical output must format to itself"
+                f"fmt/{expected_path.relative_to(fmt_dir).as_posix()}: not "
+                f"a fixed point ({detail}); canonical output must format to "
+                "itself"
+            )
+    for package in packages:
+        sources = _case_sources_under(package)
+        if not (package / PACKAGE_ENTRY).is_file():
+            problems.append(
+                f"fmt/{package.name}/: no {PACKAGE_ENTRY} at the case root; "
+                "a package case compiles from its one entry"
+            )
+            continue
+        if not all(case in formatted for case in sources):
+            continue  # reported above, file by file
+        before = _package_design(package, {})
+        after = _package_design(package, {
+            case.relative_to(package).as_posix(): formatted[case]
+            for case in sources})
+        if before[0] is None or before[1]:
+            problems.append(
+                f"fmt/{package.name}/: the package does not compile clean "
+                f"({before[1] or 'no design'}); a design-preservation case "
+                "needs a design to preserve"
+            )
+        elif after != before:
+            problems.append(
+                f"fmt/{package.name}/: formatting changed what the package "
+                f"compiles to ({before} before, {after} after); the "
+                "formatter must preserve the design"
             )
     for orphan in sorted(expected_files):
         problems.append(
-            f"fmt/{orphan.name}: expected file with no input case; delete "
-            "it or restore its case"
+            f"fmt/{orphan.relative_to(fmt_dir).as_posix()}: expected file "
+            "with no input case; delete it or restore its case"
         )
     # Refusal (F-11) is pinned on the reject corpus rather than on cases
     # of its own: a source that does not parse clean gets no bytes.
@@ -488,7 +574,7 @@ def fmt_case_problems(fmt_dir, reject_dir, write=False):
                 f"({state}); a source that does not parse clean must get "
                 "its diagnostics and no bytes"
             )
-    return problems, len(inputs)
+    return problems, len(inputs) + len(packages)
 
 
 def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
@@ -545,6 +631,17 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
     reconcile("02-grammar.md reserved words",
               _spec_words(grammar_md, "### Reserved for v1"),
               sorted(sot.RESERVED_FUTURE))
+    # Syntax 0.3's three word lists, each its own source-of-truth table.
+    reconcile("02-grammar.md soft keywords",
+              _spec_words(grammar_md, "### Soft keywords (0.3)"),
+              sorted(sot.SOFT_KEYWORDS.values()))
+    reconcile("02-grammar.md rule words",
+              _spec_words(grammar_md, "### Rule words (0.3)"),
+              sorted(sot.RULE_WORDS))
+    reconcile("02-grammar.md words reserved from 0.3",
+              _spec_words(grammar_md, "### Reserved from 0.3"),
+              sorted(word for word, since in sot.RESERVED_SINCE.items()
+                     if since == "0.3"))
     heading_of = {
         "pin_role": "### pin_role (T2)",
         "hardware_kind": "### hardware_kind (L9)",
@@ -552,6 +649,7 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
         "measurement_kind": "### measurement_kind (V2)",
         "param_type": "### param_type (L3)",
         "loop_iterator": "### loop_iterator (L3)",
+        "ground_kind": "### ground_kind (GA-2)",
     }
     for vocabulary, words in sorted(sot.CLOSED_VOCABULARIES.items()):
         # A vocabulary this table does not know yet is looked for under a
@@ -673,6 +771,9 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
         ("01-lexical-structure.md", lexical_md,
          r"Syntax (\d+\.\d+) is the\s+current\s+version",
          sot.SYNTAX_VERSION, "current version"),
+        ("01-lexical-structure.md", lexical_md,
+         r"the unfrozen version set\s+\{([^}]*)\}",
+         ", ".join(sot.UNFROZEN_SYNTAX_VERSIONS), "unfrozen version set"),
     ):
         match = re.search(pattern, text)
         if match is None:
@@ -715,6 +816,11 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
               sorted(_rank_rows(formatting_md,
                                 "### Instance body order (F-5)")),
               sorted((rank, word) for word, rank in fmt.BODY_RANKS.items()))
+    reconcile("07-formatting.md component body order",
+              sorted(_rank_rows(formatting_md,
+                                "### Component body order (0.3)")),
+              sorted((rank, production) for production, rank
+                     in fmt.COMPONENT_RANKS.items()))
     # The collation is an algorithm, not a list, so 07 pins it with a
     # sample the implementation's own key must leave in place.
     sample = re.search(r"```text\n([^\n]*)\n```",
@@ -2369,6 +2475,70 @@ def self_test() -> int:
                       any("the input does not format (broken:" in p
                           for p in problems)))
 
+        # A package case (AMB-144 #9): a directory whose every source
+        # formats to the expected file beside it, and whose design survives
+        # formatting.
+        package_case = formatter / "f05_package"
+        (package_case / "lib").mkdir(parents=True)
+        pragma_0_2 = "#pragma rhoform-syntax 0.2\n"
+        (package_case / "main.rhoform").write_text(
+            pragma_0_2 + 'import Pair from "./lib/pair"\nmodule Top:\n'
+            "  port p passive\n  u = new Pair\n  u.a ~ p\n")
+        (package_case / "lib" / "pair.rhoform").write_text(
+            pragma_0_2 + "component Pair:\n  pin b passive 2\n"
+            "  pin a passive 1\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            fmt_case_problems(formatter, reject, write=True)
+        problems, n_fmt = fmt_case_problems(formatter, reject)
+        cases.append(("a package case that formats and keeps its design "
+                      "passes", problems == [] and n_fmt == 4
+                      and (package_case / "lib"
+                           / "pair.expected.rhoform").is_file()))
+
+        (package_case / "lib" / "pair.expected.rhoform").write_text(
+            pragma_0_2 + "\ncomponent Pair:\n    pin a passive 2\n")
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a package source whose output diverges is caught",
+                      any("fmt/f05_package/lib/pair.rhoform: formats to "
+                          "bytes that diverge" in p for p in problems)))
+        with contextlib.redirect_stdout(io.StringIO()):
+            fmt_case_problems(formatter, reject, write=True)
+
+        from dataclasses import replace
+
+        real_format = fmt_module.format_source
+
+        def drifting(source, **kwargs):
+            result = real_format(source, **kwargs)
+            if result.text is None or "pin a passive 1" not in result.text:
+                return result
+            return replace(result, text=result.text.replace(
+                "pin a passive 1", "pin a passive 3"))
+
+        with mock.patch.object(fmt_module, "format_source", drifting):
+            problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a package whose design formatting changes is caught",
+                      any("fmt/f05_package/: formatting changed what the "
+                          "package compiles to" in p for p in problems)))
+
+        main_text = (package_case / "main.rhoform").read_text()
+        (package_case / "main.rhoform").write_text(
+            main_text.replace("u.a ~ p", "u.c ~ p"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            fmt_case_problems(formatter, reject, write=True)
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a package case that does not compile clean is caught",
+                      any("fmt/f05_package/: the package does not compile "
+                          "clean (['RHO2022'])" in p for p in problems)))
+        (package_case / "main.rhoform").rename(package_case / "top.rhoform")
+        (package_case / "main.expected.rhoform").rename(
+            package_case / "top.expected.rhoform")
+        problems, _ = fmt_case_problems(formatter, reject)
+        cases.append(("a package case with no main.rhoform is caught",
+                      any("fmt/f05_package/: no main.rhoform at the case "
+                          "root" in p for p in problems)))
+        shutil.rmtree(package_case)
+
         clean = Path(tmp) / "clean_reject"
         clean.mkdir()
         (clean / "r01_clean.rhoform").write_text(canonical)
@@ -2610,7 +2780,7 @@ def self_test() -> int:
         formatting_md = spec_copy / "07-formatting.md"
         real_formatting = formatting_md.read_text()
         for old, new, fragment, label in (
-            ("| 3 | `net_decl` |", "| 2 | `net_decl` |",
+            ("| 4 | `net_decl` |", "| 3 | `net_decl` |",
              "07-formatting.md statement ranks",
              "a drifted statement rank is caught"),
             ("### Statement ranks (F-1)", "### Statement order",
@@ -2619,6 +2789,9 @@ def self_test() -> int:
             ("| 5 | `dnp` |", "| 0 | `dnp` |",
              "07-formatting.md instance body order",
              "a drifted instance-body rank is caught"),
+            ("| 2 | `side_decl` |", "| 1 | `side_decl` |",
+             "07-formatting.md component body order",
+             "a drifted component-body rank is caught"),
             ("c2 c10", "c10 c2", "07-formatting.md collation sample",
              "a collation sample out of natural order is caught"),
             ("```text\nR2", "```\nR2",
@@ -2659,15 +2832,30 @@ def self_test() -> int:
              "reserved-word count", "a drifted reserved-word count"),
             ("01-lexical-structure.md", "`~` `[` `]` ", "`~` ",
              "punctuation tokens", "a drifted punctuation list"),
-            ("01-lexical-structure.md", "{0.1, 0.2}", "{0.2}",
+            ("01-lexical-structure.md", "{0.1, 0.2, 0.3}", "{0.1, 0.3}",
              "implemented version set", "a drifted version set"),
             ("01-lexical-structure.md", "Syntax 0.2 is the",
              "Syntax 0.1 is the", "'0.1' for the current version",
              "a drifted current version"),
-            ("01-lexical-structure.md", "is the\ncurrent version",
-             "was the\nlatest version",
+            ("01-lexical-structure.md", "is the current version",
+             "was the latest version",
              "no longer states the current version",
              "a deleted current-version sentence"),
+            ("01-lexical-structure.md", "unfrozen version set {0.3}",
+             "unfrozen version set {}", "unfrozen version set",
+             "a drifted unfrozen version set"),
+            ("02-grammar.md", "`draw` `rule` `side` `supply`",
+             "`draw` `rule` `supply`", "02-grammar.md soft keywords",
+             "a drifted soft-keyword list"),
+            ("02-grammar.md", "`regulate` `source`", "`regulate`",
+             "02-grammar.md rule words", "a drifted rule-word list"),
+            ("02-grammar.md", "`draw` `rule` `supply` `variant` `waive`",
+             "`draw` `rule` `supply` `waive`",
+             "02-grammar.md words reserved from 0.3",
+             "a drifted reserved-from-0.3 list"),
+            ("02-grammar.md", "`chassis` `earth` `power`",
+             "`chassis` `power`", "02-grammar.md ground_kind",
+             "a drifted ground_kind list"),
         ):
             problems = drifted(doc, old, new)
             cases.append((f"{label} is caught",
