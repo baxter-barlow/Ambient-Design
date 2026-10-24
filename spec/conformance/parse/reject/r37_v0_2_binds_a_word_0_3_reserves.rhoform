@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# A 0.2 file may bind `supply`; 0.3 reserves it (RHO1019). So the RHO1016
+# its `warning` draws cannot promise that 0.3 only adds: its fix-it is
+# needs-review, and its message names the word to rename.
+module Rail:
+    port vin power_in
+    supply = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    supply.a ~ vin
+    net SUPPLY:
+        supply.b
+    assert rail static operating_point(SUPPLY) at most 5.5V warning

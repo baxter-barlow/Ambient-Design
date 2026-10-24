@@ -223,7 +223,9 @@ RESERVED_FUTURE = ("interface",)
 # `supply = new ...` still parses, the head positions of `instance_decl` and
 # `chain_head` accept the soft terminals beside FREE_NAME, and the production
 # parser retypes such a head to FREE_NAME, so a 0.2 file that names something
-# `supply` keeps its 0.2 tree.
+# `supply` keeps its 0.2 tree. It also lexes a file older than 0.3 with them
+# demoted to FREE_NAME first, so a broken line one heads keeps its 0.2
+# diagnostic (rhoform/parser.py, _parse_as).
 #
 # WHY TERMINALS AND NOT NAMES. The other closed vocabularies are plain names
 # checked after parsing, which is right where the position is a name anyway.

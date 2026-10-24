@@ -130,15 +130,19 @@ promoted to a keyword was reserved in 0.1, so no 0.1 file could bind
 one.
 
 0.3 is likewise a superset of 0.2 for every file that declares 0.2 or
-earlier: such a file parses to the same tree, draws the same
-diagnostics and means the same thing under an implementation of 0.3.
-Its new statements open with soft keywords, words 0.2 never reserved, so
-a 0.2 file may still bind `supply`, `draw`, `waive`, `rule`, `side`,
-`warning` or `variant` as a name. A file declaring 0.3 may not bind the
-words 0.3 reserves (`RHO1019`), and it reads a run of designators with
-no separator, `01`, as the error `RHO1018` where 0.1 and 0.2 read two
-designators. What 0.3 adds is listed in
-[02 — Grammar](02-grammar.md#syntax-03-additions-unfrozen).
+earlier: such a file that is valid parses to the same tree and means the
+same thing under an implementation of 0.3, and one that is not draws the
+diagnostics 0.2 gave it, except that a construct only 0.3 has draws
+`RHO1016` (below) where 0.2 had an error at its first token. Its new
+statements open with soft keywords, words 0.2 never reserved, so a 0.2
+file may still bind `supply`, `draw`, `waive`, `rule`, `side`, `warning`
+or `variant` as a name, and a line such a word heads is read as 0.2 read
+it unless the file parses only as 0.3 statements. A file declaring 0.3
+may not bind the words 0.3 reserves (`RHO1019`), and it reads a run of
+designators with no separator, `01`, as the error `RHO1018` where 0.1
+and 0.2 read two designators. Raising a file's pragma to 0.3 therefore
+does not only add, which the fix-it below accounts for. What 0.3 adds is
+listed in [02 — Grammar](02-grammar.md#syntax-03-additions-unfrozen).
 
 One grammar defines every version, and the version is checked after
 parsing. A construct newer than the file's pragma is the syntax error
@@ -147,8 +151,14 @@ however many such constructs the file holds: its `required` param is the
 highest version any of them needs, the primary span is the first
 construct in source order that needs that version, the `count` param
 says how many constructs newer than the pragma there are, and its one
-fix-it is machine-applicable and rewrites only the version in the
-pragma, to `required`. A missing pragma, or one naming a version outside
+fix-it rewrites the version in the pragma to `required`. That fix-it is
+machine-applicable when `required` only adds to the file. When
+`required` refuses a designator run the file holds (`RHO1018`), the
+fix-it also spaces each run out (`01` to `0 1`), which is how the
+declared version reads it, and stays machine-applicable. When `required`
+reserves a word the file binds as a name (`RHO1019`), no edit can choose
+the new name: the fix-it is needs-review, and its message names the
+words to rename. A missing pragma, or one naming a version outside
 the set, is `RHO1005` (`missing-or-wrong-pragma`) instead; its fix-it
 writes the current version, and the rest of such a file is checked as
 the current version.

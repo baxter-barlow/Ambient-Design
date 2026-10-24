@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.2
+
+# 0.2 reads `01` as the designators `0` and `1`; 0.3 refuses the run
+# (RHO1018). The RHO1016 the `ground` rule draws stays machine-applicable
+# because its fix-it also spaces the run out, which is the 0.2 reading.
+component Header:
+    pin a passive 01
+    pin b passive 2
+    ground b
+
+module Board:
+    port vin power_in
+    h = new Header
+    h.a ~ vin
