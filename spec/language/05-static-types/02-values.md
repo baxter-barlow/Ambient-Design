@@ -183,7 +183,9 @@ Nothing but inside ever passes. A window's ends are its own: a window
 whose ends depend on another uncertain value (a part-data limit relative
 to a supply, 2.6) is not fixed, and a check compares it by moving that
 value to the measured side — `pin − factor × supply` against `offset`,
-evaluated at one instant.
+evaluated at one instant. Such a window carries that value's identity,
+and so does an uncertain value given an identity of its own, which is a
+measured value; the verdict refuses either as a window.
 
 An **implicit** check (an abs-max, a rating, a crossing, a budget, a
 headroom) records an incomplete verdict as an `undecided` coverage row
@@ -216,8 +218,10 @@ factor × V(reference) + offset, evaluated exactly over the enclosure of
 the referenced quantity (factor 1 and offset 0 when absent; the offset in
 the Measure's unit). Over an uncertain reference the Measure's enclosure
 takes the corner that widens it, depends on the reference, and is not
-tight. A reference the check cannot resolve leaves the Measure unread; it
-is never guessed.
+tight. It carries the reference's identity whether or not the reference
+has a variable of its own, so it is never taken for a fixed window, and
+it is unverified when the reference is. A reference the check cannot
+resolve leaves the Measure unread; it is never guessed.
 
 **Units.** A Measure's unit is `1`, an atom, or `atom/atom`. The atoms
 are 03's literal units and these:
