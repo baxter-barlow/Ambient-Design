@@ -1,0 +1,25 @@
+#pragma rhoform-syntax 0.3
+
+# Interface definitions (0.3, T1): a parameter list or none (an empty one
+# is none), leaf members, nested members named by a qualified name, and
+# either kind as a literal-sized array. `interface` is a keyword now, and
+# still a name wherever a name is not bound: a pin, after a dot.
+interface Power(v: voltage):
+    port hv
+    port gnd
+
+interface Bus8():
+    port d[8]
+    port strobe
+
+interface Board(name: string = "main", count: int):
+    port rails = new Power[2]
+    port bus = new rhoform.lib.iface.Spi
+    port data = new Bus8
+
+component Probe:
+    pin interface passive 1
+
+module Top:
+    p = new Probe
+    p.interface ~ x

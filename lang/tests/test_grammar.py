@@ -46,6 +46,7 @@ from grammar.rhoform_syntax import (  # noqa: E402
     PRAGMA_TEXT,
     PRAGMA_TEXTS,
     PROMOTED_IN_0_2,
+    PROMOTED_IN_0_3,
     RESERVED_FUTURE,
     RESERVED_SINCE,
     RULE_WORDS,
@@ -289,20 +290,21 @@ class Anchoring(unittest.TestCase):
     def test_keywords_are_a_subset_of_what_the_prototype_reserves(self):
         """A keyword the parser lets you use as a name is a hole in the freeze.
 
-        AMENDED for syntax 0.2. The relationship that holds now is: the
-        keywords are exactly the prototype's reserved words (minus `signal`,
-        below) plus the seven words 0.2 promoted from RESERVED_FUTURE. The
-        prototype never reserved those seven — the grammar reserved them
-        BEYOND it in v0.1, deliberately, so that promoting them now is
-        additive — and the prototype cannot learn them, because a
-        fingerprint over lang/bakeoff/ gates the published token
-        measurements. So the test names the exception exactly instead of
-        dropping the anchor: any other keyword the prototype does not
+        AMENDED for syntax 0.2 and 0.3. The relationship that holds now is:
+        the keywords are exactly the prototype's reserved words (minus
+        `signal`, below) plus the seven words 0.2 and the one word 0.3
+        promoted from RESERVED_FUTURE. The prototype never reserved those
+        eight — the grammar reserved them BEYOND it in v0.1, deliberately,
+        so that promoting them is additive — and the prototype cannot learn
+        them, because a fingerprint over lang/bakeoff/ gates the published
+        token measurements. So the test names the exception exactly instead
+        of dropping the anchor: any other keyword the prototype does not
         reserve is still a failure.
         """
-        self.assertEqual(set(KEYWORDS) - RESERVED, set(PROMOTED_IN_0_2))
-        self.assertEqual(set(PROMOTED_IN_0_2) & RESERVED, set())
-        self.assertTrue(set(PROMOTED_IN_0_2) <= set(KEYWORDS))
+        promoted = set(PROMOTED_IN_0_2) | set(PROMOTED_IN_0_3)
+        self.assertEqual(set(KEYWORDS) - RESERVED, promoted)
+        self.assertEqual(promoted & RESERVED, set())
+        self.assertTrue(promoted <= set(KEYWORDS))
 
     def test_the_freeze_drops_signal_and_nothing_else(self):
         """`signal` is candidate A's net declaration and lost the bake-off.
@@ -546,9 +548,11 @@ class Conformance(unittest.TestCase):
         the prototype, which happily binds all eight. E1 forbids a breaking
         syntax change without a deterministic auto-migrator, and reserving a
         word after designs exist is exactly that; reserving it while the only
-        v0.1 sources are this repo's examples costs nothing.
+        v0.1 sources are this repo's examples costs nothing. Syntax 0.3 gave
+        the last of them, `interface`, a production, so RESERVED_FUTURE is
+        empty; the word stays unbindable, now as a keyword.
         """
-        for word in RESERVED_FUTURE:
+        for word in RESERVED_FUTURE + PROMOTED_IN_0_3:
             for body in (
                 f"module {word}:\n    port p passive\n",
                 f"    net {word}:\n        p\n",
@@ -1005,7 +1009,7 @@ class Conformance(unittest.TestCase):
                 self.assertTrue(self._accepts(header + site.format(w="ok")),
                                 "the partner with an ordinary name must "
                                 "parse, or this site proves nothing")
-            for word in PROMOTED_IN_0_2:
+            for word in PROMOTED_IN_0_2 + PROMOTED_IN_0_3:
                 with self.subTest(word=word, site=site.split("\n")[0]):
                     self.assertFalse(self._accepts(header + site.format(w=word)))
 
@@ -1032,7 +1036,7 @@ class Conformance(unittest.TestCase):
         for site in sites:
             ordinary = self._both(self._design(site.format(w="ok")))
             self.assertTrue(ordinary[0], site)
-            for word in PROMOTED_IN_0_2:
+            for word in PROMOTED_IN_0_2 + PROMOTED_IN_0_3:
                 with self.subTest(word=word, site=site.strip()[:24]):
                     self.assertEqual(
                         self._both(self._design(site.format(w=word))),
@@ -1227,8 +1231,19 @@ class Syntax03Tables(unittest.TestCase):
                                 or name in SOFT_KEYWORDS, name)
                 self.assertIn(version, SYNTAX_VERSIONS)
         for name in ("annotation", "waiver", "rule_override", "rule_decl",
-                     "side_decl"):
+                     "side_decl", "interface_def", "bundle_port_decl",
+                     "view_decl"):
             self.assertEqual(CONSTRUCT_SINCE[name], "0.3")
+
+    def test_interface_is_the_one_keyword_0_3_promotes(self):
+        # The last word v0.1 reserved: a keyword from 0.3, as the 0.2 words
+        # are from 0.2, leaving nothing reserved for a later version.
+        self.assertEqual(PROMOTED_IN_0_3, ("interface",))
+        self.assertEqual(RESERVED_FUTURE, ())
+        self.assertIn("interface", KEYWORDS)
+        self.assertEqual({w: v for w, v in KEYWORDS_SINCE.items()
+                          if w in KEYWORDS}, {
+            **{w: "0.2" for w in PROMOTED_IN_0_2}, "interface": "0.3"})
 
     def test_the_soft_keywords_are_0_3_and_not_keywords(self):
         for name, word in SOFT_KEYWORDS.items():
@@ -1318,11 +1333,12 @@ class ReservedSetDocumentation(unittest.TestCase):
     went unmentioned, so a reader auditing the freeze against the README
     found an 8-word discrepancy and no explanation."""
 
-    # `words?`: since 0.2 promoted seven of the eight, ONE word is reserved,
-    # and the README says so in grammatical English.
+    # `words?`: 0.2 promoted seven of the eight, leaving ONE word reserved,
+    # and 0.3 the eighth, leaving none, so the list in parentheses is
+    # optional: the README says either in grammatical English.
     SENTENCE = re.compile(
         r"cannot be any of (\d+) words: the (\d+) keywords the grammar "
-        r"actually uses plus (\d+) words? reserved for v1 \(([^)]*)\)")
+        r"actually uses plus (\d+) words? reserved for v1(?: \(([^)]*)\))?")
 
     def test_the_readme_states_the_full_free_name_exclusion(self):
         collapsed = re.sub(r"\s+", " ",
@@ -1338,7 +1354,8 @@ class ReservedSetDocumentation(unittest.TestCase):
         self.assertEqual(future, len(RESERVED_FUTURE))
         self.assertEqual(total, len(KEYWORDS) + len(RESERVED_FUTURE))
         listed = sorted(word.strip().strip("`")
-                        for word in found.group(4).split(","))
+                        for word in (found.group(4) or "").split(",")
+                        if word.strip())
         self.assertEqual(listed, sorted(RESERVED_FUTURE))
 
     def test_free_name_actually_excludes_both_tuples(self):

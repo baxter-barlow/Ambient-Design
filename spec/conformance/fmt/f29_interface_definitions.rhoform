@@ -1,0 +1,11 @@
+#pragma rhoform-syntax 0.3
+# An interface's members sort by name; its parameter list keeps the order
+# written, and an empty one is dropped, as a module's is. Definitions keep
+# their source order.
+interface   Power ( v:voltage ) :
+    port   hv
+    port gnd
+interface Bus8 ( ):
+    port strobe
+    port d [ 8 ]
+    port   rails=new   Power [2]

@@ -18,8 +18,7 @@ Why this notice is here
     attribution." Rhoform adopts the shape of atopile's surface syntax and
     owes atopile public attribution for it:
       - the definition nouns `module`, `component` and `interface`
-        (syntax 0.2 defines `component`; `interface` remains a reserved
-        word whose definition arrives in a later syntax version);
+        (syntax 0.2 defines `component`, and syntax 0.3 `interface`);
       - the `new` keyword;
       - the `~` connection operator.
     The attribution itself is the "Attribution" section of LICENSES.md; this

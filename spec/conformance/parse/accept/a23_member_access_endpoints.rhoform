@@ -1,0 +1,16 @@
+#pragma rhoform-syntax 0.3
+
+# Endpoints that reach into a bundle (0.3): a dot after a dot, and an index
+# after a dot's name, any number of each, in a chain's head, after `~`, in a
+# net block and after `isolated`; a loop variable may index any of them.
+module Top:
+    j1.usb.d.p ~ r11.a
+    r12.a ~ j1.usb.d.n
+    leds[2].line ~ d[2].a
+    cells[0].bus[1].d[3] ~ power.gnd
+    net VCC:
+        reg.output.hv
+        cells[1].power.hv
+    isolated spare.bus.cs
+    for i in range(4):
+        leds[i].ref ~ cells[i].bus[i + 1].ref

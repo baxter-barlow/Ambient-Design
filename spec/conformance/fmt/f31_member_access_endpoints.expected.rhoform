@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.3
+
+# An endpoint that reaches into a bundle is spelled with no space around
+# its dots and brackets, and a net block's members sort naturally on that
+# spelling.
+module Top:
+    net VCC:
+        cells[2].power.hv
+        cells[10].power.hv
+        reg.output.hv
+    j1.usb.d.p ~ r11.a
+    for i in range(4):
+        leds[i].ref ~ cells[i + 1].bus.ref

@@ -48,7 +48,9 @@ subtrees form its block and how that block orders (`_BLOCKS`), and its sort
 key (`_KEYS`). The 0.2 surface (imports, component definitions, parameter
 lists, `if`/`else`/`for`, arrays and indexes) and the 0.3 surface
 (annotations, waivers, rule overrides, component rules and sides, quoted
-designators, an assertion's `warning`) are rows in the same tables; the
+designators, an assertion's `warning`, and interfaces: definitions and their
+members, bundle ports, views and their bindings, and endpoints that reach
+into a bundle) are rows in the same tables; the
 only structural addition is the `else` clause, a unit hung off its `if`
 rather than a member of the enclosing block, so it is never sorted away
 from it.
@@ -176,8 +178,9 @@ def _dotted(node) -> str:
 
 
 def _endpoint(node) -> str:
-    """`endpoint`, `chain_head`: `r1`, `r1.a`, and (0.2) `r[i + 1].a`. The
-    index is its tokens verbatim, single-spaced around the operator."""
+    """`endpoint`, `chain_head`: `r1`, `r1.a`, (0.2) `r[i + 1].a`, and (0.3)
+    `j1.power.hv`. An index is its tokens verbatim, single-spaced around the
+    operator."""
     text = ""
     for child in node.children:
         if _is_tree(child):  # the index
@@ -236,6 +239,48 @@ def _head_module(node) -> str:
 
 def _head_component(node) -> str:
     return f"component {node.children[1]}{_params(node)}"
+
+
+def _head_interface(node) -> str:
+    return f"interface {node.children[1]}{_params(node)}"
+
+
+def _typed(node) -> str:
+    """`new <interface>[N](args)`, the type of a bundle port, a view or a
+    nested member (0.3): the size and arguments when it has them."""
+    size = _subtree(node, "array_size")
+    array = "" if size is None else f"[{size.children[0]}]"
+    return (f"new {_dotted(_subtree(node, 'qualified_name'))}{array}"
+            f"{_arguments(node)}")
+
+
+def _head_member(node) -> str:
+    name = node.children[1]
+    if _subtree(node, "qualified_name") is None:
+        size = _subtree(node, "array_size")
+        return f"port {name}" + ("" if size is None
+                                 else f"[{size.children[0]}]")
+    return f"port {name} = {_typed(node)}"
+
+
+def _head_bundle_port(node) -> str:
+    return f"port {node.children[1]} = {_typed(node)}"
+
+
+def _member_path(node) -> str:
+    """A view binding's leaf member, `bus.sck` or `d[3]`."""
+    text = ""
+    for token in node.children:
+        if token.type == "INTEGER":
+            text += f"[{token}]"
+        else:
+            text += ("." if text else "") + str(token)
+    return text
+
+
+def _head_binding(node) -> str:
+    path, pin = node.children
+    return f"{_member_path(path)} = {pin}"
 
 
 def _import_names(node) -> list[str]:
@@ -400,6 +445,11 @@ _HEADS = {
     "import_stmt": _head_import,
     "module_def": _head_module,
     "component_def": _head_component,
+    "interface_def": _head_interface,
+    "member_decl": _head_member,
+    "bundle_port_decl": _head_bundle_port,
+    "view_decl": _head_bundle_port,
+    "binding": _head_binding,
     "if_stmt": _head_if,
     "else_clause": _head_else,
     "for_stmt": _head_for,
@@ -437,7 +487,10 @@ _HEADS = {
 # first `block`; its `else` branch is an "else_clause" unit of its own.
 _BLOCKS = {
     "module_def": ("paragraph", "statement"),
-    "component_def": ("sorted", ("pin_decl", "rule_decl", "side_decl")),
+    "component_def": ("sorted", ("pin_decl", "rule_decl", "side_decl",
+                                 "view_decl")),
+    "interface_def": ("sorted", "member_decl"),
+    "view_decl": ("sorted", "binding"),
     "if_stmt": ("paragraph", "block"),
     "else_clause": ("paragraph", "block"),
     "for_stmt": ("paragraph", "block"),
@@ -490,10 +543,12 @@ def _name_key(token) -> tuple:
 # `else` or `for` body), by grammar production. Chains, `isolated`, `if`
 # and `for` share rank 5 and keep source order. A rule override follows
 # the instances it is about, and the annotations and waivers follow what
-# they name (syntax 0.3). Spec 07 restates this table and the conformance
-# gate reconciles the two.
+# they name (syntax 0.3); a bundle port is a port, sorted among them by
+# name. Spec 07 restates this table and the conformance gate reconciles the
+# two.
 STATEMENT_RANKS = {
     "port_decl": 0,
+    "bundle_port_decl": 0,
     "table_decl": 1,
     "instance_decl": 2,
     "rule_override": 3,
@@ -521,13 +576,14 @@ BODY_RANKS = {
 
 
 # A component body's fixed order (syntax 0.3): its pins, then its rules,
-# then its sides. Pins sort by name, sides by name, and rules by their whole
-# canonical line, so two rules never tie. Restated in spec 07 and
-# reconciled the same way.
+# then its sides, then its views. Pins, sides and views sort by name, and
+# rules by their whole canonical line, so two rules never tie. Restated in
+# spec 07 and reconciled the same way.
 COMPONENT_RANKS = {
     "pin_decl": 0,
     "rule_decl": 1,
     "side_decl": 2,
+    "view_decl": 3,
 }
 
 
@@ -570,6 +626,14 @@ _KEYS = {
     "rule_decl": _by_line("rule_decl", COMPONENT_RANKS),
     "side_decl": lambda n: (COMPONENT_RANKS["side_decl"],
                             _name_key(_direct_tokens(n)[1])),
+    "view_decl": lambda n: (COMPONENT_RANKS["view_decl"],
+                            _name_key(n.children[1])),
+    # a bundle port (0.3) ranks with the ports, by name
+    "bundle_port_decl": _ranked("bundle_port_decl", lambda n: n.children[1]),
+    # an interface's members and a view's bindings (0.3), by name and by
+    # member path
+    "member_decl": lambda n: (0, _name_key(n.children[1])),
+    "binding": lambda n: (0, natural_key(_member_path(n.children[0]))),
     # instance body (F-5), ranks from BODY_RANKS
     "pin_decl": lambda n: (BODY_RANKS["pin"], _name_key(_direct_tokens(n)[1])),
     "part_decl": lambda n: (BODY_RANKS["part"],),
@@ -586,6 +650,7 @@ _KEYS = {
     # definitions keep source order
     "module_def": lambda n: (0,),
     "component_def": lambda n: (0,),
+    "interface_def": lambda n: (0,),
 }
 
 

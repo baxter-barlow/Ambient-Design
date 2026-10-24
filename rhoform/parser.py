@@ -128,10 +128,11 @@ _VOCAB_SITES = {
 # The words the needs-newer-pragma diagnostic names each construct of the
 # source of truth's CONSTRUCT_SINCE by (a test holds the two tables to one
 # key set). An annotation is named by its own word, `supply` or `draw`. The
-# two constructs with no key there are recognized directly by
+# three constructs with no key there are recognized directly by
 # _newer_constructs: a `value` whose child is a FREE_NAME (a parameter
-# reference, 0.2) and a vocabulary word of WORDS_SINCE (a `ground_kind`
-# attribute, 0.3).
+# reference, 0.2), a vocabulary word of WORDS_SINCE (a `ground_kind`
+# attribute, 0.3) and an endpoint that reaches into a bundle (a member
+# access, 0.3).
 _CONSTRUCT_PROSE = {
     "import_stmt": "an `import` statement",
     "component_def": "a `component` definition",
@@ -147,8 +148,16 @@ _CONSTRUCT_PROSE = {
     "side_decl": "a `side` declaration",
     "QUOTED_DESIGNATOR": "a quoted designator",
     "WARNING": "a `warning` severity",
+    "interface_def": "an `interface` definition",
+    "bundle_port_decl": "a bundle port",
+    "view_decl": "an interface view",
 }
 _PARAMETER_REFERENCE = ("a parameter reference", "0.2")
+_MEMBER_ACCESS = ("a member access", "0.3")
+# The rules whose children spell a connectable point, name and index by
+# name and index: since 0.3 the third name, or an index after the second, is
+# a member access.
+_ENDPOINTS = frozenset({"endpoint", "chain_head"})
 
 # The soft keywords a statement's head may be while it is the name it was
 # before 0.3 (`supply = new ...`): the parser retypes them to FREE_NAME, so
@@ -438,7 +447,8 @@ class ParseResult:
 
 
 _BRACKETED = frozenset(
-    {"arguments", "net_attributes", "params", "array_size", "index"})
+    {"arguments", "net_attributes", "params", "array_size", "index",
+     "member_path"})
 
 
 def _extent(node) -> tuple[int, int]:
@@ -1513,8 +1523,9 @@ def _newer_constructs(data: bytes, shift: int, tree,
     """(start, end, construct, version) for each construct of `tree` that
     some version after 0.1 introduced, as author byte offsets, ordered by
     start, then longest first. A construct is a node whose rule, or a token
-    whose terminal, the SoT's CONSTRUCT_SINCE names, plus the two it cannot
-    name: a parameter reference and a vocabulary word of WORDS_SINCE."""
+    whose terminal, the SoT's CONSTRUCT_SINCE names, plus the three it
+    cannot name: a parameter reference, a vocabulary word of WORDS_SINCE and
+    a member access."""
     found = []
     work = [tree]
     while work:
@@ -1536,6 +1547,8 @@ def _newer_constructs(data: bytes, shift: int, tree,
                 getattr(child, "type", None) == "FREE_NAME"
                 for child in node.children):
             construct, version = _PARAMETER_REFERENCE
+        elif node.data in _ENDPOINTS and _member_access(node):
+            construct, version = _MEMBER_ACCESS
         elif node.data in _VOCAB_SITES:
             vocabulary, index = _VOCAB_SITES[node.data]
             names = [child for child in node.children
@@ -1558,6 +1571,20 @@ def _newer_constructs(data: bytes, shift: int, tree,
         work.extend(node.children)
     found.sort(key=lambda item: (item[0], -item[1], item[2]))
     return found
+
+
+def _member_access(node) -> bool:
+    """Whether an endpoint reaches into a bundle (0.3): a third name, or an
+    index after its second. `a`, `a.b`, `a[i]` and `a[i].b` are 0.1 and
+    0.2 shapes."""
+    names = 0
+    for child in node.children:
+        if hasattr(child, "data"):  # an index
+            if names >= 2:
+                return True
+        else:
+            names += 1
+    return names > 2
 
 
 def _version_gate(file: str, data: bytes, shift: int, tree, loaded: _Loaded,

@@ -1,0 +1,7 @@
+#pragma rhoform-syntax 0.1
+# RHO1016: a second dot in an endpoint is syntax 0.3. `j1.power` alone is a
+# 0.1 endpoint, whatever it names.
+module Top:
+    port vin passive
+    vin ~ j1.power.hv
+    j1.power ~ j2.power

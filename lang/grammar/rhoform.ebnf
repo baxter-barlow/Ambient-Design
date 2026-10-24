@@ -72,14 +72,14 @@ DEDENT ::= (* supplied by the layout pass *)
 FINAL_NEWLINE ::= (* supplied by the layout pass *)
 
 (* Productions. *)
-(* A file is the L8 pragma, then imports (0.2), then definitions: modules, and (0.2) components. Nothing else at file scope. The definitions are an inline choice rather than a `definition` rule so a 0.1 file's tree is exactly what it was under 0.1. *)
-start ::= NEWLINE? PRAGMA NEWLINE import_stmt* (module_def | component_def)+
+(* A file is the L8 pragma, then imports (0.2), then definitions: modules, (0.2) components and (0.3) interfaces. Nothing else at file scope. The definitions are an inline choice rather than a `definition` rule so a 0.1 file's tree is exactly what it was under 0.1. *)
+start ::= NEWLINE? PRAGMA NEWLINE import_stmt* (module_def | component_def | interface_def)+
 
 (* A module groups instances, nets and assertions. A parameter list is 0.2. *)
 module_def ::= 'module' FREE_NAME params? ':' NEWLINE INDENT statement+ DEDENT
 
-(* Everything a module body can carry. `if` and `for` are 0.2; the annotations, waivers and rule overrides are 0.3. *)
-statement ::= port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl | if_stmt | for_stmt | annotation | waiver | rule_override
+(* Everything a module body can carry. `if` and `for` are 0.2; the annotations, waivers, rule overrides and bundle ports are 0.3. *)
+statement ::= port_decl | isolated_decl | net_decl | assertion | table_decl | chain | instance_decl | if_stmt | for_stmt | annotation | waiver | rule_override | bundle_port_decl
 
 (* This module's own interface port. The role is a pin_role name. *)
 port_decl ::= 'port' FREE_NAME NAME NEWLINE
@@ -99,8 +99,8 @@ net_attribute ::= NAME '=' STRING
 (* An unnamed net written as a chain of endpoints. *)
 chain ::= chain_head ('~' endpoint)+ NEWLINE
 
-(* The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer. An index is 0.2. A 0.3 soft keyword heads a chain too, as the name it was before 0.3. *)
-chain_head ::= (FREE_NAME | SUPPLY | DRAW | WAIVE | RULE) index? ('.' NAME)?
+(* The endpoint that opens a chain. Its first component is a FREE_NAME and every other endpoint's is a NAME, which looks arbitrary and is not: the parser reserved-checks the token that starts a statement and does not check the ones after `~`, so `net.a ~ x` is rejected while `x ~ net.a` is accepted. Writing that asymmetry down is also what keeps the statement head unambiguous for a one-token lexer. An index is 0.2. A 0.3 soft keyword heads a chain too, as the name it was before 0.3. A second dot, or an index after a dot, is 0.3, as in `endpoint`. *)
+chain_head ::= (FREE_NAME | SUPPLY | DRAW | WAIVE | RULE) index? ('.' NAME index?)*
 
 (* Instantiation. Facts about the instance live in its optional body. An array size is 0.2. A 0.3 soft keyword may be the bound name, as it could before 0.3; from 0.3 on that name is reserved. *)
 instance_decl ::= (FREE_NAME | SUPPLY | DRAW | WAIVE | RULE) '=' 'new' qualified_name array_size? arguments? (instance_body | NEWLINE)
@@ -162,8 +162,8 @@ argument ::= NAME '=' value
 (* T3/T4 literals. A bare decimal is not a value: it is either a quantity missing its unit or a count that should be whole — hence INTEGER here and NUMBER in `bound`. A bare name is a parameter reference (0.2); what it refers to is the elaborator's question. *)
 value ::= QUANTITY | QUANTITY_INTERVAL | STRING | INTEGER | 'true' | 'false' | FREE_NAME
 
-(* A connectable point: this module's port, or an instance pin. An index selects an array member (0.2). *)
-endpoint ::= NAME index? ('.' NAME)?
+(* A connectable point: this module's port, or an instance pin. An index selects an array member (0.2). Since 0.3 a dot may follow a dot, and an index a dot's name, to reach a member of a bundle: `j1.power.hv`, `leds[2].line`. Every 0.1 and 0.2 endpoint keeps its tree, since the repetition is inlined. *)
+endpoint ::= NAME index? ('.' NAME index?)*
 
 (* A dotted definition path, e.g. `rhoform.lib.passive.Resistor`. *)
 qualified_name ::= NAME ('.' NAME)*
@@ -171,8 +171,8 @@ qualified_name ::= NAME ('.' NAME)*
 (* Names imported from another file. The names are BOUND here, so each is a FREE_NAME; resolving the path is the package layer's job. *)
 import_stmt ::= 'import' FREE_NAME (',' FREE_NAME)* 'from' STRING NEWLINE
 
-(* A component definition: its pins and, since 0.3, its electrical rules and sides, and nothing else. Defaults such as `hardware` or flags are deliberately not definable here. A component with no pins (a mounting hole, a fiducial, artwork) has no block, as a `part` binding with no constraints has none. *)
-component_def ::= 'component' FREE_NAME params? (':' NEWLINE INDENT (pin_decl | rule_decl | side_decl)+ DEDENT | NEWLINE)
+(* A component definition: its pins and, since 0.3, its electrical rules, sides and interface views, and nothing else. Defaults such as `hardware` or flags are deliberately not definable here. A component with no pins (a mounting hole, a fiducial, artwork) has no block, as a `part` binding with no constraints has none. *)
+component_def ::= 'component' FREE_NAME params? (':' NEWLINE INDENT (pin_decl | rule_decl | side_decl | view_decl)+ DEDENT | NEWLINE)
 
 (* A definition's parameter list. It may be empty, and like an argument list it may wrap, because `(` suspends layout. *)
 params ::= '(' (param (',' param)*)? ')'
@@ -217,7 +217,25 @@ target ::= FREE_NAME index? ('.' NAME)?
 rule_decl ::= rule_body NEWLINE
 
 (* A rule word, the pins it covers, optionally a `from` or `to` pin, and optionally a value. A pin is a FREE_NAME or a keyword other than `from` and `to`, so those two after the pins lex as keywords; which words take how many pins is the check stage's. *)
-rule_body ::= RULE_WORD (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in')* (('from' | 'to') (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in'))? ('=' value)?
+rule_body ::= RULE_WORD (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in' | 'interface')* (('from' | 'to') (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in' | 'interface'))? ('=' value)?
 
 (* One side of an isolating component (GA-13): its name and the pins on it. *)
-side_decl ::= SIDE FREE_NAME ':' (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in')+ NEWLINE
+side_decl ::= SIDE FREE_NAME ':' (FREE_NAME | 'abstract' | 'assert' | 'at' | 'board_only' | 'dnp' | 'dynamic' | 'exclude_from_bom' | 'false' | 'hardware' | 'isolated' | 'least' | 'module' | 'most' | 'net' | 'new' | 'no' | 'part' | 'pin' | 'port' | 'static' | 'table' | 'true' | 'within' | 'component' | 'else' | 'for' | 'if' | 'import' | 'in' | 'interface')+ NEWLINE
+
+(* An interface definition (T1): a nominal record of members, with an optional parameter list whose values a bundle carries. A member is a leaf or a nested interface, either of which may be an array. *)
+interface_def ::= 'interface' FREE_NAME params? ':' NEWLINE INDENT member_decl+ DEDENT
+
+(* One member of an interface: a leaf, or a nested interface. A member's size is a literal and a nested one takes no arguments, since an interface's shape is fixed by its definition; which of those the elaborator refuses is its own. *)
+member_decl ::= 'port' FREE_NAME array_size? NEWLINE | 'port' FREE_NAME '=' 'new' qualified_name array_size? NEWLINE
+
+(* A module's bundle port: a port typed by an interface, an array of them when sized, its arguments the bundle's parameters. Told apart from `port_decl` by the `=` after the name. *)
+bundle_port_decl ::= 'port' FREE_NAME '=' 'new' qualified_name array_size? arguments? NEWLINE
+
+(* A component's interface view: an interface over pins it already has, one binding per leaf member. It creates no pin. *)
+view_decl ::= 'port' FREE_NAME '=' 'new' qualified_name arguments? ':' NEWLINE INDENT binding+ DEDENT
+
+(* A view's leaf member and the pin it is. *)
+binding ::= member_path '=' NAME NEWLINE
+
+(* A leaf member of an interface, named from the view's own bundle: `hv`, `bus.sck`, `d[3]`. An index here is a literal: what a pin is never depends on a parameter. *)
+member_path ::= NAME ('[' INTEGER ']')? ('.' NAME ('[' INTEGER ']')?)*

@@ -52,15 +52,16 @@ of both candidates' keywords because the bake-off needed one, and carrying the
 loser's vocabulary into the frozen language would reserve a useful identifier
 for a syntax that no longer exists.
 
-A name, then, cannot be any of 32 words: the 31 keywords the grammar actually
-uses plus 1 word reserved for v1 (`interface`). Reserving a word later is a
-breaking syntax change and E1 forbids those, so it is blocked from `FREE_NAME`
-now despite appearing in no rule. v0.1 reserved eight such words; syntax 0.2
-(`#pragma rhoform-syntax 0.2`, which adds imports, `component` definitions,
-parameters, `if`, `for` and arrays) gave seven of them productions —
-`component`, `else`, `for`, `from`, `if`, `import`, `in` — which is additive
-precisely because no 0.1 file could bind them, and they stay legal in every
-non-binding name position. One grammar parses both versions; the production
+A name, then, cannot be any of 32 words: the 32 keywords the grammar actually
+uses plus 0 words reserved for v1, since every word v0.1 reserved has a
+production now. Reserving a word later is a breaking syntax change and E1
+forbids those, so v0.1 blocked eight words from
+`FREE_NAME` before any rule used them; syntax 0.2 (`#pragma rhoform-syntax
+0.2`, which adds imports, `component` definitions, parameters, `if`, `for` and
+arrays) gave seven of them productions — `component`, `else`, `for`, `from`,
+`if`, `import`, `in` — and syntax 0.3 the eighth, `interface`, for T1's
+interface definitions. That is additive precisely because no older file could
+bind them, and they stay legal in every non-binding name position. One grammar parses both versions; the production
 parser refuses a 0.2 construct under a 0.1 pragma with a fix-it that rewrites
 the pragma. Earlier revisions of this section described only the keywords, so
 a reader counting what `FREE_NAME` rejects got 24 where the grammar enforced
@@ -70,8 +71,10 @@ grammar source.
 Syntax 0.3 (`#pragma rhoform-syntax 0.3`, **unfrozen** until M2 exits:
 `supply`, `draw` and `waive` statements, `rule` overrides, component rules
 and sides, quoted designators, an assertion's trailing `warning`, the
-`ground_kind` net attribute) adds no keyword and leaves `FREE_NAME` alone.
-None of its words was reserved in 0.2, so each statement opens with a *soft*
+`ground_kind` net attribute, and interfaces — `interface` definitions, bundle
+ports, component views, endpoints that reach into a bundle) adds one keyword,
+`interface`, which was reserved, and leaves `FREE_NAME` alone. None of its
+other words was reserved in 0.2, so each statement opens with a *soft*
 keyword, a terminal matching only its word and viable only where its
 statement may start: `draw`, `rule`, `side`, `supply`, `waive`, `warning`. A
 0.2 file binding one of them keeps its 0.2 parse tree. Instead the production
@@ -89,7 +92,7 @@ python3 -m bakeoff measure                  # token cost, T9 and L6 readings
 python3 -m bakeoff defects                  # diagnostic quality on seeded defects
 python3 -m bakeoff render --arm candidate_b --design blinker-555
 python3 -m bakeoff card --arm candidate_a   # the A4 language card
-python3 -m unittest discover -s tests -t .  # 185 tests (38 need lark)
+python3 -m unittest discover -s tests -t .  # 186 tests (38 need lark)
 ```
 
 Run from this directory. `make check` runs the gate and the tests from the

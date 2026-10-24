@@ -1,0 +1,9 @@
+#pragma rhoform-syntax 0.2
+# RHO1016: an interface definition, a bundle port and a view are syntax 0.3.
+# One diagnostic for the file, at the first of them, with a fix-it that
+# rewrites the pragma; it only adds to 0.2.
+interface Power(v: voltage):
+    port gnd
+    port hv
+module Top:
+    port power = new Power

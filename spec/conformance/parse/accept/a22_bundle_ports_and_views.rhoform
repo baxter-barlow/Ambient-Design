@@ -1,0 +1,33 @@
+#pragma rhoform-syntax 0.3
+
+# A module's bundle ports and a component's views (0.3, T1). A bundle port
+# is `port`, a name, `=` and `new` with an interface, optionally an array
+# size and arguments; a view is the same with no size and a block of
+# bindings, each a leaf member path, a literal index in it, and a pin.
+component Ldo(vout: voltage):
+    pin gnd passive 1
+    pin in power_in 2
+    pin out power_out 3
+    port input = new rhoform.lib.iface.Power:
+        gnd = gnd
+        hv = in
+    port output = new rhoform.lib.iface.Power(v = vout):
+        hv = out
+        gnd = gnd
+
+component Latch:
+    pin d0 input 1
+    pin d1 input 2
+    pin le input 3
+    port bus = new Bus8:
+        d[0] = d0
+        d[1] = d1
+        strobe = le
+
+module Top(vout: voltage = 3.3V):
+    port power = new rhoform.lib.iface.Power(v = 9V +/- 10%)
+    port leds = new rhoform.lib.iface.Logic[4]
+    port i2c = new rhoform.lib.iface.I2C(
+        addr = 80,
+        freq = 400kHz)
+    reg = new Ldo(vout = vout)

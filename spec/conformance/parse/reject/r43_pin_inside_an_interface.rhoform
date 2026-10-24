@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.3
+# An interface's members are `port` lines with no role: members carry no
+# roles (T1), so a `pin` line in an interface is an unexpected token.
+interface Power(v: voltage):
+    pin gnd passive
+    port hv
+module Top:
+    port power = new Power

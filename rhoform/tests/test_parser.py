@@ -1305,17 +1305,29 @@ class PromotedKeywordTest(unittest.TestCase):
                 result = _parse(PRAGMA_0_2 + "\n" + template.format(w="ok"))
                 self.assertTrue(result.ok, result.diagnostics.render())
 
-    def test_interface_stays_reserved_not_a_keyword(self):
+    def test_interface_is_a_keyword_that_no_version_binds(self):
+        # Reserved through 0.2 and a keyword from 0.3 (T1): unbindable in
+        # every version, a name in every other position, and its
+        # definition a 0.3 construct.
         from rhoform import parser as production
 
-        self.assertNotIn("interface",
-                         production._load().keyword_of.values())
-        self.assertFalse(_parse(PRAGMA_0_2 + "\ninterface I:\n"
-                                "    pin a passive\n").ok)
-        self.assertFalse(_parse(PRAGMA_0_2 + "\nmodule M:\n"
-                                "    interface = new lib.R\n").ok)
-        self.assertTrue(_parse(PRAGMA_0_2 + "\nmodule M:\n"
-                               "    x ~ r.interface\n").ok)
+        self.assertIn("interface", production._load().keyword_of.values())
+        for header in (PRAGMA, PRAGMA_0_2, PRAGMA_0_3):
+            with self.subTest(header=header[-3:]):
+                self.assertFalse(_parse(header + "\nmodule M:\n"
+                                        "    interface = new lib.R\n").ok)
+                self.assertTrue(_parse(header + "\nmodule M:\n"
+                                       "    x ~ r.interface\n").ok)
+                self.assertTrue(_parse(header + "\nmodule M:\n"
+                                       "    r = new lib.R:\n"
+                                       "        pin interface passive\n").ok)
+        self.assertTrue(_parse(PRAGMA_0_3 + "\ninterface I:\n"
+                               "    port a\n").ok)
+        self.assertEqual(_codes(_parse(PRAGMA_0_2 + "\ninterface I:\n"
+                                       "    port a\n")), ["RHO1016"])
+        # Members carry no roles: a `pin` line is no member.
+        self.assertEqual(_codes(_parse(PRAGMA_0_3 + "\ninterface I:\n"
+                                       "    pin a passive\n")), ["RHO1006"])
 
     def test_range_is_a_name_not_a_keyword(self):
         self.assertTrue(_parse(PRAGMA + "\nmodule M:\n"
@@ -1604,6 +1616,12 @@ class Syntax03Test(unittest.TestCase):
         "warning": "a `warning` severity",
         'module M:\n    net N(ground_kind = "power"):\n        a':
             "a `ground_kind` attribute",
+        "interface I:\n    port a": "an `interface` definition",
+        "module M:\n    port p = new I": "a bundle port",
+        "component C:\n    pin a passive 1\n    port v = new I:\n"
+        "        x = a": "an interface view",
+        "module M:\n    x ~ j1.power.hv": "a member access",
+        "module M:\n    x ~ leds.d[2]": "a member access",
     }
 
     def test_the_version_tables(self):
@@ -1760,6 +1778,36 @@ class Syntax03Test(unittest.TestCase):
         _, diags = _diags(PRAGMA_0_2 + '\nmodule M:\n    net N('
                           'ground_kind = "power"):\n        a\n')
         self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+
+    def test_a_member_access_is_a_second_dot_or_an_index_after_one(self):
+        # `a`, `a.b`, `a[i]` and `a[i].b` keep their 0.2 shape whatever
+        # they name, a whole bundle included; a third name, or an index
+        # after a dot, is 0.3, in a chain's head and after `~` alike.
+        for endpoint, newer in (("x", False), ("x.y", False),
+                                ("x[0]", False), ("x[0].y", False),
+                                ("x.y.z", True), ("x.y[0]", True),
+                                ("x[0].y[1]", True), ("x.y.z.w", True)):
+            for line in (f"{endpoint} ~ q.r", f"q.r ~ {endpoint}"):
+                with self.subTest(line=line):
+                    _, diags = _diags(PRAGMA_0_2 + "\nmodule M:\n    "
+                                      + line + "\n")
+                    self.assertEqual([d["code"] for d in diags],
+                                     ["RHO1016"] if newer else [])
+                    if newer:
+                        self.assertEqual(diags[0]["params"]["construct"],
+                                         "a member access")
+                    self.assertTrue(_parse(PRAGMA_0_3 + "\nmodule M:\n    "
+                                           + line + "\n").ok)
+
+    def test_a_member_access_keeps_its_names_and_indexes_in_order(self):
+        result = _parse(PRAGMA_0_3 + "\nmodule M:\n"
+                        "    cells[i].bus[1].d.p ~ x\n")
+        self.assertTrue(result.ok, result.diagnostics.render())
+        (head,) = result.tree.find_data("chain_head")
+        self.assertEqual(
+            [str(c) if not hasattr(c, "data") else c.data
+             for c in head.children],
+            ["cells", "index", "bus", "index", "d", "p"])
 
     def test_a_line_a_0_3_word_heads_is_read_as_0_2_reads_it(self):
         # Under 0.2 the word is a name, and the broken line is reported at

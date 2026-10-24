@@ -595,6 +595,26 @@ GOLDEN_0_3 = [
      "    supply us[ 1 ].a at most 1A\n",
      P3 + '\nmodule M:\n    net N(ground_kind = "power"):\n        a\n'
      "    supply us[1].a at most 1A\n"),
+    ("an interface's members by name, its empty parameter list dropped",
+     P3 + "interface I ( ):\n    port z = new J [ 2 ]\n    port a[ 3 ]\n",
+     P3 + "\ninterface I:\n    port a[3]\n    port z = new J[2]\n"),
+    ("a bundle port ranks with the ports, by name",
+     P3 + "module M:\n    u = new C\n    port z passive\n"
+     "    port p=new I [2] ( v=3.30V )\n    port a passive\n",
+     P3 + "\nmodule M:\n    port a passive\n    port p = new I[2](v = 3.3V)\n"
+     "    port z passive\n    u = new C\n"),
+    ("views follow the sides, their bindings by member path",
+     P3 + "component C:\n    port v = new I :\n        d[10] = b\n"
+     "        d[2]=a\n    side s: a\n    pin b passive 2\n"
+     "    pin a passive 1\n",
+     P3 + "\ncomponent C:\n    pin a passive 1\n    pin b passive 2\n"
+     "    side s: a\n    port v = new I:\n        d[2] = a\n"
+     "        d[10] = b\n"),
+    ("a member access is spelled tight, a net's members naturally",
+     P3 + "module M:\n    net N:\n        c[ 10 ] .p.hv\n        c[2].p . hv\n"
+     "    a . b [ i + 1 ] . c ~ x\n",
+     P3 + "\nmodule M:\n    net N:\n        c[2].p.hv\n        c[10].p.hv\n"
+     "    a.b[i + 1].c ~ x\n"),
 ]
 
 

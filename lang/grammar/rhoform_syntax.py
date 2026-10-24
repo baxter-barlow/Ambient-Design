@@ -49,12 +49,13 @@ from pathlib import Path
 # A SET OF VERSIONS, ONE GRAMMAR (decision S-1/S-2). Each version adds to
 # the one before: 0.2 imports, component definitions, parameters, `if`, `for`
 # and arrays, and 0.3 the design annotations (`supply`, `draw`, `waive`),
-# component rules, rule overrides, a quoted designator and an assertion's
-# `warning`. A file declaring an older version keeps its tree under the one
-# grammar; what a newer version takes away is only in files that declare it
-# (0.3 reserves a few names, RESERVED_SINCE, and refuses designators run
-# together). One grammar therefore parses all of them, and the PRAGMA
-# terminal accepts exactly the versions listed here.
+# component rules, rule overrides, a quoted designator, an assertion's
+# `warning`, and interfaces: definitions, bundle ports, component views and
+# endpoints that reach a bundle's members. A file declaring an older version
+# keeps its tree under the one grammar; what a newer version takes away is
+# only in files that declare it (0.3 reserves a few names, RESERVED_SINCE,
+# and refuses designators run together). One grammar therefore parses all
+# of them, and the PRAGMA terminal accepts exactly the versions listed here.
 # What an older version forbids is enforced AFTER parsing, by the production
 # parser, as one diagnostic per file with a fix-it that rewrites the pragma
 # (CONSTRUCT_SINCE says what needs which version) — a second grammar per
@@ -134,9 +135,10 @@ LEXER_QUANTITY = (
 # in the frozen grammar. Carrying A's vocabulary into B's freeze would reserve
 # a useful identifier for a language that no longer exists, so v0 does not.
 #
-# The seven 0.2 words at the end were RESERVED_FUTURE until 0.2 gave them
-# productions. The prototype never reserved them (see RESERVED_FUTURE's
-# history below), so they are the one stated exception to the subset rule.
+# The seven 0.2 words and the one 0.3 word at the end were RESERVED_FUTURE
+# until their version gave them productions. The prototype never reserved
+# them (see RESERVED_FUTURE's history below), so they are the one stated
+# exception to the subset rule.
 KEYWORDS = (
     "abstract",
     "assert",
@@ -170,6 +172,8 @@ KEYWORDS = (
     "if",
     "import",
     "in",
+    # Syntax 0.3 (T1), promoted from RESERVED_FUTURE.
+    "interface",
 )
 
 # The keywords syntax 0.2 promoted out of RESERVED_FUTURE. Published so the
@@ -177,6 +181,10 @@ KEYWORDS = (
 # exactly — every keyword is a prototype reserved word OR one of these —
 # rather than weakening it to nothing.
 PROMOTED_IN_0_2 = ("component", "else", "for", "from", "if", "import", "in")
+
+# The keyword syntax 0.3 promoted out of RESERVED_FUTURE, the last of v0.1's
+# eight: `interface`, for T1's interface definitions (R19).
+PROMOTED_IN_0_3 = ("interface",)
 
 # Words the grammar does not use and v1 will. Reserved now, because reserving a
 # word later is a BREAKING syntax change and E1 forbids those without a
@@ -202,9 +210,11 @@ PROMOTED_IN_0_2 = ("component", "else", "for", "from", "if", "import", "in")
 #
 # Syntax 0.2 gave seven of them productions and moved them to KEYWORDS, which
 # is additive precisely because they were reserved: no 0.1 file could bind
-# one, and every NAME position still accepts them. `interface` stays here,
-# because T1 interface semantics are R19 (M2) and a production with no
-# meaning behind it would be syntax nobody can use correctly.
+# one, and every NAME position still accepts them. Syntax 0.3 gave the eighth,
+# `interface`, its production when T1's semantics landed with it (R19), on
+# the same terms, so the tuple is empty now. It stays, empty, because it is
+# where a word v1 needs and no rule yet spells would go: reserving a word
+# after files exist is the breaking change E1 forbids.
 #
 # This is a DELIBERATE divergence from the prototype, which accepts all eight
 # as names — unlike the two fixes either side of it, which close gaps where
@@ -214,7 +224,7 @@ PROMOTED_IN_0_2 = ("component", "else", "for", "from", "if", "import", "in")
 # `signal` is deliberately NOT here. It is candidate A's dead net keyword, not
 # a word v1 needs; see KEYWORDS above and
 # `test_the_freeze_drops_signal_and_nothing_else`.
-RESERVED_FUTURE = ("interface",)
+RESERVED_FUTURE: tuple[str, ...] = ()
 
 # SOFT KEYWORDS (syntax 0.3). A word 0.1 and 0.2 never reserved cannot become
 # a keyword without breaking a file that binds it (E1), so each 0.3 statement
@@ -284,6 +294,7 @@ RULE_WORDS = (
 # its name.
 KEYWORDS_SINCE = {
     **{word: "0.2" for word in PROMOTED_IN_0_2},
+    **{word: "0.3" for word in PROMOTED_IN_0_3},
     **{word: "0.3" for word in SOFT_KEYWORDS.values()},
 }
 TERMINALS_SINCE = {
@@ -735,15 +746,17 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "start",
         "A file is the L8 pragma, then imports (0.2), then definitions: "
-        "modules, and (0.2) components. Nothing else at file scope. The "
-        "definitions are an inline choice rather than a `definition` rule so "
-        "a 0.1 file's tree is exactly what it was under 0.1.",
+        "modules, (0.2) components and (0.3) interfaces. Nothing else at "
+        "file scope. The definitions are an inline choice rather than a "
+        "`definition` rule so a 0.1 file's tree is exactly what it was under "
+        "0.1.",
         Seq(
             Opt(NEWLINE),
             Term("PRAGMA"),
             NEWLINE,
             Rep(Ref("import_stmt")),
-            Rep(Alt(Ref("module_def"), Ref("component_def")), 1),
+            Rep(Alt(Ref("module_def"), Ref("component_def"),
+                    Ref("interface_def")), 1),
         ),
     ),
     (
@@ -760,7 +773,7 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "statement",
         "Everything a module body can carry. `if` and `for` are 0.2; the "
-        "annotations, waivers and rule overrides are 0.3.",
+        "annotations, waivers, rule overrides and bundle ports are 0.3.",
         Alt(
             Ref("port_decl"),
             Ref("isolated_decl"),
@@ -774,6 +787,7 @@ RULES: tuple[tuple[str, str, Node], ...] = (
             Ref("annotation"),
             Ref("waiver"),
             Ref("rule_override"),
+            Ref("bundle_port_decl"),
         ),
     ),
     (
@@ -825,8 +839,10 @@ RULES: tuple[tuple[str, str, Node], ...] = (
         "while `x ~ net.a` is accepted. Writing that asymmetry down is also "
         "what keeps the statement head unambiguous for a one-token lexer. "
         "An index is 0.2. A 0.3 soft keyword heads a chain too, as the name "
-        "it was before 0.3.",
-        Seq(_HEAD, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
+        "it was before 0.3. A second dot, or an index after a dot, is 0.3, "
+        "as in `endpoint`.",
+        Seq(_HEAD, Opt(Ref("index")),
+            Rep(Seq(Lit("."), NAME, Opt(Ref("index"))))),
     ),
     (
         "instance_decl",
@@ -1007,8 +1023,12 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "endpoint",
         "A connectable point: this module's port, or an instance pin. An "
-        "index selects an array member (0.2).",
-        Seq(NAME, Opt(Ref("index")), Opt(Seq(Lit("."), NAME))),
+        "index selects an array member (0.2). Since 0.3 a dot may follow a "
+        "dot, and an index a dot's name, to reach a member of a bundle: "
+        "`j1.power.hv`, `leds[2].line`. Every 0.1 and 0.2 endpoint keeps its "
+        "tree, since the repetition is inlined.",
+        Seq(NAME, Opt(Ref("index")),
+            Rep(Seq(Lit("."), NAME, Opt(Ref("index"))))),
     ),
     (
         "qualified_name",
@@ -1040,16 +1060,17 @@ RULES: tuple[tuple[str, str, Node], ...] = (
     (
         "component_def",
         "A component definition: its pins and, since 0.3, its electrical "
-        "rules and sides, and nothing else. Defaults such as `hardware` or "
-        "flags are deliberately not definable here. A component with no "
-        "pins (a mounting hole, a fiducial, artwork) has no block, as a "
-        "`part` binding with no constraints has none.",
+        "rules, sides and interface views, and nothing else. Defaults such "
+        "as `hardware` or flags are deliberately not definable here. A "
+        "component with no pins (a mounting hole, a fiducial, artwork) has "
+        "no block, as a `part` binding with no constraints has none.",
         Seq(
             Lit("component"),
             FREE_NAME,
             Opt(Ref("params")),
             Alt(_block(Rep(Alt(Ref("pin_decl"), Ref("rule_decl"),
-                               Ref("side_decl")), 1)), NEWLINE),
+                               Ref("side_decl"), Ref("view_decl")), 1)),
+                NEWLINE),
         ),
     ),
     (
@@ -1193,15 +1214,91 @@ RULES: tuple[tuple[str, str, Node], ...] = (
         "on it.",
         Seq(Term("SIDE"), FREE_NAME, Lit(":"), Rep(_PIN, 1), NEWLINE),
     ),
+    # ----------------------------------------------------------------------
+    # Syntax 0.3, interfaces (T1). Appended after every other 0.3 rule for
+    # the same reason: `interface` is the one new keyword literal, and it
+    # first appears here, so no older keyword's terminal is renumbered.
+    # ----------------------------------------------------------------------
+    (
+        "interface_def",
+        "An interface definition (T1): a nominal record of members, with an "
+        "optional parameter list whose values a bundle carries. A member is "
+        "a leaf or a nested interface, either of which may be an array.",
+        Seq(
+            Lit("interface"),
+            FREE_NAME,
+            Opt(Ref("params")),
+            _block(Rep(Ref("member_decl"), 1)),
+        ),
+    ),
+    (
+        "member_decl",
+        "One member of an interface: a leaf, or a nested interface. A "
+        "member's size is a literal and a nested one takes no arguments, "
+        "since an interface's shape is fixed by its definition; which of "
+        "those the elaborator refuses is its own.",
+        Alt(
+            Seq(Lit("port"), FREE_NAME, Opt(Ref("array_size")), NEWLINE),
+            Seq(Lit("port"), FREE_NAME, Lit("="), Lit("new"),
+                Ref("qualified_name"), Opt(Ref("array_size")), NEWLINE),
+        ),
+    ),
+    (
+        "bundle_port_decl",
+        "A module's bundle port: a port typed by an interface, an array of "
+        "them when sized, its arguments the bundle's parameters. Told apart "
+        "from `port_decl` by the `=` after the name.",
+        Seq(
+            Lit("port"),
+            FREE_NAME,
+            Lit("="),
+            Lit("new"),
+            Ref("qualified_name"),
+            Opt(Ref("array_size")),
+            Opt(Ref("arguments")),
+            NEWLINE,
+        ),
+    ),
+    (
+        "view_decl",
+        "A component's interface view: an interface over pins it already "
+        "has, one binding per leaf member. It creates no pin.",
+        Seq(
+            Lit("port"),
+            FREE_NAME,
+            Lit("="),
+            Lit("new"),
+            Ref("qualified_name"),
+            Opt(Ref("arguments")),
+            _block(Rep(Ref("binding"), 1)),
+        ),
+    ),
+    (
+        "binding",
+        "A view's leaf member and the pin it is.",
+        Seq(Ref("member_path"), Lit("="), NAME, NEWLINE),
+    ),
+    (
+        "member_path",
+        "A leaf member of an interface, named from the view's own bundle: "
+        "`hv`, `bus.sck`, `d[3]`. An index here is a literal: what a pin is "
+        "never depends on a parameter.",
+        Seq(
+            NAME,
+            Opt(Seq(Lit("["), INTEGER, Lit("]"))),
+            Rep(Seq(Lit("."), NAME, Opt(Seq(Lit("["), INTEGER, Lit("]"))))),
+        ),
+    ),
 )
 
 # What needs which syntax version, for the production parser's version gate
 # (RHO1016): a tree rule, or a terminal whose token is the whole construct.
 # A construct appearing under an older pragma counts once per node, nested
-# ones included. Two 0.2 constructs have no key here, because neither is a
-# rule or a token of its own: a parameter reference (a `value` whose token is
-# a FREE_NAME) and, in 0.3, a `ground_kind` attribute (WORDS_SINCE); the
-# parser recognizes both directly.
+# ones included. Three constructs have no key here, because none is a rule or
+# a token of its own: a parameter reference (a `value` whose token is a
+# FREE_NAME, 0.2) and, in 0.3, a `ground_kind` attribute (WORDS_SINCE) and a
+# member access (an `endpoint` or `chain_head` with a second dot, or an index
+# after a dot); the parser recognizes them directly.
 CONSTRUCT_SINCE = {
     "import_stmt": "0.2",
     "component_def": "0.2",
@@ -1217,6 +1314,9 @@ CONSTRUCT_SINCE = {
     "side_decl": "0.3",
     "QUOTED_DESIGNATOR": "0.3",
     "WARNING": "0.3",
+    "interface_def": "0.3",
+    "bundle_port_decl": "0.3",
+    "view_decl": "0.3",
 }
 
 

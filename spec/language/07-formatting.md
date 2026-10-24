@@ -1,6 +1,6 @@
 # 07 — Formatting and the canonical form
 
-*Rhoform Language Specification · normative, v0.2 · CC-BY-4.0 (see
+*Rhoform Language Specification · normative, v0.2 and the unfrozen 0.3 · CC-BY-4.0 (see
 [spec/README.md](../README.md))*
 
 Every Rhoform source has exactly one canonical spelling (I1). This
@@ -29,8 +29,8 @@ refused: the formatter returns the parse's diagnostics and no bytes. A
 recovered tree is the file with its broken statements removed, so
 formatting one would delete the author's broken lines.
 
-This section defines the canonical form of both syntax versions, 0.1
-and 0.2. Formatting never adds a construct, and the pragma line is
+This section defines the canonical form of every syntax version, 0.1,
+0.2 and the unfrozen 0.3. Formatting never adds a construct, and the pragma line is
 written exactly as authored, so a 0.1 source formats to a 0.1 source.
 A 0.1 source that uses a 0.2 construct does not parse clean
 ([01 — Lexical structure](01-lexical-structure.md#syntax-versions)) and
@@ -56,9 +56,9 @@ A failure of any of the four is an internal error of the formatter
 - Imports (0.2) come next, one per line in their sorted order (see
   Ordering) with no blank line between them, and exactly one blank
   line after the last.
-- Definitions, modules and (0.2) components, appear in source order,
-  each preceded by exactly one blank line. Definitions are never
-  sorted.
+- Definitions, modules, (0.2) components and (0.3) interfaces, appear
+  in source order, each preceded by exactly one blank line. Definitions
+  are never sorted.
 - No blank line follows a block header, and none precedes the end of a
   block or an `else:` line. Inside a statement block (a module body,
   and the body of an `if`, its `else` or a `for`), blank lines exist
@@ -110,10 +110,17 @@ the author wrapped over several lines is written on one line.
 | rule statement (0.3) | `rule isos[1] open a k` | pins keep source order |
 | supply, draw (0.3) | `supply VIN within 4.5V to 5.5V`, `draw ldo.in at most 5mA` | |
 | waiver (0.3) | `waive RHO3001 isos[0] "a spare footprint"` | |
+| interface (0.3) | `interface Power(v: voltage):` with one member per line | (its members: see Other sorted blocks) |
+| member (0.3) | `port hv`, `port d[8]`, `port bus = new SpiBus[2]` | |
+| bundle port (0.3) | `port leds = new rhoform.lib.iface.Logic[4](...)` | arguments sorted by name |
+| view (0.3) | `port output = new Power(v = vout):` with one binding per line | arguments sorted by name; bindings sorted by member path |
+| binding (0.3) | `bus.sck = sck`, `d[3] = d3` | |
+| member access (0.3) | `j1.power.hv`, `cells[i + 1].bus.ref` | |
 
 An empty argument list, attribute list and parameter list are
 removed: `new L()` is written `new L`, `net N():` is written `net N:`,
-and `component Trimmer():` is written `component Trimmer:`. A table
+and `component Trimmer():` is written `component Trimmer:`, as
+`interface Bus():` is written `interface Bus:`. A table
 keeps `()`, which its grammar requires.
 
 Parameters are never reordered: like a table's columns, a parameter
@@ -206,6 +213,7 @@ reconciles this table against the reference implementation.
 | Rank | Production | Example | Within the rank, ordered by |
 |---|---|---|---|
 | 0 | `port_decl` | `port vin power_in` | port name |
+| 0 | `bundle_port_decl` | `port power = new Power` | port name |
 | 1 | `table_decl` | `table T (v):` | the least of its row names |
 | 2 | `instance_decl` | `r1 = new L` | instance name |
 | 3 | `rule_override` | `rule d1 pass a to k` | its whole line |
@@ -218,7 +226,9 @@ reconciles this table against the reference implementation.
 | 7 | `assertion` | `assert f static frequency(OUT) at least 1Hz` | assertion name |
 | 8 | `waiver` | `waive RHO3001 r1 "a spare"` | its whole line |
 
-Chains, `isolated`, `if` and `for` statements share rank 5 and are
+A bundle port (0.3) is a port: it shares rank 0 with the `port`
+declarations, and they sort among one another by name. Chains,
+`isolated`, `if` and `for` statements share rank 5 and are
 never reordered among themselves. The syntax 0.3 statements (ranks 3, 6
 and 8) follow what they are about: a `rule` statement the instances, an
 annotation the connections, a waiver everything it can waive. No one
@@ -245,27 +255,31 @@ reference implementation.
 ### Component body order (0.3)
 
 A component body is always sorted: its pins, then its rules, then its
-sides. Pins sort by pin name, rules by their whole canonical line, and
-sides by side name. The conformance gate reconciles this table against
-the reference implementation.
+sides, then its views. Pins sort by pin name, rules by their whole
+canonical line, sides by side name, and views by view name. The
+conformance gate reconciles this table against the reference
+implementation.
 
 | Rank | Production | Example |
 |---|---|---|
 | 0 | `pin_decl` | `pin a passive 1` |
 | 1 | `rule_decl` | `regulate out from in = vout` |
 | 2 | `side_decl` | `side primary: in gnd` |
+| 3 | `view_decl` | `port output = new Power:` |
 
 ### Other sorted blocks
 
 A part's constraints, a net's members, a table's rows, a component's
-pins and the file's imports are always sorted, never divided into
-runs: constraints by name, members by their full endpoint text in
-canonical form (`r1.a`; `caps[2].a` before `caps[10].a`, and
-`r[i + 1].a` before `r[i].a`, since a space sorts before `]`), rows by
-row name, pins by pin name, and imports by their path (the string
-literal as written, quotes included), then by their name lists compared
-name by name, each list already sorted. Within an import, names are
-sorted.
+pins, an interface's members (0.3), a view's bindings (0.3) and the
+file's imports are always sorted, never divided into runs: constraints
+by name, members by their full endpoint text in canonical form (`r1.a`;
+`caps[2].a` before `caps[10].a`, and `r[i + 1].a` before `r[i].a`, since
+a space sorts before `]`; `j1.power.hv` the same way), rows by row name,
+pins by pin name, an interface's members by member name, a view's
+bindings by their member path in canonical form (`d[2]` before `d[10]`),
+and imports by their path (the string literal as written, quotes
+included), then by their name lists compared name by name, each list
+already sorted. Within an import, names are sorted.
 
 ## Comments
 

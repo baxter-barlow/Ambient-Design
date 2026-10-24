@@ -30,7 +30,8 @@ recorded asymmetry of v0.1, carried into 0.2 unchanged):
 
 - A name being **bound** — a module, port, net, table row, or instance
   name, since 0.2 a component, an imported name, a declared parameter,
-  or a loop variable, and since 0.3 a component's side — MUST NOT be a
+  or a loop variable, and since 0.3 a component's side, an interface, an
+  interface's member, a bundle port or a view — MUST NOT be a
   keyword or a reserved word. In a file declaring 0.3, it MUST NOT be a
   word [reserved from 0.3](#reserved-from-03) either (`RHO1019`); nor
   may a reference, or the first name of a 0.3 statement's target.
@@ -42,7 +43,8 @@ recorded asymmetry of v0.1, carried into 0.2 unchanged):
   boolean literals.
 - Every **other** name position — pin names, constraint names, argument
   names (the name in `name = value` inside an argument list), column
-  names, and the component after a dot — MAY be a keyword.
+  names, every name of an endpoint after a dot, and both names of a
+  view's binding (0.3) — MAY be a keyword.
   `pin net passive` is legal; so is `r1.net` as an endpoint, and since
   0.2 `pin in passive` and `r1.in`. A pin a 0.3 component rule or side
   names MAY be any keyword but `from` and `to`, the two words a rule
@@ -57,25 +59,26 @@ Every keyword carries a word boundary: `moduleM:` is a use of the name
 
 ### Keywords
 
-The 31 words the grammar spells as literals. This list is reconciled
+The 32 words the grammar spells as literals. This list is reconciled
 against the grammar source of truth by the conformance gate. Syntax 0.2
-added seven of them, each reserved in 0.1 so that adding it could break
-no design; they are named under Syntax 0.2 additions below.
+added seven of them and syntax 0.3 one, each reserved in 0.1 so that
+adding it could break no design; they are named under Syntax 0.2
+additions and Syntax 0.3 additions below.
 
 `abstract` `assert` `at` `board_only` `component` `dnp` `dynamic` `else`
 `exclude_from_bom` `false` `for` `from` `hardware` `if` `import` `in`
-`isolated` `least` `module` `most` `net` `new` `no` `part` `pin` `port`
-`static` `table` `to` `true` `within`
+`interface` `isolated` `least` `module` `most` `net` `new` `no` `part`
+`pin` `port` `static` `table` `to` `true` `within`
 
 ### Reserved for v1
 
-The 1 word reserved and not yet used by any rule, excluded from binding
-positions now because reserving a word later is a breaking change (E1).
-It is required by an approved requirement a later milestone implements:
-T1 interface definitions. v0.1 reserved eight words; syntax 0.2 gave
-seven of them productions, and they are keywords now.
-
-`interface`
+The 0 words reserved and not yet used by any rule. v0.1 reserved eight
+words, each required by an approved requirement a later milestone
+implements, and excluded them from binding positions, because reserving
+a word later is a breaking change (E1); syntax 0.2 gave seven of them
+productions and syntax 0.3 the eighth, for T1's interface definitions, so
+all eight are keywords now. The list is empty and stays: it is where a
+word a later version needs is reserved before any rule spells it.
 
 ## Closed vocabularies
 
@@ -289,12 +292,15 @@ below may still change until M2 exits. It adds them and nothing else; a
 valid file declaring 0.1 or 0.2 keeps its parse tree and its meaning,
 and an invalid one its diagnostics, but for `RHO1016` on a construct
 only 0.3 has ([01 — Lexical
-structure](01-lexical-structure.md#syntax-versions)). They state source
+structure](01-lexical-structure.md#syntax-versions)). Most state source
 facts: the electrical structure of a component, a supply, a load, a
 waiver, a severity, a ground's kind. What each fact MEANS to a check is
 the check stage's (spec 05); elaboration resolves what a statement names
 and keeps it ([04 —
-Elaboration](04-elaboration.md#syntax-03-source-facts-unfrozen)).
+Elaboration](04-elaboration.md#syntax-03-source-facts-unfrozen)). The
+rest are interfaces, the nominal types of bundles, which elaboration
+checks and expands ([04](04-elaboration.md#interfaces-unfrozen), [05
+section 3](05-static-types/03-interfaces.md)).
 
 ### Soft keywords (0.3)
 
@@ -419,11 +425,75 @@ An assertion may end with `warning`: a failing assertion then warns
 rather than gates. Without it, an assertion is an error, as it always
 was. An assertion that cannot be measured gates either way (V1).
 
+### Keywords added in 0.3
+
+The word syntax 0.3 promoted from the reserved list to a keyword, in the
+keyword list above. Unlike the soft keywords it was reserved in 0.1 and
+0.2, so no older file binds it, and every name position that is not a
+binding still takes it.
+
+`interface`
+
+### Interfaces
+
+```text
+interface Power(v: voltage):
+    port gnd
+    port hv
+
+interface Spi:
+    port bus = new rhoform.lib.iface.SpiBus
+    port cs
+
+component Ldo(vout: voltage):
+    pin gnd passive 1
+    pin vin power_in 2
+    pin vout power_out 3
+    port output = new Power(v = vout):
+        gnd = gnd
+        hv = vout
+
+module Board:
+    port leds = new rhoform.lib.iface.Logic[4]
+    port rail = new Power
+    r = new rhoform.lib.passive.Resistor
+    reg = new Ldo(vout = 3.3V)
+    reg.output ~ rail
+    leds[2].line ~ r.a
+    r.b ~ rail.gnd
+```
+
+A file's definitions may be, beside modules and components, interfaces
+(T1): `interface`, a name, an optional parameter list as a module's, a
+colon, and a block of members. A member is `port` and a name, a leaf, or
+`port`, a name, `=` and `new` with an interface's qualified name, a nested
+interface; either may be an array, `[N]`. A nested member takes no
+arguments, and no member has a role: members carry none (T1).
+
+A module body may declare a **bundle port**: `port`, a name, `=` and
+`new` with an interface, optionally an array size and an argument list. A
+component body may declare a **view**: the same with no size, a colon,
+and a block of bindings, each a leaf member's path, `=` and a pin name.
+A binding's path is names joined by dots, each optionally followed by an
+integer index in square brackets; an index there is a literal, never a
+reference. The canonical form puts a component's views after its pins,
+rules and sides ([07 — Formatting](07-formatting.md)).
+
+An endpoint — a chain head, an endpoint after `~`, a net member, the
+endpoint of `isolated` — may reach into a bundle: from 0.3 a dot may
+follow a dot, and an index the name after a dot, any number of times
+(`j1.usb.d.p`, `cells[0].bus[1].d[3]`). Every 0.1 and 0.2 endpoint keeps
+its shape and its tree. What each name of an endpoint names — an
+instance, a port, a bundle's member — is
+[04 — Elaboration](04-elaboration.md)'s, and what interfaces mean is
+[05 — Static types](05-static-types/03-interfaces.md)'s.
+
 ### Under an older pragma
 
 Every construct in this section is refused in a file whose pragma
 declares 0.1 or 0.2, with one `RHO1016` per file whose fix-it rewrites
-the pragma to 0.3, and the `ground_kind` attribute with them.
+the pragma to 0.3, and the `ground_kind` attribute and a member access
+(an endpoint with a second dot, or an index after a dot) with them.
 
 ## What the grammar deliberately does not check
 

@@ -1,0 +1,23 @@
+#pragma rhoform-syntax 0.3
+
+# A bundle port is a port: it sorts among a module's ports by name. A view
+# follows a component's pins, rules and sides, views by name, and its
+# bindings sort by member path, naturally, `d[2]` before `d[10]`.
+component Latch:
+    pin d2 input 1
+    pin d10 input 2
+    pin gnd passive 4
+    pin le input 3
+    port bus = new rhoform.lib.iface.Logic:
+        line = le
+        ref = gnd
+    port wide = new Wide:
+        d[2] = d2
+        d[10] = d10
+        strobe = le
+
+module Top:
+    port leds = new rhoform.lib.iface.Logic[4]
+    port power = new rhoform.lib.iface.Power(v = 9V +/- 10%)
+    port vin passive
+    x = new Latch
