@@ -29,7 +29,8 @@ rules rather than two that drift:
     record's `implements` map and nothing else: no name, case or designator
     guessing, because `ctl` is not `CONT` and `p3v3` is not `3V3`. The
     design's role is authoritative; the record's role only has to be
-    compatible with it (`compatible`).
+    compatible with it (`compatible`), except on a definition that models
+    one part (PART_SPECIFIC), where the two must be equal.
   - HONEST VIEWS. Every value a binding hands out carries its statistic and
     whether it is a guarantee: `min` and `max` are, `typ` and `peak` never
     are, and neither is any value whose provenance says `estimated` or
@@ -73,6 +74,19 @@ ADMITS = {
     "bidirectional": frozenset(("bidirectional", "input", "output",
                                 "tri_state", "open_drain", "open_collector")),
 }
+# Standard-library definitions that model one product, not a family: the
+# definition IS that part's pinout, so it states each pin's role and the
+# relation above does not apply. A record implementing one must carry the
+# same role on every pin. Narrowing is for a generic definition (a
+# connector, LinearRegulator), where the design says what a contact is for;
+# on these, a role that differs from the record's is drift between the
+# library and the datasheet, and it would silently disarm ERC. Add a
+# definition here in the change that adds it to rhoform/lib.
+PART_SPECIFIC = frozenset((
+    "rhoform.lib.module.Esp32S3Wroom1",
+    "rhoform.lib.regulator.Lm25145",
+    "rhoform.lib.timer.Ne555",
+))
 
 STATISTICS = ("min", "typ", "max", "peak")
 GUARANTEED = ("min", "max")
@@ -1060,11 +1074,12 @@ class Binding:
     problems: tuple
 
 
-def compatible(record_role, definition_role):
+def compatible(record_role, definition_role, *, exact=False):
     """True when a record pin of `record_role` may carry a design port of
-    `definition_role` (see ADMITS)."""
-    return record_role == definition_role \
-        or definition_role in ADMITS.get(record_role, ())
+    `definition_role` (see ADMITS). With `exact`, as for a PART_SPECIFIC
+    definition, only the same role may."""
+    return record_role == definition_role or (
+        not exact and definition_role in ADMITS.get(record_role, ()))
 
 
 def _bound(raw):
@@ -1150,6 +1165,7 @@ def bind(record, definition, pins) -> Binding:
     pins = [(name, role, tuple(numbers)) for name, role, numbers in pins]
     entry = next((e for e in doc.get("implements", [])
                   if e.get("definition") == definition), None)
+    exact = definition in PART_SPECIFIC
     absences = _absences(doc)
     ports, unbound = {}, ()
     if entry is None:
@@ -1177,12 +1193,16 @@ def bind(record, definition, pins) -> Binding:
                     "on no record pin"))
                 continue
             facts = _pin_facts(doc, index[record_pin], absences)
-            if not compatible(facts.role, role):
+            if not compatible(facts.role, role, exact=exact):
                 problems.append(Problem(
                     "role-conflict", f"/pins/{index[record_pin]}/role",
                     f"{doc.get('part_id')}: {definition} pin {name!r} is "
                     f"{role}, and record pin {record_pin!r} is "
-                    f"{facts.role}, which cannot carry it"))
+                    f"{facts.role}, " + (
+                        "which cannot carry it"
+                        if not compatible(facts.role, role) else
+                        f"and {definition} models one part, so its roles "
+                        "must equal the record's")))
             if numbers and tuple(sorted(numbers, key=lambda n: (len(n), n))) \
                     != facts.numbers:
                 problems.append(Problem(
