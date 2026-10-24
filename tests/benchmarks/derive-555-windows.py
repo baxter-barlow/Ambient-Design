@@ -219,6 +219,11 @@ def _record():
     # That is reported, not silently dropped: see `unbounded` below.
     trig_i = ch["TRIG"]["input_current"]
     trig_at = (trig_i.get("conditions") or {}).get("vtrig", {})
+    # In the schema's member order (unit, then the statistics), not the
+    # file's: store records are written with sorted keys, and the printed
+    # operating point should not move because the layout did.
+    trig_at = {key: trig_at[key] for key in
+               ("unit", "min", "typ", "max", "peak") if key in trig_at}
     return {
         "ib_max": ch["THRES"]["input_current"]["max"] * 1e-9,
         "trig_i_max": trig_i["max"] * 1e-6,
