@@ -1,0 +1,35 @@
+#pragma rhoform-syntax 0.2
+
+# A regulator's feedback input fed only by a resistor divider from its
+# output (the buck FB, EN, RT and SS shape): the divider drives the input.
+component Regulator:
+    pin fb input
+    pin gnd power_in
+    pin vin power_in
+    pin vout power_out
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    c_out = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_bot = new rhoform.lib.passive.Resistor
+    r_top = new rhoform.lib.passive.Resistor
+    u = new Regulator
+    net FB:
+        r_bot.a
+        r_top.b
+        u.fb
+    net GND(ground_domain = "gnd"):
+        c_in.b
+        c_out.b
+        j.neg
+        r_bot.b
+        u.gnd
+    net VIN:
+        c_in.a
+        j.pos
+        u.vin
+    net VOUT:
+        c_out.a
+        r_top.a
+        u.vout

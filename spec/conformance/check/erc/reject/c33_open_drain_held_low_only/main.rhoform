@@ -1,0 +1,63 @@
+#pragma rhoform-syntax 0.2
+
+# Two open-drain lines whose only other parts return to ground: a reset
+# with a delay capacitor and no pull-up, and an alert whose pull resistor
+# went to GND instead of the rail. Neither can ever go high (RHO3104,
+# once per line). PG, pulled up to VCC and filtered to GND, is fine.
+component Mcu:
+    pin alert input
+    pin gnd power_in
+    pin nrst input
+    pin pg input
+    pin vdd power_in
+
+component Sensor:
+    pin alert open_drain
+    pin gnd power_in
+    pin vdd power_in
+
+component Supervisor:
+    pin gnd power_in
+    pin nrst open_drain
+    pin pg open_drain
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    c_pg = new rhoform.lib.passive.Capacitor
+    c_rst = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_alert = new rhoform.lib.passive.Resistor
+    r_pg = new rhoform.lib.passive.Resistor
+    s = new Supervisor
+    t = new Sensor
+    u = new Mcu
+    net ALERT:
+        r_alert.a
+        t.alert
+        u.alert
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        c_pg.b
+        c_rst.b
+        j.neg
+        r_alert.b
+        s.gnd
+        t.gnd
+        u.gnd
+    net NRST:
+        c_rst.a
+        s.nrst
+        u.nrst
+    net PG:
+        c_pg.a
+        r_pg.b
+        s.pg
+        u.pg
+    net VCC:
+        c_bulk.a
+        j.pos
+        r_pg.a
+        s.vdd
+        t.vdd
+        u.vdd

@@ -1,0 +1,36 @@
+#pragma rhoform-syntax 0.2
+
+# An open-drain alert and a push-pull output share a pulled-up line: when
+# the open drain pulls low while the output drives high, they short
+# (RHO3101).
+component Sensor:
+    pin alert open_drain
+    pin gnd power_in
+    pin vdd power_in
+
+component Mcu:
+    pin gnd power_in
+    pin led output
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    r_pu = new rhoform.lib.passive.Resistor
+    s = new Sensor
+    u = new Mcu
+    net ALERT:
+        r_pu.b
+        s.alert
+        u.led
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        r_pu.a
+        s.vdd
+        u.vdd

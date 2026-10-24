@@ -1,0 +1,46 @@
+#pragma rhoform-syntax 0.2
+
+# Stage labels its buffer's output OUT; Channel, used twice, extends that
+# net to a second buffer. The defect is Channel's, so its two copies are
+# one RHO3101 spelled as Channel writes it (`s/OUT`, `d.y`, `s/a.y`),
+# which names no single net and no instance path.
+component Buffer:
+    pin gnd power_in
+    pin vdd power_in
+    pin y output
+
+module Stage:
+    port gnd passive
+    port out passive
+    port vdd passive
+    a = new Buffer
+    net OUT:
+        a.y
+        out
+    vdd ~ a.vdd
+    gnd ~ a.gnd
+
+module Channel:
+    port gnd passive
+    port vdd passive
+    d = new Buffer
+    s = new Stage
+    s.out ~ d.y
+    vdd ~ d.vdd ~ s.vdd
+    gnd ~ d.gnd ~ s.gnd
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    ch1 = new Channel
+    ch2 = new Channel
+    j = new rhoform.lib.connector.BatteryConnector9V
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        ch1.gnd
+        ch2.gnd
+        j.neg
+    net VCC:
+        c_bulk.a
+        ch1.vdd
+        ch2.vdd
+        j.pos

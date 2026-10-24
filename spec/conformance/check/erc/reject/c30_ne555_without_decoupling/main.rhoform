@@ -1,0 +1,43 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0056's astable: the benchmark blinker's 555 with no bypass
+# capacitor across pins 1 and 8. The supply pin's net has no capacitor to
+# ground (RHO3110, a warning); the blinker as committed has c_byp.
+module Astable:
+    c_ctl = new rhoform.lib.passive.Capacitor
+    c_t = new rhoform.lib.passive.Capacitor
+    j_bat = new rhoform.lib.connector.BatteryConnector9V
+    led = new rhoform.lib.semiconductor.Led
+    r_a = new rhoform.lib.passive.Resistor
+    r_b = new rhoform.lib.passive.Resistor
+    r_led = new rhoform.lib.passive.Resistor
+    timer = new rhoform.lib.timer.Ne555
+    net GND(ground_domain = "gnd"):
+        c_ctl.b
+        c_t.b
+        j_bat.neg
+        led.k
+        timer.gnd
+    net N_CTL:
+        c_ctl.a
+        timer.ctl
+    net N_DIS:
+        r_a.b
+        r_b.a
+        timer.dis
+    net N_LED:
+        led.a
+        r_led.b
+    net N_TH:
+        c_t.a
+        r_b.b
+        timer.thr
+        timer.trig
+    net OUT:
+        r_led.a
+        timer.out
+    net VCC:
+        j_bat.pos
+        r_a.a
+        timer.rst
+        timer.vcc

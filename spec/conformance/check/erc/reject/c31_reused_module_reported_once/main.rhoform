@@ -1,0 +1,36 @@
+#pragma rhoform-syntax 0.2
+
+# A module whose two buffers drive one internal net, instantiated twice:
+# the defect is the definition's, so its two copies are one RHO3101,
+# which names no single net (each copy is its own).
+component Buffer:
+    pin gnd power_in
+    pin vdd power_in
+    pin y output
+
+module Pair:
+    port gnd passive
+    port vdd passive
+    a = new Buffer
+    b = new Buffer
+    net Y:
+        a.y
+        b.y
+    vdd ~ a.vdd ~ b.vdd
+    gnd ~ a.gnd ~ b.gnd
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    p1 = new Pair
+    p2 = new Pair
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        p1.gnd
+        p2.gnd
+    net VCC:
+        c_bulk.a
+        j.pos
+        p1.vdd
+        p2.vdd

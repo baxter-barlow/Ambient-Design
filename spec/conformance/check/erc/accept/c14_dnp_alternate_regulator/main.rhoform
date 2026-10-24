@@ -1,0 +1,35 @@
+#pragma rhoform-syntax 0.2
+
+# A footprint for an alternate regulator shares the rail with the fitted
+# one, and is not fitted: a DNP instance adds no driver, so the rail has
+# one power output. Fitting both would contend, which the check report
+# records as a conclusion that depends on a DNP part.
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c_in = new rhoform.lib.passive.Capacitor
+    c_out = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    load = new Load
+    u1 = new rhoform.lib.regulator.LinearRegulator(output_current = 1A, output_voltage = 3.3V)
+    u2 = new rhoform.lib.regulator.LinearRegulator(output_current = 1A, output_voltage = 3.3V):
+        dnp
+    net GND(ground_domain = "gnd"):
+        c_in.b
+        c_out.b
+        j.neg
+        load.gnd
+        u1.gnd
+        u2.gnd
+    net V3:
+        c_out.a
+        load.vdd
+        u1.vout
+        u2.vout
+    net VIN:
+        c_in.a
+        j.pos
+        u1.vin
+        u2.vin

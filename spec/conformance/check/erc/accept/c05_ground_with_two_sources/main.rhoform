@@ -1,0 +1,31 @@
+#pragma rhoform-syntax 0.2
+
+# Two battery connectors, each a rail source, return to one ground net:
+# on a ground-typed net several power outputs are supply returns sharing
+# the reference, not rails fighting.
+component Load:
+    pin gnd power_in
+    pin vdd power_in
+
+module Board:
+    c1 = new rhoform.lib.passive.Capacitor
+    c2 = new rhoform.lib.passive.Capacitor
+    j1 = new rhoform.lib.connector.BatteryConnector9V
+    j2 = new rhoform.lib.connector.BatteryConnector9V
+    l1 = new Load
+    l2 = new Load
+    net GND(ground_domain = "gnd"):
+        c1.b
+        c2.b
+        j1.neg
+        j2.neg
+        l1.gnd
+        l2.gnd
+    net V1:
+        c1.a
+        j1.pos
+        l1.vdd
+    net V2:
+        c2.a
+        j2.pos
+        l2.vdd

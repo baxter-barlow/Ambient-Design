@@ -1,0 +1,38 @@
+#pragma rhoform-syntax 0.2
+
+# BUG-0018, BUG-0022 and BUG-0038's bus: every pin on SDA and SCL is open
+# drain and no resistor pulls either line up, so neither can go high
+# (RHO3104, once per line).
+component Mcu:
+    pin gnd power_in
+    pin scl open_drain
+    pin sda open_drain
+    pin vdd power_in
+
+component Sensor:
+    pin gnd power_in
+    pin scl open_drain
+    pin sda open_drain
+    pin vdd power_in
+
+module Board:
+    c_bulk = new rhoform.lib.passive.Capacitor
+    j = new rhoform.lib.connector.BatteryConnector9V
+    s = new Sensor
+    u = new Mcu
+    net GND(ground_domain = "gnd"):
+        c_bulk.b
+        j.neg
+        s.gnd
+        u.gnd
+    net SCL:
+        s.scl
+        u.scl
+    net SDA:
+        s.sda
+        u.sda
+    net VCC:
+        c_bulk.a
+        j.pos
+        s.vdd
+        u.vdd
