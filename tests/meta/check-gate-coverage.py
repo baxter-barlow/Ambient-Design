@@ -49,6 +49,16 @@ of them is now a failure rather than an omission:
      every ceiling is measured over -- with every ceiling still met and every
      gate still green. SITES pins the denominator: it may grow, never shrink.
 
+LIBRARY CODE IS MEASURED THROUGH WHAT COVERS IT. A gate's checks can live in
+a production module the compiler shares -- rhoform/partdata.py holds the
+part-data lint core -- and blanking only the gate's own file measures none
+of them: the lint gate went from 32 sites to 13 with every ceiling met.
+COVERED_MODULES maps such a module to the runs that cover it, and one of its
+sites survives only when EVERY run still passes with it blanked. Each run
+must be one `make all` makes, and must fail on a canary mutant that raises
+when the module is imported: a run that never imports the module catches
+nothing, and listing it would claim coverage it cannot give.
+
 CEILINGS ONLY GO DOWN. Each number is today's measured value, and a gate that
 regresses fails. Lowering one is a deliberate commit; drifting up is not
 possible without this gate going red. Ceilings above zero are honest: they
@@ -112,14 +122,9 @@ CEILINGS = {
     ".github/scripts/check-dco.sh": (4, 0),
     "lang/tests/check_readme_numbers.py": (36, 16),
     # 32 -> 13 sites with D3 v1 (AMB-127): the lint core's per-clause report
-    # sites moved into rhoform/partdata.py, which the compiler shares and this
-    # census cannot mutate: it blanks a gate's own file and runs that file's
-    # self-test, and partdata.py is nobody's gate. So its 54 sites are OUTSIDE
-    # every measured population until the census can pair a mutated module
-    # with the self-test that covers it (an open review finding on AMB-127).
-    # A one-off mutation of them left none surviving both this gate's
-    # self-test and rhoform/tests/test_partdata.py, and 5, all in bind(),
-    # surviving the self-test alone. That is evidence, not a gate.
+    # sites moved into rhoform/partdata.py, which the compiler shares. They
+    # are measured there, under COVERED_MODULES, through this gate's
+    # self-test and rhoform/tests/test_partdata.py together.
     "parts/lint-part-data.py": (13, 0),
     "tests/benchmarks/check-assertions.py": (33, 3),
     "tests/benchmarks/check-corners.py": (22, 9),
@@ -136,12 +141,29 @@ CEILINGS = {
     # Measured under INNER, so 6 is an upper bound: sites the skipped wiring
     # block would have caught score as surviving. The gate now measures itself,
     # which the version that excused itself as "too few sites" did not.
-    "tests/meta/check-gate-coverage.py": (15, 6),
+    "tests/meta/check-gate-coverage.py": (18, 6),
     "tests/schemas/validate-schemas.py": (15, 2),
     "tests/golden/run.sh": (9, 0),
     "tests/structure/check-layout.sh": (29, 0),
     "tests/structure/check-retired-names.py": (4, 0),
     "tests/toolchain/check-pins.py": (28, 10),
+}
+
+# Production modules no gate's own file contains, measured through the runs
+# that cover them: module -> ((report sites, how many may survive), runs).
+# Each run is the argv after `python3`, from the repository root, and must be
+# one `make all` makes. A site survives only if every run passes with it
+# blanked. Same rules as CEILINGS otherwise: both numbers measured, sites may
+# grow, the survivor count only goes down, and a ceiling may never drop
+# because sites moved out of a gate into a module listed here.
+COVERED_MODULES = {
+    "rhoform/partdata.py": ((54, 0), (
+        ("parts/lint-part-data.py", "--self-test"),
+        # `make diagnostics` discovers rhoform/tests from the root; -p
+        # narrows that same run to the one file that covers this module.
+        ("-m", "unittest", "discover", "-s", "rhoform/tests", "-t", ".",
+         "-p", "test_partdata.py"),
+    )),
 }
 
 # Which `<name>.append(...)` calls report a problem, per file. Both halves are
@@ -167,6 +189,11 @@ OWNERS = {
         # `value` is the self-test's wiring plant marking the accumulator it
         # was handed; it reports nothing.
         {"problems"}, {"unchecked", "files", "value"}),
+    "rhoform/partdata.py": (
+        # `unchecked` collects the checks a record's data cannot support,
+        # which the lint gate prints and holds to a ceiling, so it reports;
+        # `found` is _measures() gathering the Measures a binding hands out.
+        {"problems", "unchecked"}, {"found"}),
     "tests/benchmarks/check-assertions.py": (
         {"problems"}, {"cases"}),
     "tests/benchmarks/check-corners.py": (
@@ -204,9 +231,13 @@ OWNERS = {
         {"problems"}, {"checks", "notes", "seen_spans", "_p", "documents",
                        "_seen"}),
     "tests/meta/check-gate-coverage.py": (
-        {"problems"}, {"cases", "survivors", "sites", "found", "unclassified",
-                       "gates", "notes", "unaccounted", "missed",
-                       "_TREE_DIGEST_MEMO", "current", "packages"}),
+        # `blind` holds the runs a covered module's canary did not stop, and
+        # becomes the NotCovered failure, so it reports; `made` and `rest`
+        # are the Makefile's python invocations being collected.
+        {"problems", "blind"},
+        {"cases", "survivors", "sites", "found", "unclassified",
+         "gates", "notes", "unaccounted", "missed",
+         "_TREE_DIGEST_MEMO", "current", "packages", "made", "rest"}),
     "tests/schemas/validate-schemas.py": (
         {"failures"}, {"cases"}),
     "tests/structure/check-retired-names.py": (
@@ -274,6 +305,11 @@ SHELL_SITE = re.compile(r"""(\b[a-z_]*fail[a-z_]*\s+["'$]|>&2\s*\\?\s*$)""")
 
 class GateUnavailable(Exception):
     """The measurement could not be performed. Never reported as a pass."""
+
+
+class NotCovered(Exception):
+    """A covered module's run does not import it, so the number would be
+    credit for coverage that run cannot give. A failure, not unavailability."""
 
 
 def makefile_gates(text=None) -> list[str]:
@@ -474,6 +510,54 @@ def uncollected_tests(text=None) -> list[str]:
     return missed
 
 
+def unwitnessed_runners(modules=None, makefile_text=None):
+    """(module, run) pairs in COVERED_MODULES that `make all` never makes.
+
+    A covered module's number is credit for the runs that catch its mutants.
+    One the Makefile does not execute -- a test file no live discover line
+    collects, a self-test invocation commented out or orphaned -- is
+    coverage CI never sees, so it fails rather than counting."""
+    import shlex
+    modules = COVERED_MODULES if modules is None else modules
+    if makefile_text is None:
+        makefile_text = (ROOT / "Makefile").read_text(encoding="utf-8")
+    made = []
+    for line in _live_makefile_lines(_reachable_from_all(makefile_text)):
+        try:
+            words = shlex.split(line)
+        except ValueError:
+            continue
+        for i, word in enumerate(words):
+            if word in ("python", "python3"):
+                rest = []
+                for token in words[i + 1:]:
+                    if token in ("&&", "||", ";", "|"):
+                        break
+                    rest.append(token)
+                made.append(tuple(rest))
+    return [(module, run) for module, (_pinned, runs) in sorted(modules.items())
+            for run in runs if not any(_makes(run, have) for have in made)]
+
+
+def _makes(run, have):
+    """True when the Makefile's `python3 <have>` executes `run`: the same
+    argv, or a unittest discover over the same directory and top level whose
+    pattern collects the one test file `run` names with -p."""
+    import fnmatch
+
+    def options(words):
+        return {flag: value for flag, value in zip(words, words[1:])
+                if flag in ("-s", "-t", "-p")}
+    run, have = tuple(run), tuple(have)
+    discover = ("-m", "unittest", "discover")
+    if run[:3] == discover and have[:3] == discover:
+        want, got = options(run[3:]), options(have[3:])
+        return ("-p" in want and want.get("-s") == got.get("-s")
+                and want.get("-t") == got.get("-t")
+                and fnmatch.fnmatch(want["-p"], got.get("-p", "test*.py")))
+    return run == have
+
+
 def appended_owners(source: str) -> set[str]:
     """Every `<name>.append(` owner in the file, for the classification check."""
     owners = set()
@@ -606,7 +690,8 @@ def _machinery_salt() -> str:
     digest = hashlib.sha256()
     digest.update(SHELL_SITE.pattern.encode("utf-8"))
     for fn in (report_sites, shell_report_sites, blank_site, blank_shell_site,
-               surviving_sites, _tree_digest, _cache_key, _tool_identity):
+               surviving_sites, _canary, _tree_digest, _cache_key,
+               _tool_identity):
         digest.update(inspect.getsource(fn).encode("utf-8"))
     return digest.hexdigest()
 
@@ -687,12 +772,20 @@ def _tool_identity() -> str:
     return sys.version + "|" + " ".join(ngspice) + "|" + ",".join(packages)
 
 
-def _cache_key(source: str, report_owners: set[str], tree) -> str:
+def _cache_key(source: str, report_owners: set[str], tree,
+               runners=None) -> str:
     import hashlib
     return hashlib.sha256(
-        (source + repr(sorted(report_owners)) + str(tree)
+        (source + repr(sorted(report_owners)) + str(tree) + repr(runners)
          + _tool_identity() + _machinery_salt())
         .encode("utf-8")).hexdigest()
+
+
+def _canary(source: str, shown) -> tuple[str, str]:
+    """A module that raises once it has been imported, and the text that
+    proves a run imported it. Appended, so `from __future__` stays first."""
+    marker = f"gate-coverage canary: {shown} was imported"
+    return source.rstrip("\n") + f"\n\nraise RuntimeError({marker!r})\n", marker
 
 
 def _restore_stray_mutants(root=None) -> int:
@@ -848,8 +941,11 @@ def _store_mutation_cache(cache: dict) -> None:
 
 
 def surviving_sites(gate: Path, report_owners: set[str],
-                    cache: dict | None = None) -> tuple[int, int, list[int]]:
-    """(sites, survivors, survivor line numbers) for one gate.
+                    cache: dict | None = None,
+                    runners=None) -> tuple[int, int, list[int]]:
+    """(sites, survivors, survivor line numbers) for one gate, or for one
+    covered module when `runners` names the runs that cover it (argv after
+    the interpreter, as in COVERED_MODULES).
 
     THE BASELINE SELF-TEST ALWAYS RUNS -- the environment can rot under an
     unchanged gate (PyYAML uninstalled, ngspice gone), and the baseline is
@@ -858,37 +954,55 @@ def surviving_sites(gate: Path, report_owners: set[str],
     environment its outcome is a pure function of those, and re-running
     27 mutants of a six-second self-test on every make invocation priced the
     measurement out of the default gate run.
+
+    A covered module's site is caught when ANY run fails with it blanked.
+    Before the first blank, every run must fail on _canary(); one that
+    passes never imported the module, and NotCovered is raised.
     """
     import hashlib
     source = gate.read_text(encoding="utf-8")
     shell = gate.suffix == ".sh"
     sites = (shell_report_sites(source) if shell
              else report_sites(source, report_owners))
+    # `gate.relative_to(ROOT)` raises for a probe in a TemporaryDirectory,
+    # so the unavailability report died on its own error path.
+    shown = gate.relative_to(ROOT) if gate.is_relative_to(ROOT) else gate
     # THE BASELINE MUST PASS FIRST. Nothing checked that the UNMUTATED gate's
     # self-test exits 0, so a self-test that cannot run at all -- PyYAML absent,
     # which is true of four of these gates in CI's schemas job -- made every
     # blanked site score as "caught" and the gate report perfect coverage. It
     # then told the maintainer to pin those fabricated zeros. An unavailable
     # measurement is not a measurement.
-    inner_env = {**os.environ, "RHOFORM_GATE_COVERAGE_INNER": "1"}
-    runner = (["bash", str(gate), "--self-test"] if shell
-              else [sys.executable, str(gate), "--self-test"])
-    baseline = subprocess.run(runner,
-                              capture_output=True, text=True, cwd=ROOT,
-                              env=inner_env, timeout=300)
-    if baseline.returncode != 0:
-        # `gate.relative_to(ROOT)` raises for a probe in a TemporaryDirectory,
-        # so the unavailability report died on its own error path.
-        shown = gate.relative_to(ROOT) if gate.is_relative_to(ROOT) else gate
-        raise GateUnavailable(
-            f"{shown}: its own --self-test exits "
-            f"{baseline.returncode} before any mutation, so every site would "
-            "score as caught. Install the pinned dependencies and re-run: "
-            f"{_last_line(baseline)}")
+    #
+    # No bytecode is written. A covered module is IMPORTED, not run as a
+    # script, and an import trusts cached bytecode whose recorded source
+    # mtime (whole seconds) and size match: two equal-length mutants written
+    # within one second would be judged by the first one's bytecode. With
+    # nothing written while mutants exist, the only cache an import can find
+    # is the pristine file's, older than every mutant.
+    inner_env = {**os.environ, "RHOFORM_GATE_COVERAGE_INNER": "1",
+                 "PYTHONDONTWRITEBYTECODE": "1"}
+    if runners is None:
+        runs = [(["bash", str(gate), "--self-test"] if shell
+                 else [sys.executable, str(gate), "--self-test"])]
+        labels = ["its own --self-test"]
+    else:
+        runs = [[sys.executable, *run] for run in runners]
+        labels = [f"`python3 {' '.join(run)}`" for run in runners]
+    for run, label in zip(runs, labels):
+        baseline = subprocess.run(run,
+                                  capture_output=True, text=True, cwd=ROOT,
+                                  env=inner_env, timeout=300)
+        if baseline.returncode != 0:
+            raise GateUnavailable(
+                f"{shown}: {label} exits "
+                f"{baseline.returncode} before any mutation, so every site "
+                "would score as caught. Install the pinned dependencies and "
+                f"re-run: {_last_line(baseline)}")
     tree = _tree_digest_cached()
     if tree is None:
         cache = None  # no digest, no cache: an unverifiable key is not a key
-    cache_key = _cache_key(source, report_owners, tree)
+    cache_key = _cache_key(source, report_owners, tree, runners)
     if cache is not None and cache_key in cache:
         cached_sites, cached_survivors = cache[cache_key]
         return cached_sites, len(cached_survivors), list(cached_survivors)
@@ -908,6 +1022,24 @@ def surviving_sites(gate: Path, report_owners: set[str],
         os.replace(scratch, gate)
 
     try:
+        if runners is not None:
+            canary, marker = _canary(source, shown)
+            swap_in(canary)
+            blind = []
+            for run, label in zip(runs, labels):
+                result = subprocess.run(
+                    run, capture_output=True, text=True, cwd=ROOT,
+                    env=inner_env, timeout=300)
+                if result.returncode == 0 or \
+                        marker not in result.stdout + result.stderr:
+                    blind.append(label)
+            swap_in(source)
+            if blind:
+                raise NotCovered(
+                    f"{shown}: {', '.join(blind)} never imports it (a canary "
+                    "that raises on import left it passing), so it cannot "
+                    "catch a blanked site. Measure the module through runs "
+                    "that exercise it.")
         for line_no in sites:
             swap_in((blank_shell_site if shell else blank_site)
                     (source, line_no))
@@ -921,11 +1053,11 @@ def surviving_sites(gate: Path, report_owners: set[str],
                     survivors.append(line_no + 1)
                     swap_in(source)
                     continue
-            result = subprocess.run(
-                runner,
-                capture_output=True, text=True, cwd=ROOT,
-                env=inner_env, timeout=300)
-            if result.returncode == 0:
+            # Caught by the first run that fails; the rest need not run.
+            if all(subprocess.run(
+                    run, capture_output=True, text=True, cwd=ROOT,
+                    env=inner_env, timeout=300).returncode == 0
+                   for run in runs):
                 survivors.append(line_no + 1)
             swap_in(source)
     except OSError as exc:
@@ -1017,7 +1149,7 @@ def serial_problems(makefile_text):
 
 
 def census(problems: list[str], gates=None, ceilings=None,
-           no_self_test=None) -> list[str]:
+           no_self_test=None, modules=None) -> list[str]:
     """Every Makefile gate lands in exactly one bucket, or this fails.
 
     The buckets are CEILINGS (measured) and NO_SELF_TEST (verified to have
@@ -1068,6 +1200,16 @@ def census(problems: list[str], gates=None, ceilings=None,
                 "the gate proves it CAN fail and never actually checks the "
                 "tree. Add the real run.")
 
+    # A covered module is credited with what its runs catch, so each run
+    # must be one `make all` actually makes.
+    if gates is None:
+        for module, run in unwitnessed_runners(modules):
+            problems.append(
+                f"{module}: COVERED_MODULES measures it through `python3 "
+                f"{' '.join(run)}`, which no live line reachable from `all` "
+                "runs, so its coverage is credited to a run CI never makes. "
+                "Measure it through what `make all` runs.")
+
     # THE REVERSE DIRECTION, which round 15 demonstrated was open end to end:
     # deleting a gate's invocations from the Makefile and CI left the gate
     # running NOWHERE while this census (population = the Makefile's), the
@@ -1088,10 +1230,17 @@ def census(problems: list[str], gates=None, ceilings=None,
     return unaccounted
 
 
-def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[int, int]:
-    """(gates measured, report sites counted but unpinned in NO_SELF_TEST)."""
+def check(problems: list[str], ceilings=None, owners=None, gates=None,
+          modules=None) -> tuple[int, int]:
+    """(gates and covered modules measured, report sites counted but
+    unpinned in NO_SELF_TEST). Probe runs (`gates` given) measure the
+    `modules` they name and no others."""
+    ceilings = CEILINGS if ceilings is None else ceilings
+    if modules is None:
+        modules = COVERED_MODULES if gates is None else {}
     census(problems, gates=gates, ceilings=ceilings,
-           no_self_test=NO_SELF_TEST if gates is None else ())
+           no_self_test=NO_SELF_TEST if gates is None else (),
+           modules=modules)
     if gates is None:
         for missed in uncollected_tests():
             problems.append(
@@ -1107,7 +1256,13 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
     if gates is None:
         _restore_stray_mutants()
     mutation_cache = _load_mutation_cache()
-    for name, pinned in sorted((ceilings or CEILINGS).items()):
+    # Gates first, then covered modules, through one set of rules: the only
+    # difference is which runs judge a mutant (`runners` None: the gate's own
+    # --self-test).
+    targets = [(name, pinned, None) for name, pinned in sorted(ceilings.items())]
+    targets += [(name, pinned, runners)
+                for name, (pinned, runners) in sorted(modules.items())]
+    for name, pinned, runners in targets:
         recorded_sites, ceiling = pinned
         gate = ROOT / name
         if not gate.is_file():
@@ -1132,10 +1287,13 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
                 "sites.")
             continue
         try:
-            sites, survivors, where = surviving_sites(gate, report_owners,
-                                                      cache=mutation_cache)
+            sites, survivors, where = surviving_sites(
+                gate, report_owners, cache=mutation_cache, runners=runners)
         except subprocess.TimeoutExpired:
             raise GateUnavailable(f"{name}: --self-test did not terminate")
+        except NotCovered as exc:
+            problems.append(str(exc))
+            continue
         # FLUSH PER GATE. A single store after all nineteen meant a killed
         # run (CI cancellation, OOM, the 600 s timeout that has caught this
         # measurement here) persisted nothing and the next run paid the
@@ -1169,7 +1327,9 @@ def check(problems: list[str], ceilings=None, owners=None, gates=None) -> tuple[
             problems.append(
                 f"{name}: {survivors} of {sites} report site(s) survive being "
                 f"blanked, above the ceiling of {ceiling}. Lines {where}. Each "
-                "is a check that can be deleted with --self-test green.")
+                "is a check that can be deleted with "
+                f"{'--self-test' if runners is None else 'every covering run'}"
+                " green.")
             continue
         if survivors < ceiling:
             print(f"gate-coverage: {name}: {survivors} of {sites} survive, under "
@@ -1325,6 +1485,37 @@ def self_test() -> int:
                       "planted-indirection" in _wired2))
     finally:
         globals()["indirection_problems"] = _real_ind
+    # COVERED-MODULE RUNS must be runs `make all` makes, and the check that
+    # says so must reach the census.
+    _runs = (("parts/lint-part-data.py", "--self-test"),
+             ("-m", "unittest", "discover", "-s", "rhoform/tests", "-t", ".",
+              "-p", "test_partdata.py"))
+    _mods = {"m.py": ((1, 0), _runs)}
+    _lint_line = "\tpython3 parts/lint-part-data.py --self-test\n"
+    _discover = "\tpython3 -m unittest discover -s rhoform/tests -t ."
+    cases.append(("covered-module runs the Makefile makes are witnessed",
+                  unwitnessed_runners(_mods, "all: a\n\na:\n" + _lint_line
+                                      + _discover + "\n") == []))
+    cases.append(("a test file no live discover pattern collects is not",
+                  unwitnessed_runners(_mods, "all: a\n\na:\n" + _lint_line
+                                      + _discover + " -p 'test_other.py'\n")
+                  == [("m.py", _runs[1])]))
+    cases.append(("a commented-out or orphaned run is not witnessed",
+                  unwitnessed_runners(_mods, "all: a\n\na:\n\t@#" + _lint_line[1:]
+                                      + _discover + "\n\norphan:\n"
+                                      + _lint_line) == [("m.py", _runs[0])]))
+    cases.append(("today's covered-module runs are all made by make all "
+                  f"({unwitnessed_runners()})", not unwitnessed_runners()))
+    _real_unw = globals()["unwitnessed_runners"]
+    globals()["unwitnessed_runners"] = \
+        lambda *_a, **_k: [("planted/module.py", ("x.py",))]
+    try:
+        _wired4 = []
+        census(_wired4)
+        cases.append(("the covered-module run check is WIRED into the census",
+                      any("planted/module.py" in x for x in _wired4)))
+    finally:
+        globals()["unwitnessed_runners"] = _real_unw
     cases.append(("a gate reduced to its own self-test is reported",
                   self_test_only_gates(
                       "all: a\n\na:\n\tpython3 tests/schemas/"
@@ -1710,6 +1901,55 @@ def self_test() -> int:
         finally:
             inside.unlink()
 
+    # COVERED MODULES, measured through check() like the gates. A module two
+    # runs cover from different sides: a site either run catches is caught,
+    # and only the pair catches both. A third run never imports the module,
+    # and must be reported whatever the ceiling allows -- with a ceiling equal
+    # to the site count, nothing else would notice it.
+    with tempfile.TemporaryDirectory() as _mt:
+        _mdir = Path(_mt)
+        _mod = _mdir / "mod.py"
+        _mod.write_text("def check(problems, flag=False):\n"
+                        "    if flag:\n"
+                        "        problems.append('flagged')\n"
+                        "    problems.append('always')\n", encoding="utf-8")
+        for _stem, _call, _want in (("plain", "mod.check(p)", "always"),
+                                    ("flag", "mod.check(p, flag=True)",
+                                     "flagged")):
+            (_mdir / f"run_{_stem}.py").write_text(
+                f"import mod\np = []\n{_call}\n"
+                f"raise SystemExit(0 if {_want!r} in p else 1)\n",
+                encoding="utf-8")
+        (_mdir / "run_blind.py").write_text("raise SystemExit(0)\n",
+                                            encoding="utf-8")
+        _plain, _flag, _blind = ((str(_mdir / f"run_{s}.py"),)
+                                 for s in ("plain", "flag", "blind"))
+        _pristine = _mod.read_text(encoding="utf-8")
+
+        def _measure(pinned, *runs):
+            found = []
+            check(found, ceilings={}, owners={str(_mod): ({"problems"}, set())},
+                  gates=[], modules={str(_mod): (pinned, runs)})
+            return found
+        cases.append(("a covered module's survivor over its ceiling is "
+                      "reported", any(
+                          "1 of 2" in p and "above the ceiling of 0" in p
+                          for p in _measure((2, 0), _plain))))
+        cases.append(("a covered module at its ceiling is not reported",
+                      _measure((2, 1), _plain) == []))
+        cases.append(("a site any covering run catches is caught",
+                      _measure((2, 0), _plain, _flag) == []))
+        cases.append(("a run that never imports the module is reported", any(
+            "run_blind.py" in p and "never imports" in p
+            for p in _measure((2, 2), _plain, _blind))))
+        cases.append(("a module no run imports is reported, not scored", any(
+            "never imports" in p for p in _measure((2, 2), _blind))))
+        cases.append(("a shrunken covered-module population is reported", any(
+            "down from the recorded 5" in p
+            for p in _measure((5, 2), _plain))))
+        cases.append(("the covered module is restored after measurement",
+                      _mod.read_text(encoding="utf-8") == _pristine))
+
     # A commented-out recipe line is not an invocation; the census parser
     # matched them, so #-ing a gate out kept it "covered" while disabling it.
     cases.append(("a commented-out recipe line is not counted as a gate",
@@ -1745,7 +1985,8 @@ def self_test() -> int:
             print(f"gate-coverage: UNAVAILABLE: {exc}", file=sys.stderr)
             return 2
         cases.append((f"every shipped gate is at or under its ceiling ({real})", not real))
-        cases.append(("every named gate was measured", measured == len(CEILINGS)))
+        cases.append(("every named gate and covered module was measured",
+                      measured == len(CEILINGS) + len(COVERED_MODULES)))
         cases.append(("the unpinned shell total is published", unpinned > 0))
 
     failures = 0
@@ -1773,8 +2014,8 @@ def main(argv):
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         return 1
-    print(f"gate-coverage: PASS: {measured} gate(s) at or under their "
-          f"self-test coverage ceiling; {len(NO_SELF_TEST)} gate(s) have no "
+    print(f"gate-coverage: PASS: {measured} gate(s) and covered module(s) "
+          f"at or under their coverage ceiling; {len(NO_SELF_TEST)} gate(s) have no "
           f"self-test at all and their {unpinned} report site(s) are pinned by "
           "nothing.")
     return 0
