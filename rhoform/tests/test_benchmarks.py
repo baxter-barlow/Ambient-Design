@@ -540,10 +540,10 @@ class BlinkerOracleTest(unittest.TestCase):
             self.assertEqual(self.golden["header"][key],
                              self.oracle["header"][key])
         # The example is a hand-written IR v0 document, which v0's schema
-        # still validates; the compiler writes v1 (ir/README.md,
+        # still validates; the compiler writes v2 (ir/README.md,
         # "Versioning policy").
         self.assertEqual(self.oracle["header"]["ir_version"], 0)
-        self.assertEqual(self.golden["header"]["ir_version"], 1)
+        self.assertEqual(self.golden["header"]["ir_version"], 2)
 
     def test_same_instances_ports_flags_and_values(self):
         oracle = {i["path"]: i for i in self.oracle["instances"]}
