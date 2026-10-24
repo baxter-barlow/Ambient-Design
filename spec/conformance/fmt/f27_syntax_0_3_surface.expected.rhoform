@@ -1,0 +1,26 @@
+#pragma rhoform-syntax 0.3
+
+# Syntax 0.3's statements in canonical form: a component body is its pins,
+# then its rules in line order, then its sides by name, a rule's pins in the
+# order written; in a module a `rule` statement follows the instances, the
+# annotations follow the connections, and the waivers come last.
+component Opto:
+    pin a passive 1
+    pin c passive 3
+    pin e passive 4
+    pin k passive "02"
+    conduct c to e
+    tie a k = 1ohm
+    side detector: e c
+    side emitter: a k
+
+module Rail:
+    port vout power_out
+    isos = new Opto[2]
+    rule isos[1] open a k
+    net VOUT(ground_kind = "signal"):
+        isos[1].c
+    draw isos[1].a at most 5mA
+    supply VOUT within 3.135V to 3.465V
+    assert ripple_ok dynamic ripple(VOUT) at most 50mV warning
+    waive RHO3001 isos[0] "a spare"

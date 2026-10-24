@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+# A multi-file package (AMB-144 #9): every file formats to its own
+# expected file, and the package compiles to the same design before and
+# after formatting, across the import between them.
+import  Led,Divider   from "./parts/leds"
+module Panel(count:int=2):
+    leds=new Led[2]
+    port vin power_in
+    div = new Divider(top_value=10000ohm)
+    port gnd passive
+    for i in range( count ):
+        div.mid~leds[i].a
+        leds[i].k ~ gnd
+    vin~div.top
+    div.bottom ~ gnd

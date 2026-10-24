@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.2
+
+# AMB-140: a comment hoisted out of a wrapped argument list stays directly
+# above the statement it came from. Before, it led a run that `port p` and
+# `r0` sorted above r1, and the comment ended up describing them.
+module M:
+    # after the open paren
+    r1 = new lib.R(resistance = 1kohm)
+
+    port p passive
+    r0 = new lib.R
+
+    # the domain
+    net N(voltage_domain = "5V"):
+        r1.a
+
+    port a passive
