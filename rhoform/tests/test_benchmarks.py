@@ -18,14 +18,29 @@ holds every benchmark to that.
 
 THE CHECK STAGE'S OUTPUT ON THE BENCHMARKS IS PINNED HERE AND NOWHERE ELSE.
 From the M2 foundation to the landing that empties it (L5b), each
-benchmark's check-stage stream must equal the KNOWN_FINDINGS ledger: the
-union of rhoform/tests/benchmark_findings/<landing>.json, one file per
-landing so parallel landings never edit one file. Each entry names the
-benchmark, the code and the entity of one finding, why it is there and
-which landing resolves it. A finding the ledger does not list fails, and
-so does an entry no finding matches, so neither a new false positive nor
-a resolved gap can sit unnoticed. Every benchmark compiles from a copy in
-a compile root of its own, as it does in place.
+benchmark's check stage must match the KNOWN_FINDINGS ledger: the union
+of rhoform/tests/benchmark_findings/<landing>.json, one file per landing
+so parallel landings never edit one file. An entry is one of two kinds,
+each saying why it is there and which landing resolves it:
+
+  - a FINDING: the benchmark, the code and the entity of one diagnostic.
+    The stream's findings must be exactly these (code, entity) pairs;
+    their params and spans are not pinned here.
+  - an ACTIONABLE ROW count: the benchmark, a check-report section, a
+    row class (the row's reason) and how many such rows that section
+    holds. It lives in the file of the landing that implements that
+    section's pass (SECTION_LEDGERS). The report's actionable rows must
+    be exactly these counts, and the stream's coverage note (RHO3901)
+    must count exactly them, so its actionable total, classes and
+    sections are pinned too: a coverage gap opened or closed on a
+    benchmark fails here as a finding does.
+
+A finding or a row the ledger does not list fails, and so does an entry
+nothing matches, so neither a new false positive, nor a new coverage
+gap, nor a resolved one can sit unnoticed. Inherent rows are not
+pinned here (amendment OD1: the committed check-report goldens hold
+them, from L5b). Every benchmark compiles from a copy in a compile root
+of its own, as it does in place.
 """
 
 import hashlib
@@ -47,7 +62,23 @@ except ImportError:  # pragma: no cover - exercised by absence
 ROOT = Path(__file__).resolve().parents[2]
 BENCHMARKS = ROOT / "benchmarks"
 FINDINGS = Path(__file__).resolve().parent / "benchmark_findings"
-LEDGER_KEYS = ("benchmark", "code", "entity", "reason", "resolving_landing")
+FINDING_KEYS = ("benchmark", "code", "entity", "reason", "resolving_landing")
+ROW_KEYS = ("benchmark", "class", "count", "reason", "resolving_landing",
+            "section")
+
+# The ledger file a check section's actionable rows are counted in: the
+# landing that implements that section's pass, whose file it alone edits.
+SECTION_LEDGERS = {
+    "model": "L0",
+    "parts": "L2b",
+    "dimensions": "L1c",
+    "ground": "L2c",
+    "erc": "L1b",
+    "domains": "L3",
+    "budget": "L4",
+    "domains_refine": "L4",
+    "assertions": "L5a",
+}
 
 # The benchmarks that must have a living source. Discovery below finds
 # whatever is on disk; this list makes a deleted source a failure rather
@@ -92,6 +123,14 @@ def known_findings() -> dict:
     """{landing: [entries]} from every ledger file, in file-name order."""
     return {path.stem: json.loads(path.read_text(encoding="utf-8"))
             for path in sorted(FINDINGS.glob("*.json"))}
+
+
+def ledger_rows(benchmark: str) -> dict:
+    """{(section, class): count} of one benchmark's actionable rows, from
+    every ledger file."""
+    return {(entry["section"], entry["class"]): entry["count"]
+            for entries in known_findings().values() for entry in entries
+            if "section" in entry and entry["benchmark"] == benchmark}
 
 
 def goldens(source: Path) -> tuple[Path, Path]:
@@ -318,57 +357,108 @@ print(json.dumps(out, sort_keys=True))
                      "is required")
 class BenchmarkCheckTest(unittest.TestCase):
     """The check stage on the benchmarks, against the KNOWN_FINDINGS
-    ledger. The foundation's entries: each benchmark carries exactly one
-    RHO3901, because every pass is a stub (amendment OD1)."""
+    ledger. The foundation's entries: every pass is a stub, so each
+    benchmark has one actionable pass-not-implemented row per pass, each
+    counted in its pass's landing's file, and so exactly one RHO3901
+    (amendment OD1)."""
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="rhoform-benchmarks-"))
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    def test_the_ledger_is_well_formed_and_each_finding_has_one_owner(self):
+    def test_the_ledger_is_well_formed_and_each_entry_has_one_owner(self):
+        from rhoform import check as checker
         from rhoform import codes
 
+        self.assertEqual(list(SECTION_LEDGERS), list(checker.pass_names()))
         names = {source.parent.name for source in sources()}
         owners = {}
+        notes = set()
+        gapped = set()
         ledger = known_findings()
         self.assertTrue(ledger)
         for landing, entries in ledger.items():
             with self.subTest(ledger=landing):
                 self.assertIsInstance(entries, list)
                 for entry in entries:
-                    self.assertEqual(sorted(entry), sorted(LEDGER_KEYS))
+                    self.assertIn(sorted(entry), (sorted(FINDING_KEYS),
+                                                  sorted(ROW_KEYS)))
                     self.assertIn(entry["benchmark"], names)
-                    codes.lookup(entry["code"])
                     self.assertTrue(entry["reason"].strip())
                     self.assertTrue(entry["resolving_landing"].strip())
-                    key = (entry["benchmark"], entry["code"], entry["entity"])
+                    if "section" in entry:
+                        self.assertEqual(
+                            SECTION_LEDGERS.get(entry["section"]), landing,
+                            f"{entry['section']} rows are counted in "
+                            f"{SECTION_LEDGERS.get(entry['section'])}.json")
+                        self.assertRegex(entry["class"],
+                                         r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+                        self.assertIs(type(entry["count"]), int)
+                        self.assertGreater(entry["count"], 0)
+                        key = (entry["benchmark"], entry["section"],
+                               entry["class"])
+                        gapped.add(entry["benchmark"])
+                    else:
+                        codes.lookup(entry["code"])
+                        key = (entry["benchmark"], entry["code"],
+                               entry["entity"])
+                        if (entry["code"], entry["entity"]) == ("RHO3901",
+                                                                "/"):
+                            notes.add(entry["benchmark"])
                     self.assertNotIn(
                         key, owners, f"{key} is claimed by both "
-                        f"{owners.get(key)} and {landing}; one finding has "
-                        "one ledger entry")
+                        f"{owners.get(key)} and {landing}; one finding or "
+                        "row class has one ledger entry")
                     owners[key] = landing
             path = FINDINGS / f"{landing}.json"
             self.assertEqual(path.read_bytes(), (json.dumps(
                 entries, indent=2, sort_keys=True) + "\n").encode(),
                 f"{path.name} is not in canonical layout")
+        # The coverage note fires exactly when some row is actionable.
+        self.assertEqual(sorted(notes), sorted(gapped))
 
-    def test_each_check_stream_is_exactly_the_known_findings(self):
+    def test_findings_and_actionable_rows_are_exactly_the_ledger(self):
+        from collections import Counter
+
+        from rhoform import check as checker
+
         expected = {}
         for entries in known_findings().values():
             for entry in entries:
-                expected.setdefault(entry["benchmark"], []).append(
-                    (entry["code"], entry["entity"]))
+                if "code" in entry:
+                    expected.setdefault(entry["benchmark"], []).append(
+                        (entry["code"], entry["entity"]))
+        order = checker.pass_names()
         for source in sources():
             name = source.parent.name
             with self.subTest(benchmark=name):
                 stream, compilation = build(
                     isolated_copy(source, self.tmp), stage="check")
                 self.assertIsNotNone(compilation.report)
-                found = sorted((d["code"], d["entity"]) for d in
-                               map(json.loads, stream.splitlines()))
+                lines = [json.loads(line) for line in stream.splitlines()]
+                found = sorted((d["code"], d["entity"]) for d in lines)
                 self.assertEqual(found, sorted(expected.get(name, [])),
                                  "the check stage's findings and the "
                                  "KNOWN_FINDINGS ledger disagree")
+                rows = ledger_rows(name)
+                self.assertEqual(
+                    dict(Counter((section, row.reason) for section, row
+                                 in compilation.report.actionable())),
+                    rows, "the check report's actionable rows and the "
+                    "KNOWN_FINDINGS ledger disagree")
+                by_class = Counter()
+                for (_section, kind), count in rows.items():
+                    by_class[kind] += count
+                notes = [d["params"] for d in lines
+                         if (d["code"], d["entity"]) == ("RHO3901", "/")]
+                self.assertEqual(notes, [{
+                    "actionable": sum(rows.values()),
+                    "classes": [f"{kind}: {count}" for kind, count
+                                in sorted(by_class.items())],
+                    "sections": sorted({section for section, _ in rows},
+                                       key=order.index),
+                }] if rows else [], "the coverage note does not count the "
+                    "ledger's rows")
 
     def test_check_reports_are_canonical_schema_valid_and_seed_independent(
             self):

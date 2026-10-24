@@ -1,0 +1,50 @@
+[
+  {
+    "benchmark": "blinker-555",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the budget pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "budget"
+  },
+  {
+    "benchmark": "blinker-555",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the domains_refine pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "domains_refine"
+  },
+  {
+    "benchmark": "buck-3v3",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the budget pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "budget"
+  },
+  {
+    "benchmark": "buck-3v3",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the domains_refine pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "domains_refine"
+  },
+  {
+    "benchmark": "esp32s3-devboard",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the budget pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "budget"
+  },
+  {
+    "benchmark": "esp32s3-devboard",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the domains_refine pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L4",
+    "section": "domains_refine"
+  }
+]
