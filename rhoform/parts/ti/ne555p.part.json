@@ -11,11 +11,6 @@
       "pointer": "/pins/3/abs_max/voltage",
       "reason": "vendor-unpublished",
       "target": "OUT"
-    },
-    {
-      "note": "Section 5.4's thermal table spans several packages and devices under merged header cells, and which column is the NE555 P (PDIP) package could not be read unambiguously from the PDF text layer. See notes.",
-      "pointer": "/ratings/thermal",
-      "reason": "ambiguous-in-source"
     }
   ],
   "description": "Precision timer, astable or monostable, PDIP-8",
@@ -94,7 +89,7 @@
     }
   ],
   "mpn": "NE555P",
-  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nThermal resistance is deliberately not recorded (absent: ambiguous-in-source). The datasheet's Section 5.4 thermal table spans six packages across four devices with merged header cells, and the package-to-column mapping could not be read unambiguously from the PDF text layer. No v1 check consumes RthetaJA for this part, so an uncertain transcription would add risk with no benefit. Recording nothing is correct here; recording a plausible-looking 98.5 degC/W without being certain which column it belongs to would not be.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). Every other electrical figure is at VCC = 5 V only.\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
+  "notes": "Benchmark (a) uses this part as its astable timer at a 9 V supply.\n\nRthetaJA is Section 5.4's P (PDIP) column, 98.5 degC/W, read from the rendered page. That table spans six packages across four devices under merged header cells, which the PDF text layer flattens; on the page, the P (PDIP) column is the only PDIP column and sits alone under the NA555, NE555 header.\n\nThe comparator levels (THRES, TRIG), the CONT open-circuit voltage, and VOH and VOL carry both datasheet columns, VCC = 5 V and VCC = 15 V, as condition arrays (AMB-127 item 2). Benchmark (a) runs at 9 V, between the two, and neither column describes it: a check needs both to bound the 9 V behaviour instead of silently picking one. The divider spread a timing model draws from these levels, and whether the two comparators' errors are correlated, are modelling choices the vendor does not state, so they are not recorded here (tests/benchmarks/derive-555-windows.py states its own). Every other electrical figure is at VCC = 5 V only.\n\nOUT is recorded as role 'output' (push-pull) while DISCH is 'open_collector'. Both come from the same device, and the distinction is precisely what the T2 lattice needs to check the two pins differently.",
   "package": {
     "footprint_ref": "rho:DIP-8_W7.62mm",
     "name": "P (PDIP)",
@@ -587,6 +582,13 @@
       "method": "manual",
       "note": "Published as +/-500 V, recorded as a symmetric interval.",
       "source_id": "ti-xx555-slfs022k"
+    },
+    "/ratings/thermal/theta_ja": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 5.4 Thermal Information, RthetaJA row, P (PDIP) column",
+      "method": "manual",
+      "note": "Read from the rendered page of the 2026-10-24 retrieval. The P (PDIP) column is the only PDIP column and sits alone under the 'NA555, NE555' header cell; the PDF text layer flattens the merged header cells, which is why it once looked ambiguous. The table states no board construction (its note points to TI's thermal-metrics application report), so only the package is recorded as a condition.",
+      "source_id": "ti-xx555-slfs022k-2026-10-24"
     }
   },
   "ratings": {
@@ -619,6 +621,15 @@
         "max": 70,
         "min": 0,
         "unit": "degC"
+      }
+    },
+    "thermal": {
+      "theta_ja": {
+        "conditions": {
+          "package": "P (PDIP), 8 pins"
+        },
+        "typ": 98.5,
+        "unit": "degC/W"
       }
     }
   },
