@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - exercised by absence
 
 PRAGMA = "#pragma rhoform-syntax 0.1"
 P2 = "#pragma rhoform-syntax 0.2\n"
+P3 = "#pragma rhoform-syntax 0.3\n"
 
 
 def _elaborate(body, path="design.rhoform", root=None):
@@ -499,7 +500,9 @@ class Syntax02Test(unittest.TestCase):
                     self.assertEqual(codes, {"RHO2060"})
                     self.assertEqual(len(_diagnostics(result)), 2)
                     self.assertIsNone(result.design)
-        self.assertEqual(seen, 9)
+        # a18 and a20 came with syntax 0.3: 0.2 files that bind its words
+        # and run designators together, as 0.2 always allowed.
+        self.assertEqual(seen, 11)
 
     def test_an_imported_component_elaborates_under_its_own_name(self):
         from rhoform.elaborate import elaborate
@@ -542,6 +545,18 @@ class CodeTest(unittest.TestCase):
                          result.diagnostics.render())
         span = diagnostics[0]["spans"][0]
         text = (P2 + source).encode()[span["byte_start"]:span["byte_end"]]
+        return diagnostics[0], text.decode(), result
+
+    def only3(self, source, code):
+        """`only` for a 0.3 source."""
+        from rhoform.elaborate import elaborate_source
+
+        result = elaborate_source(P3 + source)
+        diagnostics = _diagnostics(result)
+        self.assertEqual([d["code"] for d in diagnostics], [code],
+                         result.diagnostics.render())
+        span = diagnostics[0]["spans"][0]
+        text = (P3 + source).encode()[span["byte_start"]:span["byte_end"]]
         return diagnostics[0], text.decode(), result
 
     def only(self, source, code, root=None):
@@ -1108,6 +1123,74 @@ class CodeTest(unittest.TestCase):
         self.assertEqual(d["params"], {"file": "design.rhoform"})
         self.assertIsNone(result.design)
 
+    RAIL = ("component Ldo:\n    pin gnd passive 3\n    pin vin power_in 1\n"
+            "    pin vout power_out 2\n"
+            "module Sub:\n    port p passive\n"
+            "module Rail:\n    port vin power_in\n    ldo = new Ldo\n"
+            "    caps = new Ldo[2]\n    s = new Sub\n"
+            "    net VIN:\n        ldo.vin\n        vin\n")
+
+    def test_rho2080_annotation_target_unresolved(self):
+        for statement, target, reason in (
+            ("supply VDD at most 1A", "VDD",
+             "no net of the module carries that label, and a pin is "
+             "written `instance.pin`"),
+            ("draw ldo.vdd at most 1A", "ldo.vdd", "`ldo` has no port `vdd`"),
+            ("draw nope.vin at most 1A", "nope.vin",
+             "module `Rail` has no instance `nope`"),
+            ("draw caps[2].vin at most 1A", "caps[2].vin",
+             "`caps` has members 0 to 1"),
+            ("draw caps.vin at most 1A", "caps.vin",
+             "`caps` is an array; name one member, `caps[0]`"),
+            ('waive RHO3001 ghost "x"', "ghost",
+             "it names no instance, net label or assertion"),
+            ('waive RHO3001 ldo.vin "x"', "ldo.vin",
+             "a pin is not a target this statement takes"),
+            ("rule s tie p", "s",
+             "it is a module instance, and only a component has rules"),
+            ("rule VIN tie p", "VIN", "module `Rail` has no instance `VIN`"),
+        ):
+            with self.subTest(statement=statement):
+                d, text, result = self.only3(
+                    self.RAIL + "    " + statement + "\n", "RHO2080")
+                self.assertEqual(d["params"], {
+                    "statement": statement.split()[0], "target": target,
+                    "module": "Rail", "reason": reason})
+                self.assertEqual(text, statement.split()[
+                    2 if statement.startswith("waive") else 1])
+                self.assertIsNone(result.design)
+
+    def test_rho2081_duplicate_annotation(self):
+        d, text, _ = self.only3(
+            self.RAIL + "    supply VIN within 4.5V to 5.5V\n"
+            "    supply VIN at most 2A\n"
+            "    supply VIN within 4.75V to 5.25V\n", "RHO2081")
+        self.assertEqual(d["params"], {"statement": "supply", "target": "VIN",
+                                       "module": "Rail"})
+        self.assertEqual(text, "supply VIN within 4.75V to 5.25V")
+        self.assertEqual(d["spans"][1]["label"], "first stated here")
+        d, _, _ = self.only3(
+            self.RAIL + '    waive RHO3001 ldo "a"\n'
+            '    waive RHO3002 ldo "b"\n    waive RHO3001 ldo "c"\n',
+            "RHO2081")
+        self.assertEqual(d["params"]["target"], "ldo")
+
+    def test_rho2082_rule_pin_unknown(self):
+        d, text, result = self.only3(
+            "component Ldo:\n    pin vin power_in 1\n    pin vout power_out 2\n"
+            "    regulate vuot from vin\n"
+            "module Rail:\n    ldo = new Ldo\n", "RHO2082")
+        self.assertEqual(d["params"], {"pin": "vuot", "word": "regulate",
+                                       "component": "Ldo"})
+        self.assertEqual(text, "vuot")
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"], "vout")
+        self.assertIsNone(result.design)
+        d, text, _ = self.only3(
+            self.RAIL + "    rule ldo pass vin to vot\n", "RHO2082")
+        self.assertEqual(d["params"], {"pin": "vot", "word": "pass",
+                                       "component": "Ldo"})
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"], "vout")
+
     def test_rho2067_unknown_library_definition(self):
         d, text, result = self.only(
             "module Top:\n    r1 = new rhoform.lib.passive.Resistr\n",
@@ -1469,7 +1552,7 @@ module Top(n: int = 3):
 
         schema = json.loads(
             (Path(__file__).resolve().parents[2] / "ir"
-             / "netlist-ir.v1.schema.json").read_text(encoding="utf-8"))
+             / "netlist-ir.v2.schema.json").read_text(encoding="utf-8"))
         document = json.loads(emit(self.result.design)[0])
         jsonschema.validate(document, schema)
 
@@ -1795,9 +1878,10 @@ class Determinism02Test(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_LARK, "lark required")
 class CheckerFactsTest(unittest.TestCase):
-    """The source facts the design keeps for the static stage, in memory
-    only (L0): none of them reaches the IR, whose bytes stay what they
-    were, which test_benchmarks.py and the conformance cases pin."""
+    """The source facts the design keeps for the static stage (L0). IR
+    version 2 serializes one of them, `isolated`; the rest stay in memory
+    and change no IR byte, which test_ir_v2.py's oracle and the
+    conformance cases pin."""
 
     SOURCE = (
         "module Probe:\n"
@@ -1888,6 +1972,170 @@ class CheckerFactsTest(unittest.TestCase):
                          "acme.app.boards.m.M")
         design = elaborate([result]).design
         self.assertEqual(design.instances[0].definition, "boards.m.M")
+
+
+RULED = P3 + """component Ldo(vout: voltage = 3.3V):
+    pin gnd passive 3
+    pin in power_in 1
+    pin out power_out 2
+    ground gnd
+    regulate out from in = vout
+    side primary: in gnd
+
+module Rail(n: int = 2, rail: voltage = 5V):
+    port vin power_in
+    ldos = new Ldo[n](vout = 1.8V)
+    plain = new Ldo
+    for i in range(n):
+        rule ldos[i] pass in to out = rail
+    net VIN(ground_kind = "signal"):
+        ldos[0].in
+        vin
+    supply VIN within 4.5V to 5.5V
+    assert ok static operating_point(VIN) at most 6V warning
+    waive RHO3001 plain "a spare"
+
+module Top:
+    port vin power_in
+    a = new Rail
+    b = new Rail(rail = 12V)
+    net VIN(ground_kind = "power"):
+        a.vin
+        b.vin
+        vin
+"""
+
+
+@unittest.skipUnless(HAVE_LARK, "lark (pinned in toolchain/versions.yaml) "
+                     "is required")
+class SourceFacts03Test(unittest.TestCase):
+    """Syntax 0.3's source facts, elaborated into memory and inert."""
+
+    def setUp(self):
+        from rhoform.elaborate import elaborate_source
+
+        result = elaborate_source(RULED, "rail.rhoform")
+        self.assertTrue(result.ok, result.diagnostics.render())
+        self.design = result.design
+        self.instances = _by_path(self.design)
+
+    def rules(self, path):
+        return [(r.word, r.pins, r.relation, r.other, r.value, r.side,
+                 r.origin) for r in self.instances[path].rules]
+
+    def test_a_definitions_rules_are_evaluated_per_instance(self):
+        from decimal import Decimal
+
+        plain = self.rules("/a/plain")
+        self.assertEqual([r[0] for r in plain], ["ground", "regulate", "side"])
+        regulate = plain[1]
+        self.assertEqual(regulate[:4], ("regulate", ("out",), "from", "in"))
+        self.assertEqual((regulate[4].value, regulate[4].unit),
+                         (Decimal("3.3"), "V"))
+        self.assertEqual(plain[2][5], "primary")
+        self.assertEqual(self.instances["/a"].rules, ())
+
+    def test_a_rule_statement_replaces_the_rules_and_keeps_the_sides(self):
+        for path, rail in (("/a/ldos[0]", "5"), ("/b/ldos[1]", "12")):
+            with self.subTest(path=path):
+                rules = self.rules(path)
+                self.assertEqual([(r[0], r[6]) for r in rules],
+                                 [("side", "definition"),
+                                  ("pass", "override")])
+                # Evaluated in the module instance's own environment.
+                self.assertEqual(str(rules[1][4].value), rail)
+
+    def test_annotations_are_kept_once_per_module_instance(self):
+        kinds = sorted((a.scope, a.kind, a.target)
+                       for a in self.design.annotations)
+        self.assertEqual(kinds, [
+            ("/a", "supply", ("net", "VIN")),
+            ("/a", "waive", ("instance", "/a/plain")),
+            ("/b", "supply", ("net", "VIN")),
+            ("/b", "waive", ("instance", "/b/plain")),
+        ])
+
+    def test_severity_and_ground_kind(self):
+        self.assertEqual({a.path: a.severity for a in self.design.assertions},
+                         {"/a/ok": "warning", "/b/ok": "warning"})
+        vin = _by_name(self.design)["VIN"]
+        # Two kinds that disagree: no elaboration error (GA-2 is the check
+        # stage's), no IR kind, and both sites kept.
+        self.assertIsNone(vin.ground_kind)
+        self.assertEqual(sorted(value for value, _span
+                                in vin.attribute_sites["ground_kind"]),
+                         ["power", "signal"])
+
+    def test_the_check_stage_reads_none_of_them(self):
+        """Inert until their owners land: compiling with every 0.3 fact
+        and with none gives the same check-stage codes."""
+        from rhoform import compile as pipeline
+        import tempfile
+        from pathlib import Path
+
+        from rhoform.diagnostics import Diagnostics
+
+        bare = RULED
+        for line in ("    ground gnd\n", "    regulate out from in = vout\n",
+                     "    side primary: in gnd\n",
+                     "    for i in range(n):\n        rule ldos[i] pass in to "
+                     "out = rail\n",
+                     "    supply VIN within 4.5V to 5.5V\n",
+                     '    waive RHO3001 plain "a spare"\n'):
+            self.assertIn(line, bare)
+            bare = bare.replace(line, "")
+        bare = bare.replace(" warning\n", "\n").replace(
+            '(ground_kind = "signal")', "").replace(
+            '(ground_kind = "power")', "")
+
+        def codes(source):
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "rail.rhoform").write_text(source)
+                sink = Diagnostics()
+                pipeline.compile("rail.rhoform", Path(tmp), sink=sink)
+                return sorted((json.loads(line)["code"],
+                               json.loads(line)["entity"])
+                              for line in sink.render().splitlines())
+
+        self.assertEqual(codes(RULED), codes(bare))
+        self.assertTrue(codes(RULED))
+
+    def test_a_duplicate_side_is_rho2007(self):
+        from rhoform.elaborate import elaborate_source
+
+        result = elaborate_source(
+            P3 + "component C:\n    pin a passive 1\n    pin b passive 2\n"
+            "    side s: a\n    side s: b\nmodule M:\n    c = new C\n")
+        diagnostics = _diagnostics(result)
+        self.assertEqual([d["code"] for d in diagnostics], ["RHO2007"])
+        self.assertEqual(diagnostics[0]["params"],
+                         {"kind": "side", "name": "s",
+                          "scope": "component `C`"})
+
+    def test_a_rule_value_names_a_parameter_of_its_component(self):
+        from rhoform.elaborate import elaborate_source
+
+        result = elaborate_source(
+            P3 + "component C:\n    pin a passive 1\n    regulate a = vout\n"
+            "module M:\n    c = new C\n")
+        self.assertEqual(_codes(result), ["RHO2039"])
+
+    def test_every_0_3_accept_case_elaborates_without_a_traceback(self):
+        from pathlib import Path
+
+        from rhoform.elaborate import elaborate_source
+
+        accept = (Path(__file__).resolve().parents[2] / "spec"
+                  / "conformance" / "parse" / "accept")
+        seen = 0
+        for path in sorted(accept.glob("*.rhoform")):
+            source = path.read_text(encoding="utf-8")
+            if not source.startswith("#pragma rhoform-syntax 0.3"):
+                continue
+            seen += 1
+            with self.subTest(path.name):
+                elaborate_source(source, path.name)
+        self.assertEqual(seen, 1)
 
 
 def _span_of(offset):

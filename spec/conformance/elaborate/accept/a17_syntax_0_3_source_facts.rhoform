@@ -1,0 +1,60 @@
+# Syntax 0.3's source facts, which no check reads yet: a component's rules
+# and sides become each instance's `rules`, a parameter reference among them
+# evaluated per instance; a `rule` statement gives one array member others
+# and keeps its sides; `supply`, `draw` and `waive` resolve to the entity
+# they name, once per module instance; a trailing `warning` is the
+# assertion's severity; `ground_kind` is the net's authored kind.
+#pragma rhoform-syntax 0.3
+
+component Ldo(vout: voltage = 3.3V):
+    pin gnd passive 3
+    pin in power_in 1
+    pin out power_out 2
+    ground gnd
+    regulate out from in = vout
+
+component Opto:
+    pin a passive 1
+    pin c passive 3
+    pin e passive 4
+    pin k passive 2
+    side detector: c e
+    side emitter: a k
+
+module Rail:
+    port gnd passive
+    port vin power_in
+    port vout power_out
+    isos = new Opto[2]
+    ldo = new Ldo(vout = 1.8V)
+    rule isos[1] open a k
+    net VIN:
+        ldo.in
+        vin
+    net VOUT:
+        ldo.out
+        vout
+    ldo.gnd ~ gnd
+    draw ldo.in at most 5mA
+    supply VIN within 4.5V to 5.5V
+    supply ldo.out at most 300mA
+    assert vout_ok static operating_point(VOUT) within 1.7V to 1.9V
+    assert vout_ripple dynamic ripple(VOUT) at most 50mV warning
+    waive RHO3001 isos[0] "a spare footprint; nothing drives it yet"
+    waive RHO3402 vout_ripple "measured on the bench"
+
+module Board:
+    port gnd passive
+    port vin power_in
+    a = new Rail
+    b = new Rail
+    net GND(ground_kind = "power"):
+        a.gnd
+        b.gnd
+        gnd
+    net VIN:
+        a.vin
+        b.vin
+        vin
+    waive RHO3301 GND "the chassis bond is off-board"
+    waive RHO3551 b "a second-source footprint"

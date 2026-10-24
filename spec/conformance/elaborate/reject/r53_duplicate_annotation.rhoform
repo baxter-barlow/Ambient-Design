@@ -1,0 +1,16 @@
+# One fact about one target is stated once. A voltage window and a current
+# capability on the same target are two facts; a second voltage window is
+# a repeat (RHO2081), and so is a second waiver of one code for one target.
+#pragma rhoform-syntax 0.3
+
+module Rail:
+    port vin power_in
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    net VIN:
+        r.a
+        vin
+    supply VIN at most 2A
+    supply VIN within 4.5V to 5.5V
+    supply VIN within 4.75V to 5.25V
+    waive RHO3001 r "a spare footprint"
+    waive RHO3001 r "the same waiver again"

@@ -1,0 +1,17 @@
+# Every pin a component rule or a `rule` statement names is a pin of the
+# component it is about (RHO2082), with a did-you-mean when one is close.
+#pragma rhoform-syntax 0.3
+
+component Ldo:
+    pin gnd passive 3
+    pin vin power_in 1
+    pin vout power_out 2
+    regulate vuot from vin
+
+module Rail:
+    port vin power_in
+    d = new rhoform.lib.passive.Resistor(resistance = 0ohm)
+    ldo = new Ldo
+    rule d conduct a c
+    vin ~ ldo.vin
+    vin ~ d.a

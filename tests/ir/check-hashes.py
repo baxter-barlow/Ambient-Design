@@ -125,6 +125,13 @@ SORT_RULES = (
                 ((e.get("port") or {}).get("port") or ""))),
     ("assertions", lambda d: d.get("assertions") or [],
      lambda e: (e.get("path") or "",)),
+    # IR version 2 (ir/netlist-ir.v2.schema.json). An interface is keyed by
+    # its owner and port; an annotation has no one key, so the schema orders
+    # the entries by their own canonical bytes, which is total.
+    ("interfaces", lambda d: d.get("interfaces") or [],
+     lambda e: (e.get("instance") or "", e.get("port") or "")),
+    ("annotations", lambda d: d.get("annotations") or [],
+     lambda e: (_encode(e),)),
 )
 
 
@@ -155,6 +162,12 @@ def sort_problems(document, label):
             problems.append(
                 f"{label}: instance {instance.get('path')!r} has `ports` out of "
                 "the bytewise-ascending order the schema declares.")
+        rules = [_encode(rule) for rule in instance.get("rules") or []]
+        if rules != sorted(rules):
+            problems.append(
+                f"{label}: instance {instance.get('path')!r} has `rules` out of "
+                "the order of their canonical bytes, which the version 2 "
+                "schema declares.")
         for port in instance.get("ports") or []:
             # `pin_numbers`, which is what ir/netlist-ir.schema.json actually
             # declares. This read `pins`, a field the IR does not have, so the
@@ -425,6 +438,10 @@ def check_document(ir_path: Path, problems: list[str], notes: list[str],
     for assertion in document.get("assertions") or []:
         if assertion.get("path"):
             identities.add(assertion["path"])
+    # Version 2: an interface's node is its instance path, `.` and its port.
+    for interface in document.get("interfaces") or []:
+        if interface.get("instance") and interface.get("port"):
+            identities.add(f"{interface['instance']}.{interface['port']}")
     nodes = source_map.get("nodes")
     if not isinstance(nodes, dict):
         # Failing open here gave the same cheerful summary a missing map used
@@ -669,8 +686,40 @@ def self_test() -> int:
         any("bytewise-ascending path order" in p
             for p in _unsorted_map_probe()),
     ))
+    # IR version 2's three orders: interfaces by (instance, port), and
+    # annotations and each component's rules by their canonical bytes.
+    checks.append((
+        "interfaces out of (instance, port) order are caught",
+        any("`interfaces`" in p for p in sort_problems({"interfaces": [
+            {"instance": "/", "port": "usb"},
+            {"instance": "/", "port": "i2c"}]}, "probe")),
+    ))
+    checks.append((
+        "annotations out of canonical-byte order are caught",
+        any("`annotations`" in p for p in sort_problems({"annotations": [
+            {"kind": "waive", "scope": "/"},
+            {"kind": "supply", "scope": "/"}]}, "probe")),
+    ))
+    checks.append((
+        "a component's rules out of canonical-byte order are caught",
+        any("`rules`" in p for p in sort_problems({"instances": [
+            {"path": "/x", "rules": [{"pins": ["b"], "word": "tie"},
+                                     {"pins": ["a"], "word": "tie"}]}]},
+            "probe")),
+    ))
+    checks.append((
+        "rules, annotations and interfaces in their orders pass",
+        not sort_problems({
+            "instances": [{"path": "/x", "rules": [
+                {"pins": ["a"], "word": "tie"},
+                {"pins": ["b"], "word": "tie"}]}],
+            "annotations": [{"kind": "supply", "scope": "/"},
+                            {"kind": "waive", "scope": "/"}],
+            "interfaces": [{"instance": "/", "port": "i2c"},
+                           {"instance": "/", "port": "usb"}]}, "probe"),
+    ))
     # Every IR version's schema: the hand-written examples are version 0
-    # and the compiler writes version 1, and this gate sorts both.
+    # and the compiler writes version 2, and this gate sorts all of them.
     _ir_schemas = sorted((ROOT / "ir").glob("netlist-ir*.schema.json"))
     checks.append((
         "the field the rule reads is the field the schema declares",
@@ -959,6 +1008,32 @@ def self_test() -> int:
                                for p in _map_probe(lambda side: None))))
         checks.append(("a source map with no nodes object is caught",
                        any("has no `nodes` object" in p for p in _map_probe(_no_nodes))))
+
+        # Version 2: an interface is an identity too, keyed by its instance
+        # path, `.` and its port, and its node is required like any other.
+        def _interface_probe(covered):
+            probe_ir = Path(tmp) / "iface.ir.json"
+            probe_map = Path(tmp) / "iface.sourcemap.json"
+            body = json.loads(text)
+            body["interfaces"] = [{"instance": "/", "port": "power"}]
+            body["header"]["design_hash"] = ""
+            body["header"]["design_hash"] = design_hash_of(body)
+            probe_ir.write_text(json.dumps(body), encoding="utf-8")
+            side = json.loads((IR_EXAMPLES / "blinker.sourcemap.json").read_text(
+                encoding="utf-8"))
+            side["design_hash"] = body["header"]["design_hash"]
+            if covered:
+                side["nodes"]["/.power"] = side["nodes"]["/"]
+            probe_map.write_text(json.dumps(side), encoding="utf-8")
+            found = []
+            check_document(probe_ir, found, [])
+            return found
+
+        checks.append(("an interface with no source-map node is caught",
+                       any("has no `nodes` entry" in p and "/.power" in p
+                           for p in _interface_probe(False))))
+        checks.append(("an interface with its node passes the coverage leg",
+                       not any("`nodes`" in p for p in _interface_probe(True))))
 
         checks.append((
             "check_document reports an array out of its declared order, even "

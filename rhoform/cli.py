@@ -89,7 +89,7 @@ LOCKFILE = "rhoform.lock"
 MANIFEST = "rhoform.toml"
 SUFFIX = ".rhoform"
 IR_SCHEMA = (Path(__file__).resolve().parents[1] / "ir"
-             / "netlist-ir.v1.schema.json")
+             / "netlist-ir.v2.schema.json")
 
 EXIT_CLEAN = 0
 EXIT_ERRORS = 1
@@ -392,13 +392,13 @@ def run_check(args) -> int:
             run.complain(
                 f"UNAVAILABLE: jsonschema is not installed, so the IR of "
                 f"{path} could not be validated against "
-                "ir/netlist-ir.v1.schema.json. Install the pin from "
+                "ir/netlist-ir.v2.schema.json. Install the pin from "
                 "toolchain/versions.yaml: python3 -m pip install "
                 "jsonschema==4.26.0")
             continue
         if problem is not None:
             run.complain(f"INTERNAL: the IR elaborated from {path} does not "
-                         f"validate against ir/netlist-ir.v1.schema.json: "
+                         f"validate against ir/netlist-ir.v2.schema.json: "
                          f"{problem}")
             continue
         if reports is not None:

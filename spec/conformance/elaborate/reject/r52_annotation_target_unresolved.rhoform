@@ -1,0 +1,22 @@
+# A 0.3 statement's target must name something its module has, of a kind
+# the statement takes: each line below names nothing, or the wrong thing,
+# and draws one RHO2080 saying which.
+#pragma rhoform-syntax 0.3
+
+module Sensor:
+    port out output
+    port vin power_in
+    r = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    vin ~ r.a
+
+module Board:
+    port vin power_in
+    caps = new rhoform.lib.passive.Capacitor[2](capacitance = 100nF)
+    s = new Sensor
+    rule s open a b
+    vin ~ s.vin
+    draw caps.a at most 1mA
+    draw caps[2].a at most 1mA
+    supply VDD within 3V to 3.6V
+    supply s.vdd at most 10mA
+    waive RHO3001 nothing "a target that is not there"
