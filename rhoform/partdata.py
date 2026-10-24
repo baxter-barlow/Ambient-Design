@@ -37,11 +37,10 @@ rules rather than two that drift:
     `unverified`. A relative bound stays symbolic (`Relative`); evaluating
     it against the referenced pin's net is the checker's job, at one corner.
 
-HERMETIC. `load` opens the path it is given and, the first time a version
-is validated, that version's schema file beside the repository's parts/
-directory. Nothing else is opened and nothing touches the network; every
-other function here does no I/O at all. rhoform/tests/test_partdata.py holds
-that with an audit hook.
+HERMETIC. partdata opens the path it is given and, once per process per
+schema_version, the toolchain's own schema file for that version
+(parts/part-data[.vN].schema.json); it lists nothing, starts no process, and
+opens no network connection.
 """
 
 import hashlib
