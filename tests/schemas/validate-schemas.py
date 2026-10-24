@@ -179,8 +179,11 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # ZERO meant 31% of the controls could be deleted with `make all` green — and
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
 # same change that legitimately removes one. 49 -> 59 when the diagnostic
-# wire-format schema landed with its ten controls (AMB-48).
-MINIMUM_NEGATIVE_CONTROLS = 61
+# wire-format schema landed with its ten controls (AMB-48), 59 -> 61 with its
+# n11 and n12, and 61 -> 64 when D3 v1 added the part-data schema controls
+# n17, n23 and n24 (AMB-127; n18-n22 are lint controls, counted by
+# parts/lint-part-data.py). Equal to the population, as measured.
+MINIMUM_NEGATIVE_CONTROLS = 64
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
