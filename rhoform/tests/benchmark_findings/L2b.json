@@ -1,0 +1,26 @@
+[
+  {
+    "benchmark": "blinker-555",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L2b",
+    "section": "parts"
+  },
+  {
+    "benchmark": "buck-3v3",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L2b",
+    "section": "parts"
+  },
+  {
+    "benchmark": "esp32s3-devboard",
+    "class": "pass-not-implemented",
+    "count": 1,
+    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
+    "resolving_landing": "L2b",
+    "section": "parts"
+  }
+]
