@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# The record guarantees 9.9 to 10.1 kohm, and the window the
+# instance requires is 9.95 to 10.05 kohm: some parts of the
+# record are outside it.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm +/- 0.5%
+    top ~ r1.a
+    r1.b ~ bottom

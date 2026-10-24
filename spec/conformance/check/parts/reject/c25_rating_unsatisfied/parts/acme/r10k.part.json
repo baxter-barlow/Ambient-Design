@@ -1,0 +1,66 @@
+{
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "manufacturer": "Acme",
+  "mpn": "R-10K",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 10.1,
+      "min": 9.9,
+      "typ": 10,
+      "unit": "kohm"
+    },
+    "voltage_rating": {
+      "max": 25,
+      "unit": "V"
+    }
+  },
+  "part_id": "acme/r10k",
+  "pins": [
+    {
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "source_id": "acme-ds"
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "source_id": "acme-ds",
+      "state": "source-unreachable",
+      "url": "https://acme.example/ds.pdf",
+      "vendor": "acme"
+    }
+  ],
+  "stability": "unstable"
+}

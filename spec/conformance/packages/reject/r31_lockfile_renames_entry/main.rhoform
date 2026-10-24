@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+
+# A rename-ledger entry is refused, not ignored, until R27 applies
+# the ledger (AMB-62).
+module Board:
+    port p passive

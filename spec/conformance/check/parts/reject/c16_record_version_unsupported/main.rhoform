@@ -1,0 +1,18 @@
+#pragma rhoform-syntax 0.2
+
+# A record of a part-data version this toolchain does not
+# implement is refused, never read as a neighbouring version.
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

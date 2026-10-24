@@ -23,7 +23,7 @@ that checkers landing in parallel edit disjoint text:
 | [6 — Voltage domains](05-static-types/06-domains.md) | T5 (AMB-54) | reserved |
 | [7 — Budgets](05-static-types/07-budgets.md) | T10 (AMB-55) | reserved |
 | [8 — Waivers and static assertions](05-static-types/08-waivers-and-static-assertions.md) | T6, V1 (AMB-56) | reserved |
-| [9 — Part data at check time](05-static-types/09-part-data.md) | D1, D3 (AMB-59) | reserved |
+| [9 — Part data at check time](05-static-types/09-part-data.md) | D1, D3 (AMB-59) | normative |
 
 One part of T5 is specified already and is normative today: the
 ground-architecture semantics (GA-1..GA-17), published as *Rhoform

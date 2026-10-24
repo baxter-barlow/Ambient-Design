@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+
+# A bare lockfile, `{"lockfile_version": 0}`, marks the workspace
+# root: by default the compile root is the directory holding it, so
+# app's sibling dependency ../parts compiles with no explicit root
+# (AMB-144 item 2). It locks nothing, so nothing is stale, and the
+# IR is the same as with no lockfile.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

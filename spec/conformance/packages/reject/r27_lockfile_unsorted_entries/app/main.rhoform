@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# Canonically laid out, but its package entries are out of name
+# order: an invariant of the section, not of the layout.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

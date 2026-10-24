@@ -1,0 +1,22 @@
+{
+  "lockfile_version": 0,
+  "parts": {
+    "entries": [
+      {
+        "constraints": "sha256:4e7b25ec79b264232ada72753f2fa69515631cfc2e66e81592a07a03f9e23064",
+        "design": "main.Board",
+        "instance": "/r1",
+        "manufacturer": "Acme",
+        "mpn": "R-10K",
+        "part_id": "acme/r10k",
+        "record": "parts/acme/r10k.part.json"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "parts/acme/r10k.part.json",
+        "sha256": "sha256:244e373621ea1951d07fbb275fc447d47bd0d6f3f125e00e0f3f98083a325fc0"
+      }
+    ]
+  }
+}

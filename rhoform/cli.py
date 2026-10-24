@@ -53,15 +53,16 @@ reads are the exception: they are the toolchain's own files, listed as
 
 HERMETIC (I3, C-6). No network module is imported and nothing reads the
 environment or the clock. Reads: the input files and their import
-closures, the rhoform.toml files governing them, the standard library
-modules their qualified names mention (rhoform/lib/, no others), the
-grammar artifacts the parser loads, the IR schema, and with
---emit-report the check report's schema. A `rhoform.lock` decides the
-compile root by its presence; its contents are not read until the
-lockfile lands (AMB-59). Nothing outside a compile root is read as an
-author's source, and a directory is listed only to check the exact
-spelling of a name the file system resolved (a manifest, a lockfile or a
-path being imported). Writes: fmt's targets and --emit-ir's and
+closures, the rhoform.toml files governing them, the compile root's
+rhoform.lock and its schema, the part records the picks a design uses
+name and the part-data schema of each version they declare, the standard
+library modules their qualified names mention (rhoform/lib/, no others),
+the grammar artifacts the parser loads, the IR schema, and with
+--emit-report the check report's schema. Nothing outside a compile root
+is read as an author's file, and a directory is listed only to check the
+exact spelling of a name the file system resolved (a manifest, a
+lockfile, a part record or a path being imported). Writes: fmt's targets
+and --emit-ir's and
 --emit-report's files, each through a temporary file in the target's own
 directory and `os.replace`, so a reader never sees a torn file and two
 concurrent runs cannot interleave their bytes.
@@ -307,8 +308,8 @@ def _closure(root: Path, file: str) -> set:
     try:
         compilation = pipeline.compile(file, root, stage="load",
                                        sink=Diagnostics())
-    except package.ReadFailure:
-        return set()
+    except (package.ReadFailure, ImportError):
+        return set()  # the compilation itself reports it
     return {os.path.realpath(root / result.file)
             for result in compilation.loaded.results}
 
@@ -381,6 +382,20 @@ def run_check(args) -> int:
         except package.ReadFailure as exc:
             run.report.merge(sink)
             run.complain(f"FAIL: {exc}")
+            continue
+        except ImportError as exc:
+            if not (exc.name or "").startswith("jsonschema"):
+                raise
+            # The lockfile and the part records it names are checked
+            # against their schemas, as the IR is: none is ever read
+            # unchecked.
+            run.report.merge(sink)
+            run.complain(
+                f"UNAVAILABLE: jsonschema is not installed, so the "
+                f"lockfile or a part record {path} reads could not be "
+                "validated against its schema. Install the pin from "
+                "toolchain/versions.yaml: python3 -m pip install "
+                "jsonschema==4.26.0")
             continue
         run.report.merge(sink)
         if compilation.design is None:

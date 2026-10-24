@@ -1,0 +1,12 @@
+#pragma rhoform-syntax 0.2
+
+# An instance pick naming an identity path no part of
+# the design has.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm +/- 1%
+    top ~ r1.a
+    r1.b ~ bottom

@@ -1,0 +1,13 @@
+{
+  "lockfile_version": 0,
+  "renames": {
+    "entries": [
+      {
+        "design": "acme.app.main.Panel",
+        "path": "/u1"
+      }
+    ],
+    "inputs": []
+  },
+  "x_negative_control": "REJECTED at /renames/entries/0: a rename entry keeps an identity, its origin"
+}

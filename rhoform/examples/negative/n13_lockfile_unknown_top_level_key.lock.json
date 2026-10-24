@@ -1,0 +1,8 @@
+{
+  "lockfile_version": 0,
+  "pins": {
+    "entries": [],
+    "inputs": []
+  },
+  "x_negative_control": "REJECTED at /: the lockfile's top level is closed; a new section ships as a lockfile version"
+}

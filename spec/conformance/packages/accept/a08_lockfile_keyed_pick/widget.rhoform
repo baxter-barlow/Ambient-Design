@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2

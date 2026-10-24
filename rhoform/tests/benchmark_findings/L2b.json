@@ -1,26 +1,16 @@
 [
   {
     "benchmark": "blinker-555",
-    "class": "pass-not-implemented",
-    "count": 1,
-    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
-    "resolving_landing": "L2b",
-    "section": "parts"
+    "code": "RHO6001",
+    "entity": "/j_bat",
+    "reason": "`part \"conn.battery_9v/keystone-232@1\"` is a resolved part, and with no keyed pick of that key it names nothing, lockfile or none (decision D30); (a) commits no rhoform.lock, and no D3 record of the Keystone 232 exists yet to pick (AMB-58)",
+    "resolving_landing": "L5b"
   },
   {
-    "benchmark": "buck-3v3",
-    "class": "pass-not-implemented",
-    "count": 1,
-    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
-    "resolving_landing": "L2b",
-    "section": "parts"
-  },
-  {
-    "benchmark": "esp32s3-devboard",
-    "class": "pass-not-implemented",
-    "count": 1,
-    "reason": "the parts pass is still a stub, so its section records one actionable not-implemented row (amendment OD1); implementing the pass removes it",
-    "resolving_landing": "L2b",
-    "section": "parts"
+    "benchmark": "blinker-555",
+    "code": "RHO6001",
+    "entity": "/timer",
+    "reason": "`part \"timer.555/ti-NE555P@2\"` is a resolved part, and with no keyed pick of that key it names nothing, lockfile or none (decision D30); (a) commits no rhoform.lock to pick the bundled ti/ne555p record for it",
+    "resolving_landing": "L5b"
   }
 ]

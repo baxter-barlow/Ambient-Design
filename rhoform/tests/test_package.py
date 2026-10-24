@@ -1121,5 +1121,120 @@ class CodesTest(_Tree):
         self.assertEqual(d["params"]["first"], "by an earlier import")
 
 
+    # ---- the lockfile (R55; spec 08, The lockfile) --------------------------
+
+    @staticmethod
+    def lock(document) -> str:
+        from rhoform import lockfile
+
+        return lockfile.canonical_bytes(document).decode()
+
+    def tree(self, lock: str) -> dict:
+        return {"main.rhoform": TOP, "leds.rhoform": LED,
+                "rhoform.lock": lock}
+
+    def test_rho2070_lockfile_not_json(self):
+        d, text = self.only(self.tree('{"lockfile_version": 0,}\n'),
+                            "RHO2070")
+        self.assertEqual(d["params"], {
+            "reason": "an object key, a string, is expected here"})
+        self.assertEqual((d["spans"][0]["byte_start"], text), (23, ""))
+
+    def test_rho2071_lockfile_not_canonical(self):
+        d, text = self.only(self.tree('{"lockfile_version": 0}\n'),
+                            "RHO2071")
+        self.assertEqual(d["params"], {"line": 1})
+        self.assertEqual(text, '{"lockfile_version": 0}')
+        self.assertEqual(d["fixits"][0]["edits"][0]["replacement"],
+                         '{\n  "lockfile_version": 0\n}\n')
+
+    def test_rho2072_lockfile_version_unsupported(self):
+        d, text = self.only(self.tree(self.lock({"lockfile_version": 2})),
+                            "RHO2072")
+        self.assertEqual(d["params"], {"version": "2", "supported": "0"})
+        self.assertEqual(text, "2")
+
+    def test_rho2073_lockfile_invalid(self):
+        d, text = self.only(self.tree(self.lock({
+            "lockfile_version": 0, "parts": {"inputs": [], "entries": [{
+                "key": "k", "manufacturer": "Acme", "mpn": "X",
+                "part_id": "acme/x", "record": "x.part.json"}]}})),
+            "RHO2073")
+        self.assertEqual(d["params"]["pointer"], "/parts/entries/0/record")
+        self.assertEqual(text, '"x.part.json"')
+
+    def test_rho2074_lockfile_packages_stale(self):
+        from rhoform import lockfile
+
+        recorded = lockfile.digest(b"another manifest")
+        files = dict(self.tree(self.lock({
+            "lockfile_version": 0, "packages": {
+                "inputs": [{"path": "rhoform.toml", "sha256": recorded}],
+                "entries": [{
+                    "content_hash": None, "manifest": "rhoform.toml",
+                    "name": "acme/app", "requires_rhoform": "^0.2.0",
+                    "source": {"path": "."},
+                    "unavailable_reason": "canonical-archive-unavailable",
+                    "version": "0.1.0"}]}})), **{"rhoform.toml": MANIFEST})
+        d, text = self.only(files, "RHO2074")
+        self.assertEqual(d["params"]["subject"], "rhoform.toml")
+        self.assertIn(lockfile.digest(MANIFEST.encode()),
+                      d["params"]["problem"])
+        self.assertEqual(text, f'"{recorded}"')
+
+    def test_rho2075_lockfile_entry_unsupported(self):
+        d, _text = self.only(self.tree(self.lock({
+            "lockfile_version": 0, "renames": {"inputs": [], "entries": [{
+                "design": "main.Top", "origin": "/old", "path": "/led"}]}})),
+            "RHO2075")
+        self.assertEqual(d["params"], {
+            "pointer": "/renames/entries/0",
+            "entry": "a rename-ledger entry",
+            "owner": "the rename ledger, R27, AMB-62"})
+
+
+class LockfileLoadTest(_Tree):
+    """The package layer reads the compile root's rhoform.lock, spelled
+    exactly so, once the closure is read, and hands it on."""
+
+    def test_the_lockfile_reaches_the_compilation_when_there_is_one(self):
+        found, loaded, _compiled = self.compile({"main.rhoform": TOP,
+                                                 "leds.rhoform": LED})
+        self.assertEqual((found, loaded.lockfile), ([], None))
+        found, loaded, compiled = self.compile({
+            "rhoform.lock": '{\n  "lockfile_version": 0\n}\n'})
+        self.assertEqual(found, [])
+        self.assertEqual(loaded.lockfile.document, {"lockfile_version": 0})
+        self.assertIsNotNone(compiled.design)
+
+    def test_a_refused_lockfile_stops_the_compilation_before_elaboration(self):
+        found, loaded, compiled = self.compile({
+            "main.rhoform": TOP, "leds.rhoform": LED,
+            "rhoform.lock": "[]\n"})
+        self.assertEqual([d["code"] for d in found], ["RHO2072"])
+        self.assertFalse(loaded.ok)
+        self.assertIsNone(loaded.lockfile)
+        self.assertIsNone(compiled.design)
+
+    def test_only_a_file_named_rhoform_lock_exactly_is_read(self):
+        found, loaded, _compiled = self.compile({
+            "main.rhoform": TOP, "leds.rhoform": LED,
+            "RHOFORM.LOCK": "not json"})
+        self.assertEqual((found, loaded.lockfile), ([], None))
+        (self.tmp / "RHOFORM.LOCK").unlink()
+        (self.tmp / "rhoform.lock").mkdir()
+        found, loaded, _compiled = self.compile({})
+        self.assertEqual((found, loaded.lockfile), ([], None))
+
+    def test_the_lockfile_is_neither_source_nor_hashed(self):
+        from rhoform import ir
+
+        _found, _loaded, before = self.compile({"main.rhoform": TOP,
+                                                "leds.rhoform": LED})
+        _found, _loaded, after = self.compile({
+            "rhoform.lock": '{\n  "lockfile_version": 0\n}\n'})
+        self.assertEqual(ir.emit(before.design), ir.emit(after.design))
+
+
 if __name__ == "__main__":
     unittest.main()

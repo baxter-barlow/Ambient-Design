@@ -1,0 +1,20 @@
+{
+  "lockfile_version": 0,
+  "parts": {
+    "entries": [
+      {
+        "key": "acme/widget",
+        "manufacturer": "Acme",
+        "mpn": "WIDGET-1",
+        "part_id": "acme/widget",
+        "record": "parts/acme/widget.part.json"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "parts/acme/widget.part.json",
+        "sha256": "sha256:95b459478abfabdf6451a29b4a1d8090f27806264583bbbea54f3dbca9f0767b"
+      }
+    ]
+  }
+}

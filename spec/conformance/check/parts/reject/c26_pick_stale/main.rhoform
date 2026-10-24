@@ -1,0 +1,14 @@
+#pragma rhoform-syntax 0.2
+
+# The pick was made for `resistance = 10kohm +/- 5%`, and
+# the instance now states +/- 1%: a stale pick is re-made
+# explicitly, never silently (D1); the fix-it re-pins it,
+# for review.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm +/- 1%
+    top ~ r1.a
+    r1.b ~ bottom

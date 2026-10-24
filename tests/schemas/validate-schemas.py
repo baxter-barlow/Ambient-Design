@@ -16,6 +16,9 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
                                    1 part-data.v1.schema.json
         eval/  *.run.json       -> run-result.schema.json
         lang/  *.design.json    -> design-model.schema.json
+        rhoform/ *.diag.json    -> diagnostic.schema.json
+               *.lock.json      -> by lockfile_version: 0 lockfile.schema.json
+               *.check.json     -> check-report.schema.json
   - a versioned document goes to the schema of the version IT declares
     (ir/README.md: one immutable schema file per version), and one that
     declares no version, or a version no schema describes, is refused
@@ -42,6 +45,13 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
   - the bundled part store, rhoform/parts/<vendor>/<slug>.part.json, holds
     records the compiler reads, so each is a positive of the parts/ root,
     routed by its schema_version like any record;
+  - a lockfile is compiler input too: each rhoform.lock a package or check
+    conformance ACCEPT case or a benchmark commits is a positive of the
+    rhoform/ root, routed by its lockfile_version as a *.lock.json would
+    be, and so is each *.part.json record an accept case's lockfile picks,
+    of the parts/ root. A REJECT case's records and lockfile may be wrong
+    on purpose, and the conformance gate pins byte for byte what the
+    compiler reports about them, so they are its fixtures, not strays;
     any other file with a mapped suffix outside an examples/ directory is
     still a failure;
   - a root that declares schemas but ships no negative controls is a hard
@@ -88,6 +98,8 @@ SOURCEMAP_VERSIONS = (("sourcemap_version",),
 # file, so a record goes to the schema of the version it declares.
 PART_VERSIONS = (("schema_version",),
                  {0: "part-data.schema.json", 1: "part-data.v1.schema.json"})
+# And the lockfile (spec 08): one immutable schema file per lockfile_version.
+LOCKFILE_VERSIONS = (("lockfile_version",), {0: "lockfile.schema.json"})
 
 # Declared schema roots: top-level directory -> example-filename suffixes
 # it recognises and the schema each routes to (a file name, or a version
@@ -102,8 +114,16 @@ SCHEMA_ROOTS = {
     "parts": ((".part.json", PART_VERSIONS),),
     "eval": ((".run.json", "run-result.schema.json"),),
     "lang": ((".design.json", "design-model.schema.json"),),
-    "rhoform": ((".diag.json", "diagnostic.schema.json"),),
+    "rhoform": (
+        (".diag.json", "diagnostic.schema.json"),
+        (".lock.json", LOCKFILE_VERSIONS),
+        (".check.json", "check-report.schema.json"),
+    ),
 }
+
+# A committed lockfile is named rhoform.lock, the one name the compiler
+# reads (spec 08), and is routed as a *.lock.json example would be.
+LOCKFILE_NAME = "rhoform.lock"
 
 NEGATIVE_DIR_NAME = "negative"
 
@@ -125,6 +145,26 @@ GOLDEN_ROOTS = {"benchmarks": "ir"}
 CONFORMANCE_GOLDENS = (
     ("spec/conformance/elaborate/accept", "ir", "*.expected.ir.json"),
     ("spec/conformance/packages/accept", "ir", "*/expected.ir.json"),
+)
+
+# The compiler's inputs a conformance accept case or a benchmark commits
+# beside its sources: its rhoform.lock and the part records the lock picks.
+# Each is a positive of its root wherever it sits. Entries: (directory,
+# schema root, glob).
+COMMITTED_INPUTS = (
+    ("spec/conformance/packages/accept", "rhoform", "*/rhoform.lock"),
+    ("spec/conformance/packages/accept", "parts", "*/**/*.part.json"),
+    ("spec/conformance/check", "rhoform", "*/accept/*/rhoform.lock"),
+    ("spec/conformance/check", "parts", "*/accept/*/**/*.part.json"),
+    ("benchmarks", "rhoform", "*/rhoform.lock"),
+)
+
+# A reject case's records, which may be invalid on purpose: the conformance
+# gate pins what the compiler reports about each, so a mapped suffix there
+# is a fixture, not a stray. Globs from the repository root.
+CONFORMANCE_FIXTURES = (
+    "spec/conformance/packages/reject/*/**/*.part.json",
+    "spec/conformance/check/*/reject/*/**/*.part.json",
 )
 
 # The bundled part store: records the compiler reads, so positives of the
@@ -151,10 +191,24 @@ def golden_paths(root):
             for path in sorted((root / directory).glob(f"*/*{suffix}")):
                 if path.name == path.parent.name + suffix:
                     found.setdefault(schema_root, []).append(path)
-    for directory, schema_root, pattern in CONFORMANCE_GOLDENS:
+    for directory, schema_root, pattern in CONFORMANCE_GOLDENS \
+            + COMMITTED_INPUTS:
         for path in sorted((root / directory).glob(pattern)):
             found.setdefault(schema_root, []).append(path)
-    return {name: sorted(paths) for name, paths in found.items()}
+    return {name: sorted(set(paths)) for name, paths in found.items()}
+
+
+def fixture_paths(root):
+    """The reject cases' records the stray rule leaves to the conformance
+    gate."""
+    return {path for pattern in CONFORMANCE_FIXTURES
+            for path in root.glob(pattern)}
+
+
+def routed_name(path):
+    """The name a file is routed by: its own, a committed lockfile's as a
+    *.lock.json example's."""
+    return f"{path.name}.json" if path.name == LOCKFILE_NAME else path.name
 
 
 def negative_control_floor_problems(root, controls, failures, minimum=None):
@@ -187,9 +241,12 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # n11 and n12, 61 -> 64 when D3 v1 added the part-data schema controls
 # n17, n23 and n24 (AMB-127; n18-n22 are lint controls, counted by
 # parts/lint-part-data.py), 64 -> 72 when IR version 2 landed with its
-# eight (ir/examples/negative/n10-n17), and 72 -> 74 when interfaces added
-# n18 and n19 to IR v2 (AMB-51). Equal to the population, as measured.
-MINIMUM_NEGATIVE_CONTROLS = 74
+# eight (ir/examples/negative/n10-n17), 72 -> 74 when interfaces added
+# n18 and n19 to IR v2 (AMB-51), and 74 -> 86 when the lockfile schema
+# landed with its eleven and the check report gained its first
+# (rhoform/examples/negative/n13-n24, AMB-59). Equal to the population, as
+# measured.
+MINIMUM_NEGATIVE_CONTROLS = 86
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
@@ -327,7 +384,8 @@ def check_root(root, root_name, suffix_map, jsonschema, failures, goldens=(),
             example_path.relative_to(examples_dir).parts[:-1]
 
         route = next(
-            (s for suffix, s in suffix_map if example_path.name.endswith(suffix)),
+            (s for suffix, s in suffix_map
+             if routed_name(example_path).endswith(suffix)),
             None,
         )
         if route is None:
@@ -857,6 +915,69 @@ def self_test() -> int:
     cases.append(("a root with no negative controls is caught",
                   code == 1 and "ships no negative controls" in text))
 
+    # COMMITTED INPUTS. A conformance accept case's rhoform.lock is routed
+    # by its lockfile_version, as a *.lock.json example would be, and the
+    # records its lock picks are positives of parts/. A reject case's
+    # records may be wrong on purpose: the conformance gate pins them, so
+    # they are neither validated here nor strays.
+    lock_good = {"lockfile_version": 0}
+    lock_control = {"lockfile_version": 0, "extra": 1,
+                    "x_negative_control": "REJECTED at /: closed"}
+
+    def _lock_root(root, lock, *, records=(), fixtures=()):
+        _parts_root(root)
+        (root / "rhoform" / "examples" / "negative").mkdir(parents=True)
+        (root / "rhoform" / "lockfile.schema.json").write_text(_json.dumps({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object", "required": ["lockfile_version"],
+            "properties": {"lockfile_version": {"const": 0}},
+            "patternProperties": {"^x_": {"type": "string"}},
+            "additionalProperties": False}))
+        (root / "rhoform" / "examples" / "negative" / "n1.lock.json"
+         ).write_text(_json.dumps(lock_control))
+        case = root / "spec" / "conformance" / "packages" / "accept" / "a1"
+        case.mkdir(parents=True)
+        (case / "rhoform.lock").write_text(_json.dumps(lock))
+        for rel, body in records:
+            path = case / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_json.dumps(body))
+        rejected = root / "spec" / "conformance" / "check" / "parts" / \
+            "reject" / "c1"
+        for rel, body in fixtures:
+            path = rejected / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_json.dumps(body))
+
+    code, text = run_raw(lambda root: _lock_root(
+        root, lock_good, records=(("parts/acme/x.part.json", v1_good),),
+        fixtures=(("parts/acme/x.part.json", dict(v1_good,
+                                                  stability="bad")),)))
+    cases.append(("an accept case's lockfile and records are validated, a "
+                  "reject case's records are its fixtures",
+                  code == 0
+                  and "accept/a1/rhoform.lock: valid against "
+                  "lockfile.schema.json" in text
+                  and "accept/a1/parts/acme/x.part.json: valid against "
+                  "part-data.v1.schema.json" in text
+                  and "reject/c1" not in text))
+    code, text = run_raw(lambda root: _lock_root(
+        root, dict(lock_good, packages=[])))
+    cases.append(("an invalid committed lockfile is caught",
+                  code == 1 and "accept/a1/rhoform.lock: at <root>" in text))
+    code, text = run_raw(lambda root: _lock_root(
+        root, {"lockfile_version": 3}))
+    cases.append(("a committed lockfile of a version no schema describes "
+                  "is refused",
+                  code == 1 and "a1/rhoform.lock: declares "
+                  "lockfile_version 3" in text))
+    code, text = run_raw(lambda root: _lock_root(
+        root, lock_good, records=(("parts/acme/x.part.json",
+                                   dict(v1_good, stability="bad")),)))
+    cases.append(("an invalid record an accept case's lock picks is caught",
+                  code == 1 and "a1/parts/acme/x.part.json: at stability"
+                  in text))
+
     failures = 0
     for name, ok in cases:
         failures += 0 if ok else 1
@@ -910,6 +1031,7 @@ def main() -> int:
     known_example_dirs = [root / name / "examples" for name in SCHEMA_ROOTS]
     golden_set = {path for paths in list(goldens.values())
                   + list(store.values()) for path in paths}
+    golden_set |= fixture_paths(root)
     skip_dirs = {".git", "node_modules", "__pycache__", ".venv"}
     for path in sorted(root.rglob("*.json")):
         if skip_dirs & set(path.parts):

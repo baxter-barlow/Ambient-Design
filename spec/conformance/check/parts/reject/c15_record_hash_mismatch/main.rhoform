@@ -1,0 +1,19 @@
+#pragma rhoform-syntax 0.2
+
+# The record changed after it was picked: its bytes no longer
+# hash to the recorded revision. It is never re-pinned silently;
+# the fix-it re-pins it, for review.
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

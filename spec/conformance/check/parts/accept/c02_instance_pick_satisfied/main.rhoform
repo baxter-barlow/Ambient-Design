@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.2
+
+# An instance pick that holds: made for the constraints the
+# instance states now (its digest), and the record satisfies each:
+# mpn and package equal, the record's guaranteed resistance within
+# the window, its guaranteed rating at least the one required.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            mpn = "R-10K"
+            package = "0402"
+            resistance = 10kohm +/- 1%
+            voltage_rating = 25V
+    top ~ r1.a
+    r1.b ~ bottom

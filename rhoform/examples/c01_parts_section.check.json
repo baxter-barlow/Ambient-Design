@@ -1,0 +1,42 @@
+{
+  "design_hash": "sha256:abababababababababababababababababababababababababababababababab",
+  "generator": {
+    "name": "rhoformc",
+    "version": "0.1.0-dev"
+  },
+  "report_version": 0,
+  "safety": [],
+  "sections": {
+    "model": {
+      "implemented": true,
+      "rows": []
+    },
+    "parts": {
+      "implemented": true,
+      "rows": [
+        {
+          "actionable": false,
+          "detail": {
+            "part_id": "acme/widget",
+            "pick": "keyed",
+            "record": "parts/acme/widget.part.json",
+            "revision": "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+          },
+          "entity": "/w",
+          "reason": "bound",
+          "status": "pass"
+        },
+        {
+          "actionable": false,
+          "detail": {
+            "lockfile": "no-pick"
+          },
+          "entity": "/r1",
+          "reason": "no-pick",
+          "status": "no-data"
+        }
+      ]
+    }
+  },
+  "waivers": []
+}

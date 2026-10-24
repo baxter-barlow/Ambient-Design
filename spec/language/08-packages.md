@@ -44,8 +44,11 @@ manifest above the compile root is not read.
 
 Compilation is hermetic (L2, I3). It reads the files of the import
 closure, the manifests that govern them — the entry file's package's
-and, transitively, those of the packages it depends on — and the
-standard library modules those files name, and nothing else: a
+and, transitively, those of the packages it depends on — the compile
+root's `rhoform.lock` when there is one ([The lockfile](#the-lockfile)),
+the standard library modules those files name, and, at the check stage,
+the part records the picks the design uses name
+([05 section 9](05-static-types/09-part-data.md)), and nothing else: a
 directory of the author's is listed only to match the spelling of a name
 on a path being resolved (as the toolchain's own library directory is,
 to match module names exactly), no network is opened, and a
@@ -216,7 +219,7 @@ file the compilation read — the entry file, its import closure, and the
 standard library modules they name — by compile-root-relative path, a
 library module by its fixed path `rhoform/lib/<module>.rhoform`
 ([04](04-elaboration.md#the-source-map)). A manifest is configuration,
-not source, and is not listed.
+not source, and is not listed; nor is the lockfile, nor a part record.
 
 ## The command line
 
@@ -229,6 +232,172 @@ the cycle is reported. The package specification defines no entry-point
 key (`[package]` is closed), so no manifest names entries. A defect two
 compilations of one run share is reported once.
 
+## The lockfile
+
+`rhoform.lock` (R55; R14a L1, L4, L5; D1; I2, I3) records what a
+workspace resolved: one file at the compile root, the workspace root,
+named so exactly. It is **optional** in this version (decision D30): with
+none, every section is **unlocked** — path dependencies are read in
+place, and a `part abstract` has no pick — which
+[Deviations](#deviations-recorded) records against L3. A `part "key"` is
+an error with no lockfile too ([05 section 9](05-static-types/09-part-data.md#92-picks)).
+Its shape is [`rhoform/lockfile.schema.json`](../../rhoform/lockfile.schema.json),
+normative by reference, one immutable schema file per `lockfile_version`
+as the IR has; a reader refuses a version it does not implement.
+
+### Canonical bytes
+
+A lockfile's bytes MUST be the canonical serialization of its content:
+`json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2)`
+followed by one line feed. That is UTF-8 with no byte-order mark; object
+keys sorted; a two-space indent, `": "` after a key and one member or
+element per line; `[]` and `{}` for empty containers; strings escaping
+exactly `"`, `\` and the C0 controls (as `\b`, `\f`, `\n`, `\r`, `\t`
+or `\u00xx`); integers only, no key repeated in an object, no NaN or
+infinity. JavaScript's `JSON.stringify(sorted, null, 2)` writes the same
+bytes: every key the schema admits is ASCII, so code-point and UTF-16
+key orders agree. A reader refuses any other bytes, so one lockfile
+state has one byte string, its diff is a diff of states, and every
+diagnostic span in it is exact.
+
+### Sections
+
+The top level holds `lockfile_version` and up to three sections, which
+share one framing: each is `{inputs, entries}`. An **input** is a file
+the section's entries rest on, its path and the `sha256:` hash of its
+exact bytes. An input path is relative and POSIX — no empty, `.` or `..`
+segment, no backslash — and names a file under the compile root, except
+that a path beginning `rhoform/` names the toolchain's own file, as the
+source map's `rhoform/lib/` paths do; of the toolchain, a lockfile names
+only its bundled part store, `rhoform/parts/`. Inputs are sorted by
+path, each once.
+
+- **`packages`** (L5): its inputs are the `rhoform.toml` of each package
+  resolution read; each entry is one package — its `name`, `version`,
+  `source` (`{"path": <package root>}`, `.` for the compile root),
+  `manifest` (an input), `requires_rhoform` (the language range the
+  resolution admits it under) and `content_hash`. The archive content
+  hash (T2, G8–G10) is not built, so `content_hash` is `null` and
+  `unavailable_reason` says why (`canonical-archive-unavailable`).
+  Entries are sorted by name, each once.
+- **`parts`** (D1): its inputs are part records; each entry is a
+  **keyed pick**, `{key, part_id, manufacturer, mpn, record}`, the
+  record a `part "key"` with that key stands for, or an **instance
+  pick**, `{design, instance, constraints, part_id, manufacturer, mpn,
+  record}`, the record picked for the `part abstract` of the instance
+  whose identity path is `instance` in the design whose root definition
+  is `design`, made for the constraints whose digest is `constraints`
+  ([05 section 9.5](05-static-types/09-part-data.md#95-instance-picks)).
+  `record` is an input; `part_id`, `manufacturer` and `mpn` echo the
+  record so the file reads on its own. Keyed picks come first, sorted by
+  key, then instance picks, sorted by design and instance; each selector
+  once.
+- **`renames`** (I2): each entry `{design, path, origin}` keeps the
+  identity `origin` for the entity now at `path`, sorted by design and
+  path, each path and each origin once within a design. Its inputs are
+  reserved for R27's identity baseline and are empty.
+
+The keys of each object, reconciled against the reader:
+
+<!-- reconcile: rhoform.lockfile:key_rows -->
+
+| Object | Key | Required |
+|---|---|---|
+| the lockfile | `lockfile_version` | yes |
+| the lockfile | `packages` | no |
+| the lockfile | `parts` | no |
+| the lockfile | `renames` | no |
+| a section | `entries` | yes |
+| a section | `inputs` | yes |
+| an input | `path` | yes |
+| an input | `sha256` | yes |
+| a package entry | `content_hash` | yes |
+| a package entry | `manifest` | yes |
+| a package entry | `name` | yes |
+| a package entry | `requires_rhoform` | yes |
+| a package entry | `source` | yes |
+| a package entry | `unavailable_reason` | no |
+| a package entry | `version` | yes |
+| a keyed pick | `key` | yes |
+| a keyed pick | `manufacturer` | yes |
+| a keyed pick | `mpn` | yes |
+| a keyed pick | `part_id` | yes |
+| a keyed pick | `record` | yes |
+| an instance pick | `constraints` | yes |
+| an instance pick | `design` | yes |
+| an instance pick | `instance` | yes |
+| an instance pick | `manufacturer` | yes |
+| an instance pick | `mpn` | yes |
+| an instance pick | `part_id` | yes |
+| an instance pick | `record` | yes |
+| a rename | `design` | yes |
+| a rename | `origin` | yes |
+| a rename | `path` | yes |
+
+An `x_` member at the top level is the schema's reserved annotation slot
+(a schema-gate fixture's declaration); the reader refuses every one, so
+nothing in a lockfile a compilation reads goes unread.
+
+### What a compilation checks
+
+The package layer reads the lockfile once the import closure is read,
+and checks, each step only once the one before it passed: that it is
+JSON (`RHO2070`, at the decoder's position); that it is in canonical
+layout (`RHO2071`, alone, spanning the line of the first byte that
+differs, with a machine-applicable fix-it that rewrites the file and
+changes no value); its version (`RHO2072`); its schema and the
+invariants a schema cannot state — the orders and uniqueness above, each
+entry naming an input of its own section, the input paths and the
+renames rules (`RHO2073`, at the offending value); and what this version
+refuses rather than ignores (`RHO2075`): every rename-ledger entry,
+until R27 applies the ledger, and a non-null `content_hash`, which
+nothing could verify. When nothing else was reported, the packages
+section is then held to the compilation: every manifest it read MUST be
+an input with its bytes' hash, and every package it read MUST have an
+entry agreeing with its manifest on source, manifest and version, whose
+range is contained in the manifest's `requires-rhoform` and admits a
+language version the toolchain implements (`RHO2074`, naming the
+manifest or the package). Any of these errors stops the compilation
+before elaboration. A pick is checked by the check stage, which reads
+the records the design's picks name
+([05 section 9](05-static-types/09-part-data.md)).
+
+A workspace's lockfile serves every compilation of it, and one
+compilation sees only its own closure: an entry or input none of its
+packages or instances names belongs to another compilation and is not
+checked here. Nothing yet checks a workspace's lockfile as a whole.
+
+<!-- reconcile: rhoform.lockfile:code_rows -->
+
+| Code | Slug | Severity |
+|---|---|---|
+| RHO2070 | `lockfile-not-json` | error |
+| RHO2071 | `lockfile-not-canonical` | error |
+| RHO2072 | `lockfile-version-unsupported` | error |
+| RHO2073 | `lockfile-invalid` | error |
+| RHO2074 | `lockfile-packages-stale` | error |
+| RHO2075 | `lockfile-entry-unsupported` | error |
+
+### Picks
+
+`pick_key(key)` and `pick_instance(design, instance)` are how the check
+stage finds a pick: the entry, or **unlocked** with its reason —
+`no-lockfile`, `no-parts-section` or `no-pick`. An instance pick is
+keyed by identity, the instance's path, never by a spelling of its
+definition; a ledgered rename would keep its pick, once R27 applies
+the ledger.
+
+### Writers
+
+Each section has one writer: `packages` is `rhoform pkg lock`'s,
+`parts` is `rhoform parts pin` and `unpin`'s (R28), and `renames` the
+rename refactor's (R27). A writer reads the whole file, replaces only its
+own section, writes the file canonically — so every other section comes
+out byte for byte as it was — and replaces it atomically. None of the
+three exists yet; `rhoform/lockfile.py` holds the pure half of the
+contract (`replace_section`, `canonical_bytes`, `input_entry`,
+`constraints_digest`).
+
 ## Deviations, recorded
 
 This version implements §1 (identity), §2.1 and §2.3 (versions and
@@ -236,14 +405,23 @@ language versions), §3 (the manifest), §4.3 (ranges) and §7 (imports)
 of the package specification, with these differences; each is a
 diagnostic or a documented absence, never a silent skip:
 
-- **No lockfile.** L3 requires `rhoform.lock` for compilation and L4/L5
-  define it; the lockfile schema is R55 (M2). This version compiles
-  without one and reads path dependencies in place; nothing is
+- **The lockfile is optional.** L3 requires `rhoform.lock` for
+  compilation and fails one that is absent; this version compiles
+  without one (decision D30), unlocked, reading path dependencies in
+  place, and a section the file lacks is unlocked too. Nothing is
   resolved, so there is no MVS selection (L6–L8) beyond the checks of
-  [`[deps]`](#deps). A `rhoform.lock` already marks the workspace root,
-  which is the compile root
-  ([04](04-elaboration.md#the-compile-root)); its contents are not
-  read.
+  [`[deps]`](#deps).
+- **Staleness is per input file.** L3 decides a path dependency's
+  staleness by the canonical-archive content hash of the package as
+  well as its manifest's hash; the archive is not built (G8–G10), so
+  this version records and checks the manifests' bytes alone, an edit to
+  a dependency's sources is not seen, and `content_hash` is null with
+  its reason. Conformance to L5 is not claimed.
+- **The L8 intersection** is checked for containment in each package's
+  own range, not recomputed across the closure.
+- **No writer.** Nothing writes `rhoform.lock` yet: `pkg lock`, `parts
+  pin`/`unpin` and the rename refactor are R14a O1, R28 and R27.
+- **Renames are refused** (`RHO2075`) until R27 applies the ledger.
 - **Path dependencies only.** A `git` source (and with it `rev`, M3) is
   RHO2056 until the lockfile and fetching land with R55; `rev` without
   `git` is RHO2056 too.

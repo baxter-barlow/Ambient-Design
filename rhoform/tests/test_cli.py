@@ -53,6 +53,7 @@ except ImportError:  # pragma: no cover - exercised by absence
 SKIP = "lark and jsonschema (pinned in toolchain/versions.yaml) are required"
 ROOT = Path(__file__).resolve().parents[2]
 ELABORATE = ROOT / "spec" / "conformance" / "elaborate"
+PARTS = ROOT / "spec" / "conformance" / "check" / "parts"
 
 COVERAGE_NOTE = "RHO3901"
 
@@ -830,7 +831,10 @@ class HermeticTest(_Tmp):
         done = _subprocess(["check", "--compile-root", root, "--emit-ir",
                             "ir", "--emit-report", "reports", *names], cwd,
                            prelude=_AUDIT)
-        self.assertEqual(done.returncode, 0, done.stderr.decode())
+        # Exit 1 is a check-stage error the run reports, such as (a)'s
+        # resolved parts with no lockfile; 2 would be a run that failed.
+        self.assertEqual(done.returncode, exit_of(done.stdout.decode()),
+                         done.stderr.decode())
         report = json.loads(next(
             line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
             if line.startswith("AUDIT ")))
@@ -872,26 +876,95 @@ class HermeticTest(_Tmp):
                     self._within(path, place) for place in allowed)]
                 self.assertEqual(stray, [])
 
-    def test_a_lockfile_decides_the_root_and_is_not_read(self):
-        # Until the lockfile lands (AMB-59), rhoform.lock is a marker: its
-        # directory is the compile root, and the check stage opens nothing,
-        # it included.
+    def test_a_lockfile_decides_the_root_and_is_read_there(self):
+        # rhoform.lock marks the workspace root, and the package layer reads
+        # and checks it there (AMB-59): a file that is not one is the
+        # compilation's error, spanned in rhoform.lock, and stops it before
+        # elaboration, so no IR is written.
         real = os.path.realpath
         self.write("rhoform.lock", "{not even json\n")
         self.write("boards/main.rhoform", CLEAN)
         done = _subprocess(["check", "--emit-ir", "ir", "boards/main.rhoform"],
                            self.tmp, prelude=_AUDIT)
-        self.assertEqual(done.returncode, 0, done.stderr.decode())
+        self.assertEqual(done.returncode, 1, done.stderr.decode())
+        self.assertEqual([(d["code"], d["spans"][0]["file"])
+                          for d in lines(done.stdout.decode())],
+                         [("RHO2070", "rhoform.lock")])
         report = json.loads(next(
             line[len("AUDIT "):] for line in done.stderr.decode().splitlines()
             if line.startswith("AUDIT ")))
         opened = [real(os.path.join(self.tmp, path))
                   for path in report["opened"]]
-        self.assertNotIn(real(self.tmp / "rhoform.lock"), opened)
+        self.assertIn(real(self.tmp / "rhoform.lock"), opened)
+        self.assertFalse((self.tmp / "ir").exists())
+        (self.tmp / "rhoform.lock").write_text('{\n  "lockfile_version": 0\n'
+                                              '}\n')
+        done = _subprocess(["check", "--emit-ir", "ir", "boards/main.rhoform"],
+                           self.tmp)
+        self.assertEqual(done.returncode, 0, done.stderr.decode())
         source_map = json.loads(
             (self.tmp / "ir" / "main.sourcemap.json").read_text())
         self.assertEqual([entry["path"] for entry in source_map["files"]],
                          ["boards/main.rhoform"])
+
+    def test_a_check_opens_the_lockfile_and_only_the_records_picks_use(self):
+        # The check stage's read set (amendment W0/L0c F4): rhoform.lock,
+        # exactly the records of the picks the design uses -- one in the
+        # compile root, one in the toolchain's bundled store -- and the
+        # part-data schema of the version each declares. The lockfile's
+        # other pick, another design's record, and every other store
+        # record are never opened, and nothing touches the network.
+        from rhoform import lockfile
+
+        real = os.path.realpath
+        widget = PARTS / "accept" / "c01_keyed_pick_bound"
+        shutil.copytree(widget, self.tmp / "ws")
+        unused = self.tmp / "ws" / "parts" / "acme" / "unused.part.json"
+        shutil.copy(widget / "parts" / "acme" / "widget.part.json", unused)
+        store = ROOT / "rhoform" / "parts" / "ti" / "ne555p.part.json"
+        store_path = "rhoform/parts/ti/ne555p.part.json"
+        document = json.loads(store.read_bytes())
+        lock = json.loads((self.tmp / "ws" / "rhoform.lock").read_bytes())
+        lock["parts"]["inputs"] = sorted(lock["parts"]["inputs"] + [
+            lockfile.input_entry("parts/acme/unused.part.json",
+                                 unused.read_bytes()),
+            lockfile.input_entry(store_path, store.read_bytes())],
+            key=lambda item: item["path"])
+        lock["parts"]["entries"] = sorted(lock["parts"]["entries"] + [
+            dict(lock["parts"]["entries"][0], key="acme/unused",
+                 record="parts/acme/unused.part.json"),
+            {"key": "ti/ne555p", "manufacturer": document["manufacturer"],
+             "mpn": document["mpn"], "part_id": document["part_id"],
+             "record": store_path}], key=lambda entry: entry["key"])
+        (self.tmp / "ws" / "rhoform.lock").write_bytes(
+            lockfile.canonical_bytes(lock))
+        main = self.tmp / "ws" / "main.rhoform"
+        main.write_text(main.read_text().replace(
+            "    vin ~ w.gnd_vcc\n",
+            "    u = new rhoform.lib.timer.Ne555:\n"
+            '        part "ti/ne555p"\n'
+            "    vin ~ w.gnd_vcc\n    vin ~ u.vcc\n"))
+        opened, _python = self._audited_check(["main.rhoform"], cwd=self.tmp
+                                              / "ws")
+        workspace = real(self.tmp / "ws")
+        written = [real(self.tmp / "ws" / "ir"),
+                   real(self.tmp / "ws" / "reports")]
+        self.assertEqual(
+            sorted({path for path in opened
+                    if self._within(path, workspace) and not any(
+                        self._within(path, out) for out in written)}),
+            sorted(real(self.tmp / "ws" / rel) for rel in (
+                "main.rhoform", "rhoform.lock",
+                "parts/acme/widget.part.json")))
+        self.assertEqual(
+            sorted({path for path in opened if self._within(
+                path, real(ROOT / "rhoform" / "parts"))}), [real(store)])
+        self.assertEqual(
+            sorted({path for path in opened if self._within(
+                path, real(ROOT / "parts"))}),
+            [real(ROOT / "parts" / "part-data.v1.schema.json")])
+        self.assertIn(real(ROOT / "rhoform" / "lockfile.schema.json"),
+                      opened)
 
     def test_a_check_reads_only_the_library_modules_it_names(self):
         # One module named, one module read: adding or editing any other

@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# The lock was written against acme/parts 1.2.0, and the
+# dependency's manifest now says 1.3.0: its bytes and its
+# version both moved, and each is reported.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

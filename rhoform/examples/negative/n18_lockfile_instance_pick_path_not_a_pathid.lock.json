@@ -1,0 +1,70 @@
+{
+  "lockfile_version": 0,
+  "packages": {
+    "entries": [
+      {
+        "content_hash": null,
+        "manifest": "app/rhoform.toml",
+        "name": "acme/app",
+        "requires_rhoform": "^0.2.0",
+        "source": {
+          "path": "app"
+        },
+        "unavailable_reason": "canonical-archive-unavailable",
+        "version": "0.1.0"
+      },
+      {
+        "content_hash": null,
+        "manifest": "parts/rhoform.toml",
+        "name": "acme/parts",
+        "requires_rhoform": "^0.2.0",
+        "source": {
+          "path": "parts"
+        },
+        "unavailable_reason": "canonical-archive-unavailable",
+        "version": "1.3.0"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "app/rhoform.toml",
+        "sha256": "sha256:abababababababababababababababababababababababababababababababab"
+      },
+      {
+        "path": "parts/rhoform.toml",
+        "sha256": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+      }
+    ]
+  },
+  "parts": {
+    "entries": [
+      {
+        "key": "acme/widget",
+        "manufacturer": "Acme",
+        "mpn": "WIDGET-1",
+        "part_id": "acme/widget",
+        "record": "parts/acme/widget.part.json"
+      },
+      {
+        "constraints": "sha256:abababababababababababababababababababababababababababababababab",
+        "design": "acme.app.main.Panel",
+        "instance": "timer",
+        "manufacturer": "Texas Instruments",
+        "mpn": "NE555P",
+        "part_id": "ti/ne555p",
+        "record": "rhoform/parts/ti/ne555p.part.json"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "parts/acme/widget.part.json",
+        "sha256": "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef"
+      },
+      {
+        "path": "rhoform/parts/ti/ne555p.part.json",
+        "sha256": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+      }
+    ]
+  },
+  "x_negative_control": "REJECTED at /parts/entries/1/instance: an instance pick names an IR identity path"
+}

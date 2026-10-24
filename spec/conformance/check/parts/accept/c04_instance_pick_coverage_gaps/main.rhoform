@@ -1,0 +1,16 @@
+#pragma rhoform-syntax 0.2
+
+# An instance pick the subset cannot show holds every constraint:
+# `dielectric` is outside the subset, and the record states no
+# `power_rating` to compare. The pick binds, and each gap is an
+# actionable row, so the compilation draws its coverage note.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            dielectric = "thick-film"
+            power_rating = 63mW
+            resistance = 10kohm +/- 1%
+    top ~ r1.a
+    r1.b ~ bottom

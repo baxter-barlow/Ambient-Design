@@ -1,0 +1,19 @@
+{
+  "lockfile_version": 0,
+  "renames": {
+    "entries": [
+      {
+        "design": "acme.app.main.Panel",
+        "origin": "/u_old",
+        "path": "/u1"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "baseline.json",
+        "sha256": "sha256:abababababababababababababababababababababababababababababababab"
+      }
+    ]
+  },
+  "x_negative_control": "REJECTED at /renames/inputs: the renames inputs are reserved for R27's identity baseline, empty in version 0"
+}

@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/rhoform/schemas/lockfile/0.schema.json",
+  "title": "Rhoform Lockfile v0",
+  "description": "rhoform.lock, the workspace's one lockfile (spec/language/08-packages.md, The lockfile; R14a L1/L4, D1, I2/I3). It sits at the compile root and holds up to three sections that share one framing: every section is {inputs, entries}, an input is a file's path and the sha256 of its exact bytes, and a section is stale when an input it records is missing or its bytes changed. The file's bytes MUST equal json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2) plus one LF, which JavaScript's JSON.stringify(sorted, null, 2) also writes; the order of every array, the uniqueness of every selector, and each entry naming an input of its own section are invariants this schema cannot state, checked by rhoform/lockfile.py. This file is immutable once released: a later version adds lockfile.v1.schema.json, as the IR does.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lockfile_version"],
+  "patternProperties": {
+    "^x_": {
+      "type": "string",
+      "description": "Reserved for annotations no compiler reads, such as a schema-gate negative control's declaration. rhoform/lockfile.py refuses every one, so a lockfile a compilation reads holds none: a member that changed nothing would read as if it did."
+    }
+  },
+  "properties": {
+    "lockfile_version": {
+      "const": 0,
+      "description": "This document's version. A reader refuses a version it does not implement."
+    },
+    "packages": {
+      "$ref": "#/$defs/PackagesSection",
+      "description": "Package resolution (R14a L5): each package a compilation of the workspace reads, and the manifests that governed resolving it. Written only by `rhoform pkg lock`, which does not exist yet."
+    },
+    "parts": {
+      "$ref": "#/$defs/PartsSection",
+      "description": "D1 part picks: the part record each `part \"key\"` names, and the record picked for an instance's `part abstract`. Written only by `rhoform parts pin/unpin` (R28)."
+    },
+    "renames": {
+      "$ref": "#/$defs/RenamesSection",
+      "description": "The I2 rename ledger. Its shape is fixed now; every entry is refused until R27 applies the ledger."
+    }
+  },
+  "$defs": {
+    "Sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])",
+      "description": "Algorithm-prefixed lowercase hex SHA-256, the IR's hash spelling."
+    },
+    "InputPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[^/\\\\\\u0000-\\u001f]+(?:/[^/\\\\\\u0000-\\u001f]+)*(?![\\s\\S])",
+      "description": "A relative POSIX path: segments joined by `/`, none empty, `.` or `..`, and no backslash or control character. A path beginning `rhoform/` names a file bundled with the toolchain (its part store), as the source map's `rhoform/lib/` paths do; any other is relative to the compile root."
+    },
+    "Input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/InputPath" },
+        "sha256": { "$ref": "#/$defs/Sha256", "description": "The sha256 of the file's exact bytes." }
+      }
+    },
+    "Inputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Input" },
+      "description": "Sorted bytewise by path, each path once."
+    },
+    "PackageName": {
+      "type": "string",
+      "maxLength": 100,
+      "pattern": "^[a-z](?:-?[a-z0-9])*/[a-z](?:-?[a-z0-9])*(?![\\s\\S])",
+      "description": "A package name (R14a N1, N2, N4)."
+    },
+    "Version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?![\\s\\S])",
+      "description": "A SemVer 2.0.0 version with no build metadata (R14a V1, V2)."
+    },
+    "Range": {
+      "type": "string",
+      "pattern": "^[\\^=](?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?![\\s\\S])",
+      "description": "A version range, `^X.Y.Z` or `=X.Y.Z` (R14a L9)."
+    },
+    "PackageDirectory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?:\\.|(?!\\.{1,2}(?:/|(?![\\s\\S])))(?![\\s\\S]*/\\.{1,2}(?:/|(?![\\s\\S])))[^/\\\\\\u0000-\\u001f]+(?:/[^/\\\\\\u0000-\\u001f]+)*)(?![\\s\\S])",
+      "description": "A package root relative to the compile root, as an input path is; `.` is the compile root itself."
+    },
+    "PackageEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "source", "manifest", "requires_rhoform", "content_hash"],
+      "properties": {
+        "name": { "$ref": "#/$defs/PackageName" },
+        "version": { "$ref": "#/$defs/Version", "description": "The version the package's manifest declares." },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": { "$ref": "#/$defs/PackageDirectory" }
+          },
+          "description": "Where the package is read from: a path dependency's package root. Version 0 has no other source, as the manifest admits none (spec 08)."
+        },
+        "manifest": { "$ref": "#/$defs/InputPath", "description": "The package's rhoform.toml, one of the section's inputs." },
+        "requires_rhoform": { "$ref": "#/$defs/Range", "description": "The range of language versions the resolution admits for this package: contained in the package's own `requires-rhoform` (R14a L5, L8)." },
+        "content_hash": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/Sha256" }],
+          "description": "The canonical-archive content hash of the package (R14a T2, G8-G10). The archive is not built yet, so the slot is null and `unavailable_reason` says why; a value is refused, since nothing could verify it."
+        },
+        "unavailable_reason": {
+          "enum": ["canonical-archive-unavailable"],
+          "description": "Why `content_hash` is null. Present exactly when it is."
+        }
+      },
+      "if": { "properties": { "content_hash": { "type": "null" } } },
+      "then": { "required": ["unavailable_reason"] },
+      "else": { "not": { "required": ["unavailable_reason"] } }
+    },
+    "PackagesSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "entries"],
+      "properties": {
+        "inputs": { "$ref": "#/$defs/Inputs", "description": "Every rhoform.toml that took part in resolution." },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PackageEntry" },
+          "description": "Sorted bytewise by name, each name once."
+        }
+      }
+    },
+    "PartId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?/[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?(?![\\s\\S])",
+      "description": "The D3 part_id, `<vendor-slug>/<part-slug>` (parts/part-data.schema.json)."
+    },
+    "Echo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "A value the picked record states, echoed so the lockfile reads on its own; it must equal the record's."
+    },
+    "PathId": {
+      "type": "string",
+      "pattern": "^/(?![\\s\\S])|^(/[A-Za-z_][A-Za-z0-9_]*(\\[[0-9]+\\])?)+(?![\\s\\S])",
+      "description": "An IR identity path (ir/netlist-ir.v2.schema.json PathId)."
+    },
+    "DefinitionName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+(?![\\s\\S])",
+      "description": "The IR `definition` of a design's root instance: the design a pick or a ledger entry belongs to."
+    },
+    "KeyedPick": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "part_id", "manufacturer", "mpn", "record"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 500, "description": "The string a `part \"key\"` statement names." },
+        "part_id": { "$ref": "#/$defs/PartId" },
+        "manufacturer": { "$ref": "#/$defs/Echo" },
+        "mpn": { "$ref": "#/$defs/Echo" },
+        "record": { "$ref": "#/$defs/InputPath", "description": "The picked record, one of the section's inputs." }
+      }
+    },
+    "InstancePick": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["design", "instance", "constraints", "part_id", "manufacturer", "mpn", "record"],
+      "properties": {
+        "design": { "$ref": "#/$defs/DefinitionName" },
+        "instance": { "$ref": "#/$defs/PathId", "description": "The instance's identity path." },
+        "constraints": { "$ref": "#/$defs/Sha256", "description": "The digest of the instance's part constraints when it was picked, over their exact decimal values (spec 08); a different digest now is a stale pick." },
+        "part_id": { "$ref": "#/$defs/PartId" },
+        "manufacturer": { "$ref": "#/$defs/Echo" },
+        "mpn": { "$ref": "#/$defs/Echo" },
+        "record": { "$ref": "#/$defs/InputPath", "description": "The picked record, one of the section's inputs." }
+      }
+    },
+    "PartsSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "entries"],
+      "properties": {
+        "inputs": { "$ref": "#/$defs/Inputs", "description": "The part records the picks name." },
+        "entries": {
+          "type": "array",
+          "items": {
+            "if": { "type": "object", "required": ["key"] },
+            "then": { "$ref": "#/$defs/KeyedPick" },
+            "else": { "$ref": "#/$defs/InstancePick" }
+          },
+          "description": "Keyed picks first, sorted by key, then instance picks, sorted by design and then instance; each selector once."
+        }
+      }
+    },
+    "Rename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["design", "path", "origin"],
+      "properties": {
+        "design": { "$ref": "#/$defs/DefinitionName" },
+        "path": { "$ref": "#/$defs/PathId", "description": "The entity's current path." },
+        "origin": { "$ref": "#/$defs/PathId", "description": "The identity it keeps (I2)." }
+      }
+    },
+    "RenamesSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "entries"],
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "maxItems": 0,
+          "description": "Reserved for R27's identity baseline; empty in version 0."
+        },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Rename" },
+          "description": "Sorted by design and then path; within a design each path and each origin once, and no path its own origin."
+        }
+      }
+    }
+  }
+}

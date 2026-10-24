@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+
+# rhoform.lock is not JSON: a trailing comma, reported where the
+# decoder stops.
+module Board:
+    port p passive

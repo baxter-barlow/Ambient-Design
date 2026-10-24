@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# app's rhoform.toml was edited after the workspace was
+# locked: its bytes no longer hash to the recorded input,
+# and the finding names the manifest.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

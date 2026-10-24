@@ -1,0 +1,62 @@
+{
+  "implements": [
+    {
+      "definition": "main.Widget",
+      "pins": {
+        "gnd_vcc": "VCC",
+        "in": "IN",
+        "out": "OUT"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "manufacturer": "Acme",
+  "mpn": "WIDGET-1",
+  "package": {
+    "name": "SOT-23",
+    "pin_count": 3
+  },
+  "part_id": "acme/widget",
+  "pins": [
+    {
+      "name": "IN",
+      "numbers": [
+        "1"
+      ],
+      "role": "input"
+    },
+    {
+      "name": "OUT",
+      "numbers": [
+        "2"
+      ],
+      "role": "output"
+    },
+    {
+      "name": "VCC",
+      "numbers": [
+        "3"
+      ],
+      "role": "power_in"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "source_id": "acme-ds"
+    }
+  },
+  "schema_version": 7,
+  "sources": [
+    {
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "source_id": "acme-ds",
+      "state": "source-unreachable",
+      "url": "https://acme.example/ds.pdf",
+      "vendor": "acme"
+    }
+  ],
+  "stability": "unstable"
+}

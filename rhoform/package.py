@@ -13,11 +13,20 @@ block-2 diagnostic spanning the offending key or value: tomllib reports no
 positions, so `_TomlSpans` re-scans the (already valid) document to find
 them.
 
-DEVIATIONS for milestone M1, recorded in the decision record and in spec
-08: there is no lockfile (L3 is deferred to R55), so a compilation reads
-path dependencies in place; `git` and bare-string dependencies, and
+DEVIATIONS, recorded in spec 08: the lockfile is optional (decision D30;
+L3 requires one), so a compilation with no rhoform.lock reads path
+dependencies in place, unlocked; `git` and bare-string dependencies, and
 `integrity` (which needs the canonical archive, G8-G10), are refused with a
 diagnostic rather than ignored.
+
+THE LOCKFILE (R55, rhoform/lockfile.py). When the compile root holds a
+`rhoform.lock`, spelled exactly so, `load` reads it once the closure is
+read and holds it to every check a lockfile's own bytes allow -- JSON,
+canonical layout, version, schema, invariants, what version 0 refuses --
+and its packages section to the manifests this compilation read, from the
+bytes already in hand. Any of those errors stops the compilation here, as
+any package-layer error does. A part record a pick names is the check
+stage's to read (rhoform/check/parts.py), so `load` opens none.
 
 IMPORTS (§7). `import Name[, Name]* from "path"`: a path beginning `./` or
 `../`, or holding no `/`, is a file of the importing file's own package,
@@ -33,9 +42,10 @@ resolves nothing a case-sensitive one would report missing.
 
 THE COMPILATION is the entry file plus its import closure. `load` reads
 exactly that closure plus the `rhoform.toml` files that govern it (the
-entry's package and its dependencies, transitively): a directory is listed
-only to match the spelling of a name on a path being resolved, nothing
-outside the compile root is opened, and nothing touches the network. Name
+entry's package and its dependencies, transitively) and the compile root's
+`rhoform.lock`: a directory is listed only to match the spelling of a name
+on a path being resolved, nothing outside the compile root is opened but
+the lockfile's own schema, and nothing touches the network. Name
 binding (an imported name must be defined in its file, and must not
 collide with a definition or another import) is the elaborator's, because
 it needs the files' definitions.
@@ -57,6 +67,7 @@ import os
 import posixpath
 import re
 
+from . import lockfile
 from .diagnostics import Diagnostics, Edit, FixIt, Span, span_from_bytes
 
 MANIFEST = "rhoform.toml"
@@ -1022,6 +1033,9 @@ class Compilation:
     imports: dict  # file key -> [Import]
     ok: bool  # nothing the package layer reported stops elaboration
     modules: dict = field(default_factory=dict)  # file key -> module_name
+    # The compile root's rhoform.lock, checked; None when there is none
+    # (unlocked) or when it was refused, which `ok` then says.
+    lockfile: object | None = None  # rhoform.lockfile.Lockfile
 
 
 def _is_file(path: Path) -> bool:
@@ -1268,8 +1282,22 @@ class _Loader:
                     work.append(target)
             imports[key] = found
         report_cycles(imports, order, self.sink)
+        lock = self.read_lockfile(self.sink.counts()["error"] == before)
         ok = not refused and self.sink.counts()["error"] == before
-        return Compilation(results, imports, ok, modules)
+        return Compilation(results, imports, ok, modules, lock)
+
+    def read_lockfile(self, clean: bool):
+        """The compile root's rhoform.lock, checked, or None: there is none,
+        or it was refused (reported). Its packages section is held to the
+        manifests read only when nothing else was reported (`clean`): a
+        manifest in error is reported in itself, not again as stale.
+        Raises ImportError when the pinned jsonschema is missing."""
+        if not self.is_file(lockfile.LOCKFILE):
+            return None
+        lock = lockfile.parse(self.read(lockfile.LOCKFILE), self.sink)
+        if lock is not None and clean:
+            lockfile.check_packages(lock, self.packages.values(), self.sink)
+        return lock
 
     def contained(self, package: Package, result) -> bool:
         """V9/V10: the file's language version lies in its package's
@@ -1293,9 +1321,11 @@ class _Loader:
 def load(entry: str, root: Path, sink: Diagnostics) -> Compilation:
     """Read and parse the compilation whose entry file is `entry` (its key,
     relative to the compile root `root`): the entry, its import closure,
-    and the manifests that govern them. Every problem is reported into
-    `sink`; `ok` is False when elaboration must not run. Raises
-    ReadFailure when a file that exists cannot be read."""
+    the manifests that govern them, and the compile root's rhoform.lock.
+    Every problem is reported into `sink`; `ok` is False when elaboration
+    must not run. Raises ReadFailure when a file that exists cannot be
+    read, and ImportError when a lockfile exists and the pinned jsonschema
+    that checks it does not."""
     from .parser import parse
 
     def parse_one(source, key):

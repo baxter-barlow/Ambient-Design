@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# The instance requires a package the picked record is not
+# in.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            package = "0603"
+            resistance = 10kohm +/- 1%
+    top ~ r1.a
+    r1.b ~ bottom

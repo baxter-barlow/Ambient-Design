@@ -1,0 +1,18 @@
+#pragma rhoform-syntax 0.2
+
+# A keyed pick: `part "acme/widget"` is the parts entry of that
+# key, whose record is an input of the section and implements the
+# imported widget.Widget. The package layer checks the lockfile;
+# reading the record is the check stage's (check/parts), so this
+# compiles to IR without opening it.
+import Widget from "./widget"
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

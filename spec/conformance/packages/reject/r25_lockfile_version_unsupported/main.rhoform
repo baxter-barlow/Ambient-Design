@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+
+# A lockfile version this toolchain does not implement is refused,
+# never read as a neighbouring version.
+module Board:
+    port p passive

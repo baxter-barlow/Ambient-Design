@@ -1,0 +1,6 @@
+#pragma rhoform-syntax 0.2
+
+# rhoform.lock is JSON but not in canonical layout (its keys out of
+# order): one finding, with a fix-it that rewrites the whole file.
+module Board:
+    port p passive

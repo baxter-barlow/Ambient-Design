@@ -1,0 +1,13 @@
+{
+  "lockfile_version": 0,
+  "renames": {
+    "entries": [
+      {
+        "design": "main.Board",
+        "origin": "/p_old",
+        "path": "/p"
+      }
+    ],
+    "inputs": []
+  }
+}

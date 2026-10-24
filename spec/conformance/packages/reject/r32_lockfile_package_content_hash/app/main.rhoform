@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# A package content_hash is refused: the canonical archive it
+# would be the hash of is not built (R14a G8-G10), so nothing
+# could verify it.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

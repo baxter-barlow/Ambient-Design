@@ -1,0 +1,38 @@
+{
+  "lockfile_version": 0,
+  "packages": {
+    "entries": [
+      {
+        "content_hash": null,
+        "manifest": "app/rhoform.toml",
+        "name": "acme/app",
+        "requires_rhoform": "^0.2.0",
+        "source": {
+          "path": "app"
+        },
+        "unavailable_reason": "canonical-archive-unavailable",
+        "version": "0.1.0"
+      },
+      {
+        "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "manifest": "parts/rhoform.toml",
+        "name": "acme/parts",
+        "requires_rhoform": "^0.2.0",
+        "source": {
+          "path": "parts"
+        },
+        "version": "1.3.0"
+      }
+    ],
+    "inputs": [
+      {
+        "path": "app/rhoform.toml",
+        "sha256": "sha256:baef393316424e389631e6c07dd7a950b024a0a5b06abfb5df446019b459179a"
+      },
+      {
+        "path": "parts/rhoform.toml",
+        "sha256": "sha256:49fa2d85792c8f10331f7cfd8854f4bde458ec60e554c4b8159af15931635b5a"
+      }
+    ]
+  }
+}

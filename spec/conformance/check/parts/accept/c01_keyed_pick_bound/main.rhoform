@@ -1,0 +1,20 @@
+#pragma rhoform-syntax 0.2
+
+# A keyed pick that holds: its record is where the lockfile says,
+# hashes to the revision it records, is a valid version 1 record,
+# echoes its identity, and joins the definition through its
+# `implements` map, every role compatible.
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

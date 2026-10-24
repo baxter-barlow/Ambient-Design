@@ -1,0 +1,17 @@
+#pragma rhoform-syntax 0.2
+
+# A key no keyed pick may hold, spanned at its value.
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

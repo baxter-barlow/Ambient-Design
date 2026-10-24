@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+
+# A packages section that is fresh: each manifest the compilation
+# reads is an input with the sha256 of its bytes, and each package
+# has an entry agreeing with its manifest on source, version and
+# range. The content_hash slot is null until the canonical archive
+# exists, and says why.
+import Led from "acme/parts/leds"
+
+module Panel:
+    port gnd passive
+    port vin power_in
+    d1 = new Led
+    vin ~ d1.a
+    d1.k ~ gnd

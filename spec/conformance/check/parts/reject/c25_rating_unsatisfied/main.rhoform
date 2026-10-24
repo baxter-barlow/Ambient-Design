@@ -1,0 +1,13 @@
+#pragma rhoform-syntax 0.2
+
+# The record is rated to 25 V, and the instance requires at
+# least 50 V.
+module Board:
+    port bottom passive
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm +/- 1%
+            voltage_rating = 50V
+    top ~ r1.a
+    r1.b ~ bottom

@@ -1,0 +1,18 @@
+#pragma rhoform-syntax 0.2
+
+# A version 0 record loads, and has no `implements` map, so it
+# can never bind to a definition (AMB-151 item 20).
+component Widget:
+    pin gnd_vcc power_in 3
+    pin in input 1
+    pin out output 2
+
+module Board:
+    port vin power_in
+    port x input
+    port y output
+    w = new Widget:
+        part "acme/widget"
+    vin ~ w.gnd_vcc
+    x ~ w.in
+    w.out ~ y

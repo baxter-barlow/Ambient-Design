@@ -1,0 +1,22 @@
+#pragma rhoform-syntax 0.2
+
+# No lockfile: a `part abstract` is unlocked, which is where the
+# binding ladder begins (D1), and hardware and a component with no
+# part statement have nothing to verify. Each is an inherent row
+# of the report, so the stream is empty.
+component Probe:
+    pin p passive 1
+
+module Board:
+    port p passive
+    port q passive
+    mh = new rhoform.lib.mech.MountingHole(diameter = 3.2mm):
+        hardware mounting_hole
+        exclude_from_bom
+    probe = new Probe
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = 10kohm +/- 1%
+    p ~ r1.a
+    r1.b ~ q
+    isolated probe.p

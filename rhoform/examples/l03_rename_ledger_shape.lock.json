@@ -1,0 +1,13 @@
+{
+  "lockfile_version": 0,
+  "renames": {
+    "entries": [
+      {
+        "design": "acme.app.main.Panel",
+        "origin": "/u_old",
+        "path": "/u1"
+      }
+    ],
+    "inputs": []
+  }
+}
