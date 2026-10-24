@@ -8,8 +8,15 @@ import unittest
 from decimal import Decimal
 
 from rhoform.quantities import (
-    FORMS, QuantityError, UNITS, normal_form, parse_quantity,
+    DIMENSIONS, FORMS, OFFSET_DIMENSIONS, QuantityError, UNITS, normal_form,
+    parse_quantity,
 )
+
+try:
+    import lark  # noqa: F401 - availability probe only
+    HAVE_LARK = True
+except ImportError:  # pragma: no cover - exercised by absence
+    HAVE_LARK = False
 
 
 class AmbientContextTest(unittest.TestCase):
@@ -266,6 +273,75 @@ class ParseTest(unittest.TestCase):
             for below, above in zip(ordered, ordered[1:]):
                 self.assertEqual(above / below, 1000, dimension)
             self.assertIn(Decimal(1), ordered, dimension)
+
+
+class DimensionTableTest(unittest.TestCase):
+    def test_every_dimension_is_one_vector_and_every_unit_has_one(self):
+        self.assertEqual(sorted({dim for dim, _ in UNITS.values()}),
+                         sorted(DIMENSIONS))
+        self.assertEqual(len(set(DIMENSIONS.values())), len(DIMENSIONS))
+        for vector in DIMENSIONS.values():
+            self.assertEqual(len(vector), 5)
+            self.assertTrue(any(vector))
+        self.assertEqual(OFFSET_DIMENSIONS, frozenset({"temperature"}))
+
+    def test_the_names_are_the_param_type_words(self):
+        import importlib.util
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location(
+            "_sot_dims", Path(__file__).resolve().parents[2]
+            / "lang" / "grammar" / "rhoform_syntax.py")
+        sot = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sot)
+        words = sot.CLOSED_VOCABULARIES["param_type"]
+        self.assertEqual(list(DIMENSIONS),
+                         [w for w in words
+                          if w not in ("string", "int", "bool")])
+
+
+class OffsetScaleTest(unittest.TestCase):
+    """OD6, an erratum under every syntax version: a percent tolerance of
+    a reading on an offset scale moved with the scale's arbitrary zero
+    (`25degC +/- 1%` read as [24.75, 25.25]), so it is refused."""
+
+    def test_a_percent_tolerance_on_degc_is_refused(self):
+        for text in ("25degC +/- 1%", "0degC +/- 5%", "-40degC +/- 0%"):
+            with self.subTest(literal=text), \
+                    self.assertRaises(QuantityError) as caught:
+                parse_quantity(text)
+            self.assertIn("meaningless on an offset scale",
+                          caught.exception.reason)
+
+    def test_an_absolute_band_and_a_window_still_read(self):
+        q = parse_quantity("25degC +/- 2degC")
+        self.assertEqual((q.lower, q.upper), (Decimal(23), Decimal(27)))
+        q = parse_quantity("25degC (20degC to 30degC)")
+        self.assertEqual((q.lower, q.upper), (Decimal(20), Decimal(30)))
+        self.assertEqual(normal_form("25degC +/- 2degC"),
+                         "25degC +/- 2degC")
+
+    @unittest.skipUnless(HAVE_LARK, "lark (pinned in toolchain/versions.yaml) "
+                         "is required")
+    def test_the_parser_refuses_it_with_rho1010_under_every_version(self):
+        from rhoform.parser import parse
+
+        for version in ("0.1", "0.2"):
+            source = (f"#pragma rhoform-syntax {version}\n\n"
+                      "module Board:\n"
+                      "    u1 = new acme.ic.Sensor:\n"
+                      "        pin vdd power_in 1\n"
+                      "        part abstract:\n"
+                      "            t_amb = 25degC +/- 1%\n")
+            with self.subTest(version=version):
+                found = [(d.code, dict(d.params)) for d in
+                         parse(source, file="m.rhoform").diagnostics]
+                self.assertEqual(len(found), 1, found)
+                code, params = found[0]
+                self.assertEqual((code, params["literal"]),
+                                 ("RHO1010", "25degC +/- 1%"))
+                self.assertIn("meaningless on an offset scale",
+                              params["reason"])
 
 
 class NormalFormTest(unittest.TestCase):
