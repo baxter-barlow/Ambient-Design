@@ -7,9 +7,11 @@ Contract, applied independently to every root declared in SCHEMA_ROOTS:
   - example JSON lives FLAT under <root>/examples/ and is routed to its
     schema by an explicit suffix mapping declared per root:
         ir/    *.ir.json        -> by header.ir_version: 0 netlist-ir.schema.json,
-                                   1 netlist-ir.v1.schema.json
+                                   1 netlist-ir.v1.schema.json,
+                                   2 netlist-ir.v2.schema.json
                *.sourcemap.json -> by sourcemap_version: 0 source-map.schema.json,
-                                   1 source-map.v1.schema.json
+                                   1 source-map.v1.schema.json,
+                                   2 source-map.v2.schema.json
         parts/ *.part.json      -> by schema_version: 0 part-data.schema.json,
                                    1 part-data.v1.schema.json
         eval/  *.run.json       -> run-result.schema.json
@@ -76,10 +78,12 @@ DEFAULT_ROOT = Path(__file__).resolve().parent.parent.parent
 # A version missing here is one no backend may accept either, so it is
 # refused; add the row in the same change that adds the schema file.
 IR_VERSIONS = (("header", "ir_version"),
-               {0: "netlist-ir.schema.json", 1: "netlist-ir.v1.schema.json"})
+               {0: "netlist-ir.schema.json", 1: "netlist-ir.v1.schema.json",
+                2: "netlist-ir.v2.schema.json"})
 SOURCEMAP_VERSIONS = (("sourcemap_version",),
                       {0: "source-map.schema.json",
-                       1: "source-map.v1.schema.json"})
+                       1: "source-map.v1.schema.json",
+                       2: "source-map.v2.schema.json"})
 # Part data follows the same rule: v0's file is immutable and v1 is a second
 # file, so a record goes to the schema of the version it declares.
 PART_VERSIONS = (("schema_version",),
@@ -180,10 +184,11 @@ def negative_control_floor_problems(root, controls, failures, minimum=None):
 # the JSON count still cleared check-layout.sh's own floor. Raise this in the
 # same change that legitimately removes one. 49 -> 59 when the diagnostic
 # wire-format schema landed with its ten controls (AMB-48), 59 -> 61 with its
-# n11 and n12, and 61 -> 64 when D3 v1 added the part-data schema controls
+# n11 and n12, 61 -> 64 when D3 v1 added the part-data schema controls
 # n17, n23 and n24 (AMB-127; n18-n22 are lint controls, counted by
-# parts/lint-part-data.py). Equal to the population, as measured.
-MINIMUM_NEGATIVE_CONTROLS = 64
+# parts/lint-part-data.py), and 64 -> 72 when IR version 2 landed with its
+# eight (ir/examples/negative/n10-n17). Equal to the population, as measured.
+MINIMUM_NEGATIVE_CONTROLS = 72
 
 # Every negative fixture carries its own statement of what it proves, in this
 # member, and the statement is machine-checked.
@@ -805,7 +810,8 @@ def self_test() -> int:
     cases.append(("a document of a version no schema describes is refused",
                   code == 1
                   and "a01_x.expected.ir.json: declares header.ir_version 7, "
-                  "and the schemas of ir/ describe versions 0, 1 only" in text))
+                  "and the schemas of ir/ describe versions 0, 1, 2 only"
+                  in text))
     code, text = run_raw(_expected_ir(good))
     cases.append(("a document declaring no version is refused",
                   code == 1
@@ -820,11 +826,11 @@ def self_test() -> int:
     def _unknown_map(root):
         _ir_root(root)
         _golden(root, "x.ir.json", ir_good)
-        _golden(root, "x.sourcemap.json", dict(good, sourcemap_version=2))
+        _golden(root, "x.sourcemap.json", dict(good, sourcemap_version=9))
     code, text = run_raw(_unknown_map)
     cases.append(("a source map is routed by its own sourcemap_version",
                   code == 1
-                  and "x.sourcemap.json: declares sourcemap_version 2, "
+                  and "x.sourcemap.json: declares sourcemap_version 9, "
                   "and the schemas of ir/ describe" in text))
 
     # A package case keeps its expected IR inside its own directory.

@@ -863,7 +863,7 @@ class HermeticTest(_Tmp):
                                 ".rhoform") for module in named))
                 allowed = [real(ROOT / "rhoform"),
                            real(ROOT / "lang" / "grammar"),
-                           real(ROOT / "ir" / "netlist-ir.v1.schema.json"),
+                           real(ROOT / "ir" / "netlist-ir.v2.schema.json"),
                            real(root / "ir"), real(root / "reports"),
                            real(entry)]
                 allowed += python

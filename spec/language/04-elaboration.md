@@ -1,19 +1,23 @@
 # 04 — Elaboration
 
-*Rhoform Language Specification · normative, v0.2 · CC-BY-4.0 (see
+*Rhoform Language Specification · normative, v0.2 and the unfrozen 0.3 · CC-BY-4.0 (see
 [spec/README.md](../README.md))*
 
 Elaboration turns the parsed sources of one compilation into one
 design: a flat list of instances named by hierarchical paths, the nets
 that join their ports, and the assertions that check them. Its output is
-the netlist IR and its source map at `ir_version` 1 (`sourcemap_version`
-1), whose shapes are normative by reference —
-[`ir/netlist-ir.v1.schema.json`](../../ir/netlist-ir.v1.schema.json)
-and [`ir/source-map.v1.schema.json`](../../ir/source-map.v1.schema.json) — and
+the netlist IR and its source map at `ir_version` 2 (`sourcemap_version`
+2), whose shapes are normative by reference —
+[`ir/netlist-ir.v2.schema.json`](../../ir/netlist-ir.v2.schema.json)
+and [`ir/source-map.v2.schema.json`](../../ir/source-map.v2.schema.json) — and
 whose serialization and hashes are defined in
 [`ir/README.md`](../../ir/README.md). Version 1 is version 0 with net
 names that carry an array index mid-name ([Names](#names)), which version
-0's schema refuses; an implementation MUST write version 1. This section states what the
+0's schema refuses. Version 2 is version 1 with the source facts syntax
+0.3 states ([Syntax 0.3 source facts](#syntax-03-source-facts-unfrozen))
+and the one version 1 dropped, an `isolated` net; with those removed, a
+version 2 document is the version 1 document of the same design. Version
+2 is unfrozen with syntax 0.3, and an implementation MUST write it. This section states what the
 schemas cannot: which design a source denotes. The cases under
 [`conformance/elaborate/`](../conformance/README.md) hold the reference
 implementation to it, and a conforming implementation MUST reproduce
@@ -22,7 +26,8 @@ them.
 This section covers the v0.1 surface and what syntax 0.2 adds to it:
 `component` definitions, parameter lists, parameter references, `if`,
 `for`, arrays, imports, and the bundled standard library those
-definitions make possible. Every rule stated for v0.1 holds unchanged
+definitions make possible; and the source facts the unfrozen syntax 0.3
+adds, which no check reads yet. Every rule stated for v0.1 holds unchanged
 for a 0.1 source, with one deliberate exception: the standard library's
 reserved prefix. Under a toolchain that also implements 0.2, a dotted
 name beginning `rhoform.lib.` names a component of the bundled library
@@ -44,8 +49,9 @@ reserve nothing. Raising a pragma from 0.1 to 0.2 still changes nothing,
 since the prefix means the library under both, and a 0.1 source that
 writes no `rhoform.lib.` name, at a path outside the prefix, elaborates
 to the same design as under v0.1 (written as IR version 1, which for
-such a design differs from version 0 only in `ir_version` and the
-`design_hash` that covers it).
+such a design differed from version 0 only in `ir_version` and the
+`design_hash` that covers it; version 2 adds an `isolated` net's flag and
+two empty arrays).
 
 Which files a compilation holds — the entry file and the files it
 imports — and how an import's path names a file are the package layer's,
@@ -566,7 +572,8 @@ flattened net, also when another member would reach it through a
 module port (RHO2026). The net it makes is thereby declared an
 intentional single-member net: the elaborated design records that, for
 the check stage's single-pin-net rule (L9b,
-[05](05-static-types.md)), and IR version 1 does not carry it.
+[05](05-static-types.md)), and IR version 2 carries it as the net's
+`isolated`, present only when true (version 1 did not carry it).
 
 Every net a connecting statement creates is emitted, a single-member
 net included. Every node of a net is one IR connection, module-port
@@ -607,6 +614,12 @@ only: it computes no ground-architecture meet and emits no RHO40xx.
 Ground nets joined directly are merged into one net, never aliased, so
 the T5 checker evaluates GA-2 over merged nets.
 
+`ground_kind` (syntax 0.3) is no domain label, and is not merged: labels
+of one net that give it different values are no elaboration error, but
+GA-2's question, which the check stage asks of every site. The net's IR
+`ground_kind` is the one value its sites agree on, and absent when they
+disagree or none gives it.
+
 ## Assertions
 
 An assertion named `name` in the module elaborated at path `P` has the
@@ -631,6 +644,71 @@ bound has the unit `"1"`, so a ratio is written as a fraction. A
 quantity window is ordered at parse level ([03 — Literals](03-literals.md));
 a plain-number window whose lower bound exceeds its upper is an error
 (RHO2031).
+
+An assertion ending `warning` (syntax 0.3) has the IR `severity`
+`"warning"`; one without it has none, and is an error when it fails.
+
+## Syntax 0.3 source facts (unfrozen)
+
+Syntax 0.3's statements state facts no check reads yet; the check stage
+gives them their meaning ([05](05-static-types.md)). Elaboration keeps
+each one, resolved to the entity it is about, and refuses only what
+needs no electrical meaning to refuse: a target that names nothing it
+may name, a fact stated twice, a rule naming a pin its component does
+not have. Each is reported per definition or per instance by the rules
+of [Diagnostics](#diagnostics).
+
+### Rules and sides
+
+A component definition's rules and sides are checked once per
+definition: every pin a rule or side names is one of the component's
+(RHO2082, with a did-you-mean fix-it when one pin is close), a side's
+name is declared once in its component (RHO2007), and a parameter
+reference in a rule's value names one of the component's parameters
+(RHO2039). Each component instance's IR `rules` are its definition's
+rules and sides, a parameter reference evaluated in the instance's
+environment: `regulate out from in = vout` on an instance created with
+`vout = 1.8V` is `{"word": "regulate", "pins": ["out"], "from": "in",
+"value": {"unit": "V", "value": 1.8}}`, and a side is `{"word": "side",
+"name": ..., "pins": [...]}`. Pins keep the order written; the list is
+in the order of its entries' canonical bytes. An instance with no rules
+has no `rules`, and a module instance never does.
+
+A `rule` statement's target MUST be a component member of its module,
+an array member indexed (RHO2080), and its pins that component's
+(RHO2082); its value is evaluated in the module's environment and its
+loop variables. Every `rule` statement naming one member replaces that
+member's definition rules with the statements' rules, in each instance
+of the module; the definition's sides stay, since a side is what the
+part is, not how it is used.
+
+### Annotations
+
+`supply`, `draw` and `waive` statements elaborate to the IR
+`annotations`, each `{kind, scope, target}` with a `supply` or `draw`'s
+`bounds` (as an assertion's) or a `waive`'s `code` and `justification`.
+`scope` is the path of the module instance whose body states it, so a
+statement in a module instantiated twice is two annotations, as its
+assertions are two. The array is in the order of its entries'
+canonical bytes.
+
+A target resolves within its module. A `supply` or `draw` names a net
+label (`{"net": <the net's final name>}`) or a pin of a member, an
+array member indexed (`{"port": {"instance": <path>, "port": <name>}}`).
+A `waive` names a member (`{"instance": <path>}`), a net label, or an
+assertion of the module (`{"assertion": <path>}`). A target that names
+none of those — an unknown name, a pin of a module that has no such
+port, an array without an index, an index out of range, a module
+instance for a `rule`, a name that is both a member and a label — is
+RHO2080, whose `reason` says which. One statement of a fact per target:
+a second `supply`, or a second `draw`, of the same dimension for one
+target, or a second `waive` of one code for one target, in one module,
+is RHO2081. A voltage window and a current capability for one target are
+two facts.
+
+What a target may be for each kind, which dimensions a bound may have,
+and which codes may be waived are the owning check pass's (spec 05),
+reported in its own block-3 range.
 
 ## Diagnostics
 
@@ -707,7 +785,9 @@ hex sha256 of the `rhoform-canonical-json/1` bytes of the list of
 `design_hash`, so editing a comment moves `source_hash` and leaves
 `design_hash` alone.
 
-Every instance path, net name and assertion path has one node, and its
+Every instance path, net name and assertion path has one node, and so,
+in version 2, does every interface (keyed `<instance path>.<port>`, none
+yet); its
 `declaration` is a statement's span, from its first token to its last
 token: a block statement includes its body, and the trailing line
 break, trailing comment and following comment lines are excluded.

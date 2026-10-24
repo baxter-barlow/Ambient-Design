@@ -78,14 +78,26 @@ the package layer (`rhoform/package.py`) finds, reads and resolves; this
 module binds the imported names. Called with files and no resolution, it
 resolves their imports among exactly those files.
 
+SYNTAX 0.3 (unfrozen) adds source facts no check reads yet: a component
+definition's electrical rules and sides, and the `rule` statements that
+give one instance others (Instance.rules); the `supply`, `draw` and
+`waive` statements, each resolved to the IR entity it names and kept once
+per module instance that states it (ElaboratedDesign.annotations); an
+assertion's severity; and a net's authored `ground_kind`. Elaborating them
+checks only what needs no electrical meaning: that a target names
+something, that a fact is stated once, that a rule names pins its
+component has. What they MEAN is the check stage's (spec 05).
+
 FOR THE CHECKER, IN MEMORY ONLY. The static stage (`rhoform.check`) reads
-this design, never the IR, so the design carries source facts the IR v1
-does not: which nets an `isolated` statement made (Net.isolated), every
-site of a net attribute (Net.attribute_sites) and of an endpoint
-(Net.endpoint_spans), each port's declaration (Port.declaration), how
-each part constraint was written (Part.sites), and each assertion's bound
-(Assertion.bound_span). `rhoform/ir.py` serializes none of them, so they
-change no IR byte and no hash.
+this design, never the IR, so the design carries source facts the IR does
+not: every site of a net attribute (Net.attribute_sites) and of an
+endpoint (Net.endpoint_spans), each port's declaration (Port.declaration),
+how each part constraint was written (Part.sites), each assertion's bound
+(Assertion.bound_span), and where each rule and annotation was written and
+whether a rule is its definition's or an override. `rhoform/ir.py`
+serializes none of them, so they change no IR byte and no hash. IR
+version 2 does serialize what an `isolated` statement made (Net.isolated)
+and the 0.3 facts above.
 """
 
 from dataclasses import dataclass, field, replace
@@ -178,6 +190,27 @@ class Part:
     sites: dict = field(default_factory=dict, compare=False)  # name -> site
 
 
+@dataclass(frozen=True)
+class Rule:
+    """One electrical rule of a component instance (syntax 0.3): its word,
+    the pins it covers in the order written, the pin after `from` or `to`
+    (`relation` says which), and its value, evaluated in the environment of
+    the instance (a definition's rule) or of the module stating it (an
+    override). A side is a rule whose word is `side` and whose `side` is its
+    name. `origin` is `definition` or `override`: an instance a `rule`
+    statement names takes those rules in place of its definition's, and
+    keeps its definition's sides. Inert until the check stage reads it."""
+
+    word: str
+    pins: tuple[str, ...]
+    relation: str | None = None  # "from" | "to"
+    other: str | None = None
+    value: object = None
+    side: str | None = None
+    origin: str = field(default="definition", compare=False)
+    span: Span | None = field(default=None, compare=False)
+
+
 @dataclass
 class Instance:
     path: str
@@ -192,6 +225,7 @@ class Instance:
     part: Part | None
     declaration: Span
     trace: tuple[Span, ...]
+    rules: tuple[Rule, ...] = ()  # components only (syntax 0.3)
 
 
 @dataclass
@@ -211,6 +245,10 @@ class Net:
     # member -> the spans of every connecting statement naming it, in the
     # order of the sites that hold them (depth, path, file, offset).
     endpoint_spans: dict = field(default_factory=dict)
+    # Syntax 0.3: the `ground_kind` every site that sets one agrees on, or
+    # None (no site, or sites that disagree, which is the check stage's
+    # GA-2 question over attribute_sites, never an elaboration error).
+    ground_kind: str | None = None
 
 
 @dataclass(frozen=True)
@@ -230,6 +268,26 @@ class Assertion:
     declaration: Span
     trace: tuple[Span, ...]
     bound_span: Span | None = None  # its `within` / `at least` / `at most`
+    severity: str = "error"  # "warning" with a trailing `warning` (0.3)
+
+
+@dataclass(frozen=True)
+class Annotation:
+    """A design annotation (syntax 0.3): `supply` or `draw` with its
+    bounds, or `waive` with its code and justification. `target` is the IR
+    entity it names: ("net", name), ("port", instance path, port),
+    ("instance", path) or ("assertion", path). `scope` is the path of the
+    module instance whose body states it, so a statement in a module used
+    twice is two annotations, as its assertions are two."""
+
+    kind: str  # "supply" | "draw" | "waive"
+    scope: str
+    target: tuple
+    bounds: Bounds | None = None
+    code: str | None = None
+    justification: str | None = None
+    declaration: Span | None = field(default=None, compare=False)
+    trace: tuple = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -250,6 +308,8 @@ class ElaboratedDesign:
     nets: list[Net]  # sorted by name
     assertions: list[Assertion]  # sorted by path
     files: list[SourceFile]  # sorted by path; every source file read
+    # Syntax 0.3, sorted by scope, kind, then target.
+    annotations: list[Annotation] = field(default_factory=list)
 
     def connections(self) -> list[tuple[str, str, str]]:
         """(net, instance path, port), in the IR's sort order."""
@@ -399,6 +459,23 @@ def _tokens(node, kind: str) -> list:
 
 def _words(node) -> list[str]:
     return [str(c) for c in node.children if not _is_tree(c)]
+
+
+def _rule_parts(body):
+    """A `rule_body` as (word token, pin tokens, relation, other pin
+    token, value tree): `regulate OUT from IN = v`."""
+    word, *rest = body.children
+    pins, relation, other, value = [], None, None, None
+    for child in rest:
+        if _is_tree(child):
+            value = child
+        elif str(child) in ("from", "to"):  # never a pin's name here
+            relation = str(child)
+        elif relation is None:
+            pins.append(child)
+        else:
+            other = child
+    return word, pins, relation, other, value
 
 
 def _block_statements(block) -> list:
@@ -633,6 +710,10 @@ class _Definition:
     quiet_ports: set = field(default_factory=set)  # misplaced port names
     quiet_members: set = field(default_factory=set)  # misplaced members
     library: bool = False  # a standard library definition
+    # A component's rules and sides (0.3), in source order: Rule templates
+    # whose `value` is the evaluated literal, or ("reference", name) for a
+    # parameter the instance's environment supplies.
+    rules: list = field(default_factory=list)
 
     @property
     def spelled(self) -> str:
@@ -687,6 +768,22 @@ class _Check:
     bounds: Bounds | None
     span: Span
     bound_span: Span | None = None
+    severity: str = "error"
+
+
+@dataclass
+class _Note:
+    """A 0.3 annotation statement of one module body, its target resolved
+    within the body: ("label", label), ("pin", member or None, port),
+    ("member", member) or ("assertion", name). Flattening turns it into
+    an Annotation on the IR entity."""
+
+    kind: str
+    target: tuple
+    bounds: Bounds | None
+    code: str | None
+    justification: str | None
+    span: Span
 
 
 @dataclass
@@ -726,6 +823,18 @@ class _Model:
     units: int = 0  # loop iterations + array members expanded here
     sites: list = field(default_factory=list)  # (span, units, construct)
     paths: list = field(default_factory=list)  # instance paths using it
+    overrides: dict = field(default_factory=dict)  # member -> [Rule] (0.3)
+    notes: list = field(default_factory=list)  # _Note (0.3)
+
+
+def _annotation_key(annotation) -> tuple:
+    """Annotations in a stable order: by scope, kind and target, then code
+    and bounds, which tell apart the facts one target may carry."""
+    bounds = annotation.bounds
+    return (annotation.scope, annotation.kind, annotation.target,
+            annotation.code or "",
+            () if bounds is None else (bounds.unit, str(bounds.min),
+                                       str(bounds.max)))
 
 
 class _UnionFind:
@@ -1151,6 +1260,76 @@ class _Elaborator:
             defn.ports.append(Port(pin, role, tuple(sorted(designators)),
                                    declaration=span))
             defn.roles[pin] = role
+        self.collect_rules(defn)
+
+    def collect_rules(self, defn: _Definition) -> None:
+        """A component definition's rules and sides (syntax 0.3), each
+        checked once: its pins are the component's (RHO2082), a side's
+        name is declared once (RHO2007), a reference in a value names one
+        of its parameters (RHO2039). A literal value is evaluated here,
+        once; a reference is evaluated per instance, in its environment."""
+        result = defn.result
+        scope = {p.name: p.type for p in defn.params or ()}
+        sides = {}
+        for node in defn.tree.children:
+            if not _is_tree(node) or node.data not in ("rule_decl",
+                                                       "side_decl"):
+                continue
+            span = result.span_of(node)
+            if node.data == "side_decl":
+                _word, name_token, *pins = [c for c in node.children
+                                            if not _is_tree(c)]
+                name = str(name_token)
+                if name in sides:
+                    self.report(
+                        "RHO2007",
+                        {"kind": "side", "name": name,
+                         "scope": f"component `{defn.name}`"},
+                        span, secondary=((sides[name], "first declared "
+                                          "here"),))
+                    continue
+                sides[name] = span
+                if self.rule_pins(defn, "side", pins, defn.roles,
+                                  defn.spelled):
+                    defn.rules.append(Rule(
+                        "side", tuple(map(str, pins)), side=name,
+                        span=span))
+                continue
+            word, pins, relation, other, value = _rule_parts(
+                node.children[0])
+            named = pins + ([other] if other is not None else [])
+            known = self.rule_pins(defn, str(word), named, defn.roles,
+                                   defn.spelled)
+            evaluated = None
+            if value is not None:
+                token = value.children[0]
+                if token.type == "FREE_NAME":
+                    if self.reference(defn, token, scope) is None:
+                        continue
+                    evaluated = ("reference", str(token))
+                else:
+                    evaluated = self.value(defn, value, str(word), EMPTY_ENV)
+                    if evaluated is UNKNOWN:
+                        continue
+            if known:
+                defn.rules.append(Rule(
+                    str(word), tuple(map(str, pins)), relation,
+                    None if other is None else str(other), evaluated,
+                    span=span))
+
+    def rule_pins(self, defn, word, tokens, roles, component) -> bool:
+        """Every pin a rule names is one of the component's (RHO2082);
+        False when one is not."""
+        known = True
+        for token in tokens:
+            if str(token) not in roles:
+                known = False
+                span = defn.result.span_of(token)
+                self.report("RHO2082", {"pin": str(token), "word": word,
+                                        "component": component},
+                            span, fixits=_did_you_mean(str(token), roles,
+                                                       span))
+        return known
 
     # -- pass C: the instantiation graph
 
@@ -1435,6 +1614,16 @@ class _Elaborator:
                         for token in index.children[::2]:
                             self.check_int(defn, index, token, scope,
                                            "an index")
+            elif data in ("annotation", "waiver", "rule_override"):
+                index = _tree(_tree(stmt, "target"), "index")
+                if index is not None:
+                    for token in index.children[::2]:
+                        self.check_int(defn, index, token, scope,
+                                       "an index")
+                if data == "rule_override":
+                    value = _rule_parts(_tree(stmt, "rule_body"))[4]
+                    if value is not None:
+                        self.check_value(defn, value, scope, None, None)
             elif data == "if_stmt":
                 self.check_condition(defn, _tree(stmt, "condition"), scope)
                 for block in reversed(_trees(stmt, "block")):
@@ -1726,12 +1915,35 @@ class _Elaborator:
                     parameters=dict(member.parameters),
                     ports=tuple(member.ports),
                     hardware_kind=member.hardware_kind, part=member.part,
-                    declaration=member.span, trace=itrace, **flags))
+                    declaration=member.span, trace=itrace,
+                    rules=self.member_rules(member, model), **flags))
                 if member.kind == "module":
                     work.append((member.target, member.env, ipath,
                                  depth + 1, itrace, flags))
             visits.append((model, path, depth, trace))
         return instances, visits
+
+    @staticmethod
+    def member_rules(member: _Member, model: _Model) -> tuple:
+        """A component member's rules (syntax 0.3): its definition's, each
+        reference evaluated in the member's own environment; or, when the
+        module's `rule` statements name it, those instead, with the
+        definition's sides kept (a side is what the part is, not how it is
+        used)."""
+        if member.kind != "component":
+            return ()
+        definition = member.target.rules if member.target is not None \
+            else []
+        overrides = model.overrides.get(member.name)
+        rules = []
+        for rule in definition:
+            if overrides is not None and rule.word != "side":
+                continue
+            value = rule.value
+            if isinstance(value, tuple):  # ("reference", name)
+                value = member.parameters.get(value[1], UNKNOWN)
+            rules.append(replace(rule, value=value))
+        return tuple(rules + list(overrides or ()))
 
     def over_limit(self, model: _Model, total: int) -> None:
         """The design crossed its replication budget inside `model`'s
@@ -1928,6 +2140,12 @@ class _Elaborator:
         for stmt, _loops in live:
             if stmt.data == "assertion":
                 self.assertion(defn, model, stmt, names)
+        stated: dict = {}
+        for stmt, loops in live:
+            if stmt.data == "rule_override":
+                self.rule_override(defn, model, stmt, loops)
+            elif stmt.data in ("annotation", "waiver"):
+                self.annotation(defn, model, stmt, loops, stated, names)
 
     def declare(self, defn, model, name, span, first_seen) -> bool:
         """Claim a member name in the module; False (reported) if taken."""
@@ -2588,9 +2806,10 @@ class _Elaborator:
                         fixits=_did_you_mean(subject, model.labels, sspan))
         bound = _tree(stmt, "bound")
         bounds = self.bounds(defn, bound)
+        severity = "warning" if _tokens(stmt, "WARNING") else "error"
         model.checks.append(
             _Check(name, tier, measurement, subject, bounds, span,
-                   result.span_of(bound)))
+                   result.span_of(bound), severity))
 
     def bounds(self, defn, node) -> Bounds | None:
         result = defn.result
@@ -2630,6 +2849,175 @@ class _Elaborator:
                         result.span_of(literal))
             return None
         return Bounds(unit, low, high)
+
+    # -- syntax 0.3: annotations, waivers and rule overrides
+
+    def target(self, defn, model, statement, node, loops, accepts,
+               assertions=()):
+        """What a 0.3 statement's target names in this body, as one of
+        `accepts`: ("label", label), ("pin", member, port), ("member",
+        member), or ("assertion", name). "component" accepts a member that
+        is a component instance. None when it names nothing that kind of
+        statement takes (RHO2080), or names something whose own defect was
+        already reported (quiet, so one defect is one diagnostic)."""
+        result = defn.result
+        tokens = [c for c in node.children if not _is_tree(c)]
+        head = str(tokens[0])
+        index = _tree(node, "index")
+        port = str(tokens[1]) if len(tokens) > 1 else None
+        written = head + ("" if index is None else _text_of(result, index))
+        span = result.span_of(node)
+
+        def refuse(reason, shown=None):
+            shown = written if shown is None else shown
+            if port is not None:
+                shown += f".{port}"
+            self.report("RHO2080", {"statement": statement, "target": shown,
+                                    "module": defn.name, "reason": reason},
+                        span)
+            return None
+
+        quiet = head in model.quiet or head in defn.quiet_members
+        owner = head
+        if index is not None:
+            if id(index) in self.bad:
+                return None
+            if head not in model.arrays:
+                if quiet or (head in model.members
+                             and model.members[head].broken):
+                    return None
+                return refuse(f"`{head}` is not an array")
+            size = model.arrays[head]
+            position = self.position(model, index, loops)
+            if size is None or position is None:
+                return None
+            owner = f"{head}[{position}]"
+            if not 0 <= position < size:
+                return refuse(f"`{head}` has members 0 to {size - 1}", owner)
+        elif head in model.arrays and (port is not None
+                                       or "label" not in accepts
+                                       or head not in model.labels):
+            if model.arrays[head] is None:
+                return None
+            return refuse(f"`{head}` is an array; name one member, "
+                          f"`{head}[0]`")
+        member = model.members.get(owner)
+        if port is not None:
+            if "pin" not in accepts:
+                return refuse("a pin is not a target this statement takes")
+            if member is None:
+                return None if quiet else refuse(
+                    f"module `{defn.name}` has no instance `{owner}`")
+            if member.broken:
+                return None
+            if port not in member.roles:
+                return refuse(f"`{owner}` has no port `{port}`")
+            return ("pin", owner, port)
+        found = []
+        if member is not None and accepts != ("label", "pin"):
+            found.append(("member", "an instance"))
+        if index is None and head in model.labels and "label" in accepts:
+            found.append(("label", "a net label"))
+        if index is None and head in assertions \
+                and "assertion" in accepts:
+            found.append(("assertion", "an assertion"))
+        if len(found) > 1:
+            return refuse(f"it names both {found[0][1]} and {found[1][1]}")
+        if not found:
+            if quiet:
+                return None
+            if accepts == ("label", "pin"):
+                return refuse("no net of the module carries that label, and "
+                              "a pin is written `instance.pin`")
+            if accepts == ("component",):
+                return refuse(f"module `{defn.name}` has no instance "
+                              f"`{owner}`")
+            return refuse("it names no instance, net label or assertion")
+        kind = found[0][0]
+        if kind == "member":
+            if member.broken:
+                return None
+            if "component" in accepts and member.kind != "component":
+                return refuse("it is a module instance, and only a "
+                              "component has rules")
+        return (kind, owner)
+
+    @staticmethod
+    def _shown(target) -> str:
+        if target[0] == "pin":
+            return f"{target[1]}.{target[2]}"
+        return target[1]
+
+    def annotation(self, defn, model, stmt, loops, stated, assertions):
+        """A `supply`, `draw` or `waive` statement: its target resolved
+        (RHO2080), its bounds or code and justification read, and a second
+        statement of one fact about one target refused (RHO2081). A
+        `supply` of a voltage and one of a current are two facts."""
+        result = defn.result
+        kind = str(stmt.children[0])
+        node = _tree(stmt, "target")
+        bounds = code = justification = None
+        if kind == "waive":
+            target = self.target(defn, model, kind, node, loops,
+                                 ("member", "label", "assertion"),
+                                 assertions)
+            code = str(stmt.children[1])
+            justification = str(stmt.children[3])[1:-1]
+            fact = code
+        else:
+            target = self.target(defn, model, kind, node, loops,
+                                 ("label", "pin"))
+            bounds = self.bounds(defn, _tree(stmt, "bound"))
+            if bounds is None:
+                return
+            fact = quantities.UNITS[bounds.unit][0] \
+                if bounds.unit in quantities.UNITS else bounds.unit
+        if target is None:
+            return
+        span = result.span_of(stmt)
+        key = (kind, target, fact)
+        if key in stated:
+            self.report(
+                "RHO2081",
+                {"statement": kind, "target": self._shown(target),
+                 "module": defn.name},
+                span, secondary=((stated[key], "first stated here"),))
+            return
+        stated[key] = span
+        model.notes.append(_Note(kind, target, bounds, code, justification,
+                                 span))
+
+    def rule_override(self, defn, model, stmt, loops) -> None:
+        """A `rule` statement: its target a component member (RHO2080), its
+        pins that member's ports (RHO2082), and its value evaluated in the
+        module's environment and loop variables. The member then takes the
+        module's rules in place of its definition's."""
+        result = defn.result
+        target = self.target(defn, model, "rule", _tree(stmt, "target"),
+                             loops, ("component",))
+        if target is None:
+            return
+        member = model.members[target[1]]
+        word, pins, relation, other, value = _rule_parts(
+            _tree(stmt, "rule_body"))
+        named = pins + ([other] if other is not None else [])
+        # The component as a source names it, as RHO2035 does: a library
+        # one by its dotted name. An ad-hoc component has no definition.
+        component = (member.target.spelled if member.target is not None
+                     else member.definition)
+        if not self.rule_pins(defn, str(word), named, member.roles,
+                              component):
+            return
+        evaluated = None
+        if value is not None:
+            env = _Env(tuple(model.env.values) + tuple(loops.items()))
+            evaluated = self.value(defn, value, str(word), env)
+            if evaluated is UNKNOWN:
+                return
+        model.overrides.setdefault(target[1], []).append(Rule(
+            str(word), tuple(map(str, pins)), relation,
+            None if other is None else str(other), evaluated,
+            origin="override", span=result.span_of(stmt)))
 
     # -- pass H: flattening
 
@@ -2690,6 +3078,7 @@ class _Elaborator:
                       key=lambda v: tuple(int(p) for p in v.split(".")))
         found = _UnionFind()
         labels, statements, isolated, checks = [], [], [], []
+        notes = []  # (scope path, _Note, the IR target or a label's node)
         endpoint_sites = {}  # node -> [(site key, span)], for the checker
         for model, path, depth, trace in visits:
             labelled = {}  # label -> a node of its net, in this instance
@@ -2733,6 +3122,23 @@ class _Elaborator:
                         else child_path(path, anchor.member), anchor.port)
                 checks.append((child_path(path, check.name), check, node,
                                (check.span,) + trace))
+            for note in model.notes:
+                kind, *what = note.target
+                if kind == "label":
+                    connect = model.labels.get(what[0])
+                    if connect is None or not connect.endpoints:
+                        continue
+                    anchor = connect.endpoints[0]
+                    target = ("net", (path if anchor.member is None
+                                      else child_path(path, anchor.member),
+                                      anchor.port))
+                elif kind == "pin":
+                    target = ("port", child_path(path, what[0]), what[1])
+                elif kind == "member":
+                    target = ("instance", child_path(path, what[0]))
+                else:
+                    target = ("assertion", child_path(path, what[0]))
+                notes.append((path, note, target, (note.span,) + trace))
 
         def site_key(site):
             depth, path, span, _trace = site
@@ -2795,6 +3201,11 @@ class _Elaborator:
                         sites = attribute_sites.setdefault(attribute, [])
                         if (value, spans[attribute]) not in sites:
                             sites.append((value, spans[attribute]))
+                        if attribute not in domains:
+                            # `ground_kind` (0.3) is no domain label: sites
+                            # that disagree are GA-2's question, which the
+                            # check stage asks of attribute_sites.
+                            continue
                         if domains[attribute] is None:
                             domains[attribute] = value
                             setters[attribute] = csite[2]
@@ -2813,12 +3224,16 @@ class _Elaborator:
                 name = "N_" + spelled[0]
                 site = min(group_sites[key], key=site_key)
             names[key] = name
+            kinds = {value for value, _span
+                     in attribute_sites.get("ground_kind", ())}
             nets.append(Net(name, domains["ground_domain"],
                             domains["voltage_domain"], members, site[2],
                             site[3], isolated=key in isolated_nets,
                             attribute_sites=attribute_sites,
                             endpoint_spans={member: spans_of(member)
-                                            for member in members}))
+                                            for member in members},
+                            ground_kind=kinds.pop() if len(kinds) == 1
+                            else None))
 
         for node, endpoint, span, path in isolated:
             key = found.find(node)
@@ -2836,8 +3251,16 @@ class _Elaborator:
         assertions = [
             Assertion(apath, check.tier, check.measurement,
                       names[found.find(node)], check.bounds, check.span,
-                      atrace, check.bound_span)
+                      atrace, check.bound_span, check.severity)
             for apath, check, node, atrace in checks]
+        annotations = sorted(
+            (Annotation(note.kind, scope,
+                        ("net", names[found.find(target[1])])
+                        if target[0] == "net" else target,
+                        note.bounds, note.code, note.justification,
+                        note.span, atrace)
+             for scope, note, target, atrace in notes),
+            key=_annotation_key)
 
         if len({net.name for net in nets}) != len(nets):
             raise AssertionError(  # pragma: no cover - naming invariant
@@ -2852,4 +3275,5 @@ class _Elaborator:
             assertions=sorted(assertions, key=lambda a: a.path),
             files=sorted((SourceFile(r.file, r.data) for r in self.results),
                          key=lambda f: f.path),
+            annotations=annotations,
         )

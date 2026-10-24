@@ -1,4 +1,4 @@
-"""IR v1 emission: an ElaboratedDesign to the netlist IR and its source map.
+"""IR v2 emission: an ElaboratedDesign to the netlist IR and its source map.
 
 This module owns three things the elaborator deliberately does not:
 
@@ -22,6 +22,16 @@ This module owns three things the elaborator deliberately does not:
 
 Every array is emitted in the order the schema declares, so one design has
 one serialization and therefore one hash.
+
+VERSION 2 (ir/netlist-ir.v2.schema.json), UNFROZEN until M2 exit (decision
+OD8; ir/README.md, "Unfrozen working versions"). It carries the source facts
+syntax 0.3 adds and the one IR v1 dropped: an `isolated` net, a net's
+authored `ground_kind`, a component's `rules`, an assertion's `severity`,
+the `annotations` (`supply`, `draw`, `waive`), and an `interfaces` array that
+syntax 0.3's interfaces fill (empty until then). It drops
+Assertion.waiver, which nothing wrote: a waiver is an annotation now. With
+those removed and `ir_version` 1, a version 2 document is the version 1
+document of the same design (rhoform/tests/test_ir_v2.py holds that).
 """
 
 from decimal import Decimal
@@ -31,11 +41,11 @@ import json
 from .elaborate import Quantity
 
 CANONICAL_PROFILE = "rhoform-canonical-json/1"
-# Version 1 (ir/netlist-ir.v1.schema.json, ir/source-map.v1.schema.json):
-# net names carry an elaboration index after any segment, which the
-# version 0 schema refuses (ir/README.md, "Versioning policy").
-IR_VERSION = 1
-SOURCEMAP_VERSION = 1
+# Version 2 (ir/netlist-ir.v2.schema.json, ir/source-map.v2.schema.json),
+# unfrozen; version 1 widened net names, version 2 adds the 0.3 source facts
+# (ir/README.md, "Versioning policy").
+IR_VERSION = 2
+SOURCEMAP_VERSION = 2
 GENERATOR = {"name": "rhoformc", "version": "0.1.0-dev"}
 NON_DESIGN_HEADER_FIELDS = ("design_hash", "generator", "source_hash")
 
@@ -159,6 +169,8 @@ def _instance(instance) -> dict:
         out["ports"].append(entry)
     if instance.hardware_kind is not None:
         out["hardware_kind"] = instance.hardware_kind
+    if instance.rules:
+        out["rules"] = _by_bytes(_rule(rule) for rule in instance.rules)
     part = instance.part
     if part is not None:
         constraints = {name: _value(value)
@@ -173,32 +185,78 @@ def _instance(instance) -> dict:
     return out
 
 
+def _by_bytes(entries) -> list:
+    """Entries of a list whose order carries no meaning, in the order of
+    their canonical bytes: total, so one set has one serialization."""
+    return sorted(entries, key=canonical_bytes)
+
+
+def _rule(rule) -> dict:
+    out = {"word": rule.word, "pins": list(rule.pins)}
+    if rule.side is not None:
+        out["name"] = rule.side
+    if rule.relation is not None:
+        out[rule.relation] = rule.other
+    if rule.value is not None:
+        out["value"] = _value(rule.value)
+    return out
+
+
 def _net(net) -> dict:
     out = {"name": net.name}
     if net.ground_domain is not None:
         out["ground_domain"] = net.ground_domain
     if net.voltage_domain is not None:
         out["voltage_domain"] = net.voltage_domain
+    if net.ground_kind is not None:
+        out["ground_kind"] = net.ground_kind
+    if net.isolated:
+        out["isolated"] = True
+    return out
+
+
+def _bounds(bounds) -> dict:
+    out = {"unit": bounds.unit}
+    if bounds.min is not None:
+        out["min"] = number(bounds.min)
+    if bounds.max is not None:
+        out["max"] = number(bounds.max)
     return out
 
 
 def _assertion(assertion) -> dict:
-    bounds = {"unit": assertion.bounds.unit}
-    if assertion.bounds.min is not None:
-        bounds["min"] = number(assertion.bounds.min)
-    if assertion.bounds.max is not None:
-        bounds["max"] = number(assertion.bounds.max)
-    return {
+    out = {
         "path": assertion.path,
         "tier": assertion.tier,
         "measurement": assertion.measurement,
         "subject": {"net": assertion.subject},
-        "bounds": bounds,
+        "bounds": _bounds(assertion.bounds),
     }
+    if assertion.severity == "warning":
+        out["severity"] = "warning"
+    return out
+
+
+def _target(target) -> dict:
+    kind, *what = target
+    if kind == "port":
+        return {"port": {"instance": what[0], "port": what[1]}}
+    return {kind: what[0]}
+
+
+def _annotation(annotation) -> dict:
+    out = {"kind": annotation.kind, "scope": annotation.scope,
+           "target": _target(annotation.target)}
+    if annotation.kind == "waive":
+        out["code"] = annotation.code
+        out["justification"] = annotation.justification
+    else:
+        out["bounds"] = _bounds(annotation.bounds)
+    return out
 
 
 def to_ir(design) -> dict:
-    """The IR v1 document, hashes filled in."""
+    """The IR v2 document, hashes filled in."""
     document = {
         "header": {
             "ir_version": IR_VERSION,
@@ -218,6 +276,9 @@ def to_ir(design) -> dict:
             for net, path, port in design.connections()],
         "assertions": [_assertion(a) for a in
                        sorted(design.assertions, key=lambda a: a.path)],
+        # Syntax 0.3's interfaces fill this; nothing does yet.
+        "interfaces": [],
+        "annotations": _by_bytes(_annotation(a) for a in design.annotations),
     }
     document["header"]["design_hash"] = design_hash_of(document)
     return document

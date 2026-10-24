@@ -1,4 +1,4 @@
-Rhoform IR v0 and v1 — validation evidence.
+Rhoform IR v0, v1 and v2 — validation evidence.
 
 REGENERATED 2026-08-17T06:43:24Z under AMB-123 (M0 completion audit). Until then this file
 was untracked: `.gitignore`'s `*.log` swallowed it while tracked documents
@@ -27,7 +27,7 @@ ir/examples/negative/, and are checked on every run.
 === END HISTORICAL RECORD ===
 
 Command: python3 tests/ir/check-hashes.py --self-test
-ir-hashes: self-test PASS: 72 checks.
+ir-hashes: self-test PASS: 78 checks.
 exit=0
 
 Command: python3 tests/ir/check-hashes.py
@@ -40,8 +40,10 @@ exit=0
 Command: python3 tests/schemas/validate-schemas.py  (ir/ rows, and the benchmark goldens routed to ir/)
 schemas: ir/netlist-ir.schema.json: well-formed.
 schemas: ir/netlist-ir.v1.schema.json: well-formed.
+schemas: ir/netlist-ir.v2.schema.json: well-formed.
 schemas: ir/source-map.schema.json: well-formed.
 schemas: ir/source-map.v1.schema.json: well-formed.
+schemas: ir/source-map.v2.schema.json: well-formed.
 schemas: ir/examples/blinker.ir.json: valid against netlist-ir.schema.json.
 schemas: ir/examples/blinker.sourcemap.json: valid against source-map.schema.json.
 schemas: ir/examples/negative/n01_mounting_hole_with_port.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/ports.
@@ -53,12 +55,20 @@ schemas: ir/examples/negative/n06_bad_path.ir.json: invalid as expected, at the 
 schemas: ir/examples/negative/n07_static_tier_dynamic_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n08_retired_measurement_kind.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/measurement.
 schemas: ir/examples/negative/n09_span_missing_byte_offset.sourcemap.json: invalid as expected, at the 1 location(s) it declares: /nodes//r_a/declaration.
-schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.v1.schema.json.
-schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.v1.schema.json.
-schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.v1.schema.json.
-schemas: benchmarks/buck-3v3/buck-3v3.sourcemap.json: valid against source-map.v1.schema.json.
-schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.v1.schema.json.
-schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.v1.schema.json.
+schemas: ir/examples/negative/n10_v2_assertion_waiver.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0.
+schemas: ir/examples/negative/n11_v2_isolated_false.ir.json: invalid as expected, at the 1 location(s) it declares: /nets/0/isolated.
+schemas: ir/examples/negative/n12_v2_severity_error.ir.json: invalid as expected, at the 1 location(s) it declares: /assertions/0/severity.
+schemas: ir/examples/negative/n13_v2_rules_on_a_module.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/0.
+schemas: ir/examples/negative/n14_v2_waiver_without_justification.ir.json: invalid as expected, at the 1 location(s) it declares: /annotations/1.
+schemas: ir/examples/negative/n15_v2_waiver_bad_code.ir.json: invalid as expected, at the 1 location(s) it declares: /annotations/1.
+schemas: ir/examples/negative/n16_v2_rule_from_and_to.ir.json: invalid as expected, at the 1 location(s) it declares: /instances/1/rules/0.
+schemas: ir/examples/negative/n17_v2_no_annotations.ir.json: invalid as expected, at the 1 location(s) it declares: /.
+schemas: benchmarks/blinker-555/blinker-555.ir.json: valid against netlist-ir.v2.schema.json.
+schemas: benchmarks/blinker-555/blinker-555.sourcemap.json: valid against source-map.v2.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.ir.json: valid against netlist-ir.v2.schema.json.
+schemas: benchmarks/buck-3v3/buck-3v3.sourcemap.json: valid against source-map.v2.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.ir.json: valid against netlist-ir.v2.schema.json.
+schemas: benchmarks/esp32s3-devboard/esp32s3-devboard.sourcemap.json: valid against source-map.v2.schema.json.
 exit=0
 
 === design_hash refrozen, 2026-08-18 (AMB-123 round 14) ===
@@ -156,3 +166,35 @@ predecessor only in its version fields and design_hash, which moved
 because ir_version is hashed. Neither ir-hashes summary line changed:
 the examples are still version 0 and the gate's checks do not depend on
 the version.
+
+=== IR version 2, unfrozen, 2026-10-24 ===
+Syntax 0.3 opened, unfrozen (decision OD8), and with it IR version 2:
+netlist-ir.v2.schema.json and source-map.v2.schema.json, new files, with
+the version 0 and version 1 files left byte for byte as they were. Version
+2 adds the required `interfaces` (empty until syntax 0.3's interfaces land)
+and `annotations` arrays, a component's `rules`, a net's `isolated`
+(present only when true) and authored `ground_kind`, and an assertion's
+`severity` (present only when "warning"); it widens Port.name and
+PortRef.port to member paths and removes Assertion.waiver. It is unfrozen:
+it may change in place until L5b freezes it with syntax 0.3, and no tagged
+release ships while it is (README, "Unfrozen working versions"). The
+compiler writes ir_version 2 and sourcemap_version 2.
+
+The transcript above was re-run for this change and replaces the one
+before it, for the reason the round-14 section gives. The schemas rows now
+list the two version 2 schema files and eight version 2 negative controls,
+n10-n17, each a minimal version 2 document with one defect at the location
+it declares (69 controls in all, up from 61, which is the gate's new
+floor). The goldens validate against version 2. The ir-hashes self-test
+went from 72 to 78 checks: the version 2 sort rules (interfaces by
+instance and port, annotations and each component's rules by their
+canonical bytes) and the interface node-coverage rule each have a case.
+The ir-hashes PASS line did not change: the examples are still version 0,
+and the gate checks the benchmark goldens whatever their version.
+
+Every benchmark golden and conformance expectation was regenerated once,
+through the compiler. The preservation oracle in rhoform/tests/test_ir_v2.py
+removes the version 2 additions from each, sets ir_version to 1, and
+recomputes design_hash: every one equals the version 1 design_hash it had
+before this change (24 documents: three benchmarks, sixteen elaboration
+cases, five package cases).

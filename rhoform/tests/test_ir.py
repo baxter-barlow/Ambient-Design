@@ -218,7 +218,7 @@ class EmissionTest(unittest.TestCase):
 
     def test_header(self):
         header = self.document["header"]
-        self.assertEqual(header["ir_version"], 1)
+        self.assertEqual(header["ir_version"], 2)
         self.assertEqual(header["language_version"], "0.1.0")
         self.assertEqual(header["design_name"], "Blinker")
         self.assertEqual(header["canonical_form"], "rhoform-canonical-json/1")
@@ -246,10 +246,10 @@ class EmissionTest(unittest.TestCase):
 
     @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
     def test_documents_validate_against_their_schemas(self):
-        self.assertEqual(self.source_map["sourcemap_version"], 1)
-        self.assertEqual(self.source_map["ir_version"], 1)
-        for name, document in (("netlist-ir.v1.schema.json", self.document),
-                               ("source-map.v1.schema.json",
+        self.assertEqual(self.source_map["sourcemap_version"], 2)
+        self.assertEqual(self.source_map["ir_version"], 2)
+        for name, document in (("netlist-ir.v2.schema.json", self.document),
+                               ("source-map.v2.schema.json",
                                 self.source_map)):
             with self.subTest(schema=name):
                 schema = json.loads((ROOT / "ir" / name).read_text())
@@ -378,3 +378,143 @@ module Top:
                                                   "562ohm +/- 1%")))
         self.assertNotEqual(changed["header"]["design_hash"],
                             self.document["header"]["design_hash"])
+
+
+SOURCE_FACTS = """#pragma rhoform-syntax 0.3
+
+component Ldo(vout: voltage = 3.3V):
+    pin gnd passive 3
+    pin in power_in 1
+    pin out power_out 2
+    ground gnd
+    regulate out from in = vout
+
+component Opto:
+    pin a passive 1
+    pin c passive 3
+    pin e passive 4
+    pin k passive 2
+    side detector: c e
+    side emitter: a k
+
+module Rail:
+    port gnd passive
+    port vin power_in
+    port vout power_out
+    isos = new Opto[2]
+    ldo = new Ldo(vout = 1.8V)
+    rule isos[1] open a k
+    net GND(ground_kind = "power"):
+        gnd
+        ldo.gnd
+    net VIN:
+        ldo.in
+        vin
+    net VOUT:
+        ldo.out
+        vout
+    isolated isos[0].a
+    draw ldo.in at most 5mA
+    supply VIN within 4.5V to 5.5V
+    supply ldo.out at most 300mA
+    assert ok static operating_point(VOUT) within 1.7V to 1.9V
+    assert ripple dynamic ripple(VOUT) at most 50mV warning
+    waive RHO3001 isos[0] "a spare footprint"
+    waive RHO3402 ripple "measured on the bench"
+"""
+
+
+@unittest.skipUnless(HAVE_LARK, "lark (pinned in toolchain/versions.yaml) "
+                     "is required")
+class EmissionV2Test(unittest.TestCase):
+    """IR version 2's additions, emitted from a design that states each."""
+
+    def setUp(self):
+        self.design = _design(SOURCE_FACTS, "rail.rhoform")
+        self.document = ir.to_ir(self.design)
+        self.instances = {i["path"]: i for i in self.document["instances"]}
+
+    def test_rules_are_evaluated_per_instance_and_overridden_by_rule(self):
+        # In the order of their canonical bytes, not as written: a rule
+        # list's order carries no meaning, a rule's pin order does.
+        self.assertEqual(self.instances["/ldo"]["rules"], [
+            {"from": "in", "pins": ["out"], "word": "regulate",
+             "value": {"unit": "V", "value": 1.8}},
+            {"pins": ["gnd"], "word": "ground"},
+        ])
+        sides = [{"name": "detector", "pins": ["c", "e"], "word": "side"},
+                 {"name": "emitter", "pins": ["a", "k"], "word": "side"}]
+        self.assertEqual(self.instances["/isos[0]"]["rules"], sides)
+        # The `rule` statement replaces the definition's rules and keeps
+        # its sides.
+        self.assertEqual(self.instances["/isos[1]"]["rules"],
+                         sides + [{"pins": ["a", "k"], "word": "open"}])
+        self.assertNotIn("rules", self.instances["/"])
+
+    def test_annotations_resolve_to_ir_entities(self):
+        annotations = self.document["annotations"]
+        self.assertEqual(annotations, sorted(annotations,
+                                             key=ir.canonical_bytes))
+        targets = {(a["kind"], json.dumps(a["target"], sort_keys=True))
+                   for a in annotations}
+        self.assertEqual(targets, {
+            ("draw", '{"port": {"instance": "/ldo", "port": "in"}}'),
+            ("supply", '{"net": "VIN"}'),
+            ("supply", '{"port": {"instance": "/ldo", "port": "out"}}'),
+            ("waive", '{"instance": "/isos[0]"}'),
+            ("waive", '{"assertion": "/ripple"}'),
+        })
+        waiver = next(a for a in annotations
+                      if a["target"] == {"assertion": "/ripple"})
+        self.assertEqual(waiver, {
+            "kind": "waive", "scope": "/", "target": {"assertion": "/ripple"},
+            "code": "RHO3402", "justification": "measured on the bench"})
+        window = next(a for a in annotations if a["target"] == {"net": "VIN"})
+        self.assertEqual(window["bounds"],
+                         {"unit": "V", "min": 4.5, "max": 5.5})
+
+    def test_net_and_assertion_facts(self):
+        nets = {n["name"]: n for n in self.document["nets"]}
+        self.assertEqual(nets["GND"]["ground_kind"], "power")
+        self.assertNotIn("ground_kind", nets["VIN"])
+        self.assertIs(nets["N_isos[0].a"]["isolated"], True)
+        self.assertNotIn("isolated", nets["VIN"])
+        severity = {a["path"]: a.get("severity")
+                    for a in self.document["assertions"]}
+        self.assertEqual(severity, {"/ok": None, "/ripple": "warning"})
+        self.assertEqual(self.document["interfaces"], [])
+
+    @unittest.skipUnless(HAVE_JSONSCHEMA, "jsonschema required")
+    def test_the_document_validates_against_version_2_only(self):
+        for name, valid in (("netlist-ir.v2.schema.json", True),
+                            ("netlist-ir.v1.schema.json", False)):
+            schema = json.loads((ROOT / "ir" / name).read_text())
+            errors = list(jsonschema.Draft202012Validator(schema)
+                          .iter_errors(self.document))
+            with self.subTest(schema=name):
+                self.assertEqual(not errors, valid)
+
+    def test_the_gate_accepts_the_pair(self):
+        self.assertEqual(GATE.sort_problems(self.document, "emitted"), [])
+        with tempfile.TemporaryDirectory() as scratch:
+            target = Path(scratch) / "emitted.ir.json"
+            ir_bytes, map_bytes = ir.emit(self.design)
+            target.write_bytes(ir_bytes)
+            (Path(scratch) / "emitted.sourcemap.json").write_bytes(map_bytes)
+            problems = []
+            GATE.check_document(target, problems, [])
+        self.assertEqual(problems, [])
+
+    def test_a_0_3_fact_moves_the_design_hash_and_a_comment_does_not(self):
+        base = self.document["header"]["design_hash"]
+        for old, new in (("at most 5mA", "at most 6mA"),
+                         ("50mV warning", "50mV"),
+                         ('"power"', '"chassis"'),
+                         ("open a k", "open k a")):
+            with self.subTest(change=new):
+                moved = ir.to_ir(_design(SOURCE_FACTS.replace(old, new),
+                                         "rail.rhoform"))
+                self.assertNotEqual(moved["header"]["design_hash"], base)
+        commented = ir.to_ir(_design(SOURCE_FACTS.replace(
+            "    rule isos", "    # a note\n    rule isos"), "rail.rhoform"))
+        self.assertEqual(commented["header"]["design_hash"], base)
