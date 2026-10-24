@@ -1706,6 +1706,86 @@ class Syntax03Test(unittest.TestCase):
         self.assertTrue(_parse(PRAGMA_0_2 + "\ncomponent H:\n"
                                "    pin a passive 01\n").ok)
 
+    def test_the_pragma_fixit_says_when_0_3_does_not_only_add(self):
+        # 0.3 refuses designator runs and reserves names 0.2 binds. A run
+        # the fix-it spaces out itself, the reading 0.2 had, so it stays
+        # machine-applicable; a bound reserved word it cannot rename.
+        warning = ("    assert x static operating_point(N) at most 1V "
+                   "warning\n")
+
+        def applied(source, fixit):
+            for edit in sorted(fixit["edits"],
+                               key=lambda e: -e["byte_start"]):
+                source = (source[:edit["byte_start"]] + edit["replacement"]
+                          + source[edit["byte_end"]:])
+            return source
+
+        cases = {
+            "\ncomponent H:\n    pin a passive 01 2\n    pin b passive 1A"
+            "\nmodule M:\n": ("machine-applicable", ["0.3", "0 1", "1 A"],
+                               []),
+            "\nmodule M:\n    port supply passive\n    draw = new R\n": (
+                "needs-review", ["0.3"], ["RHO1019", "RHO1019"]),
+            "\nmodule M:\n": ("machine-applicable", ["0.3"], []),
+        }
+        for body, (applicability, replacements, after) in cases.items():
+            with self.subTest(body=body):
+                source = PRAGMA_0_2 + body + warning
+                _, diags = _diags(source)
+                self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+                fixit = diags[0]["fixits"][0]
+                self.assertEqual(fixit["applicability"], applicability)
+                self.assertEqual([e["replacement"] for e in fixit["edits"]],
+                                 replacements)
+                self.assertEqual(
+                    "(it only adds to 0.2)" in fixit["message"],
+                    replacements == ["0.3"] and not after)
+                if after:
+                    self.assertIn("`draw`, `supply`", fixit["message"])
+                self.assertEqual(_codes(_parse(applied(source, fixit))),
+                                 after)
+
+    def test_a_did_you_mean_names_no_word_newer_than_the_pragma(self):
+        # `ground_kind` (0.3) is no repair for a 0.1 or 0.2 file, and as a
+        # second close match it hid `ground_domain`, the one that is. It is
+        # still a word under 0.2: what it draws there is RHO1016.
+        for header in (PRAGMA, PRAGMA_0_2):
+            with self.subTest(header=header):
+                _, diags = _diags(header + '\nmodule M:\n    net N('
+                                  'ground_domian = "G"):\n        a\n')
+                self.assertEqual([d["code"] for d in diags], ["RHO1009"])
+                self.assertEqual(
+                    [f["edits"][0]["replacement"] for f in diags[0]["fixits"]],
+                    ["ground_domain"])
+        _, diags = _diags(PRAGMA_0_2 + '\nmodule M:\n    net N('
+                          'ground_kind = "power"):\n        a\n')
+        self.assertEqual([d["code"] for d in diags], ["RHO1016"])
+
+    def test_a_line_a_0_3_word_heads_is_read_as_0_2_reads_it(self):
+        # Under 0.2 the word is a name, and the broken line is reported at
+        # the token after it, asking for what follows a name: not at `~`,
+        # asking for the `within` or `at` of a 0.3 statement.
+        for word in ("supply", "draw", "waive", "rule"):
+            with self.subTest(word=word):
+                source = (PRAGMA_0_2 + f"\nmodule M:\n    {word} = new R\n"
+                          f"    {word} out ~ vout\n")
+                _, diags = _diags(source)
+                self.assertEqual([d["code"] for d in diags], ["RHO1006"])
+                self.assertEqual(diags[0]["params"]["expected"],
+                                 "`.`, `=`, `[`, `~`")
+                span = diags[0]["spans"][0]
+                self.assertEqual(source[span["byte_start"]:span["byte_end"]],
+                                 "out")
+        # A file that parses only as 0.3 statements is one RHO1016; one
+        # that parses neither way keeps the 0.2 reading's diagnostics.
+        statement = ("\nmodule M:\n    port p passive\n"
+                     "    supply p at most 1A\n")
+        self.assertEqual(_codes(_parse(PRAGMA_0_2 + statement)), ["RHO1016"])
+        _, diags = _diags(PRAGMA_0_2 + statement + "    port q\n")
+        self.assertEqual([d["code"] for d in diags], ["RHO1006", "RHO1006"])
+        self.assertEqual(diags[0]["params"]["found"],
+                         "`p` (a name (not a keyword))")
+
     def test_ground_kind_is_a_closed_vocabulary_inside_its_string(self):
         source = (PRAGMA_0_3 + '\nmodule M:\n    net G(ground_kind = "pwer"):'
                   "\n        a\n")

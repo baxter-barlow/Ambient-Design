@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.1
+
+# `ground_kind` is a 0.3 attribute, so it is no repair for a 0.1 file: the
+# did-you-mean names `ground_domain` alone.
+module Rail:
+    port gnd passive
+    net GND(ground_domian = "GND"):
+        gnd

@@ -1,0 +1,8 @@
+#pragma rhoform-syntax 0.1
+
+# Before 0.3 `supply` is a name, and a broken line it heads is diagnosed as
+# 0.1 reads it: at `out`, asking for what may follow a name, not for the
+# `within` or `at` of a 0.3 `supply` statement.
+module Rail:
+    supply = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    supply out ~ vout

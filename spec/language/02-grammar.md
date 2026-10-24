@@ -286,11 +286,14 @@ states. The grammar itself accepts them under either pragma.
 Syntax 0.3 is unfrozen ([01 — Lexical
 structure](01-lexical-structure.md#syntax-versions)): the constructs
 below may still change until M2 exits. It adds them and nothing else; a
-file declaring 0.1 or 0.2 keeps its parse tree, its diagnostics and its
-meaning. They state source facts: the electrical structure of a
-component, a supply, a load, a waiver, a severity, a ground's kind. What
-each fact MEANS to a check is the check stage's (spec 05); elaboration
-resolves what a statement names and keeps it ([04 —
+valid file declaring 0.1 or 0.2 keeps its parse tree and its meaning,
+and an invalid one its diagnostics, but for `RHO1016` on a construct
+only 0.3 has ([01 — Lexical
+structure](01-lexical-structure.md#syntax-versions)). They state source
+facts: the electrical structure of a component, a supply, a load, a
+waiver, a severity, a ground's kind. What each fact MEANS to a check is
+the check stage's (spec 05); elaboration resolves what a statement names
+and keeps it ([04 —
 Elaboration](04-elaboration.md#syntax-03-source-facts-unfrozen)).
 
 ### Soft keywords (0.3)
