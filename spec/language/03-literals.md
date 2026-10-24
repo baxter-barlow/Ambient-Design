@@ -120,4 +120,7 @@ the vector table rather than trusting the derivation:
 An ill-formed literal is the parse-level diagnostic `RHO1010`
 (`invalid-quantity-literal`), carrying the literal and a stable reason
 in structured params — see [06 — Diagnostics](06-diagnostics.md). The
-vector table's `errors` half pins the reasons.
+vector table's `errors` half pins the reasons a literal's own text
+yields. The two reasons for a misspaced `+/-`, which the parser gives
+before the literal is read as one token, are pinned by the reference
+implementation's parser tests, not by the table.

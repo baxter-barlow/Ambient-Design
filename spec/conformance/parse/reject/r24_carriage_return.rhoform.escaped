@@ -1,0 +1,1 @@
+#pragma rhoform-syntax 0.1\nmodule M:\r\n    port p passive\n

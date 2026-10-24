@@ -1,0 +1,1 @@
+#pragma rhoform-syntax 0.1\nmodule M:\n    port p passive  # a bell \x07 inside a comment\n
