@@ -1,0 +1,15 @@
+#pragma rhoform-syntax 0.2
+
+component Led:
+    pin a passive 1
+    pin k passive 2
+
+module Divider(top_value: resistance = 1kohm):
+    port bottom passive
+    port mid passive
+    port top passive
+    lower = new rhoform.lib.passive.Resistor(resistance = 1kohm)
+    upper = new rhoform.lib.passive.Resistor(resistance = top_value)
+    top ~ upper.a
+    upper.b ~ mid ~ lower.a
+    lower.b ~ bottom

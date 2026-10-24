@@ -30,7 +30,9 @@ ATTACHMENT (F-10), in one place, `_attach_comments`:
   - on the last physical line of a statement header: a trailing comment,
     re-emitted after two spaces;
   - inside a wrapped header (between its first and last physical line):
-    hoisted to an own-line comment above the statement (F-6);
+    hoisted to an own-line comment above the statement (F-6), which in a
+    statement block then stands in a run of its own, so the comment stays
+    directly above the statement it came from (AMB-140);
   - on a line of its own: a leading comment of the next statement, at that
     statement's indent - unless it is indented deeper than that statement,
     in which case it trails the innermost block that closed in between
@@ -44,10 +46,12 @@ DISPATCH PER PRODUCTION. Every grammar production a statement can be is a
 row in three tables: how its header renders (`_HEADS`), which child
 subtrees form its block and how that block orders (`_BLOCKS`), and its sort
 key (`_KEYS`). The 0.2 surface (imports, component definitions, parameter
-lists, `if`/`else`/`for`, arrays and indexes) is rows in the same tables;
-the only structural addition is the `else` clause, a unit hung off its
-`if` rather than a member of the enclosing block, so it is never sorted
-away from it.
+lists, `if`/`else`/`for`, arrays and indexes) and the 0.3 surface
+(annotations, waivers, rule overrides, component rules and sides, quoted
+designators, an assertion's `warning`) are rows in the same tables; the
+only structural addition is the `else` clause, a unit hung off its `if`
+rather than a member of the enclosing block, so it is never sorted away
+from it.
 
 THE SELF-CHECK (F-11). Before bytes are returned: the output re-parses
 clean, its normalized AST (F-12) equals the input's, formatting it again is
@@ -348,10 +352,48 @@ def _head_table_row(node) -> str:
     return " ".join(_row_cells(node))
 
 
+def _bound(node) -> str:
+    return " ".join(_text(t) for t in _tokens(node))
+
+
 def _head_assertion(node) -> str:
-    keyword, name, tier, kind, subject, bound = node.children
-    bound_text = " ".join(_text(t) for t in _tokens(bound))
-    return f"assert {name} {tier} {kind}({subject}) {bound_text}"
+    keyword, name, tier, kind, subject, bound, *severity = node.children
+    head = f"assert {name} {tier} {kind}({subject}) {_bound(bound)}"
+    return " ".join([head, *map(str, severity)])
+
+
+def _head_annotation(node) -> str:
+    word, target, bound = node.children
+    return f"{word} {_endpoint(target)} {_bound(bound)}"
+
+
+def _head_waiver(node) -> str:
+    word, code, target, justification = node.children
+    return f"{word} {code} {_endpoint(target)} {justification}"
+
+
+def _rule_body(node) -> str:
+    """`regulate OUT from IN = 3.3V`: the pins keep author order, like a
+    chain's endpoints, since which order means something is the check
+    stage's; only the value is normalized."""
+    words = []
+    for child in node.children:
+        words += ["=", _value(child)] if _is_tree(child) else [str(child)]
+    return " ".join(words)
+
+
+def _head_rule_override(node) -> str:
+    word, target, body = node.children
+    return f"{word} {_endpoint(target)} {_rule_body(body)}"
+
+
+def _head_rule(node) -> str:
+    return _rule_body(node.children[0])
+
+
+def _head_side(node) -> str:
+    word, name, *pins = _direct_tokens(node)
+    return f"{word} {name}: " + " ".join(map(str, pins))
 
 
 _HEADS = {
@@ -376,6 +418,11 @@ _HEADS = {
     "table_decl": _head_table,
     "table_row": _head_table_row,
     "assertion": _head_assertion,
+    "annotation": _head_annotation,
+    "waiver": _head_waiver,
+    "rule_override": _head_rule_override,
+    "rule_decl": _head_rule,
+    "side_decl": _head_side,
 }
 
 
@@ -390,7 +437,7 @@ _HEADS = {
 # first `block`; its `else` branch is an "else_clause" unit of its own.
 _BLOCKS = {
     "module_def": ("paragraph", "statement"),
-    "component_def": ("sorted", "pin_decl"),
+    "component_def": ("sorted", ("pin_decl", "rule_decl", "side_decl")),
     "if_stmt": ("paragraph", "block"),
     "else_clause": ("paragraph", "block"),
     "for_stmt": ("paragraph", "block"),
@@ -401,13 +448,18 @@ _BLOCKS = {
 }
 
 
-def _block_children(node) -> list:
+def _block_names(node) -> tuple:
+    """The data names of the direct children that hold `node`'s block."""
     spec = _BLOCKS.get(node.data)
     if spec is None:
-        return []
-    _, child = spec
-    found = _subtrees(node, child)
-    if child in ("instance_body", "block"):
+        return ()
+    return spec[1] if isinstance(spec[1], tuple) else (spec[1],)
+
+
+def _block_children(node) -> list:
+    names = _block_names(node)
+    found = [c for c in node.children if _is_tree(c) and c.data in names]
+    if names in (("instance_body",), ("block",)):
         found = found[0].children if found else []
     return [_unwrap(c) for c in found]
 
@@ -436,18 +488,23 @@ def _name_key(token) -> tuple:
 
 # F-1: a statement block's kind ranks (a module body, and an `if`,
 # `else` or `for` body), by grammar production. Chains, `isolated`, `if`
-# and `for` share rank 4 and keep source order. Spec 07 restates this
-# table and the conformance gate reconciles the two.
+# and `for` share rank 5 and keep source order. A rule override follows
+# the instances it is about, and the annotations and waivers follow what
+# they name (syntax 0.3). Spec 07 restates this table and the conformance
+# gate reconciles the two.
 STATEMENT_RANKS = {
     "port_decl": 0,
     "table_decl": 1,
     "instance_decl": 2,
-    "net_decl": 3,
-    "isolated_decl": 4,
-    "chain": 4,
-    "if_stmt": 4,
-    "for_stmt": 4,
-    "assertion": 5,
+    "rule_override": 3,
+    "net_decl": 4,
+    "isolated_decl": 5,
+    "chain": 5,
+    "if_stmt": 5,
+    "for_stmt": 5,
+    "annotation": 6,
+    "assertion": 7,
+    "waiver": 8,
 }
 
 # F-5: an instance body's fixed order, by the word that opens the line
@@ -463,6 +520,17 @@ BODY_RANKS = {
 }
 
 
+# A component body's fixed order (syntax 0.3): its pins, then its rules,
+# then its sides. Pins sort by name, sides by name, and rules by their whole
+# canonical line, so two rules never tie. Restated in spec 07 and
+# reconciled the same way.
+COMPONENT_RANKS = {
+    "pin_decl": 0,
+    "rule_decl": 1,
+    "side_decl": 2,
+}
+
+
 def _key_table(node) -> tuple:
     rows = [natural_key(str(r.children[0])) for r in _subtrees(node, "table_row")]
     return (STATEMENT_RANKS["table_decl"], min(rows))
@@ -473,6 +541,14 @@ def _ranked(production: str, name=None):
     if name is None:
         return lambda n: (rank,)
     return lambda n: (rank, _name_key(name(n)))
+
+
+def _by_line(production: str, ranks=STATEMENT_RANKS):
+    """A rank, then the statement's whole canonical line: for kinds no one
+    name identifies (an annotation, a waiver, a rule), so two statements of
+    the kind tie only when they are the same statement."""
+    rank = ranks[production]
+    return lambda n: (rank, natural_key(_HEADS[production](n)))
 
 
 _KEYS = {
@@ -486,6 +562,14 @@ _KEYS = {
     "if_stmt": _ranked("if_stmt"),
     "for_stmt": _ranked("for_stmt"),
     "assertion": _ranked("assertion", lambda n: n.children[1]),
+    "annotation": _by_line("annotation"),
+    "waiver": _by_line("waiver"),
+    "rule_override": _by_line("rule_override"),
+    # component body (0.3), ranks from COMPONENT_RANKS. A pin's key there
+    # is its instance-body key: both ranks are 0.
+    "rule_decl": _by_line("rule_decl", COMPONENT_RANKS),
+    "side_decl": lambda n: (COMPONENT_RANKS["side_decl"],
+                            _name_key(_direct_tokens(n)[1])),
     # instance body (F-5), ranks from BODY_RANKS
     "pin_decl": lambda n: (BODY_RANKS["pin"], _name_key(_direct_tokens(n)[1])),
     "part_decl": lambda n: (BODY_RANKS["part"],),
@@ -610,6 +694,7 @@ class _Unit:
     leading: list = field(default_factory=list)   # (line, text)
     trailing: str | None = None
     blank_before: bool = False
+    hoisted: bool = False  # some of `leading` came out of its own header
 
 
 @dataclass
@@ -699,6 +784,7 @@ def _attach_comments(scanned: list, units: list, root: _Block,
                 owner.trailing = entry.comment
             else:  # inside a wrapped header: hoisted (F-6)
                 owner.leading.append((number, entry.comment))
+                owner.hoisted = True
             continue
 
         at = bisect_right(starts, number)
@@ -761,7 +847,14 @@ def _runs(block: _Block) -> list[tuple[list, list]]:
         return [([], _sorted(block.children))]
     runs: list[tuple[list, list]] = []
     for position, unit in enumerate(block.children):
-        if position == 0 or unit.blank_before or unit.leading:
+        # A statement whose header held a comment is a run of its own: its
+        # hoisted comments lead the run, and a run's comments stay at its
+        # top while its statements sort, so in a shared run they could land
+        # above a different statement (AMB-140). Alone, they cannot, and
+        # the output reads back the same way: those comments are own-line
+        # comments above it then, and a blank line follows its run.
+        if position == 0 or unit.blank_before or unit.leading \
+                or block.children[position - 1].hoisted:
             runs.append(([text for _, text in unit.leading], []))
         runs[-1][1].append(unit)
     return [(comments, _sorted(units)) for comments, units in runs]
@@ -869,14 +962,14 @@ _UNORDERED = frozenset({"arguments", "net_attributes"})
 _EMPTY_DROPPED = _UNORDERED | {"params"}
 
 
-def _canon(node, skip: str | None = None):
+def _canon(node, skip: tuple = ()):
     """A generic walk: every token (normalized), every subtree, sortable
     lists in canonical order. It does not use the header renderers, so it
     is an independent witness of what the output means."""
     if not _is_tree(node):
         return _text(node)
     children = [c for c in node.children
-                if not (skip and _is_tree(c) and c.data == skip)]
+                if not (skip and _is_tree(c) and c.data in skip)]
     if node.data in _EMPTY_DROPPED and not children:
         return None
     if node.data in _UNORDERED:
@@ -915,7 +1008,7 @@ def _ast_events(block: _Block) -> tuple:
             events.append(("run",) + item)
         else:
             unit, leading = item, rest[0]
-            skip = _BLOCKS.get(unit.node.data, (None, None))[1]
+            skip = _block_names(unit.node)
             events.append((
                 "unit",
                 _canon(unit.node, skip),

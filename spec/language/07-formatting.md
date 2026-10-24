@@ -86,7 +86,7 @@ the author wrapped over several lines is written on one line.
 |---|---|---|
 | import | `import Led, Resistor from "./lib/parts"` | names sorted |
 | module | `module Power:` | (its body: see Ordering) |
-| component | `component UsbC:` with one pin per line, or `component Fiducial` with no pins | (its body: pins sorted by name) |
+| component | `component UsbC:` with one pin per line, or `component Fiducial` with no pins | (its body: see Component body order) |
 | parameter list | `module Divider(r_top: resistance = 10kohm, stages: int = 1):` | parameters keep source order |
 | port | `port vin power_in` | |
 | instance | `r1 = new rhoform.lib.passive.Resistor(power_rating = 250mW, resistance = 1kohm)` | arguments sorted by name |
@@ -103,7 +103,13 @@ the author wrapped over several lines is written on one line.
 | if | `if n > 2:`, `if enabled:`, then `else:` at the `if`'s indentation | (its bodies: see Ordering) |
 | for | `for i in range(4):`, `for i in range(1, n):` | bounds keep source order |
 | table | `table rhoform.lib.passive.Resistor part abstract (resistance, part.package):` with one row per line | columns keep source order; rows sorted by row name |
-| assertion | `assert f static frequency(OUT) within 1kHz to 2kHz` | |
+| assertion | `assert f static frequency(OUT) within 1kHz to 2kHz`, and (0.3) `... at most 50mV warning` | |
+| component rule (0.3) | `regulate out from in = 3.3V` | pins keep source order |
+| side (0.3) | `side primary: in gnd` | pins keep source order |
+| quoted designator (0.3) | `pin gnd passive "03"` | sorted with the other designators, as written |
+| rule statement (0.3) | `rule isos[1] open a k` | pins keep source order |
+| supply, draw (0.3) | `supply VIN within 4.5V to 5.5V`, `draw ldo.in at most 5mA` | |
+| waiver (0.3) | `waive RHO3001 isos[0] "a spare footprint"` | |
 
 An empty argument list, attribute list and parameter list are
 removed: `new L()` is written `new L`, `net N():` is written `net N:`,
@@ -114,6 +120,10 @@ Parameters are never reordered: like a table's columns, a parameter
 list is the author's declaration, and its order is kept as written.
 An array size and an index are written as their tokens, with only the
 spacing above changed.
+
+A rule's pins and a side's pins are never reordered: which pin of a
+rule comes first can mean something (spec 05 says what), so only the
+spacing changes, and a rule's value is normalized like any value.
 
 Chain endpoints are never reordered: the head of a chain is a
 binding-checked position ([02 — Grammar](02-grammar.md#names)), so
@@ -176,9 +186,12 @@ of its `else`, or of a `for`, at any depth. Each statement block is
 sorted on its own by the rules below; a nested block never mixes with
 the block around it. A statement block is divided into **runs**. A new
 run starts at the block's first statement, at a statement separated
-from the previous statement by a blank line, and at a statement that
-has own-line comments of its own (including comments hoisted out of
-its wrapped header; see Comments). Statements are sorted only within
+from the previous statement by a blank line, at a statement that has
+own-line comments of its own (including comments hoisted out of its
+wrapped header; see Comments), and at the statement after one whose
+header held hoisted comments: a statement whose comments came out of
+its own header is a run of its own, so those comments stay directly
+above it (AMB-140). Statements are sorted only within
 their run, by rank, then by name under the collation above, then by
 source position; runs keep their source order. Sorting never moves a
 statement across a blank line or past a comment, so an author's
@@ -195,15 +208,23 @@ reconciles this table against the reference implementation.
 | 0 | `port_decl` | `port vin power_in` | port name |
 | 1 | `table_decl` | `table T (v):` | the least of its row names |
 | 2 | `instance_decl` | `r1 = new L` | instance name |
-| 3 | `net_decl` | `net VCC:` | net name |
-| 4 | `isolated_decl` | `isolated tp1.a` | source position |
-| 4 | `chain` | `a ~ b` | source position |
-| 4 | `if_stmt` | `if n > 2:` | source position |
-| 4 | `for_stmt` | `for i in range(4):` | source position |
-| 5 | `assertion` | `assert f static frequency(OUT) at least 1Hz` | assertion name |
+| 3 | `rule_override` | `rule d1 pass a to k` | its whole line |
+| 4 | `net_decl` | `net VCC:` | net name |
+| 5 | `isolated_decl` | `isolated tp1.a` | source position |
+| 5 | `chain` | `a ~ b` | source position |
+| 5 | `if_stmt` | `if n > 2:` | source position |
+| 5 | `for_stmt` | `for i in range(4):` | source position |
+| 6 | `annotation` | `supply VIN within 4.5V to 5.5V` | its whole line |
+| 7 | `assertion` | `assert f static frequency(OUT) at least 1Hz` | assertion name |
+| 8 | `waiver` | `waive RHO3001 r1 "a spare"` | its whole line |
 
-Chains, `isolated`, `if` and `for` statements share rank 4 and are
-never reordered among themselves. An `if` and its `else` are one
+Chains, `isolated`, `if` and `for` statements share rank 5 and are
+never reordered among themselves. The syntax 0.3 statements (ranks 3, 6
+and 8) follow what they are about: a `rule` statement the instances, an
+annotation the connections, a waiver everything it can waive. No one
+name identifies one of them, so each sorts by its whole canonical line
+under the collation, and two of a rank tie only when they are the same
+statement. An `if` and its `else` are one
 statement: the `else` clause stays directly after its `if` branch.
 
 ### Instance body order (F-5)
@@ -220,6 +241,19 @@ reference implementation.
 | 3 | `exclude_from_bom` | or its negated form |
 | 4 | `board_only` | or its negated form |
 | 5 | `dnp` | |
+
+### Component body order (0.3)
+
+A component body is always sorted: its pins, then its rules, then its
+sides. Pins sort by pin name, rules by their whole canonical line, and
+sides by side name. The conformance gate reconciles this table against
+the reference implementation.
+
+| Rank | Production | Example |
+|---|---|---|
+| 0 | `pin_decl` | `pin a passive 1` |
+| 1 | `rule_decl` | `regulate out from in = vout` |
+| 2 | `side_decl` | `side primary: in gnd` |
 
 ### Other sorted blocks
 

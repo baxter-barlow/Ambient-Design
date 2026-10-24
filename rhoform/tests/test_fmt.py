@@ -446,17 +446,17 @@ def _sources_0_2():
 
 
 def _constructs(source):
-    """Every 0.2 construct, by name, as the parser's version gate finds
-    them (the finder RHO1016 rests on, which shares nothing with the
-    formatter). An empty `()` is not counted: F-7 drops it."""
+    """Every construct newer than 0.1, by name, as the parser's version
+    gate finds them (the finder RHO1016 rests on, which shares nothing with
+    the formatter). An empty `()` is not counted: F-7 drops it."""
     from collections import Counter
 
-    from rhoform.parser import _v0_2_extents, parse
+    from rhoform.parser import _load, _newer_constructs, parse
 
     parsed = parse(source)
     return Counter(
-        construct for start, end, construct
-        in _v0_2_extents(parsed.data, parsed.shift, parsed.tree)
+        construct for start, end, construct, _version
+        in _newer_constructs(parsed.data, parsed.shift, parsed.tree, _load())
         if parsed.data[start:end].translate(None, b" \n") != b"()")
 
 
@@ -559,6 +559,150 @@ class Syntax02Test(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             digests.add(run.stdout.strip())
         self.assertEqual(len(digests), 1)
+
+
+P3 = "#pragma rhoform-syntax 0.3\n"
+
+# The 0.3 surface (unfrozen), one golden per production: (name, input,
+# canonical).
+GOLDEN_0_3 = [
+    ("a component body is pins, then rules by line, then sides by name",
+     P3 + "component C:\n    side s2 :b\n    tie a  b\n    pin b passive 2\n"
+     "    side s1: a\n    conduct a to b = 1000mohm\n    pin a passive 1\n",
+     P3 + "\ncomponent C:\n    pin a passive 1\n    pin b passive 2\n"
+     "    conduct a to b = 1ohm\n    tie a b\n    side s1: a\n"
+     "    side s2: b\n"),
+    ("a rule keeps its pins in author order",
+     P3 + "component C:\n    pin a passive 1\n    pin b passive 2\n"
+     "    tie b a\n",
+     P3 + "\ncomponent C:\n    pin a passive 1\n    pin b passive 2\n"
+     "    tie b a\n"),
+    ("a quoted designator sorts with the others, as written",
+     P3 + 'component C:\n    pin a passive "02" 1\n',
+     P3 + '\ncomponent C:\n    pin a passive "02" 1\n'),
+    ("module statements: rule after instances, annotations after "
+     "connections, waivers last",
+     P3 + 'module M:\n    waive RHO3001 u "x"\n'
+     "    assert a static operating_point(N) at most 1V   warning\n"
+     "    supply N within 4.5V to 5.5V\n    draw u.a at most 5000uA\n"
+     "    a ~ b\n    rule u  tie a b\n    u = new C\n    port p passive\n",
+     P3 + "\nmodule M:\n    port p passive\n    u = new C\n    rule u tie a b\n"
+     "    a ~ b\n    draw u.a at most 5mA\n    supply N within 4.5V to 5.5V\n"
+     "    assert a static operating_point(N) at most 1V warning\n"
+     '    waive RHO3001 u "x"\n'),
+    ("indexed targets and ground_kind",
+     P3 + 'module M:\n    net N ( ground_kind="power" ):\n        a\n'
+     "    supply us[ 1 ].a at most 1A\n",
+     P3 + '\nmodule M:\n    net N(ground_kind = "power"):\n        a\n'
+     "    supply us[1].a at most 1A\n"),
+]
+
+
+def _package_design(directory, texts):
+    """(design_hash or None, sorted codes) of compiling the package in
+    `directory` from its one main.rhoform, wherever it sits, each file of
+    `texts` (path relative to it -> source) replacing that file's bytes, in
+    a scratch copy."""
+    import shutil
+    import tempfile
+
+    from rhoform import compile as pipeline
+    from rhoform import ir
+    from rhoform.diagnostics import Diagnostics
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / directory.name
+        shutil.copytree(directory, root, ignore=shutil.ignore_patterns(
+            "*.expected.rhoform", "expected.*"))
+        for relative, text in texts.items():
+            (root / relative).write_text(text, encoding="utf-8")
+        (entry,) = root.rglob("main.rhoform")
+        sink = Diagnostics()
+        compiled = pipeline.compile(entry.relative_to(root).as_posix(), root,
+                                    stage="elaborate", sink=sink)
+        design = (None if compiled.design is None else
+                  ir.design_hash_of(ir.to_ir(compiled.design)))
+        return design, sorted(json.loads(line)["code"]
+                              for line in sink.render().splitlines())
+
+
+@unittest.skipUnless(HAVE_LARK, SKIP)
+class Syntax03Test(unittest.TestCase):
+    """The canonical form of the unfrozen 0.3 surface, AMB-140's hoisting
+    rule, and design preservation across a package's files (AMB-144 #9)."""
+
+    def test_every_production(self):
+        for name, source, expected in GOLDEN_0_3:
+            with self.subTest(name):
+                result = _fmt(source)
+                self.assertTrue(result.ok, result.diagnostics.render())
+                self.assertEqual(result.text, expected)
+                self.assertEqual(_fmt(expected).text, expected)
+                self.assertEqual(_ast(result.text), _ast(source))
+                self.assertEqual(_constructs(result.text), _constructs(source))
+
+    def test_a_hoisted_comment_stays_above_its_own_statement(self):
+        # AMB-140: the comment came out of r1's header, and used to lead a
+        # run that `port p` sorted to the top of.
+        source = (P2 + "module M:\n    r1 = new lib.R(  # about r1\n"
+                  "        resistance = 1kohm)\n    port p passive\n"
+                  "    r0 = new lib.R\n")
+        text = _fmt(source).text
+        self.assertEqual(text, P2 + "\nmodule M:\n    # about r1\n"
+                         "    r1 = new lib.R(resistance = 1kohm)\n\n"
+                         "    port p passive\n    r0 = new lib.R\n")
+        self.assertEqual(_fmt(text).text, text)
+
+    def test_formatting_keeps_every_0_3_design(self):
+        sources = [path for path in
+                   sorted((_PARSE_CASES / "accept").glob("*.rhoform"))
+                   + sorted(_FMT_CASES.glob("*.rhoform"))
+                   + sorted((_ROOT / "spec" / "conformance" / "elaborate")
+                            .rglob("*.rhoform"))
+                   if path.read_text(encoding="utf-8").find(P3) >= 0]
+        self.assertGreaterEqual(len(sources), 6)
+        designs = 0
+        for path in sources:
+            with self.subTest(path.name):
+                source = path.read_text(encoding="utf-8")
+                result = _fmt(source)
+                if result.text is None:
+                    continue
+                self.assertEqual(_fmt(result.text).text, result.text)
+                self.assertEqual(_constructs(result.text), _constructs(source))
+                before = _design_and_codes(source, path.name)
+                self.assertEqual(_design_and_codes(result.text, path.name),
+                                 before)
+                designs += before[0] is not None
+        self.assertGreaterEqual(designs, 3)
+
+    def test_formatting_a_package_keeps_its_design(self):
+        """The single-file preservation tests cannot see an import: this
+        formats every file of each multi-file package and compiles the
+        package again (AMB-144 #9)."""
+        packages = ([_FMT_CASES / "f28_package"]
+                    + sorted(p for p in (_ROOT / "spec" / "conformance"
+                                         / "packages" / "accept").iterdir()
+                             if p.is_dir()))
+        changed = 0
+        for package in packages:
+            with self.subTest(package.name):
+                files = sorted(path for path in package.rglob("*.rhoform")
+                               if not path.name.endswith(".expected.rhoform"))
+                self.assertGreater(len(files), 1)
+                texts = {}
+                for path in files:
+                    source = path.read_text(encoding="utf-8")
+                    result = _fmt(source)
+                    self.assertTrue(result.ok, result.diagnostics.render())
+                    self.assertEqual(_fmt(result.text).text, result.text)
+                    texts[path.relative_to(package).as_posix()] = result.text
+                    changed += result.text != source
+                before = _package_design(package, {})
+                self.assertIsNotNone(before[0], before[1])
+                self.assertEqual(_package_design(package, texts), before)
+        # The fmt case's sources are not canonical, so formatting did work.
+        self.assertGreaterEqual(changed, 2)
 
 
 # Mutations for the totality fuzz: each takes (rng, lines) and returns new
