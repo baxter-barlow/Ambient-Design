@@ -44,7 +44,7 @@ Nothing here reaches the IR: dimensions, rationals and intervals are
 erased after checking (T3).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from fractions import Fraction
 import math
@@ -376,10 +376,13 @@ class Q:
     `offset` marks a reading on an offset scale (a `degC` point); the
     difference of two readings is a plain temperature. `nominal`, when
     present, lies inside the interval. `tight` says the interval is the
-    exact range of what it encloses. `vars` are the variable ids of the
-    uncertain leaves it was computed from. `verified` is False for an
-    enclosure resting on a typ or peak figure, which may prove a violation
-    but never a pass."""
+    exact range of what it encloses; a non-point with no `vars` is never
+    tight, and a direct construction must say so (from_bounds and the
+    other conversions do). `vars` are the variable ids of the uncertain
+    leaves it was computed from, and the identity of any uncertain
+    reference a relative bound read. `verified` is False for an enclosure
+    resting on a typ or peak figure, which may prove a violation but never
+    a pass."""
 
     iv: Interval
     dim: Dimension
@@ -663,7 +666,11 @@ def verdict(m, b) -> Verdict:
     """The static verdict on the measured enclosure M against the fixed
     window B (spec 05 section 2). B's ends are the window's own: a window
     whose ends depend on another uncertain value is not fixed, and is
-    checked by moving that value to the measured side."""
+    checked by moving that value to the measured side. Such a window
+    carries that value's identity in `vars` (a relative bound over an
+    uncertain reference carries the reference's, variable id or not), as
+    does an uncertain value given a variable id of its own, which is a
+    measured value, never a window: both are refused."""
     sentinel = _absorbing(m, b)
     if sentinel is not None:
         return Verdict("incomplete", reason=sentinel.reason)
@@ -722,13 +729,15 @@ def from_literal(text: str, var=None) -> Q:
     return _leaf(iv, named(parsed.dimension), offset, nominal, var)
 
 
-def from_bounds(bounds) -> Q:
+def from_bounds(bounds, var=None) -> Q:
     """An assertion's window (rhoform.elaborate.Bounds), exactly: unit `1`
-    is dimensionless and a missing end is infinite."""
+    is dimensionless and a missing end is infinite. Read as an uncertain
+    value instead (a `supply` origin), it is a leaf like a literal's,
+    tight only when a point or given a variable id `var`."""
     dim, multiplier, offset = _literal_unit(bounds.unit)
     low = NEG_INF if bounds.min is None else exact(bounds.min) * multiplier
     high = POS_INF if bounds.max is None else exact(bounds.max) * multiplier
-    return Q(Interval(low, high), dim, offset)
+    return _leaf(Interval(low, high), dim, offset, None, var)
 
 
 # Part-data units: the literal UNITS, `1`, and these atoms (spec 05 section
@@ -819,11 +828,17 @@ def _bound_value(bound, unit: PartUnit, refs) -> Q:
     term = reference if exact(bound.factor) == 1 \
         else scale(reference, bound.factor)
     shift = exact(bound.offset) * unit.scale
-    if shift == 0:
+    if shift != 0:
+        # The offset is a magnitude even on an offset scale: a reading plus
+        # a difference.
+        term = add(term, constant(shift, unit.dimension))
+    if reference.iv.is_point:
         return term
-    # The offset is a magnitude even on an offset scale: a reading plus a
-    # difference.
-    return add(term, constant(shift, unit.dimension))
+    # The bound moves with an uncertain reference, so it carries the
+    # reference's identity whether or not the reference has a variable id
+    # of its own: nothing read from it can pass for a fixed window.
+    return replace(term, vars=tuple(sorted(
+        set(term.vars) | {("reference", bound.reference)}, key=repr)))
 
 
 def references(measure) -> tuple[str, ...]:
@@ -855,8 +870,11 @@ def from_measure(measure, refs=None, *, var=None, lower_bound_only=False):
     unverified and never passes (amendment, budgets). A relative bound is
     evaluated exactly as factor * ref + offset over refs[reference] (a Q),
     at the corner that widens the enclosure; the result depends on that
-    reference, and carries its variables. Conditions are not read here:
-    which operating point applies is the caller's to decide."""
+    reference, carries its variables and, when it is uncertain, its
+    identity (`("reference", name)`), so verdict() refuses it as a window,
+    and it is unverified when the reference is. Given `var`, an uncertain
+    result is a measured value, never a window. Conditions are not read
+    here: which operating point applies is the caller's to decide."""
     unit = parse_part_unit(measure.unit)
     offset = unit.kind == "offset"
     guaranteed = {v.statistic: v.bound for v in measure.values
@@ -902,7 +920,8 @@ def from_measure(measure, refs=None, *, var=None, lower_bound_only=False):
     own = () if var is None or iv.is_point else (var,)
     tight = fixed and (iv.is_point or var is not None)
     return Q(iv, unit.dimension, offset, nominal, tight,
-             tuple(sorted(set(depends) | set(own), key=repr)))
+             tuple(sorted(set(depends) | set(own), key=repr)),
+             all(q.verified for q in ends if q is not None))
 
 
 # ---- display ----------------------------------------------------------------

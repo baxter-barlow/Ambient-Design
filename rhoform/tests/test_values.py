@@ -21,12 +21,12 @@ from rhoform.check import values as V
 ROOT = Path(__file__).resolve().parents[2]
 SEED = 53  # AMB-53; fixed, so a property failure reproduces exactly
 
-# An operand is a quantity literal or {lo, hi, dim[, var, nominal, offset]}
-# in base units, the ends exact rationals or `-inf`/`+inf`. Its variable id
-# is `var`, by default its position (`a`, `b`, `m`), and null for an
-# anonymous leaf, which is never tight; a point is its own nominal. A
-# result is {lo, hi, dim, tight[, nominal, offset]}, `UNDEFINED`, or
-# {raises: DimensionError}.
+# An operand is a quantity literal or {lo, hi, dim[, var, nominal, offset,
+# verified]} in base units, the ends exact rationals or `-inf`/`+inf`. Its
+# variable id is `var`, by default its position (`a`, `b`, `m`), and null
+# for an anonymous leaf, which is never tight; a point is its own nominal.
+# A result is {lo, hi, dim, tight[, nominal, offset, verified]},
+# `UNDEFINED`, or {raises: DimensionError}.
 ALGEBRA = json.loads(r"""
 {
   "operations": [
@@ -219,7 +219,23 @@ ALGEBRA = json.loads(r"""
     {"case": "scale by an exact constant",
      "op": "scale", "a": "10kohm +/- 1%", "factor": "3/2",
      "want": {"lo": "14850", "hi": "15150", "dim": "resistance",
-              "tight": true, "nominal": "15000"}}
+              "tight": true, "nominal": "15000"}},
+    {"case": "a sum keeps an unverified operand unverified",
+     "op": "add", "a": {"lo": "1", "hi": "+inf", "dim": "current",
+                        "verified": false},
+     "b": {"lo": "2", "hi": "3", "dim": "current"},
+     "want": {"lo": "3", "hi": "+inf", "dim": "current", "tight": true,
+              "verified": false}},
+    {"case": "a product keeps an unverified operand unverified",
+     "op": "mul", "a": {"lo": "2", "hi": "3", "dim": "voltage"},
+     "b": {"lo": "1", "hi": "+inf", "dim": "current", "verified": false},
+     "want": {"lo": "2", "hi": "+inf", "dim": "power", "tight": true,
+              "verified": false}},
+    {"case": "a scale keeps an unverified operand unverified",
+     "op": "scale", "a": {"lo": "1", "hi": "+inf", "dim": "current",
+                          "verified": false}, "factor": "2",
+     "want": {"lo": "2", "hi": "+inf", "dim": "current", "tight": true,
+              "verified": false}}
   ],
   "relations": [
     {"m": "3.3V +/- 1%", "b": "3V to 3.6V", "want": "inside"},
@@ -286,7 +302,8 @@ def operand(spec, position):
     return V.Q(iv, dimension(spec["dim"]), spec.get("offset", False),
                None if nominal is None else Fraction(nominal),
                iv.is_point or var is not None,
-               (var,) if var is not None and not iv.is_point else ())
+               (var,) if var is not None and not iv.is_point else (),
+               spec.get("verified", True))
 
 
 OPERATIONS = {"add": V.add, "sub": V.sub, "mul": V.mul, "div": V.div,
@@ -322,6 +339,7 @@ class AlgebraVectorTest(unittest.TestCase):
                     self.assertEqual(got.nominal, Fraction(want["nominal"]))
                 if "offset" in want:
                     self.assertIs(got.offset, want["offset"])
+                self.assertIs(got.verified, want.get("verified", True))
 
     def test_every_relation_vector(self):
         for row in ALGEBRA["relations"]:
@@ -477,6 +495,25 @@ class ConversionTest(unittest.TestCase):
         q = V.from_bounds(Bounds("mV", None, Decimal("50")))
         self.assertEqual((q.iv.lo, q.iv.hi), (V.NEG_INF, Fraction(1, 20)))
 
+    def test_a_window_read_as_a_value_is_a_leaf_like_a_literal(self):
+        from rhoform.elaborate import Bounds
+
+        # `supply VIN within 9V to 14V` as an origin: with no variable id
+        # nothing shows it is used once, so b - b, exactly 0, overlaps
+        # [-1V, 1V] by overestimate and is incomplete, never fail(possible).
+        b = V.from_bounds(Bounds("V", Decimal("9"), Decimal("14")))
+        self.assertEqual((b.tight, b.vars), (False, ()))
+        window = V.from_bounds(Bounds("V", Decimal("-1"), Decimal("1")))
+        self.assertEqual(V.verdict(b - b, window),
+                         V.Verdict("incomplete",
+                                   reason="interval-overestimate"))
+        named = V.from_bounds(Bounds("V", Decimal("9"), Decimal("14")),
+                              var="vin")
+        self.assertEqual((named.tight, named.vars), (True, ("vin",)))
+        self.assertFalse((named - named).tight)
+        point = V.from_bounds(Bounds("V", Decimal("5"), Decimal("5")))
+        self.assertEqual((point.tight, point.vars), (True, ()))
+
     def test_a_float_is_refused_never_converted(self):
         with self.assertRaises(TypeError):
             V.exact(0.3)
@@ -623,6 +660,70 @@ class PartDataTest(unittest.TestCase):
                          (Fraction("3.27"), Fraction("3.93")))
         with self.assertRaises(KeyError):
             V.from_measure(vih)
+        # Over an exact rail the limit is a fixed window.
+        fixed = V.from_measure(vih, {"3V3": rail})
+        self.assertEqual(fixed.vars, ())
+        self.assertEqual(V.verdict(V.from_literal("2.5V to 2.6V"), fixed),
+                         V.Verdict("pass"))
+
+    def test_a_limit_over_an_uncertain_reference_is_never_a_fixed_window(self):
+        from rhoform.elaborate import Bounds
+
+        doc = record("rhoform/parts/espressif/esp32-s3-wroom-1-n8r2.part.json")
+        vih = measure_at(doc, "/pin_classes/0/characteristics/vih")
+        signal = V.from_literal("2.5V to 2.6V")
+        # A rail with no variable id: the outer enclosure [2.2275V, 3.93V]
+        # holds the signal, but at 3.63V VIH's min is 2.7225V, above 2.6V.
+        # It carries the rail's identity, so it is refused, never a pass.
+        for rail in (V.from_literal("3.3V +/- 10%"),
+                     V.from_literal("3.3V +/- 10%", var="rail")):
+            window = V.from_measure(vih, {"3V3": rail})
+            self.assertIn(("reference", "3V3"), window.vars)
+            with self.assertRaises(ValueError):
+                V.verdict(signal, window)
+            with self.assertRaises(ValueError):
+                V.verdict(signal, V.statistic(vih, "min", {"3V3": rail}))
+        # And a 555 abs-max relative to VCC, over a `supply` window.
+        doc = record("rhoform/parts/ti/ne555p.part.json")
+        limit = measure_at(doc, "/pins/0/abs_max/voltage")
+        supply = V.from_bounds(Bounds("V", Decimal("4.5"), Decimal("16")))
+        window = V.from_measure(limit, {"VCC": supply})
+        self.assertEqual((window.iv.lo, window.iv.hi), (V.NEG_INF,
+                                                        Fraction(16)))
+        with self.assertRaises(ValueError):
+            V.verdict(V.from_bounds(Bounds("V", Decimal("0"),
+                                           Decimal("12"))), window)
+
+    def test_a_limit_over_an_unverified_reference_is_unverified(self):
+        from rhoform import partdata
+
+        doc = record("rhoform/parts/espressif/esp32-s3-wroom-1-n8r2.part.json")
+        vih = measure_at(doc, "/pin_classes/0/characteristics/vih")
+        rail = V.Q(V.Interval(Fraction(3), Fraction("3.6")),
+                   V.named("voltage"), tight=False, verified=False)
+        q = V.from_measure(vih, {"3V3": rail})
+        self.assertFalse(q.verified)
+        self.assertEqual(V.verdict(q, V.from_literal("0V to 5V")),
+                         V.Verdict("incomplete", reason="unverified-input"))
+        self.assertEqual(q.verified, V.statistic(vih, "min",
+                                                 {"3V3": rail}).verified)
+        # A reference resting on a typ read as a lower bound feeds a
+        # relative max: the enclosure cannot pass either.
+        typical = partdata.Measure("/ref", "V", (
+            partdata.Value("typ", Decimal("3.3"), False),), {}, "datasheet")
+        floor = V.from_measure(typical, lower_bound_only=True)
+        relative = partdata.Measure("/m", "V", (
+            partdata.Value("min", Decimal("0"), True),
+            partdata.Value("max", partdata.Relative("REF", Decimal("1"),
+                                                    Decimal("0.3")), True)),
+            {}, "datasheet")
+        q = V.from_measure(relative, {"REF": floor})
+        self.assertEqual((q.iv.lo, q.iv.hi, q.verified),
+                         (Fraction(0), V.POS_INF, False))
+        self.assertEqual(
+            V.verdict(q, V.Q(V.Interval(Fraction(0), V.POS_INF),
+                             V.named("voltage"))),
+            V.Verdict("incomplete", reason="unverified-input"))
 
     def test_a_relative_bound_with_no_factor_and_an_offset(self):
         doc = record("rhoform/parts/diodes/ap7361c-33e-13.part.json")
