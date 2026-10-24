@@ -11,7 +11,9 @@ rhoform/check/values.py (spec 05 section 2):
     nominal-valued vocabulary name (`resistance = 10kohm`). Its form is the
     authored one (ConstraintSite.form), never the width of the interval,
     so `0ohm +/- 5%` is not exact; a rating or a limit is exact by nature
-    and is never flagged.
+    and is never flagged. Its values are the evaluated ones in normal
+    form, so instances given different values through one parameter stay
+    apart.
 
 A quantity-valued constraint whose name the vocabulary does not hold is
 not dimension-checked. That is an inherent limit of a closed vocabulary,
@@ -26,6 +28,7 @@ reported (the earliest-pass rule).
 
 from dataclasses import dataclass, field
 
+from .. import quantities
 from ..codeset import quantities as quantities_codes
 from ..diagnostics import Edit, FixIt, Span
 from ..elaborate import Quantity
@@ -115,6 +118,12 @@ def _text(model, span) -> str:
     return data[span.byte_start:span.byte_end].decode("utf-8")
 
 
+def _normal(value: Quantity) -> str:
+    """An exact elaborated value in normal form (spec 05 section 2), the
+    value a reference evaluates to rather than its name."""
+    return quantities.normal_form(format(value.value, "f") + value.unit)
+
+
 def _found(value) -> str:
     """What a constraint value is, as a diagnostic says it."""
     if isinstance(value, Quantity):
@@ -189,7 +198,7 @@ def _constraints(model, found, report):
             report.finding(
                 "RHO3201",
                 {"constraints": [name for name, _site in exact],
-                 "values": [_text(model, site.span) for _name, site in exact]},
+                 "values": [_normal(site.value) for _name, site in exact]},
                 entity=path, primary=exact[0][1].span,
                 secondary=tuple((site.span, f"`{name}` too")
                                 for name, site in exact[1:]),

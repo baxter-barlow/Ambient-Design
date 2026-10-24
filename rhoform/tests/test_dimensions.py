@@ -241,6 +241,14 @@ class PassTest(unittest.TestCase):
         rows = _compiled.report.sections["dimensions"]["rows"]
         self.assertEqual(rows, [])
 
+    def test_the_lint_reports_a_value_in_normal_form(self):
+        lines, _compiled = self.run_pass(
+            "    r1 = new rhoform.lib.passive.Resistor:\n"
+            "        part abstract:\n"
+            "            resistance = 10000ohm\n")
+        self.assertEqual([(d["code"], d["entity"], d["params"]["values"])
+                          for d in lines], [("RHO3201", "/r1", ["10kohm"])])
+
     def test_the_lint_reads_the_authored_form_and_the_binding(self):
         header = ("module Divider(r: resistance = 10kohm):\n"
                   "    port top passive\n"
@@ -268,9 +276,9 @@ class PassTest(unittest.TestCase):
             header)
         by_entity = {d["entity"]: d for d in lines}
         self.assertEqual(sorted(by_entity), ["/c2", "/d/r1", "/l1"])
-        # A reference has the form of its value: exact, but there is no
-        # literal here to fix.
-        self.assertEqual(by_entity["/d/r1"]["params"]["values"], ["r"])
+        # A reference has the form of its value, and the finding names the
+        # value, not the parameter; there is no literal here to fix.
+        self.assertEqual(by_entity["/d/r1"]["params"]["values"], ["10kohm"])
         self.assertEqual(by_entity["/d/r1"]["fixits"], [])
         # Two on one instance are one finding, in name order.
         l1 = by_entity["/l1"]

@@ -1,0 +1,21 @@
+#pragma rhoform-syntax 0.2
+
+# The lint names the value a reference evaluates to, not the parameter:
+# the two dividers are given different exact values, so their resistors
+# are two findings, each about its own instance, at the one site. A
+# reference has no literal to fix, so there is no fix-it.
+module Divider(r: resistance = 10kohm +/- 1%):
+    port top passive
+    r1 = new rhoform.lib.passive.Resistor:
+        part abstract:
+            resistance = r
+    top ~ r1.a
+
+module Board:
+    port vin power_in
+    a = new Divider(r = 10kohm)
+    b = new Divider(r = 22kohm)
+    net VIN:
+        a.top
+        b.top
+        vin
