@@ -13,7 +13,10 @@ THE PASSES, in order, each total over its input:
   A. definitions: every `module` and (0.2) `component` per file, named
      `<module path>.<Name>` where the module path is the file's path
      relative to the compile root with `/` turned into `.` and each
-     segment made an identifier; then each definition's parameter list;
+     segment made an identifier — or, for a file a manifest governs, the
+     package layer's name for it, its package's identity before its
+     package-relative path (`modules`); then each definition's parameter
+     list;
   B. each module's own ports, each component's pins;
   C. imports bind names (each imported name must be a definition of the
      file it comes from, and binds once per file); then the instantiation
@@ -74,6 +77,15 @@ FILES. A compilation is the entry file plus the files it imports, which
 the package layer (`rhoform/package.py`) finds, reads and resolves; this
 module binds the imported names. Called with files and no resolution, it
 resolves their imports among exactly those files.
+
+FOR THE CHECKER, IN MEMORY ONLY. The static stage (`rhoform.check`) reads
+this design, never the IR, so the design carries source facts the IR v1
+does not: which nets an `isolated` statement made (Net.isolated), every
+site of a net attribute (Net.attribute_sites) and of an endpoint
+(Net.endpoint_spans), each port's declaration (Port.declaration), how
+each part constraint was written (Part.sites), and each assertion's bound
+(Assertion.bound_span). `rhoform/ir.py` serializes none of them, so they
+change no IR byte and no hash.
 """
 
 from dataclasses import dataclass, field, replace
@@ -138,6 +150,24 @@ class Port:
     name: str
     role: str
     pin_numbers: tuple[str, ...] = ()
+    # The `port` or `pin` statement declaring it: the definition's for a
+    # library or file component, the instance's own for an ad-hoc one.
+    # Not compared, so restating a pin elsewhere is still the same pin.
+    declaration: Span | None = field(default=None, compare=False)
+
+
+@dataclass(frozen=True)
+class ConstraintSite:
+    """How one part constraint was written. `form` is the authored shape of
+    a quantity — `exact`, `toleranced` (a `+/-` band) or `interval` (a
+    bracketed window) — or None for a string, an integer or a boolean. A
+    `reference` to a parameter has the form of the value it evaluates to,
+    `toleranced` when that value's band is symmetric about its nominal.
+    `span` is the value's."""
+
+    form: str | None
+    origin: str  # "literal" | "reference"
+    span: Span
 
 
 @dataclass(frozen=True)
@@ -145,6 +175,7 @@ class Part:
     binding: str  # "abstract" | "resolved"
     lockfile_key: str | None
     constraints: dict
+    sites: dict = field(default_factory=dict, compare=False)  # name -> site
 
 
 @dataclass
@@ -171,6 +202,15 @@ class Net:
     members: tuple[tuple[str, str], ...]  # sorted (instance path, port)
     declaration: Span
     trace: tuple[Span, ...]
+    # Made by an `isolated` statement: an intentional single-member net.
+    isolated: bool = False
+    # attribute -> [(value, span of the attribute)], one per site that sets
+    # it, shallowest label first: both sides of a conflict, for a checker
+    # that compares what elaboration only merges.
+    attribute_sites: dict = field(default_factory=dict)
+    # member -> the spans of every connecting statement naming it, in the
+    # order of the sites that hold them (depth, path, file, offset).
+    endpoint_spans: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -189,6 +229,7 @@ class Assertion:
     bounds: Bounds
     declaration: Span
     trace: tuple[Span, ...]
+    bound_span: Span | None = None  # its `within` / `at least` / `at most`
 
 
 @dataclass(frozen=True)
@@ -435,6 +476,33 @@ def _representable(*values: Decimal) -> bool:
     return all(abs(float(value)) != float("inf") for value in values)
 
 
+# A quantity literal's form, as ConstraintSite records it.
+_AUTHORED_FORM = {"exact": "exact", "tolerance-absolute": "toleranced",
+                  "tolerance-percent": "toleranced",
+                  "interval-bracketed": "interval",
+                  "interval-bare": "interval"}
+
+
+def _literal_form(token) -> str | None:
+    """The authored form of a value literal: None unless it is a quantity."""
+    if token.type in ("STRING", "INTEGER") or str(token) in ("true",
+                                                             "false"):
+        return None
+    return _AUTHORED_FORM[quantities.parse_quantity(str(token)).form]
+
+
+def _value_form(value) -> str | None:
+    """The form of an evaluated value, for a reference whose literal lies
+    elsewhere: a band symmetric about the nominal is `toleranced`."""
+    if not isinstance(value, Quantity):
+        return None
+    if value.tolerance is None:
+        return "exact"
+    low, high = value.tolerance
+    return "toleranced" if value.value - low == high - value.value \
+        else "interval"
+
+
 # Value types. A parameter's declared type is one of the param_type words:
 # `string`, `int`, `bool`, or a quantity dimension. A bare-interval literal
 # has the type ("interval", dimension): it is never a parameter value.
@@ -607,6 +675,7 @@ class _Connect:
     label: str | None = None
     attributes: dict = field(default_factory=dict)
     node: object = None  # the statement, so a loop's label is one label
+    attribute_spans: dict = field(default_factory=dict)  # attribute -> span
 
 
 @dataclass
@@ -617,6 +686,7 @@ class _Check:
     subject: str
     bounds: Bounds | None
     span: Span
+    bound_span: Span | None = None
 
 
 @dataclass
@@ -682,7 +752,8 @@ class _UnionFind:
 def elaborate(results, *, root: str | None = None,
               sink: Diagnostics | None = None,
               imports: dict | None = None,
-              library: Library | None = None) -> Elaboration:
+              library: Library | None = None,
+              modules: dict | None = None) -> Elaboration:
     """Elaborate a compilation: `results[0]` is the entry file's
     ParseResult, any others are the files it imports. `root` names the
     root module explicitly; otherwise it is the unique module of the entry
@@ -691,7 +762,10 @@ def elaborate(results, *, root: str | None = None,
     it is None they are resolved among `results` alone (`package.link`),
     and any problem doing so stops elaboration as it would at load.
     `library` is the standard library names under `rhoform.lib.` resolve
-    against: the bundled one unless a test supplies another."""
+    against: the bundled one unless a test supplies another. `modules` is
+    the package layer's name for each file (`package.load`), which a file
+    a manifest governs takes from its package's identity; a file it does
+    not name is named by its compile-root-relative path."""
     results = list(results)
     sink = sink if sink is not None else Diagnostics()
     if not results:
@@ -709,7 +783,8 @@ def elaborate(results, *, root: str | None = None,
         if sink.counts()["error"] > errors:
             return Elaboration(None, sink)
     design = _Elaborator(results, sink, imports,
-                         BUNDLED if library is None else library).run(root)
+                         BUNDLED if library is None else library,
+                         modules or {}).run(root)
     if sink.has_errors:
         design = None
     return Elaboration(design, sink)
@@ -728,11 +803,12 @@ def elaborate_source(source: str, path: str = "design.rhoform", *,
 
 class _Elaborator:
     def __init__(self, results, sink: Diagnostics, imports: dict,
-                 library: Library):
+                 library: Library, modules: dict):
         self.results = results
         self.sink = sink
         self.imports = imports
         self.library = library
+        self.modules = modules  # file -> module name, from the package layer
         self.defs: list[_Definition] = []
         self.visible: dict[str, dict[str, _Definition]] = {}
         self.unbound: dict[str, set] = {}  # file -> names an import failed
@@ -886,7 +962,7 @@ class _Elaborator:
             self.collect_definitions(result, library=True)
 
     def collect_definitions(self, result, library: bool = False) -> None:
-        mpath = module_path(result.file)
+        mpath = self.modules.get(result.file) or module_path(result.file)
         table = self.visible.setdefault(result.file, {})
         for node in result.tree.children:
             if not (_is_tree(node)
@@ -1043,7 +1119,7 @@ class _Elaborator:
                     span, secondary=((spans[name], "first declared here"),))
                 continue
             spans[name] = span
-            defn.ports.append(Port(name, role))
+            defn.ports.append(Port(name, role, declaration=span))
             defn.roles[name] = role
 
     def collect_pins(self, defn: _Definition) -> None:
@@ -1072,7 +1148,8 @@ class _Elaborator:
                         result.span_of(designator))
                     continue
                 designators.append(text)
-            defn.ports.append(Port(pin, role, tuple(sorted(designators))))
+            defn.ports.append(Port(pin, role, tuple(sorted(designators)),
+                                   declaration=span))
             defn.roles[pin] = role
 
     # -- pass C: the instantiation graph
@@ -2007,7 +2084,8 @@ class _Elaborator:
                             result.span_of(designator), about=about)
                         continue
                     designators.append(text)
-                ports.append(Port(pin, role, tuple(sorted(designators))))
+                ports.append(Port(pin, role, tuple(sorted(designators)),
+                                  declaration=span))
             elif fact.data == "part_decl":
                 if part_seen:
                     self.report("RHO2010",
@@ -2103,16 +2181,37 @@ class _Elaborator:
         constraints = self.pairs(defn, statements, "constraint",
                                  f"instance `{instance}`",
                                  self.current_env)
+        sites = self.constraint_sites(
+            defn, [(str(_tokens(s, "NAME")[0]), _tree(s, "value"))
+                   for s in statements], constraints)
         if getattr(binding, "type", None) == "STRING":
             key = str(binding)[1:-1]
             if not key:
                 self.report("RHO2015", {"instance": instance}, span,
                             about=about)
-            return Part("resolved", key, constraints)
+            return Part("resolved", key, constraints, sites)
         if not statements:
             self.report("RHO2014", {"instance": instance}, span,
                         about=about)
-        return Part("abstract", None, constraints)
+        return Part("abstract", None, constraints, sites)
+
+    @staticmethod
+    def constraint_sites(defn, pairs, values) -> dict:
+        """How each constraint of `values` was written, from its (name,
+        value node) pairs; the first pair naming it wins, as it does for
+        the value."""
+        sites = {}
+        for name, node in pairs:
+            if name in sites or name not in values:
+                continue
+            token = node.children[0]
+            if token.type == "FREE_NAME":
+                origin, form = "reference", _value_form(values[name])
+            else:
+                origin, form = "literal", _literal_form(token)
+            sites[name] = ConstraintSite(form, origin,
+                                         defn.result.span_of(node))
+        return sites
 
     # -- values
 
@@ -2257,7 +2356,7 @@ class _Elaborator:
                     secondary=((span, "this row"),))
                 member.broken = True
                 continue
-            given, constraints = {}, {}
+            given, constraints, written = {}, {}, []
             for slot, node in zip(plan, values):
                 if slot is None:
                     continue
@@ -2267,11 +2366,15 @@ class _Elaborator:
                 target_dict = given if slot[0] == "parameter" \
                     else constraints
                 target_dict[slot[1]] = value
+                if slot[0] == "constraint":
+                    written.append((slot[1], node))
             member.parameters = dict(self.bind_values(target, given).values) \
                 if typed else given
             if binding is not None:
-                member.part = Part("resolved" if key is not None
-                                   else "abstract", key, constraints)
+                member.part = Part(
+                    "resolved" if key is not None else "abstract", key,
+                    constraints,
+                    self.constraint_sites(defn, written, constraints))
 
     # -- connections
 
@@ -2390,7 +2493,7 @@ class _Elaborator:
     def connect(self, defn, model, stmt, loops) -> None:
         result = defn.result
         span = result.span_of(stmt)
-        label, attributes = None, {}
+        label, attributes, attribute_spans = None, {}, {}
         if stmt.data == "net_decl":
             kind, nodes = "net", _trees(stmt, "endpoint")
             label = str(_tokens(stmt, "FREE_NAME")[0])
@@ -2403,7 +2506,8 @@ class _Elaborator:
                     span, secondary=((model.labels[label].span,
                                       "first labelled here"),))
                 label = None
-            attributes = self.net_attributes(defn, stmt, label)
+            attributes, attribute_spans = self.net_attributes(
+                defn, stmt, label)
         elif stmt.data == "chain":
             kind = "chain"
             nodes = _trees(stmt, "chain_head") + _trees(stmt, "endpoint")
@@ -2421,15 +2525,17 @@ class _Elaborator:
                 continue
             seen.add(key)
             endpoints.append(endpoint)
-        connect = _Connect(kind, endpoints, span, label, attributes, stmt)
+        connect = _Connect(kind, endpoints, span, label, attributes, stmt,
+                           attribute_spans)
         model.connects.append(connect)
         if label is not None and label not in model.labels:
             model.labels[label] = connect
 
-    def net_attributes(self, defn, stmt, label) -> dict:
+    def net_attributes(self, defn, stmt, label) -> tuple[dict, dict]:
+        """({attribute: value}, {attribute: its span}) of a net block."""
         node = _tree(stmt, "net_attributes")
         if node is None:
-            return {}
+            return {}, {}
         out, spans = {}, {}
         shown = label or str(_tokens(stmt, "FREE_NAME")[0])
         for attribute in _trees(node, "net_attribute"):
@@ -2449,7 +2555,7 @@ class _Elaborator:
                             span)
                 continue
             out[key] = text
-        return out
+        return out, {key: spans[key] for key in out}
 
     # -- assertions
 
@@ -2480,9 +2586,11 @@ class _Elaborator:
             self.report("RHO2029", {"subject": subject, "module": defn.name},
                         sspan, about=name,
                         fixits=_did_you_mean(subject, model.labels, sspan))
-        bounds = self.bounds(defn, _tree(stmt, "bound"))
+        bound = _tree(stmt, "bound")
+        bounds = self.bounds(defn, bound)
         model.checks.append(
-            _Check(name, tier, measurement, subject, bounds, span))
+            _Check(name, tier, measurement, subject, bounds, span,
+                   result.span_of(bound)))
 
     def bounds(self, defn, node) -> Bounds | None:
         result = defn.result
@@ -2582,6 +2690,7 @@ class _Elaborator:
                       key=lambda v: tuple(int(p) for p in v.split(".")))
         found = _UnionFind()
         labels, statements, isolated, checks = [], [], [], []
+        endpoint_sites = {}  # node -> [(site key, span)], for the checker
         for model, path, depth, trace in visits:
             labelled = {}  # label -> a node of its net, in this instance
             for connect in model.connects:
@@ -2593,6 +2702,11 @@ class _Elaborator:
                 found.find(nodes[0])
                 for node in nodes[1:]:
                     found.union(nodes[0], node)
+                for node, endpoint in zip(nodes, connect.endpoints):
+                    endpoint_sites.setdefault(node, []).append(
+                        ((depth, path, endpoint.span.file,
+                          endpoint.span.byte_start, endpoint.span.byte_end),
+                         endpoint.span))
                 if connect.label is not None:
                     # A net block a loop runs more than once declares one
                     # label: every iteration joins the one net.
@@ -2604,7 +2718,8 @@ class _Elaborator:
                 if connect.label is not None:
                     labels.append((nodes[0], site,
                                    _qualified_label(path, connect.label),
-                                   connect.attributes))
+                                   connect.attributes,
+                                   connect.attribute_spans))
                 if connect.kind == "isolated":
                     isolated.append((nodes[0], connect.endpoints[0],
                                      connect.span, path))
@@ -2626,9 +2741,9 @@ class _Elaborator:
         groups, group_labels, group_sites = {}, {}, {}
         for node in list(found.parent):
             groups.setdefault(found.find(node), []).append(node)
-        for node, site, name, attributes in labels:
+        for node, site, name, attributes, spans in labels:
             group_labels.setdefault(found.find(node), []).append(
-                (site, name, attributes))
+                (site, name, attributes, spans))
         for node, site in statements:
             group_sites.setdefault(found.find(node), []).append(site)
 
@@ -2644,12 +2759,24 @@ class _Elaborator:
             defects.setdefault((code, primary, secondary, detail), []).append(
                 (path, tuple(sorted(params.items())), entity))
 
+        isolated_nets = {found.find(node) for node, *_ in isolated}
+
+        def spans_of(node):
+            """A node's endpoint spans in site order, each once."""
+            out = []
+            for _key, span in sorted(endpoint_sites.get(node, ()),
+                                     key=lambda item: item[0]):
+                if span not in out:
+                    out.append(span)
+            return tuple(out)
+
         nets, names = [], {}
         for key, members in groups.items():
             members = tuple(sorted(set(members)))
             candidates = sorted(group_labels.get(key, []),
                                 key=lambda c: site_key(c[0]))
             domains = {"ground_domain": None, "voltage_domain": None}
+            attribute_sites = {}
             if candidates:
                 shallowest = candidates[0][0][0]
                 top = [c for c in candidates if c[0][0] == shallowest]
@@ -2663,8 +2790,11 @@ class _Elaborator:
                         secondary=((top[0][0][2], "the other label"),))
                 site = next(c[0] for c in top if c[1] == name)
                 setters = {}
-                for csite, _cname, attributes in candidates:
+                for csite, _cname, attributes, spans in candidates:
                     for attribute, value in sorted(attributes.items()):
+                        sites = attribute_sites.setdefault(attribute, [])
+                        if (value, spans[attribute]) not in sites:
+                            sites.append((value, spans[attribute]))
                         if domains[attribute] is None:
                             domains[attribute] = value
                             setters[attribute] = csite[2]
@@ -2685,7 +2815,10 @@ class _Elaborator:
             names[key] = name
             nets.append(Net(name, domains["ground_domain"],
                             domains["voltage_domain"], members, site[2],
-                            site[3]))
+                            site[3], isolated=key in isolated_nets,
+                            attribute_sites=attribute_sites,
+                            endpoint_spans={member: spans_of(member)
+                                            for member in members}))
 
         for node, endpoint, span, path in isolated:
             key = found.find(node)
@@ -2703,7 +2836,7 @@ class _Elaborator:
         assertions = [
             Assertion(apath, check.tier, check.measurement,
                       names[found.find(node)], check.bounds, check.span,
-                      atrace)
+                      atrace, check.bound_span)
             for apath, check, node, atrace in checks]
 
         if len({net.name for net in nets}) != len(nets):

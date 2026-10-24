@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ambient.science/rhoform/schemas/check-report/0.schema.json",
+  "title": "Rhoform Check Report v0",
+  "description": "The static stage's coverage report for one compilation (spec/language/05-static-types.md, section 1): per pass, what it decided and what it could not, entity by entity. Written by `rhoform check --emit-report DIR` as <stem>.check.json, in rhoform-canonical-json/1, and validated against this schema before it is written. It is never part of design_hash and never changes the IR. Version 0 is UNFROZEN while M2 lands its passes: a landing that fills a section, the waivers or the safety list states their shape here in the same change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report_version", "design_hash", "generator", "sections", "waivers", "safety"],
+  "properties": {
+    "report_version": {
+      "const": 0,
+      "description": "This document's version."
+    },
+    "design_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The design_hash of the IR the checked design serializes to, so a report names the design it covers."
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      },
+      "description": "The toolchain that wrote the report, as the IR header names it."
+    },
+    "sections": {
+      "type": "object",
+      "propertyNames": { "enum": ["model", "parts", "dimensions", "ground", "erc", "domains", "budget", "domains_refine", "assertions"] },
+      "required": ["model"],
+      "additionalProperties": { "$ref": "#/$defs/Section" },
+      "description": "One section for the model build and one per pass that ran, keyed by the pass's NAME. A pass the run did not reach has no section."
+    },
+    "waivers": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "The waivers the design declares and what each matched (T6). Empty until AMB-56 (L5a) lands waivers and states the entry shape."
+    },
+    "safety": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "The safety-relevant bonds GA-11 surfaces, waived or not. Empty until the ground-architecture checker (L2c, L5a) states the entry shape."
+    }
+  },
+  "$defs": {
+    "Section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implemented", "rows"],
+      "properties": {
+        "implemented": {
+          "type": "boolean",
+          "description": "False for a pass that is not implemented yet; its rows then include the actionable not-implemented row."
+        },
+        "rows": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Row" },
+          "description": "Sorted by entity, status, reason, actionable, then detail; each row once."
+        }
+      }
+    },
+    "Row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "status", "reason", "actionable", "detail"],
+      "properties": {
+        "entity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The IR entity the row is about: an instance path, a net name or an assertion path, each a node of the source map."
+        },
+        "status": {
+          "enum": ["pass", "fail", "undecided", "no-data", "not-run", "not-implemented", "interim"],
+          "description": "What the pass concluded about the entity."
+        },
+        "reason": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Why, as a stable kebab-case class; RHO3901 counts actionable rows by it."
+        },
+        "actionable": {
+          "type": "boolean",
+          "description": "True when the author or the toolchain can close the gap; any actionable row raises the compilation's one RHO3901 note. False for an inherent limit, which lives in this report only."
+        },
+        "detail": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+          "additionalProperties": {
+            "anyOf": [
+              { "$ref": "#/$defs/Scalar" },
+              { "type": "array", "items": { "$ref": "#/$defs/Scalar" } }
+            ]
+          },
+          "description": "Structured facts behind the row: scalars or arrays of scalars, as diagnostic params are."
+        }
+      }
+    },
+    "Scalar": {
+      "type": ["string", "number", "boolean", "null"]
+    }
+  }
+}

@@ -39,6 +39,16 @@ outside the compile root is opened, and nothing touches the network. Name
 binding (an imported name must be defined in its file, and must not
 collide with a definition or another import) is the elaborator's, because
 it needs the files' definitions.
+
+NAMES (AMB-144 item 1). A file a manifest governs is named by its package's
+identity and then its module path within the package: `acme/app`'s
+`lib/divider.rhoform` is `acme.app.lib.divider`, wherever the package sits
+under the compile root, so a package keeps one name whether it is compiled
+on its own or as a dependency, and vendoring or moving it renames nothing.
+N1 forbids `_` in a package name, so turning `-` into `_` keeps two packages
+apart. A file no manifest governs keeps the name its path relative to the
+compile root gives it (`module_path`). `load` hands the elaborator these
+names.
 """
 
 from dataclasses import dataclass, field
@@ -417,6 +427,26 @@ def _kind(value) -> str:
     return "a date or time"
 
 
+def _within(key: str, root: str) -> str:
+    """The key `key` relative to the directory key `root` it lies under."""
+    return key[len(root) + 1:] if root else key
+
+
+def module_name(key: str, package: "Package | None") -> str:
+    """The name the definitions of file `key` take before their own: the
+    governing package's identity, each segment made an identifier, then
+    the file's package-relative module path; a file no manifest governs
+    (or a package whose name is unusable, which stops the compilation
+    anyway) takes its compile-root-relative module path."""
+    from .elaborate import _identifier, module_path
+
+    if package is None or package.manifest is None or package.name is None:
+        return module_path(key)
+    identity = ".".join(_identifier(segment)
+                        for segment in package.name.split("/"))
+    return f"{identity}.{module_path(_within(key, package.root))}"
+
+
 def _join(directory: str, relative: str) -> str:
     """A directory key joined with a relative POSIX path, normalized
     lexically. The compile root is "", and a key outside it starts `..`."""
@@ -730,9 +760,10 @@ class Resolver:
     `spelling(key)` (how the disk spells a file `key` misses only by
     letter case, else None) are the only questions it asks of the file
     system, so `link` can run it over files already in hand and `load`
-    over the disk. It also remembers each file's module path, in the order
-    the compilation reaches them, so a second file with one (RHO2069) is
-    refused at the import that brings it in."""
+    over the disk. It also remembers each file's module path within its
+    package, in the order the compilation reaches them, so a second file of
+    one package with one (RHO2069) is refused at the import that brings it
+    in. Two packages never share a name, so their files never collide."""
 
     def __init__(self, sink, exists, owner, package_of, real=None,
                  spelling=None):
@@ -743,14 +774,21 @@ class Resolver:
         self.real = real if real is not None else (lambda key: key)
         self.spelling = spelling if spelling is not None \
             else (lambda key: None)
-        self.modules: dict[str, str] = {}  # module path -> the file key
+        # (package root, module path within it) -> the file key
+        self.modules: dict[tuple[str, str], str] = {}
 
-    def claim(self, key: str) -> str:
-        """Record `key`'s module path for it unless a file reached earlier
-        already has it; returns the file that has it."""
+    def module(self, key: str) -> str:
+        """`key`'s module path within its package (the compile root's,
+        for a file no manifest governs)."""
         from .elaborate import module_path
 
-        return self.modules.setdefault(module_path(key), key)
+        return module_path(_within(key, self.owner(key)))
+
+    def claim(self, key: str) -> str:
+        """Record `key`'s module path for it unless a file of its package
+        reached earlier already has it; returns the file that has it."""
+        return self.modules.setdefault((self.owner(key), self.module(key)),
+                                       key)
 
     def resolve(self, importer: str, text: str, span: Span) -> str | None:
         package = self.package_of(self.owner(importer))
@@ -783,7 +821,8 @@ class Resolver:
             self.sink.add("RHO2061", {"path": text, "boundary": boundary},
                           primary=span)
             return None
-        module = reserved_module(target)
+        module = reserved_module(
+            target, package if kind == "local" else dep_package)
         if module is not None:
             self.sink.add("RHO2068", {"file": target, "module": module},
                           primary=span)
@@ -807,10 +846,8 @@ class Resolver:
         # two such files would give two definitions one IR name.
         first = self.claim(target)
         if first != target:
-            from .elaborate import module_path
-
             self.sink.add("RHO2069", {"file": target,
-                                      "module": module_path(target),
+                                      "module": self.module(target),
                                       "first": first}, primary=span)
             return None
         return target
@@ -841,15 +878,18 @@ def _respelt(text: str, target: str, spelled: str | None,
                   (Edit(span, f'"{fixed}"'),)),)
 
 
-def reserved_module(key: str) -> str | None:
-    """The module path of the file `key`, when it falls under the reserved
-    prefix `rhoform.lib.`: only the bundled library's modules are named
-    there, and an author's file at such a path would take their names."""
+def reserved_module(key: str,
+                    package: "Package | None" = None) -> str | None:
+    """The module path of the file `key`, or the name its package gives it
+    (`module_name`), when either falls under the reserved prefix
+    `rhoform.lib.`: only the bundled library's modules are named there, and
+    an author's file at such a path, or in a package named `rhoform/lib`,
+    would take their names."""
     from .elaborate import module_path
 
-    module = module_path(key)
-    if module == "rhoform.lib" or module.startswith("rhoform.lib."):
-        return module
+    for module in (module_path(key), module_name(key, package)):
+        if module == "rhoform.lib" or module.startswith("rhoform.lib."):
+            return module
     return None
 
 
@@ -978,6 +1018,7 @@ class Compilation:
     results: list  # ParseResult, the entry first, then in load order
     imports: dict  # file key -> [Import]
     ok: bool  # nothing the package layer reported stops elaboration
+    modules: dict = field(default_factory=dict)  # file key -> module_name
 
 
 def _is_file(path: Path) -> bool:
@@ -1186,6 +1227,7 @@ class _Loader:
                             self.packages.get, self.real_key, self.spelling)
         resolver.claim(entry)
         results, imports, order, queued = [], {}, [], {entry}
+        modules = {}
         work = [entry]
         refused = False
         while work:
@@ -1194,11 +1236,22 @@ class _Loader:
             if not package.ok:
                 refused = True
                 continue
+            if key == entry:
+                # The package can name an entry into the reserved prefix
+                # (a package `rhoform/lib`); an import is caught at its
+                # path, but no statement names the entry.
+                module = reserved_module(key, package)
+                if module is not None:
+                    self.sink.add("RHO2068", {"file": key, "module": module},
+                                  primary=span_from_bytes(key, b"", 0, 0))
+                    refused = True
+                    continue
             result = parse(self.read(key).decode("utf-8", "surrogateescape"),
                            key)
             self.sink.extend(result.diagnostics)
             results.append(result)
             order.append(key)
+            modules[key] = module_name(key, package)
             if not result.ok:
                 continue
             if not self.contained(package, result):
@@ -1213,7 +1266,7 @@ class _Loader:
             imports[key] = found
         report_cycles(imports, order, self.sink)
         ok = not refused and self.sink.counts()["error"] == before
-        return Compilation(results, imports, ok)
+        return Compilation(results, imports, ok, modules)
 
     def contained(self, package: Package, result) -> bool:
         """V9/V10: the file's language version lies in its package's

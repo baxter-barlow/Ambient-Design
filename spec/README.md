@@ -41,8 +41,10 @@ and this specification deliberately does not restate their content:
 Where a section below **does** restate a closed list from the
 implementation (keywords, vocabularies, the unit table), the conformance
 gate reconciles the restatement against the source of truth, so the spec
-cannot drift from the language it describes. A list in this spec is
-either machine-reconciled or absent.
+cannot drift from the language it describes. A section can mark a table
+it restates with `<!-- reconcile: rhoform.module:NAME -->` on the line
+before it, and the gate holds the table to that name, row by row. A list
+in this spec is either machine-reconciled or absent.
 
 ## Sections
 
@@ -52,8 +54,8 @@ either machine-reconciled or absent.
 | [02 — Grammar, names, and vocabularies](language/02-grammar.md) | normative, v0.2 (syntax versions 0.1 and 0.2) |
 | [03 — Literals and the SI normal form](language/03-literals.md) | normative, v0.1 (T3; the single source R16 and R21 consume) |
 | [04 — Elaboration](language/04-elaboration.md) | normative, v0.2 (syntax versions 0.1 and 0.2; R13 and R15) |
-| [05 — Static types and domains](language/05-static-types.md) | reserved (lands with M2; T5 transfer semantics land with R22) |
-| [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes) |
+| [05 — Static types and domains](language/05-static-types.md) | normative, v0.1 for section 1, the checking model (M2); sections 2–9 reserved, each landing with its checker (T5 transfer semantics with R22) |
+| [06 — Diagnostics](language/06-diagnostics.md) | normative, v0.1 (A1; the R18 command line's stream and exit codes; param values and code ranges since M2) |
 | [07 — Formatting and the canonical form](language/07-formatting.md) | normative, v0.2 (syntax versions 0.1 and 0.2; I1, AC6; the canonical form R16's formatter writes) |
 | [08 — Packages and imports](language/08-packages.md) | normative, v0.2 (R14b: the manifest, language versions and imports of the R14a package specification; M1 deviations recorded: no lockfile, path dependencies only) |
 
@@ -67,6 +69,7 @@ that change, not a note for later.
 [conformance/README.md](conformance/README.md) documents the case
 format. The suite is runnable against any implementation that can parse
 Rhoform sources and emit the diagnostic wire format (and, for its
-elaboration and package cases, the netlist IR); in this repository,
+elaboration and package cases, the netlist IR; for its check cases, the
+check stage); in this repository,
 `tests/conformance/check-conformance.py` runs it against the reference
 implementation on every `make all`.

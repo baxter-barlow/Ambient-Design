@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gate: the conformance suite holds the implementation to the spec.
 
-Seven legs:
+Eight legs:
 
   1. PARSE ACCEPT: every spec/conformance/parse/accept case parses with
      zero diagnostics.
@@ -14,14 +14,21 @@ Seven legs:
      three T3 properties (value-exact, idempotent, re-lexable) plus form
      preservation hold ON each row — a vector contradicting the
      properties cannot sit in the table quietly. Error rows pin the
-     stable rejection reasons.
+     stable rejection reasons the quantity reader gives a literal
+     (rhoform.quantities); the parser's own reasons for a misspaced
+     `+/-`, given before the literal is one token, are pinned by its unit
+     tests (rhoform/tests/test_parser.py), not here.
   4. DOC RECONCILIATION: every closed list the spec restates (keywords,
      the keywords syntax 0.2 added, reserved words, every closed
      vocabulary, the punctuation tokens, the pragma versions, the unit
      ladders, the diagnostic block table, the output cap, the formatter's
-     statement ranks and instance-body order) equals the source of truth
-     it restates, and 07's collation sample is in natural order. The spec
-     promised "a list in this spec is either machine-reconciled or
+     statement ranks and instance-body order, 03's five forms) equals the
+     source of truth it restates, and 07's collation sample is in natural
+     order. A list a section restates under a reconcile marker,
+     `<!-- reconcile: rhoform.module:NAME -->`, is held to the tuple that
+     NAME is (or a zero-argument callable returns), row by row, so a
+     section can add a reconciled table without editing this gate. The
+     spec promised "a list in this spec is either machine-reconciled or
      absent"; this is the reconciliation.
   5. FORMATTER: every spec/conformance/fmt input formats to its committed
      .expected.rhoform BYTE FOR BYTE, every expected file formats to
@@ -32,10 +39,8 @@ Seven legs:
      its .expected.ir.json BYTE FOR BYTE, and that IR validates against
      ir/netlist-ir.v1.schema.json, the version the compiler writes; every elaborate/reject case parses clean
      and its elaboration diagnostic stream equals its .expected.ndjson
-     byte for byte, each line valid on the wire schema. Every block-2 code
-     a source can trigger must be emitted by some reject case (of this leg
-     or the next), and the closed lists 04 restates are reconciled against
-     the elaborator.
+     byte for byte, each line valid on the wire schema. The closed lists
+     04 restates are reconciled against the elaborator.
   7. PACKAGE CASES (spec/language/08-packages.md): each case is a
      directory, compiled with itself as the compile root from its one
      `main.rhoform` through the package layer (manifests, imports, the
@@ -43,15 +48,30 @@ Seven legs:
      diagnostics to IR equal to their expected.ir.json byte for byte, valid
      against the IR schema; packages/reject cases' streams equal their
      expected.ndjson byte for byte, each line valid on the wire schema.
+  8. CHECK CASES (spec/language/05-static-types.md): each area of
+     spec/conformance/check/ names, in its pass.json, the last pass it
+     runs, and each case under its accept/ and reject/ is a directory
+     compiled like a package case through the static stage, stopped after
+     that pass. Its stream equals its expected.ndjson byte for byte,
+     each line valid on the wire schema; an accept case reports no error
+     or warning, and every case source is in canonical form.
+
+Legs 6-8 run through rhoform.compile, the pipeline the command line
+runs: 6 and 7 stop after elaboration, so what they pin stays the
+elaborator's, and 8 after the check stage. Across the reject cases of
+legs 2, 6, 7 and 8, every active code of blocks 1-4 and 6 a source can
+trigger must be emitted somewhere; a code no source can reach says why
+in its registry entry (CodeDef.source_triggered and trigger_reason), and
+an exemption a case contradicts is stale.
 
 Population floors on cases and vectors keep the suite from shrinking by
 accident, the same posture as the schema gate's negative-control floor.
 
 Exit 0 pass, 1 violation, 2 when the pinned lark or jsonschema is
 missing (an unavailable gate is not a pass). `--write` regenerates the
-reject and formatter cases' expected files, and the elaboration and
-package cases' expected IR and streams, from the reference
-implementation; the git diff is the review artifact.
+reject and formatter cases' expected files, the elaboration and package
+cases' expected IR and streams, and the check cases' streams, from the
+reference implementation; the git diff is the review artifact.
 
 Usage: check-conformance.py [--self-test | --write]
 """
@@ -102,14 +122,21 @@ MINIMUM_PACKAGE_ACCEPT_CASES = 5
 MINIMUM_PACKAGE_REJECT_CASES = 22
 PACKAGE_ENTRY = "main.rhoform"
 
-# Block-2 codes no source text can trigger, each with its reason. Every
-# other active block-2 code must be emitted by at least one reject case,
-# so an elaboration code cannot land without the case the spec README
-# requires in the same change.
-NOT_SOURCE_TRIGGERED = {
-    "RHO2003": "it fires only for a root module requested by name, which "
-               "the caller supplies and no source text can spell",
-}
+# Check cases (leg 8): spec/conformance/check/<area>/{accept,reject}/<case>/,
+# each area's pass.json naming the last pass it runs. The M2 foundation
+# added the model area and its three cases.
+CHECK = CONFORMANCE / "check"
+PASS_FILE = "pass.json"
+MINIMUM_CHECK_AREAS = 1
+MINIMUM_CHECK_CASES = 3
+
+# The blocks whose every active, source-triggered code some reject case
+# must emit: syntax, elaboration, types, ground architecture and parts.
+# Block 0 is the framework's own truncation note; blocks 5 and 7 have no
+# checker a source reaches yet. A code no source can trigger says why in
+# its registry entry, so a code cannot land without the case the spec
+# README requires in the same change.
+COVERED_BLOCKS = "12346"
 
 _WORD = re.compile(r"`([A-Za-z_][A-Za-z0-9_./-]*)`")
 # A backticked run of punctuation, for the token list 01 restates.
@@ -223,8 +250,9 @@ def _load_sot():
     return sot
 
 
-def parse_case_problems(accept_dir, reject_dir, write=False):
-    """Legs 1 and 2. Returns (problems, accept_count, reject_count)."""
+def parse_case_problems(accept_dir, reject_dir, write=False, emitted=None):
+    """Legs 1 and 2. Returns (problems, accept_count, reject_count); the
+    codes the reject cases emit are added to `emitted` when it is given."""
     from rhoform.parser import parse
 
     import jsonschema
@@ -261,6 +289,9 @@ def parse_case_problems(accept_dir, reject_dir, write=False):
                 "case that stopped rejecting is an accepted defect"
             )
             continue
+        if emitted is not None:
+            emitted.update(json.loads(line)["code"]
+                           for line in stream.splitlines())
         for number, line in enumerate(stream.splitlines(), 1):
             for error in validator.iter_errors(json.loads(line)):
                 problems.append(
@@ -461,12 +492,14 @@ def fmt_case_problems(fmt_dir, reject_dir, write=False):
 
 def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
                       blocks=None, cap=None, severities=None,
-                      applicability=None):
+                      applicability=None, forms=None):
     """Leg 4: every restated list equals its source of truth."""
     if sot is None:
         sot = _load_sot()
     if units is None:
         from rhoform.quantities import UNITS as units
+    if forms is None:
+        from rhoform.quantities import FORMS as forms
     if blocks is None:
         from rhoform.codes import BLOCKS as blocks
     if cap is None:
@@ -556,6 +589,14 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
                     f"{spec_table.get(dimension)}, implementation says "
                     f"{truth_table.get(dimension)}"
                 )
+
+    # 03's five forms (AMB-134 item 3), its Form column spelled as prose
+    # ("tolerance, absolute") where FORMS has identifiers.
+    form_rows = re.findall(r"^\| ([a-z][a-z, ]*) \| `",
+                           _section(literals_md, "## The five forms (T4)")
+                           or "", re.MULTILINE)
+    reconcile("03-literals.md five forms",
+              [row.replace(", ", "-") for row in form_rows], list(forms))
 
     block_rows = re.findall(r"^\| RHO(\d)xxx \| ([a-z-]+) \|", diag_md,
                             re.MULTILINE)
@@ -689,6 +730,165 @@ def doc_sync_problems(spec_dir=SPEC_LANG, sot=None, units=None,
     return problems
 
 
+# A restated closed list's marker: the table that follows it is the named
+# module's NAME (or what a zero-argument callable of that name returns),
+# row by row. Only the rhoform package may be named: a marker is spec text,
+# and a gate must not import what any text happens to spell.
+_MARKER = re.compile(
+    r"^<!-- reconcile: ([A-Za-z_][A-Za-z0-9_.]*):([A-Za-z_][A-Za-z0-9_]*) "
+    r"-->$")
+
+
+def _marked_truth(module: str, name: str):
+    """The list a marker names. Raises LookupError when there is none."""
+    import importlib
+
+    if module != "rhoform" and not module.startswith("rhoform."):
+        raise LookupError(f"{module} is not a module of the rhoform package")
+    try:
+        found = getattr(importlib.import_module(module), name)
+    except (ImportError, AttributeError) as exc:
+        raise LookupError(str(exc)) from None
+    return found() if callable(found) else found
+
+
+def _table_after(lines, start):
+    """The body rows (cells, backticks stripped) of the Markdown table that
+    begins at the first non-blank line from `start`, or None when none
+    does."""
+    index = start
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    if index + 1 >= len(lines) or not lines[index].startswith("|") \
+            or not re.match(r"^\|[ :|-]+\|$", lines[index + 1].strip()):
+        return None
+    rows = []
+    for line in lines[index + 2:]:
+        if not line.startswith("|"):
+            break
+        rows.append([cell.strip().strip("`")
+                     for cell in line.strip().strip("|").split("|")])
+    return rows
+
+
+def marker_problems(spec_dir=SPEC_LANG):
+    """Leg 4, the marked half: every `<!-- reconcile: module:NAME -->` in
+    the spec's sections is followed by a table equal to what it names.
+    Each entry of the truth is a row; a tuple entry is that many leading
+    cells, compared as text."""
+    problems = []
+    for doc in sorted(spec_dir.rglob("*.md")):
+        rel = doc.relative_to(spec_dir).as_posix()
+        lines = doc.read_text(encoding="utf-8").split("\n")
+        for number, line in enumerate(lines, 1):
+            if "<!-- reconcile:" not in line:
+                continue
+            match = _MARKER.match(line.strip())
+            if match is None:
+                problems.append(
+                    f"{rel}:{number}: a reconcile marker this gate cannot "
+                    f"read, {line.strip()!r}; a list behind it would be "
+                    "reconciled by nothing")
+                continue
+            module, name = match.groups()
+            try:
+                truth = _marked_truth(module, name)
+            except LookupError as exc:
+                problems.append(
+                    f"{rel}:{number}: the reconcile marker names "
+                    f"`{module}:{name}`, which does not exist ({exc})")
+                continue
+            rows = _table_after(lines, number)
+            if rows is None:
+                problems.append(
+                    f"{rel}:{number}: no table follows the reconcile "
+                    f"marker for `{module}:{name}`")
+                continue
+            want = [tuple(str(cell) for cell in item)
+                    if isinstance(item, (tuple, list)) else (str(item),)
+                    for item in truth]
+            got = [tuple(row[:len(want[0]) if want else 1]) for row in rows]
+            if got != want:
+                detail = []
+                missing = [row for row in want if row not in got]
+                extra = [row for row in got if row not in want]
+                if missing:
+                    detail.append(f"missing {missing}")
+                if extra:
+                    detail.append(f"extra {extra}")
+                problems.append(
+                    f"{rel}:{number}: the table under the reconcile marker "
+                    f"disagrees with `{module}:{name}` "
+                    f"({'; '.join(detail) or 'order differs'})")
+    return problems
+
+
+def marker_self_test_cases(tmp):
+    """The reconcile markers' self-test cases, over a planted spec. Each
+    marker report site has one; the real spec's markers pass."""
+    from rhoform import check as checker
+
+    cases = [("the real spec's reconcile markers reconcile",
+              marker_problems() == [])]
+    spec = Path(tmp) / "marked"
+    (spec / "sub").mkdir(parents=True)
+    head = ("<!-- reconcile: rhoform.codes:SEVERITIES -->\n\n"
+            "| Severity | Meaning |\n|---|---|\n")
+
+    def problems_for(body):
+        (spec / "sub" / "doc.md").write_text(body)
+        return marker_problems(spec_dir=spec)
+
+    good = head + "| `error` | gates |\n| `warning` | x |\n| `note` | y |\n"
+    cases.append(("a marked table equal to its truth passes",
+                  problems_for(good) == []))
+    for name, body, fragment in (
+        ("a missing row", head + "| `error` | g |\n| `note` | y |\n",
+         "missing [('warning',)]"),
+        ("an extra row", good + "| `fatal` | z |\n", "extra [('fatal',)]"),
+        ("a mismatched row", good.replace("`warning`", "`warn`"),
+         "missing [('warning',)]; extra [('warn',)]"),
+        ("rows out of order", head + "| `warning` | x |\n| `error` | g |\n"
+         "| `note` | y |\n", "order differs"),
+    ):
+        problems = problems_for(body)
+        cases.append((f"{name} under a reconcile marker is caught",
+                      any("sub/doc.md:1: the table under the reconcile "
+                          "marker disagrees" in p and fragment in p
+                          for p in problems)))
+    for name, body, fragment in (
+        ("an unknown NAME", good.replace("SEVERITIES", "SEVERITY"),
+         "names `rhoform.codes:SEVERITY`, which does not exist"),
+        ("an unknown module", good.replace("rhoform.codes",
+                                           "rhoform.nonesuch"),
+         "which does not exist"),
+        ("a module outside rhoform", good.replace("rhoform.codes", "os"),
+         "not a module of the rhoform package"),
+        ("a marker with no table", head.split("\n")[0] + "\n\nprose\n",
+         "no table follows the reconcile marker"),
+        ("an unreadable marker", "<!-- reconcile: rhoform.codes -->\n",
+         "a reconcile marker this gate cannot read"),
+    ):
+        problems = problems_for(body)
+        cases.append((f"{name} in a reconcile marker is caught",
+                      any(fragment in p for p in problems)))
+    # A callable truth is called, and a tuple entry is a row's leading
+    # cells.
+    callable_body = ("<!-- reconcile: rhoform.check:pass_names -->\n\n"
+                     "| Pass | Owner |\n|---|---|\n"
+                     + "".join(f"| `{name}` | x |\n"
+                               for name in checker.pass_names()))
+    cases.append(("a zero-argument callable is called for its rows",
+                  problems_for(callable_body) == []))
+    ranges = ("<!-- reconcile: rhoform.codes:RANGES -->\n\n"
+              "| First | Last | Owner |\n|---|---|---|\n"
+              "| RHO0001 | RHO0001 | core |\n")
+    cases.append(("a tuple entry is compared cell by cell",
+                  any("missing [('RHO0002', 'RHO0009', 'waivers')" in p
+                      for p in problems_for(ranges))))
+    return cases
+
+
 # ---- leg 5: elaboration cases (spec/language/04-elaboration.md) ----------
 #
 # Kept apart from the parse legs on purpose: each function below takes its
@@ -702,17 +902,18 @@ def _shown(path):
 def elaborate_case_problems(accept_dir, reject_dir, write=False):
     """Returns (problems, accept_count, reject_count, emitted_codes).
 
-    Each case is compiled alone with its own directory as the compile
-    root, so its one source file is `<case>.rhoform` and its definitions
-    are `<case>.<Module>`. An elaboration case must PARSE clean: a case
-    that stops at the parser is a parse case, and filing it here would
-    let the parse layer satisfy a leg written to pin the elaborator.
+    Each case is compiled alone through rhoform.compile, stopped after
+    elaboration, with its own directory as the compile root, so its one
+    source file is `<case>.rhoform` and its definitions are
+    `<case>.<Module>`. An elaboration case must PARSE clean: a case that
+    stops at the parser is a parse case, and filing it here would let the
+    parse layer satisfy a leg written to pin the elaborator.
     """
     import jsonschema
 
-    from rhoform.elaborate import elaborate
+    from rhoform import compile as pipeline
+    from rhoform.diagnostics import Diagnostics
     from rhoform.ir import emit
-    from rhoform.parser import parse
 
     def validator(path):
         schema = json.loads(path.read_text(encoding="utf-8"))
@@ -722,9 +923,13 @@ def elaborate_case_problems(accept_dir, reject_dir, write=False):
     ir_schema = validator(IR_SCHEMA_PATH)
 
     def run(case):
-        text = case.read_bytes().decode("utf-8", errors="surrogateescape")
-        result = parse(text, file=case.name)
-        return result, (elaborate([result]) if result.ok else None)
+        """(stream, whether every file parsed clean, design or None)."""
+        sink = Diagnostics()
+        compiled = pipeline.compile(case.name, case.parent,
+                                    stage="elaborate", sink=sink)
+        results = compiled.loaded.results
+        return (sink.render(), bool(results) and all(r.ok for r in results),
+                compiled.design)
 
     def stem(case):
         return case.name[:-len(".rhoform")]
@@ -735,16 +940,15 @@ def elaborate_case_problems(accept_dir, reject_dir, write=False):
     for case in accept_cases:
         expected_path = case.with_name(stem(case) + ".expected.ir.json")
         expected_irs.discard(expected_path)
-        result, elaboration = run(case)
-        stream = (elaboration or result).diagnostics.render()
-        if elaboration is None or elaboration.design is None or stream:
+        stream, _parsed, design = run(case)
+        if design is None or stream:
             codes = [json.loads(line)["code"] for line in stream.splitlines()]
             problems.append(
                 f"elaborate/accept/{case.name}: expected a clean "
                 f"elaboration, got {codes or 'no design'}"
             )
             continue
-        ir_bytes = emit(elaboration.design)[0]
+        ir_bytes = emit(design)[0]
         # The emitted document is the one compared byte for byte below, so
         # whenever the case passes this is the EXPECTED IR being validated;
         # checking before the comparison also keeps --write from committing
@@ -783,17 +987,15 @@ def elaborate_case_problems(accept_dir, reject_dir, write=False):
     for case in reject_cases:
         expected_path = case.with_name(stem(case) + ".expected.ndjson")
         expected_streams.discard(expected_path)
-        result, elaboration = run(case)
-        if elaboration is None:
-            codes = [json.loads(line)["code"]
-                     for line in result.diagnostics.render().splitlines()]
+        stream, parsed, _design = run(case)
+        if not parsed:
+            codes = [json.loads(line)["code"] for line in stream.splitlines()]
             problems.append(
                 f"elaborate/reject/{case.name}: does not parse clean "
                 f"({codes or 'no tree'}); an elaboration case must reach the "
                 "elaborator, or it is a parse case"
             )
             continue
-        stream = elaboration.diagnostics.render()
         if not stream:
             problems.append(
                 f"elaborate/reject/{case.name}: produced no diagnostics; a "
@@ -838,27 +1040,33 @@ def elaborate_case_problems(accept_dir, reject_dir, write=False):
     return problems, len(accept_cases), len(reject_cases), emitted_codes
 
 
-def elaborate_coverage_problems(emitted_codes, registry=None,
-                                exempt=None):
-    """Every active block-2 code is emitted by a reject case or exempt."""
+def coverage_problems(emitted_codes, registry=None):
+    """Every active code of COVERED_BLOCKS a source can trigger is emitted
+    by some reject case (parse, elaborate, packages or check). A code
+    whose registry entry says no source triggers it is exempt, and the
+    exemption is stale when a case emits the code anyway, or when the code
+    has no case to need (a reserved code, or one outside the rule)."""
     if registry is None:
         from rhoform.codes import REGISTRY as registry
-    if exempt is None:
-        exempt = NOT_SOURCE_TRIGGERED
-    block = {entry.code for entry in registry
-             if entry.code.startswith("RHO2") and not entry.reserved}
     problems = []
-    for code in sorted(block - set(exempt) - set(emitted_codes)):
-        problems.append(
-            f"{code}: no elaborate/reject or packages/reject case emits it; "
-            "every block-2 code a source can trigger needs one (or a reason "
-            "in NOT_SOURCE_TRIGGERED)"
-        )
-    for code in sorted(set(exempt) - block):
-        problems.append(
-            f"NOT_SOURCE_TRIGGERED exempts {code}, which is not an active "
-            "block-2 code; drop the stale exemption"
-        )
+    for entry in registry:
+        covered = entry.code[3] in COVERED_BLOCKS and not entry.reserved
+        if covered and entry.source_triggered \
+                and entry.code not in emitted_codes:
+            problems.append(
+                f"{entry.code}: no reject case emits it; every code of "
+                "blocks 1-4 and 6 a source can trigger needs one, or its "
+                "registry entry says why no source can (source_triggered, "
+                "trigger_reason)"
+            )
+        elif not entry.source_triggered and (
+                not covered or entry.code in emitted_codes):
+            problems.append(
+                f"{entry.code}: its registry entry says no source triggers "
+                "it, but " + ("a reject case emits it" if covered else
+                              "the coverage rule does not cover it")
+                + "; drop the stale exemption"
+            )
     return problems
 
 
@@ -917,12 +1125,11 @@ def package_doc_problems(spec_dir=SPEC_LANG, truths=None):
                                    "package layer")
 
 
-def elaborate_leg_problems(write=False, package_codes=()):
-    """Leg 5 as main() runs it: (problems, accept_count, reject_count).
-    Block-2 coverage counts the package cases' codes too."""
+def elaborate_leg_problems(write=False):
+    """Leg 6 as main() runs it: (problems, accept_count, reject_count,
+    emitted codes)."""
     problems, accepts, rejects, codes = elaborate_case_problems(
         ELABORATE / "accept", ELABORATE / "reject", write=write)
-    problems += elaborate_coverage_problems(set(codes) | set(package_codes))
     problems += elaboration_doc_problems()
     if accepts < MINIMUM_ELABORATE_ACCEPT_CASES:
         problems.append(
@@ -934,7 +1141,7 @@ def elaborate_leg_problems(write=False, package_codes=()):
             f"{rejects} elaborate reject case(s), below the floor of "
             f"{MINIMUM_ELABORATE_REJECT_CASES}"
         )
-    return problems, accepts, rejects
+    return problems, accepts, rejects, codes
 
 
 def elaborate_self_test_cases(tmp):
@@ -1084,22 +1291,30 @@ def elaborate_self_test_cases(tmp):
                                   "violates the wire schema" in p
                                   for p in problems)))
 
-    # -- coverage of the block-2 codes
-    from rhoform.codes import REGISTRY
+    # -- coverage of every source-triggered code, blocks 1-4 and 6
+    from rhoform.codes import REGISTRY, CodeDef
 
-    block = {entry.code for entry in REGISTRY
-             if entry.code.startswith("RHO2") and not entry.reserved}
-    triggerable = block - set(NOT_SOURCE_TRIGGERED)
-    cases.append(("full block-2 coverage passes",
-                  elaborate_coverage_problems(triggerable) == []))
-    problems = elaborate_coverage_problems(triggerable - {"RHO2001"})
-    cases.append(("a block-2 code no reject case emits is caught",
-                  any(p.startswith("RHO2001: no elaborate/reject or "
-                                   "packages/reject case")
-                      for p in problems)))
-    problems = elaborate_coverage_problems(block, exempt={"RHO2999": "x"})
-    cases.append(("a stale NOT_SOURCE_TRIGGERED entry is caught",
-                  any("stale exemption" in p for p in problems)))
+    triggerable = {entry.code for entry in REGISTRY
+                   if entry.code[3] in COVERED_BLOCKS and not entry.reserved
+                   and entry.source_triggered}
+    cases.append(("full coverage passes",
+                  coverage_problems(triggerable) == []))
+    for code in ("RHO1003", "RHO2001", "RHO3901"):
+        problems = coverage_problems(triggerable - {code})
+        cases.append((f"block {code[3]}: a code no reject case emits is "
+                      "caught", any(p.startswith(f"{code}: no reject case")
+                                    for p in problems)))
+    problems = coverage_problems(triggerable | {"RHO1017"})
+    cases.append(("an exemption a reject case contradicts is stale",
+                  any(p.startswith("RHO1017: its registry entry says") and
+                      "a reject case emits it" in p for p in problems)))
+    planted = REGISTRY + (CodeDef("RHO4099", "planted", "error", "m",
+                                  reserved=True, source_triggered=False,
+                                  trigger_reason="none"),)
+    problems = coverage_problems(triggerable, registry=planted)
+    cases.append(("an exemption of a code the rule does not cover is stale",
+                  any(p.startswith("RHO4099: its registry entry says") and
+                      "does not cover it" in p for p in problems)))
 
     # -- the lists 04 restates
     cases.append(("the real 04 restatements reconcile",
@@ -1154,9 +1369,9 @@ def package_case_problems(accept_dir, reject_dir, write=False):
     """
     import jsonschema
 
+    from rhoform import compile as pipeline
     from rhoform import package
     from rhoform.diagnostics import Diagnostics
-    from rhoform.elaborate import elaborate
     from rhoform.ir import emit
 
     def validator(path):
@@ -1177,16 +1392,13 @@ def package_case_problems(accept_dir, reject_dir, write=False):
             return None
         sink = Diagnostics()
         try:
-            compilation = package.load(
-                entries[0].relative_to(case).as_posix(), case, sink)
+            compiled = pipeline.compile(
+                entries[0].relative_to(case).as_posix(), case,
+                stage="elaborate", sink=sink)
         except package.ReadFailure as exc:
             problems.append(f"{where}: could not be read: {exc}")
             return None
-        design = None
-        if compilation.ok:
-            design = elaborate(compilation.results, sink=sink,
-                               imports=compilation.imports).design
-        return sink.render(), design
+        return sink.render(), compiled.design
 
     def cases_in(directory, kind):
         found = sorted(directory.iterdir()) if directory.is_dir() else []
@@ -1493,14 +1705,349 @@ def package_self_test_cases(tmp):
     # -- a code only a package case emits still counts for coverage
     from rhoform.codes import REGISTRY
 
-    block = {entry.code for entry in REGISTRY
-             if entry.code.startswith("RHO2") and not entry.reserved}
-    triggerable = block - set(NOT_SOURCE_TRIGGERED)
+    triggerable = {entry.code for entry in REGISTRY
+                   if entry.code[3] in COVERED_BLOCKS and not entry.reserved
+                   and entry.source_triggered}
     elaborate_only = triggerable - {"RHO2064"}
     cases.append(("a block-2 code emitted only by a package case covers it",
-                  elaborate_coverage_problems(elaborate_only) != []
-                  and elaborate_coverage_problems(
-                      elaborate_only | {"RHO2064"}) == []))
+                  coverage_problems(elaborate_only) != []
+                  and coverage_problems(elaborate_only | {"RHO2064"}) == []))
+    return cases
+
+
+# ---- leg 8: check cases (spec/language/05-static-types.md) ---------------
+
+def area_pass(area, problems):
+    """The last pass an area runs, from its pass.json, or None (reported)."""
+    from rhoform import check as checker
+
+    path = area / PASS_FILE
+    why = None
+    try:
+        declared = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        why = f"cannot be read as JSON ({exc})"
+    else:
+        if not isinstance(declared, dict) or set(declared) != {"last_pass"}:
+            why = 'is not one object {"last_pass": NAME}'
+        elif declared["last_pass"] not in checker.pass_names():
+            why = (f"names {declared['last_pass']!r}, which is no pass; "
+                   f"the passes are {', '.join(checker.pass_names())}")
+    if why is not None:
+        problems.append(
+            f"check/{area.name}/{PASS_FILE} {why}; an area names the last "
+            "pass it runs, so what it pins is that pass's alone")
+        return None
+    return declared["last_pass"]
+
+
+def check_case_problems(check_dir, write=False):
+    """Returns (problems, area_count, case_count, emitted_codes).
+
+    An area is spec/conformance/check/<area>/: its pass.json and its
+    accept/ and reject/ directories, nothing else. A case is a directory
+    and its own compile root, its entry its one `main.rhoform`, compiled
+    through rhoform.compile with the check stage stopped after the area's
+    pass. A check case must reach the check stage: one that stops at the
+    parser or the elaborator pins those layers and belongs to their
+    legs. Its stream is pinned in expected.ndjson; an accept case reports
+    no error or warning (notes, such as the coverage note every run
+    carries while passes are unimplemented, are pinned like the rest).
+    """
+    import jsonschema
+
+    from rhoform import compile as pipeline
+    from rhoform import package
+    from rhoform.diagnostics import Diagnostics
+    from rhoform.fmt import FormatterError, format_source
+
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    wire = jsonschema.validators.validator_for(schema)(schema)
+    problems = []
+    emitted = set()
+    areas = 0
+    count = 0
+    found = sorted(check_dir.iterdir()) if check_dir.is_dir() else []
+    for area in found:
+        if not area.is_dir():
+            if area.name != "README.md":
+                problems.append(
+                    f"check/{area.name}: not an area directory; the check "
+                    "cases live in spec/conformance/check/<area>/")
+            continue
+        areas += 1
+        last = area_pass(area, problems)
+        for entry in sorted(area.iterdir()):
+            if entry.name not in (PASS_FILE, "accept", "reject"):
+                problems.append(
+                    f"check/{area.name}/{entry.name}: an area holds only "
+                    f"{PASS_FILE}, accept/ and reject/")
+        if last is None:
+            continue
+        for kind in ("accept", "reject"):
+            directory = area / kind
+            cases = sorted(directory.iterdir()) if directory.is_dir() else []
+            for case in cases:
+                where = f"check/{area.name}/{kind}/{case.name}"
+                if not case.is_dir():
+                    problems.append(
+                        f"{where}: not a case directory; each check case "
+                        "is a directory of its own")
+                    continue
+                count += 1
+                sources = sorted(case.rglob("*.rhoform"))
+                entries = [p for p in sources if p.name == PACKAGE_ENTRY]
+                if len(entries) != 1:
+                    problems.append(
+                        f"{where}: holds {len(entries)} {PACKAGE_ENTRY} "
+                        "files; a check case has exactly one entry")
+                    continue
+                for source in sources:
+                    text = source.read_bytes().decode("utf-8",
+                                                      "surrogateescape")
+                    rel = source.relative_to(case).as_posix()
+                    try:
+                        canonical = format_source(text, file=rel).text
+                    except FormatterError:
+                        canonical = None
+                    if canonical != text:
+                        problems.append(
+                            f"{where}/{rel}: not in canonical form; "
+                            "`rhoform fmt` it, as every committed source")
+                sink = Diagnostics()
+                try:
+                    compiled = pipeline.compile(
+                        entries[0].relative_to(case).as_posix(), case,
+                        sink=sink, through=last)
+                except package.ReadFailure as exc:
+                    problems.append(f"{where}: could not be read: {exc}")
+                    continue
+                stream = sink.render()
+                lines = [json.loads(line) for line in stream.splitlines()]
+                if compiled.report is None:
+                    problems.append(
+                        f"{where}: does not reach the check stage "
+                        f"({[line['code'] for line in lines]}); a case that "
+                        "stops at the parser or the elaborator belongs to "
+                        "their legs")
+                    continue
+                if kind == "reject":
+                    emitted.update(line["code"] for line in lines)
+                for number, line in enumerate(lines, 1):
+                    for error in wire.iter_errors(line):
+                        problems.append(
+                            f"{where}: line {number} violates the wire "
+                            "schema at "
+                            f"/{'/'.join(map(str, error.absolute_path))}: "
+                            f"{error.message}")
+                gating = [line["code"] for line in lines
+                          if line["severity"] != "note"]
+                if kind == "accept" and gating:
+                    problems.append(
+                        f"{where}: an accept case reports {gating}; it may "
+                        "carry notes only")
+                if kind == "reject" and not lines:
+                    problems.append(
+                        f"{where}: produced no diagnostics; a reject case "
+                        "that stopped rejecting is an accepted defect")
+                expected = case / "expected.ndjson"
+                if write:
+                    expected.write_text(stream, encoding="utf-8")
+                    print(f"conformance: wrote {_shown(expected)}")
+                    continue
+                if not expected.is_file():
+                    problems.append(
+                        f"{where}: no expected.ndjson; run --write and "
+                        "review the diff")
+                    continue
+                if expected.read_text(encoding="utf-8") != stream:
+                    want = [json.loads(line)["code"] for line in
+                            expected.read_text(encoding="utf-8").splitlines()
+                            if line.strip()]
+                    problems.append(
+                        f"{where}: diagnostic stream diverges from "
+                        f"expected.ndjson (emitted "
+                        f"{[line['code'] for line in lines]}, expected "
+                        f"{want}; if the change is deliberate, --write and "
+                        "review the byte diff)")
+    return problems, areas, count, emitted
+
+
+def check_leg_problems(write=False):
+    """Leg 8 as main() runs it: (problems, area_count, case_count,
+    emitted codes)."""
+    problems, areas, count, codes = check_case_problems(CHECK, write=write)
+    if areas < MINIMUM_CHECK_AREAS:
+        problems.append(
+            f"{areas} check area(s), below the floor of "
+            f"{MINIMUM_CHECK_AREAS}")
+    if count < MINIMUM_CHECK_CASES:
+        problems.append(
+            f"{count} check case(s), below the floor of "
+            f"{MINIMUM_CHECK_CASES}")
+    return problems, areas, count, codes
+
+
+def check_self_test_cases(tmp):
+    """Leg 8's self-test cases, over planted areas under `tmp`. Every
+    report site in leg 8 has a case that fails when the site is blanked."""
+    import contextlib
+    import io
+    import shutil
+    from unittest import mock
+
+    global SCHEMA_PATH
+
+    cases = []
+    check_dir = Path(tmp) / "check"
+    area = check_dir / "model"
+    (area / "accept").mkdir(parents=True)
+    (area / "reject").mkdir()
+    (area / PASS_FILE).write_text('{"last_pass": "model"}\n')
+    pragma = "#pragma rhoform-syntax 0.2\n"
+    pinless = (pragma + "\ncomponent Blob\n\nmodule M:\n"
+               "    b = new Blob\n")
+    clean = pragma + "\nmodule M:\n    port p passive\n"
+
+    def plant(case, text, name=PACKAGE_ENTRY):
+        case.mkdir(parents=True, exist_ok=True)
+        (case / name).write_text(text)
+        return case
+
+    def run(write=False):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return check_case_problems(check_dir, write=write)
+
+    reject = plant(area / "reject" / "c01_pinless", pinless)
+    problems, n_areas, n_cases, _ = run()
+    cases.append(("a check case without expected output is caught (a "
+                  "missing expected stream fails)",
+                  any("c01_pinless: no expected.ndjson" in p
+                      for p in problems) and (n_areas, n_cases) == (1, 1)))
+    problems, _, _, codes = run(write=True)
+    cases.append(("--write creates a check case's expected stream",
+                  problems == [] and codes == {"RHO3901"}
+                  and (reject / "expected.ndjson").is_file()))
+    problems, _, _, _ = run()
+    cases.append(("a written check stream round-trips byte-exact",
+                  problems == []))
+    stream = (reject / "expected.ndjson").read_text()
+    obj = json.loads(stream)
+    obj["spans"][0]["byte_start"] += 1
+    (reject / "expected.ndjson").write_text(
+        json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n")
+    problems, _, _, _ = run()
+    cases.append(("a one-byte span drift in a check stream is caught",
+                  any("c01_pinless: diagnostic stream diverges" in p
+                      for p in problems)))
+    (reject / "expected.ndjson").write_text(stream)
+
+    # The pass mask: the same case run through one more pass is another
+    # stream (the parts stub's actionable row joins the coverage note).
+    (area / PASS_FILE).write_text('{"last_pass": "parts"}\n')
+    problems, _, _, _ = run()
+    cases.append(("the area's pass mask decides which passes a case runs",
+                  any("c01_pinless: diagnostic stream diverges" in p
+                      for p in problems)))
+    for text, fragment in (("not json", "cannot be read as JSON"),
+                           ('{"pass": "model"}', "is not one object"),
+                           ('{"last_pass": "interfaces"}', "which is no pass")):
+        (area / PASS_FILE).write_text(text)
+        problems, _, _, _ = run()
+        cases.append((f"a pass.json that {fragment} is caught",
+                      any(f"check/model/{PASS_FILE} " in p and fragment in p
+                          for p in problems)))
+    (area / PASS_FILE).write_text('{"last_pass": "model"}\n')
+
+    accept = plant(area / "accept" / "c02_clean", clean)
+    (accept / "expected.ndjson").write_text("")
+    problems, _, _, _ = run()
+    cases.append(("a clean accept case passes", problems == []))
+    plant(accept, pinless.replace("module M:", "module M:\n"
+                                  "    port vin power_in\n    net VIN:\n"
+                                  "        vin\n    assert ok static "
+                                  "operating_point(VIN) within 1V to 2V"))
+    problems, _, _, _ = run(write=True)
+    cases.append(("an accept case that reports an error is caught",
+                  any("c02_clean: an accept case reports ['RHO3553']" in p
+                      for p in problems)))
+    plant(accept, clean)
+    (accept / "expected.ndjson").write_text("")
+
+    quiet = plant(area / "reject" / "c03_quiet", clean)
+    problems, _, _, _ = run()
+    cases.append(("a check reject case that stopped rejecting is caught",
+                  any("c03_quiet: produced no diagnostics" in p
+                      for p in problems)))
+    plant(quiet, pragma + "\nmodule M:\n  port p passive\n")
+    problems, _, _, _ = run()
+    cases.append(("a check case source not in canonical form is caught",
+                  any("c03_quiet/main.rhoform: not in canonical form" in p
+                      for p in problems)))
+    plant(quiet, pragma + "\nmodule M:\n    x = new Missing\n")
+    problems, _, _, _ = run()
+    cases.append(("a check case that never reaches the check stage is "
+                  "caught", any("c03_quiet: does not reach the check stage "
+                                "(['RHO2005'])" in p for p in problems)))
+    shutil.rmtree(quiet)
+
+    two = plant(area / "reject" / "c04_two", clean)
+    plant(two / "sub", clean)
+    problems, _, _, _ = run()
+    cases.append(("a check case with two entries is caught",
+                  any("c04_two: holds 2 main.rhoform files" in p
+                      for p in problems)))
+    shutil.rmtree(two)
+
+    from rhoform import package
+
+    def unreadable(self, key):
+        raise package.ReadFailure(self.root / key, OSError("planted"))
+
+    with mock.patch.object(package._Loader, "read", unreadable):
+        problems, _, _, _ = run()
+    cases.append(("an unreadable check case is reported, not a crash",
+                  any("c01_pinless: could not be read" in p
+                      for p in problems)))
+
+    real_schema = SCHEMA_PATH
+    SCHEMA_PATH = Path(tmp) / "strict-check-wire.schema.json"
+    SCHEMA_PATH.write_text(json.dumps({
+        "type": "object", "properties": {"code": {"const": "RHONONE"}}}))
+    try:
+        problems, _, _, _ = run()
+    finally:
+        SCHEMA_PATH = real_schema
+    cases.append(("a check stream violating the wire schema is reported",
+                  any("c01_pinless: line 1 violates the wire schema" in p
+                      for p in problems)))
+
+    (check_dir / "notes.txt").write_text("x")
+    (area / "extra").mkdir()
+    (area / "accept" / "stray.txt").write_text("x")
+    problems, _, _, _ = run()
+    cases.append(("a stray file among the check areas is caught",
+                  any("check/notes.txt: not an area directory" in p
+                      for p in problems)))
+    cases.append(("a stray entry in an area is caught",
+                  any("check/model/extra: an area holds only" in p
+                      for p in problems)))
+    cases.append(("a stray file among an area's cases is caught",
+                  any("check/model/accept/stray.txt: not a case directory"
+                      in p for p in problems)))
+
+    # -- both floors feed main()
+    for floor_name in ("MINIMUM_CHECK_AREAS", "MINIMUM_CHECK_CASES"):
+        real_floor = globals()[floor_name]
+        globals()[floor_name] = 10_000
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                wired = main()
+        finally:
+            globals()[floor_name] = real_floor
+        cases.append((f"the {floor_name} floor is WIRED into main()",
+                      wired == 1 and "below the floor" in err.getvalue()))
     return cases
 
 
@@ -1547,16 +2094,18 @@ def main(write=False) -> int:
         return 2
 
     problems = []
+    parse_codes = set()
     parse_problems, accepts, rejects = parse_case_problems(
         CONFORMANCE / "parse" / "accept",
         CONFORMANCE / "parse" / "reject",
-        write=write,
+        write=write, emitted=parse_codes,
     )
     problems += parse_problems
     literal_problems, vectors, errors = vector_problems(
         CONFORMANCE / "literals" / "normal-form.json")
     problems += literal_problems
     problems += doc_sync_problems()
+    problems += marker_problems()
     formatter_problems, formats = fmt_case_problems(
         CONFORMANCE / "fmt",
         CONFORMANCE / "parse" / "reject",
@@ -1566,9 +2115,14 @@ def main(write=False) -> int:
     package_problems, p_accepts, p_rejects, package_codes = \
         package_leg_problems(write=write)
     problems += package_problems
-    elaborate_problems, e_accepts, e_rejects = elaborate_leg_problems(
-        write=write, package_codes=package_codes)
+    elaborate_problems, e_accepts, e_rejects, elaborate_codes = \
+        elaborate_leg_problems(write=write)
     problems += elaborate_problems
+    check_problems, c_areas, c_cases, check_codes = check_leg_problems(
+        write=write)
+    problems += check_problems
+    problems += coverage_problems(
+        parse_codes | elaborate_codes | package_codes | check_codes)
 
     if accepts < MINIMUM_ACCEPT_CASES:
         problems.append(
@@ -1605,7 +2159,9 @@ def main(write=False) -> int:
         f"conformance: PASS: {accepts} accept + {rejects} reject parse "
         f"case(s) byte-exact, {e_accepts} accept + {e_rejects} reject "
         f"elaboration case(s) byte-exact, {p_accepts} accept + {p_rejects} "
-        f"reject package case(s) byte-exact, {formats} formatter case(s) "
+        f"reject package case(s) byte-exact, {c_cases} check case(s) in "
+        f"{c_areas} area(s) byte-exact, every source-triggered code of "
+        f"blocks 1-4 and 6 emitted, {formats} formatter case(s) "
         "byte-exact and fixed points with every reject case refused, "
         f"{vectors} normal-form vector(s) with all three T3 properties, "
         f"{errors} pinned rejection(s), spec restatements reconciled."
@@ -2120,8 +2676,17 @@ def self_test() -> int:
                                     and "missing ['->']" in p
                                     for p in problems)))
 
+        # 03's five forms, reconciled against FORMS (AMB-134 item 3).
+        problems = drifted("03-literals.md", "| tolerance, percent |",
+                           "| tolerance, relative |")
+        cases.append(("a drifted five-forms table is caught",
+                      any("03-literals.md five forms" in p
+                          for p in problems)))
+
+        cases += marker_self_test_cases(tmp)
         cases += elaborate_self_test_cases(tmp)
         cases += package_self_test_cases(tmp)
+        cases += check_self_test_cases(tmp)
 
     # WIRING: all five floors feed main(). Raise each over the real
     # population in turn — three of the first four were deletable when

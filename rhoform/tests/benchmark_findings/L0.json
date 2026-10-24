@@ -1,0 +1,23 @@
+[
+  {
+    "benchmark": "blinker-555",
+    "code": "RHO3901",
+    "entity": "/",
+    "reason": "every check pass is still a stub, so each is an actionable not-implemented row and the compilation's one coverage note fires (amendment OD1); it stays while any pass is unimplemented or any actionable row remains",
+    "resolving_landing": "L5b"
+  },
+  {
+    "benchmark": "buck-3v3",
+    "code": "RHO3901",
+    "entity": "/",
+    "reason": "every check pass is still a stub, so each is an actionable not-implemented row and the compilation's one coverage note fires (amendment OD1); it stays while any pass is unimplemented or any actionable row remains",
+    "resolving_landing": "L5b"
+  },
+  {
+    "benchmark": "esp32s3-devboard",
+    "code": "RHO3901",
+    "entity": "/",
+    "reason": "every check pass is still a stub, so each is an actionable not-implemented row and the compilation's one coverage note fires (amendment OD1); it stays while any pass is unimplemented or any actionable row remains",
+    "resolving_landing": "L5b"
+  }
+]

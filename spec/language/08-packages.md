@@ -21,8 +21,9 @@ A compilation is its **entry file** plus that file's **import closure**:
 every file it imports, every file those import, and so on. Its compile
 root is defined in [04 — Elaboration](04-elaboration.md#the-compile-root),
 and every file of the compilation MUST lie under it; in this version the
-compile root is also the package specification's workspace root. The
-compilation also holds the
+compile root is also the package specification's workspace root, which
+is why the nearest `rhoform.lock` (L1) decides it ahead of the nearest
+`rhoform.toml`. The compilation also holds the
 [standard library](04-elaboration.md#the-standard-library) modules its
 files name under `rhoform.lib.`; those are the toolchain's own files,
 recorded by their fixed library path, and are not imported: no import
@@ -170,14 +171,16 @@ fix-it. A symbolic link on the path is
 followed only when what it leads to is still inside the package the
 path is in, so neither form of import can leave its package, or the
 compile root, through one (RHO2061). A path naming a file whose module
-path falls under the reserved prefix `rhoform.lib.` is RHO2068, and so
-is such a file as the entry
-([04](04-elaboration.md#the-standard-library)). No two files of a
-compilation may have one module path
+path or module name falls under the reserved prefix `rhoform.lib.` is
+RHO2068, and so is such a file as the entry
+([04](04-elaboration.md#the-standard-library)). No two files of one
+package may have one module path
 ([04](04-elaboration.md#definitions-and-the-root)), since their
 definitions would share IR names: a path naming a file whose module path
-a file read earlier already has — `./a-b/x` after `a_b/x.rhoform`, both
-`a_b.x` — is RHO2069, and the file is not read. Files are read from the
+a file of its package read earlier already has — `./a-b/x` after
+`a_b/x.rhoform`, both `a_b.x` — is RHO2069, and the file is not read.
+Files of two packages never collide: their module names begin with two
+different package identities. Files are read from the
 entry breadth first, each file's imports in source order, so the file
 refused is always the second of the two that order reaches. A path that
 is empty, absolute, holds an empty segment, ends in `.` or `..`, or is
@@ -200,8 +203,11 @@ name is used exactly as a definition of the file: a single word in a
 `new` or `table` ([04](04-elaboration.md#module-or-component)). Its
 instances' IR `definition` is named by the file that defines it
 ([04](04-elaboration.md#definitions-and-the-root)): `Divider` imported
-from `lib/divider.rhoform` is `lib.divider.Divider`. A name whose import
-failed is not reported again where it is used.
+from `lib/divider.rhoform` of the package `acme/app` is
+`acme.app.lib.divider.Divider`, and `Led` from the dependency
+`acme/parts`'s `leds.rhoform` is `acme.parts.leds.Led`, wherever either
+package sits under the compile root. A name whose import failed is not
+reported again where it is used.
 
 ## Files and hashes
 
@@ -234,7 +240,10 @@ diagnostic or a documented absence, never a silent skip:
   define it; the lockfile schema is R55 (M2). This version compiles
   without one and reads path dependencies in place; nothing is
   resolved, so there is no MVS selection (L6–L8) beyond the checks of
-  [`[deps]`](#deps).
+  [`[deps]`](#deps). A `rhoform.lock` already marks the workspace root,
+  which is the compile root
+  ([04](04-elaboration.md#the-compile-root)); its contents are not
+  read.
 - **Path dependencies only.** A `git` source (and with it `rev`, M3) is
   RHO2056 until the lockfile and fetching land with R55; `rev` without
   `git` is RHO2056 too.

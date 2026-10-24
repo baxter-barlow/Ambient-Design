@@ -7,7 +7,8 @@ These cases define, executably, what a conforming Rhoform implementation
 does. In this repository `tests/conformance/check-conformance.py` (the
 gate; Apache-2.0 code) runs them against the reference implementation on
 every `make all`; a third-party implementation conforms to the parse,
-literal, elaboration, package and formatter layers exactly when it reproduces them. The suite is standing —
+literal, elaboration, package, check and formatter layers exactly when it
+reproduces them. The suite is standing —
 each milestone that changes the language adds its cases in the same
 change (parser disambiguation with R12, formatter cases with R16, type
 cases with M2, and so on).
@@ -30,7 +31,10 @@ constructs 0.2 added.
 
 Each `<case>.rhoform` is paired with `<case>.expected.ndjson`: the
 byte-exact A1 diagnostic stream the reference implementation emits for
-it (each line conforms to `rhoform/diagnostic.schema.json`).
+it (each line conforms to `rhoform/diagnostic.schema.json`). Cases
+`r24`–`r27` pin the four lexical codes no case pinned before them
+(carriage return, end of file, an unexpected character, a control
+character).
 
 One encoding exception: a case whose bytes are DELIBERATELY not valid
 UTF-8 (the invalid-byte diagnostic class) is committed as
@@ -67,8 +71,11 @@ The machine-checked half of
 literal to its canonical spelling; the gate checks each row plus the
 three properties (value-exact, idempotent, re-lexable) ON the row, so a
 vector that contradicts the properties cannot be committed. `errors`
-rows pin the stable rejection reasons ill-formed literals carry
-(RHO1010's `reason` param).
+rows pin the stable rejection reasons the quantity reader gives an
+ill-formed literal (RHO1010's `reason` param). RHO1010 has a second
+source the table does not read: the parser's two reasons for a
+misspaced `+/-`, given before the literal is one token, are pinned by
+the reference implementation's parser tests.
 
 ## `elaborate/accept/` — sources that elaborate clean, and the exact IR
 
@@ -97,17 +104,26 @@ document with `header.generator` set aside.
 Each `<case>.rhoform` MUST parse clean — a case that stops at the
 parser belongs under `parse/` — and its elaboration diagnostic stream
 MUST equal `<case>.expected.ndjson` byte for byte, exactly as for
-`parse/reject/`. There is one case per block-2 code a source can
-trigger, and the gate fails when an active block-2 code is emitted by
-no case, unless it exempts the code with a stated reason it cannot be
-reached from source text. A case pinning a warning (a repeated flag, a
-repeated endpoint) still elaborates to a design; the stream is what it
-pins. Codes only a package case can trigger count as emitted when a
-`packages/reject/` case emits them. `r33` pinned the interim refusal of
-`import` statements and was retired with its code, `RHO2033`, when
-imports gained their semantics; its number is not reused. Cases from
-`a09` and `r35` on declare syntax 0.2 and pin its semantics: component
-definitions, parameters, `if`, `for` and arrays.
+`parse/reject/`. The stream is the elaborator's: the case is compiled
+through the pipeline the command line runs, stopped after elaboration,
+so the check stage's notes are not part of it. A case pinning a warning
+(a repeated flag, a repeated endpoint) still elaborates to a design; the
+stream is what it pins.
+
+**Coverage.** Across the reject cases of every layer — `parse/`,
+`elaborate/`, `packages/` and `check/` — every active code of blocks 1–4
+and 6 a source can trigger MUST be emitted by some case, and the gate
+fails when one is emitted by none. A code no source text can reach says
+so, and why, in its own registry entry (`source_triggered`,
+`trigger_reason`: `RHO1017`, which only `fmt --check` reports, and
+`RHO2003`, which only a caller's `--root-module` reaches); the gate
+fails on an exemption a case contradicts, too.
+
+`r33` pinned the interim refusal of `import` statements and was retired
+with its code, `RHO2033`, when imports gained their semantics; its
+number is not reused. Cases from `a09` and `r35` on declare syntax 0.2
+and pin its semantics: component definitions, parameters, `if`, `for`
+and arrays.
 
 `--write` regenerates the elaboration cases' expected IR and streams
 along with the parse reject cases'; the diff is the review artifact.
@@ -142,6 +158,30 @@ block-2 coverage rule above counts them. Every `.rhoform` file of a
 package case is held to the canonical form, like the elaboration cases.
 `--write` regenerates the expectations; the diff is the review artifact.
 
+## `check/` — the check stage, by area
+
+The machine-checked half of
+[05 — Static types](../language/05-static-types.md). Cases are grouped
+in **areas**, `check/<area>/`, one per checker. An area holds a
+`pass.json`, `{"last_pass": NAME}`, and its `accept/` and `reject/`
+directories, nothing else. NAME is the last pass the area's cases run
+(or `model`, the checked design alone): the check stage runs the passes
+up to and including it, so what an area pins is that pass's behaviour,
+whatever later passes do, and a later landing never moves another
+area's streams. One `integration` area, added with the last checker,
+runs every pass.
+
+Each case is a directory and its own compile root, like a package case,
+its entry its one `main.rhoform`. It MUST reach the check stage — a case
+that stops at the parser or the elaborator belongs to their layers — and
+its stream MUST equal its `expected.ndjson` byte for byte, each line
+valid on the wire schema. An `accept/` case reports no error or warning;
+its notes, such as the coverage note every check-stage run carries while
+passes are unimplemented, are pinned like the rest. A `reject/` case
+reports something. Every source of a check case is in canonical form,
+which the gate checks itself. `--write` regenerates the streams; the
+diff is the review artifact.
+
 ## `fmt/` — formatter cases
 
 The machine-checked half of
@@ -165,8 +205,10 @@ Its expected file is never escaped: canonical output carries neither.
 `aNN_...` accept cases, `rNN_...` reject cases, `fNN_...` formatter
 cases, numbered within their directory in the order they were added,
 never renumbered — a conformance case is cited by name in commit
-messages and issues, and a renamed case orphans every citation. A case
-retired with the behavior it pinned keeps its number unused. Cite an
-elaboration or package case with its directory
-(`elaborate/r04_unknown_definition`, `packages/r18_import_cycle`), since
-the parse cases use the same prefixes.
+messages and issues, and a renamed case orphans every citation. Check
+cases are `cNN_...`, numbered across their area's `accept/` and
+`reject/` together. A case retired with the behavior it pinned keeps its
+number unused. Cite an elaboration, package or check case with its
+directory (`elaborate/r04_unknown_definition`, `packages/r18_import_cycle`,
+`check/model/c01_component_without_pins`), since the parse cases use the
+same prefixes.

@@ -9,9 +9,13 @@ manifests and an entry file's import closure, the bundled standard
 library of components (`rhoform/lib/`, names under `rhoform.lib.`), the
 elaborator (R13, with R15's fabrication facts) that flattens a parsed
 design into IR v1 and its source map, serialized and hashed by
-`rhoform.ir` (all of syntax 0.2), the
-canonical formatter (R16) for both syntax versions, and the
-command line (R18, `python3 -m rhoform check|fmt`, in `rhoform.cli`).
+`rhoform.ir` (all of syntax 0.2), the static check stage (M2,
+`rhoform.check`) that every type checker plugs into, run on the
+elaborated design, the one pipeline that composes those stages
+(`rhoform.compile`), the canonical formatter (R16) for both syntax
+versions, and the command line (R18, `python3 -m rhoform check|fmt`, in
+`rhoform.cli`). Diagnostic codes are declared in `rhoform.codes` and the
+per-owner files under `rhoform/codeset/`.
 
 It deliberately imports nothing from `lang.bakeoff` (the throwaway
 prototypes) and nothing from `lang.grammar` at import time; the parser loads
