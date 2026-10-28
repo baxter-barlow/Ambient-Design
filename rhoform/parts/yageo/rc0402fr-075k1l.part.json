@@ -1,0 +1,201 @@
+{
+  "description": "5.1 kohm +/-1% thick-film chip resistor, 0402, 1/16 W at 70 degC, +/-100 ppm/K, 50 V max working (Yageo RC_L)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "YAGEO",
+  "mpn": "RC0402FR-075K1L",
+  "notes": "Benchmark use: esp32s3-devboard /r1, /r2 (R1, R2, CC pull-downs). Series data sheet record: every rating is the RC0402 standard-power (1/16 W) row of Table 2, which is how Yageo specifies catalogue chip resistors. The MPN's 07 field selects a 7-inch reel at standard power, so the 1/8 W RC0402 row (field 7W, double power) does not apply. Value-specific limits the vendor defines by formula are not separate figures here. The continuous rated voltage is sqrt(P x R) or the maximum working voltage, whichever is less (RATED VOLTAGE, page 7); for this part that is sqrt(0.0625 W x 5100 ohm) = sqrt(318.75) V, 17.9 V to three figures. A check that holds the terminal voltage to voltage_rating and the dissipation to power_rating applies exactly that rule. The Short Time Overload test applies 2.5 x RCWV or the maximum overload voltage, whichever is less, for 5 s (page 9); for this part that is 2.5 x that, 44.6 V to three figures; overload_voltage records the 100 V series ceiling from Table 2. Not recorded because no check reads them: the 100 V dielectric withstanding voltage (terminals to surroundings), the endurance and environmental test limits, packing and marking. Lifecycle: the data sheet states none, and the vendor's product page for this MPN (yageogroup.com/products/Resistors/part/RC0402FR-075K1L, read 2026-10-24) lists the part with stock and sample ordering but no lifecycle field, so the record says unknown rather than inferring active. Source URL: www.yageo.com answers this path with a 301 redirect to the same path on yageogroup.com, a domain Yageo also operates, which served the hashed bytes. The record cites the yageo.com URL because VENDOR_DOMAINS lists only yageo.com for this vendor; curl -L on it reproduces the hash.",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 5.151,
+      "min": 5.049,
+      "typ": 5.1,
+      "unit": "kohm"
+    },
+    "resistance_tolerance": {
+      "max": 0.01,
+      "min": -0.01,
+      "unit": "1"
+    },
+    "temperature_coefficient": {
+      "conditions": {
+        "ta": {
+          "max": 125,
+          "min": -55,
+          "unit": "degC"
+        }
+      },
+      "max": 100,
+      "min": -100,
+      "unit": "ppm/K"
+    }
+  },
+  "part_id": "yageo/rc0402fr-075k1l",
+  "pins": [
+    {
+      "description": "Terminal 1. The part is symmetric; which terminal is 1 carries no meaning.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Terminal 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. Yageo RC_L series data sheet, RC0402 1/16 W (standard power) row.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/implements": {
+      "confidence": "datasheet-derived",
+      "locator": "CONSTRUCTION and Fig. 9 Chip resistor outlines, page 4",
+      "method": "manual",
+      "note": "The resistor's two ends are the two external terminations of Fig. 9; Resistor's a and b map to terminals 1 and 2, and either orientation is electrically identical.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "ORDERING INFORMATION - GLOBAL PART NUMBER, page 2",
+      "method": "manual",
+      "note": "Read against the vendor's global part number grammar: RC, size 0402, tolerance F (+/-1.0 %), packaging R (paper taping reel), TCR '-' (based on spec), 07 (7-inch reel, standard power), value 5K1 (R/K/M as the decimal point), default code L. The vendor's site lists this exact MPN (product page and per-part spec sheet on yageogroup.com, 2026-10-24).",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "ORDERING INFORMATION (1) SIZE, page 2; CONSTRUCTION, Fig. 9 and Table 1 DIMENSION (RC0402 row), page 4",
+      "method": "manual",
+      "note": "0402 is the MPN's size field; Fig. 9 shows two external terminations, the package's two terminals.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/parameters/resistance": {
+      "confidence": "datasheet-derived",
+      "locator": "ORDERING INFORMATION (6) RESISTANCE VALUE and (2) TOLERANCE, page 2; Table 2, RC0402 1/16 W row, RESISTANCE RANGE column, page 5",
+      "method": "manual",
+      "note": "Nominal 5.1 kohm from the MPN's value field 5K1, inside the 1 % (E24/E96) range of 1 ohm to 10 Mohm. min and max are the F tolerance (+/-1.0 %) evaluated at that nominal (x 0.99 and x 1.01): arithmetic on stated values, so datasheet-derived. The tolerance itself is /parameters/resistance_tolerance.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/parameters/resistance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "ORDERING INFORMATION (2) TOLERANCE, F = +/-1.0%, page 2",
+      "method": "manual",
+      "note": "+/-1.0 % written as a fraction of nominal.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/parameters/temperature_coefficient": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, TEMPERATURE COEFFICIENT column (10 ohm < R <= 10 Mohm), page 5; Table 5, Temperature Coefficient of Resistance (T.C.R.) procedure, page 8",
+      "method": "manual",
+      "note": "The MPN's TCR field is '-' (based on spec), so the series figure for this resistance band applies: +/-100 ppm per degree Celsius, which is the same coefficient per kelvin. The ta range is the T.C.R. test's temperatures, +25 to -55 degC and +25 to +125 degC (MIL-STD-202 Method 304).",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "CONSTRUCTION and Fig. 9 Chip resistor outlines, page 4",
+      "method": "manual",
+      "note": "The data sheet shows two end terminations and names neither; a chip resistor is a symmetric two-terminal passive, so the terminals are 1 and 2, role passive.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/abs_max/overload_voltage": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, MAXIMUM OVERLOAD VOLTAGE column, page 5; Table 5 (continued), Short Time Overload, IEC 60115-1 8.1, page 9",
+      "method": "manual",
+      "note": "100 V is the series maximum overload voltage. The Short Time Overload test applies 2.5 x RCWV or this maximum, whichever is less, for 5 seconds at room temperature; the duration condition is that test's. The per-value figure is in the record notes.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, OPERATING TEMPERATURE RANGE column, page 5; FUNCTIONAL DESCRIPTION, OPERATING TEMPERATURE RANGE (RC0402 to RC2512) and Fig. 10-1, page 7",
+      "method": "manual",
+      "note": "Fig. 10-1 plots this range against ambient temperature (Tamb).",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/power_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, POWER column, page 5; FUNCTIONAL DESCRIPTION, POWER RATING (rated power at 70 degC) and Fig. 10-1, page 7",
+      "method": "manual",
+      "note": "1/16 W, written exactly as 0.0625 W, at the 70 degC ambient the rating is stated at. Fig. 10-1 holds 100 % of rated power up to 70 degC and derates linearly to zero at 155 degC; only the 70 degC rating is recorded.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, MAXIMUM WORKING VOLTAGE column, page 5; FUNCTIONAL DESCRIPTION, RATED VOLTAGE, page 7",
+      "method": "manual",
+      "note": "The series maximum working voltage, DC or AC rms. RATED VOLTAGE caps the continuous voltage at sqrt(P x R) where that is less; the per-value figure is in the record notes.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    }
+  },
+  "ratings": {
+    "abs_max": {
+      "overload_voltage": {
+        "conditions": {
+          "duration": {
+            "typ": 5,
+            "unit": "s"
+          }
+        },
+        "max": 100,
+        "unit": "V"
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "max": 155,
+        "min": -55,
+        "unit": "degC"
+      },
+      "power_rating": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.0625,
+        "unit": "W"
+      },
+      "voltage_rating": {
+        "max": 50,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:7b6f0ae72708ca4b38126f84b5407a3e970a94cb60bc1a0afdaeb25a23d839bb",
+      "doc_title": "GENERAL PURPOSE CHIP RESISTORS - RC_L series",
+      "document_version": "Product specification - November 14, 2025 V.14",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:31:17Z",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14",
+      "state": "available",
+      "url": "https://www.yageo.com/content/datasheet/asset/file/PYU-RC_GROUP_51_ROHS_L",
+      "vendor": "yageo"
+    }
+  ],
+  "stability": "unstable"
+}

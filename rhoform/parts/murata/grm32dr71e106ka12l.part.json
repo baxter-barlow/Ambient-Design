@@ -1,0 +1,207 @@
+{
+  "absent": [
+    {
+      "note": "Murata's specification tabulates no DC-bias capacitance change; its Rating cautions only warn that a class-II capacitor's capacitance falls with applied DC voltage. For this part Murata's product data flags separately downloadable characteristic data files (isECD, isSparameter and isNetList true; isBasicCharacteristicGraph and isFrequencyCharacteristicGraph false). Those files are not the specification and are not cited here, and the capacitor profile takes a DC-bias change only from a vendor table, so no figure is recorded.",
+      "pointer": "/parameters/capacitance_dc_bias_change",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Murata's specification has no absolute-maximum table. Its Rating cautions bound the voltage between the terminations, surges and pulses included, by the rated voltage, which the record carries as ratings.recommended.voltage_rating; the voltage-proof test level is a production test, not a rating, and the storage conditions are for unmounted parts' solderability, not a storage-temperature limit.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "10 uF +/-10% 25 V X7R MLCC, EIA 1210 (3225M), -55 to 125 C, Murata GRM series, 180 mm embossed reel",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Capacitor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "nrnd",
+  "manufacturer": "Murata",
+  "mpn": "GRM32DR71E106KA12L",
+  "notes": "Benchmark (b) uses this part as its two input capacitors (/c1a, /c1b; C1 and C4).\n\nLifecycle: Murata marks the family NRND and names GRM31CR71E106KA12# as its alternative; benchmark (b)'s design.md records that it struck that 1206 alternate for its DC-bias loss and keeps an NRND primary. That is a BOM decision for L5b, not a record fact.\n\nMurata tabulates no DC-bias capacitance change; it offers only separately downloadable characteristic data, which the record does not cite. Murata publishes no absolute-maximum table: the rated voltage, which Murata says must also bound surges and pulses, is ratings.recommended.voltage_rating.",
+  "package": {
+    "name": "1210",
+    "pin_count": 2
+  },
+  "parameters": {
+    "capacitance": {
+      "conditions": {
+        "frequency": {
+          "max": 1.1,
+          "min": 0.9,
+          "unit": "kHz"
+        },
+        "measurement_voltage": "1.0+/-0.2 Vrms",
+        "ta": "room temperature"
+      },
+      "max": 11,
+      "min": 9,
+      "typ": 10,
+      "unit": "uF"
+    },
+    "capacitance_tolerance": {
+      "max": 0.1,
+      "min": -0.1,
+      "unit": "1"
+    },
+    "temperature_characteristic": {
+      "conditions": {
+        "measurement_voltage": "less than 1.0 Vrms",
+        "reference_temperature": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ta": {
+          "max": 125,
+          "min": -55,
+          "unit": "degC"
+        },
+        "vdc": {
+          "typ": 0,
+          "unit": "V"
+        }
+      },
+      "max": 0.15,
+      "min": -0.15,
+      "unit": "1"
+    }
+  },
+  "part_id": "murata/grm32dr71e106ka12l",
+  "pins": [
+    {
+      "description": "End termination 1. No polarity is marked; the two terminations are interchangeable.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "End termination 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. The cited source is Murata's per-part specification (reference sheet) for this part-number family; it covers every packaging code, and the packaging letter in /mpn selects one reel. Every value here is read from it unless a deeper entry says otherwise. Pin naming and roles are the record's convention (see /pins).",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/lifecycle": {
+      "confidence": "datasheet-stated",
+      "locator": "productionStatus field of the part's product data, shown on the pim.murata.com product details page",
+      "method": "manual",
+      "note": "Murata lists the production status as NRND (not recommended for new designs) and points to GRM31CR71E106KA12# as the alternative product. The source is the JSON the product details page renders, fetched by POST to the cited URL with body {\"searchCondClass\":2,\"partNum\":\"GRM32DR71E106KA12#\",\"page\":1,\"pageSize\":20,\"productCategoryId\":\"ceramicCapacitorSMD\",\"languageRegion\":\"en-us\",\"series\":\"\",\"sortKey\":\"\",\"valSearchCondList\":[],\"rangeValSearchCondList\":[],\"dateRangeSearchCondList\":[]}; the details page itself is a script shell whose bytes carry no product data.",
+      "source_id": "murata-pim-grm32dr71e106ka12-2026-10-24"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, MURATA Part No. System; page 2, Package table (packaging code L)",
+      "method": "manual",
+      "note": "The specification is titled for the family GRM32DR71E106KA12_, the trailing character standing for the packaging code. The record is the orderable member with code L (180 mm reel, plastic tape W8P4, 1000 pcs), a code the Package table lists; Murata's product data for GRM32DR71E106KA12# (source murata-pim-grm32dr71e106ka12-2026-10-24) lists GRM32DR71E106KA12L among its orderable part numbers.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Type & Dimension (Size Code)",
+      "method": "manual",
+      "note": "Murata prints the size code as 3225M(1210); the record's package name is the EIA inch code, 1210, and the two terminations are the pin count.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/parameters/capacitance": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Rated Value table, Capacitance and Capacitance Tolerance columns; page 3, Specifications and Test Methods item 6 (Capacitance)",
+      "method": "manual",
+      "note": "The nominal 10 uF is the Capacitance column (and the part number's 106 code). min and max are that nominal at the +/-10 % tolerance, arithmetic on stated values, so datasheet-derived. The conditions are the measurement conditions of the Capacitance test item: room temperature, 1.0 +/-0.1 kHz (written as its range, 0.9 to 1.1 kHz), 1.0 +/-0.2 Vrms.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/parameters/capacitance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Capacitance Tolerance column",
+      "method": "manual",
+      "note": "+/-10% written as a fraction of nominal.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/parameters/temperature_characteristic": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Temp. coeff. or Cap. Change, Temp. Range and Ref.Temp. columns; page 3, Specifications and Test Methods item 8 (Temperature Characteristics of Capacitance)",
+      "method": "manual",
+      "note": "X7R: capacitance change within -15 to +15 % over -55 to 125 degC about the 25 degC reference, measured with no DC bias (written vdc 0 V) and under 1.0 Vrms.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Type & Dimension (Size Code)",
+      "method": "manual",
+      "note": "Murata publishes no pin table for a chip capacitor. Its Type & Dimension drawing shows two identical end terminations with no polarity mark, so the record names them 1 and 2 and gives both role passive, as the authoring convention does for every two-terminal passive. The numbering is the record's, not Murata's.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Operating Temp. Range column; page 12, Rating section 4 (Type of Applied Voltage and Self-heating Temperature)",
+      "method": "manual",
+      "note": "Murata's operating temperature range. Its Rating cautions hold the capacitor's own surface temperature, self-heating included, inside this range, so as a bound on ambient it is optimistic by whatever self-heating the circuit causes.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Rated Voltage column; page 3, Specifications and Test Methods item 1 (Rated Voltage); page 11, Rating section 3 (Applied Voltage)",
+      "method": "manual",
+      "note": "DC 25 V. Murata defines the rated voltage as the most that may be applied continuously; with AC superimposed the larger of the peak-to-peak and zero-to-peak voltages must stay within it, and the Rating cautions extend the bound to surges, static and pulses. Recorded as max: it is the vendor's limit for the design.",
+      "source_id": "murata-grm32dr71e106ka12-01a-en"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 125,
+        "min": -55,
+        "unit": "degC"
+      },
+      "voltage_rating": {
+        "max": 25,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:905a88c455fd094f75faef9f34ebe5aac0fdc8a22015c9b4f51389bd4d453984",
+      "doc_title": "Chip Multilayer Ceramic Capacitors for Consumer Electronics & Industrial Equipment, GRM32DR71E106KA12_(3225M(1210), X7R(EIA), 10μF, DC 25V), Reference Sheet",
+      "document_version": "GRM32DR71E106KA12-01A; product specifications as of Jun.26,2026",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:33:11Z",
+      "source_id": "murata-grm32dr71e106ka12-01a-en",
+      "state": "available",
+      "url": "https://pim.murata.com/asset/pim4/ceramicCapacitorSMD/GRM32DR71E106KA12-01A-EN_PDF_CERAMICCAPACITORSMD?lastModifiedDatetime=20260730173423",
+      "vendor": "murata"
+    },
+    {
+      "byte_sha256": "sha256:b1c0b8601a194d4447eef5bdd66bee0ebb92914e17fdd2c973ed072d08011c8e",
+      "doc_title": "Murata PIM product data for GRM32DR71E106KA12# (public product search API)",
+      "document_version": "Unversioned product data as served on 2026-10-24; no revision is printed",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:32:26Z",
+      "source_id": "murata-pim-grm32dr71e106ka12-2026-10-24",
+      "state": "available",
+      "url": "https://pimapi.murata.com/public/api/pim/v1/products/search",
+      "vendor": "murata"
+    }
+  ],
+  "stability": "unstable"
+}

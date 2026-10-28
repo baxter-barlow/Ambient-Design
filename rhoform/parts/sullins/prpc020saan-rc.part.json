@@ -1,0 +1,284 @@
+{
+  "absent": [
+    {
+      "note": "The 2019 catalog's .100 in [2.54 mm] Male Breakaway Headers, Straight spread (pages 114-115, PDF pages 116-117) has no absolute-maximum table; it states a current rating, flammability rating, materials, finishes, operating and processing temperatures and dimensions.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Pages 114-115 state no voltage rating, working voltage or dielectric withstanding voltage for this series. The Operating Voltage and DWV rows on catalog page 6 are the Card Edge general specifications and do not apply to headers. Sullins' product search on sullinscorp.com leaves Operating Voltage blank for this part. The per-part drawing it links (DWG 11635 REV E; see notes, Drawing) gives a 1000 VAC dielectric withstanding voltage (NOTES item 7), which is a test level and not a rated voltage, and no operating voltage, so Sullins publishes no voltage rating for this series.",
+      "pointer": "/ratings/recommended/voltage_rating",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Contact resistance is published, but only in the per-part drawing (DWG 11635 REV E; see notes, Drawing), which this record cannot cite. Pages 114-115 of the cited catalog state none for this series, and the header pages that do state one cover other series. The drawing's NOTES item 6 reads CONTACT RESISTANCE: 20 MILLIOHMS MAX., with no test condition and no mating part named. It is a figure for one contact, not a resistance between two of this record's pins, which are separate contacts in one insulator, so if the host is admitted it goes in series.resistance, where parts/README.md places contact resistance, with that said in its note. Not transcribed while the drawing's host is outside VENDOR_DOMAINS['sullins'].",
+      "pointer": "/series",
+      "reason": "not-transcribed"
+    }
+  ],
+  "description": "Male breakaway pin header, 1x20, 2.54 mm pitch, straight through-hole, PBT/brass, gold flash overall",
+  "implements": [
+    {
+      "definition": "rhoform.lib.connector.PinHeader1x20",
+      "pins": {
+        "p1": "1",
+        "p10": "10",
+        "p11": "11",
+        "p12": "12",
+        "p13": "13",
+        "p14": "14",
+        "p15": "15",
+        "p16": "16",
+        "p17": "17",
+        "p18": "18",
+        "p19": "19",
+        "p2": "2",
+        "p20": "20",
+        "p3": "3",
+        "p4": "4",
+        "p5": "5",
+        "p6": "6",
+        "p7": "7",
+        "p8": "8",
+        "p9": "9"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Sullins Connector Solutions",
+  "mpn": "PRPC020SAAN-RC",
+  "notes": "Orderable PRPC020SAAN-RC decodes by the catalog's part number options (page 115, PR B C 002 S AA N - RC) as PR = PBT insulator with brass contacts, P = gold flash overall, C = .100 in [2.54 mm] centers, 020 positions per row, S = single readout, AA = straight termination with a 0.230 in [5.84 mm] head and 0.120 in [3.05 mm] tail (page 114), N, and the -RC suffix; the page does not spell out the N code. Sullins' product search links this part to the same catalog spread (PAGE114-115 .100 MALE HDR ST).\n\nContacts. The catalog draws the header without position numbers; the record numbers them 1 to 20 from one end, as the definition's p1 to p20 do, and which physical end is 1 is the footprint's convention.\n\nDrawing. Sullins' product search on sullinscorp.com links this part to its per-part drawing, https://drawings-pdf.s3.amazonaws.com/11635.pdf: HEADER MALE .100\" PITCH, STRAIGHT, P/N _R_C___S__N-RC, DWG NO 11635, REV E (ECO 2828, 04/09/2015), CAGE 54453, sha256:41696a19c6a386a77cb4cafc3c3b32f7800866476c37c2e98f04f510b1d8bc0a as served on 2026-10-24. The host is outside VENDOR_DOMAINS['sullins'], so the record cannot cite the drawing (L21) and transcribes nothing from it. It was read in review, and what it states is given where it bears: the /series and voltage_rating absences, and Current below. It agrees with the catalog on the PR = PBT/brass operating temperature (-40 to +105 C). Its title block carries a proprietary-information legend (not to be reproduced, used or disclosed except as Sullins authorizes in writing), which a decision to admit the host would also weigh; that decision is the integrator's.\n\nCurrent. Page 114's specification bullet gives a 3 A current rating with no scope (per contact, per row or total) and no temperature-rise or ambient condition, and the drawing's NOTES item 4 (CURRENT RATING: 3 AMPS.) is no more specific. The same catalog does scope other headers' ratings (for one contact energized, printed page 32; per contact with all contacts energized, printed page 82), so the scope of this one is unknown, not implied. It is recorded as a 3 A maximum with no conditions.\n\nLifecycle is unknown: Sullins' product search lists the part with no status field, and the catalog states none.",
+  "package": {
+    "name": "Male Breakaway Header, Straight, Single Readout, 20 Positions",
+    "pin_count": 20
+  },
+  "part_id": "sullins/prpc020saan-rc",
+  "pins": [
+    {
+      "description": "Contact position 1",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 10",
+      "name": "10",
+      "numbers": [
+        "10"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 11",
+      "name": "11",
+      "numbers": [
+        "11"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 12",
+      "name": "12",
+      "numbers": [
+        "12"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 13",
+      "name": "13",
+      "numbers": [
+        "13"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 14",
+      "name": "14",
+      "numbers": [
+        "14"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 15",
+      "name": "15",
+      "numbers": [
+        "15"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 16",
+      "name": "16",
+      "numbers": [
+        "16"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 17",
+      "name": "17",
+      "numbers": [
+        "17"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 18",
+      "name": "18",
+      "numbers": [
+        "18"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 19",
+      "name": "19",
+      "numbers": [
+        "19"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 2",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 20",
+      "name": "20",
+      "numbers": [
+        "20"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 3",
+      "name": "3",
+      "numbers": [
+        "3"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 4",
+      "name": "4",
+      "numbers": [
+        "4"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 5",
+      "name": "5",
+      "numbers": [
+        "5"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 6",
+      "name": "6",
+      "numbers": [
+        "6"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 7",
+      "name": "7",
+      "numbers": [
+        "7"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 8",
+      "name": "8",
+      "numbers": [
+        "8"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact position 9",
+      "name": "9",
+      "numbers": [
+        "9"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override.",
+      "source_id": "sullins-2019-catalog"
+    },
+    "/implements/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 115 (PDF page 117), PART NUMBER OPTIONS (Number of Positions, Readout S = Single) and the single-readout dimension table, row _R_C020S___-RC",
+      "method": "manual",
+      "note": "Header contacts take their position numbers: p1 to '1' through p20 to '20'.",
+      "source_id": "sullins-2019-catalog",
+      "target": "rhoform.lib.connector.PinHeader1x20"
+    },
+    "/pins": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 115 (PDF page 117), PART NUMBER OPTIONS (Number of Positions, Readout S = Single) and the single-readout dimension table, row _R_C020S___-RC; page 114 (PDF page 116), DIMENSIONS, single readout",
+      "method": "manual",
+      "note": "Roles are passive: header contacts have no electrical direction.",
+      "source_id": "sullins-2019-catalog"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 115 (PDF page 117), MATERIALS (INSULATOR/CONTACT), PR = PBT/BRASS, Operating Temperature",
+      "method": "manual",
+      "source_id": "sullins-2019-catalog"
+    },
+    "/ratings/recommended/current_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 114 (PDF page 116), SPECIFICATIONS, current rating bullet",
+      "method": "manual",
+      "note": "The bullet states 3 A with no scope and no condition; see notes.",
+      "source_id": "sullins-2019-catalog"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 105,
+        "min": -40,
+        "unit": "degC"
+      },
+      "current_rating": {
+        "max": 3,
+        "unit": "A"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:44e4b4485b961a87cc23a190224b282764adff2a05daffd38d4bab94a84ebf77",
+      "doc_title": "2019 CATALOG",
+      "document_version": "2019 CATALOG, as printed on the cover; no revision or issue date is printed",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:34:38Z",
+      "source_id": "sullins-2019-catalog",
+      "state": "available",
+      "url": "https://www.sullinscorp.com/wp-content/uploads/2018/10/2019-CATALOG.pdf",
+      "vendor": "sullins"
+    }
+  ],
+  "stability": "unstable"
+}

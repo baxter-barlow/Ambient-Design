@@ -1,0 +1,77 @@
+{
+  "absent": [
+    {
+      "note": "Keystone's page 61 (M70p61.pdf) states, for CAT. NO. 5015, the material (.010 in phosphor bronze, silver plate), dimensions, pad layout and packaging (1000 pieces per reel, 8 mm tape, 4 mm pitch) and nothing else: no current rating, voltage rating, operating temperature or absolute-maximum table. Keystone's per-part drawing (keyelco.com/product-pdf.cfm?p=1353) and product page answered this session with HTTP 403 from Cloudflare and were not read, so whether the drawing states a rating is unknown.",
+      "pointer": "/ratings",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "SMT test point, micro miniature, silver-plated phosphor bronze, 1000 per reel",
+  "implements": [
+    {
+      "definition": "rhoform.lib.mech.TestPoint",
+      "pins": {
+        "p": "1"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Keystone Electronics Corp.",
+  "mpn": "5015",
+  "notes": "CAT. NO. 5015 is the 1000-per-reel micro miniature SMT test point; CAT. NO. 5017 is the same part on a 5000-piece reel (page 61).\n\nThe test point is one formed conductor on one pad, so the record has one terminal. Keystone numbers no terminal; the record names it '1', the definition's p lands on it, and its role is passive.\n\nBenchmark (c) instantiates TP1 to TP8 as hardware test_point instances that also carry this MPN, so a pick is optional for them; the record exists so the pick helper resolves the MPN, and it carries no electrical figure because the cited page states none.\n\nLifecycle is unknown: Keystone's product page answered with HTTP 403 (Cloudflare) and was not read.\n\nDocument identity. The page prints only its title and its page number, 61, with no revision, date or catalog designation, and document_version says so. M70 is the designation in the URL's filename (M70p61.pdf), not a printed one, and the PDF's Info Title field (11-2011) is metadata, not a printed revision. Which Keystone catalog the page belongs to, and whether it is the current one, could not be checked: Keystone's HTML pages answered with HTTP 403 (Cloudflare). A second Keystone page, keyelco.com/userAssets/file/M65p55.pdf (page 55, sha256:ef1bf216e240986f5717bcd71309afdf5689f1eda962462b2b44cae4c8dae060 as served on 2026-10-24), shows the same 5015 block with the same material and packaging; it is not cited.",
+  "package": {
+    "name": "Micro Miniature SMT Test Point",
+    "pin_count": 1
+  },
+  "part_id": "keystone/5015",
+  "pins": [
+    {
+      "description": "The test point's one terminal",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override.",
+      "source_id": "keystone-m70-p61"
+    },
+    "/implements/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Page 61 (M70p61.pdf), (SMT) Surface Mount Test Points on Tape & Reel, MICRO MINIATURE block (CAT. NO. 5015) and its Pad Layout",
+      "method": "manual",
+      "note": "One terminal: p to '1'.",
+      "source_id": "keystone-m70-p61",
+      "target": "rhoform.lib.mech.TestPoint"
+    },
+    "/pins": {
+      "confidence": "datasheet-stated",
+      "locator": "Page 61 (M70p61.pdf), (SMT) Surface Mount Test Points on Tape & Reel, MICRO MINIATURE block (CAT. NO. 5015) and its Pad Layout",
+      "method": "manual",
+      "note": "One pad in the pad layout, so one terminal. Passive: a test point has no electrical direction.",
+      "source_id": "keystone-m70-p61"
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:bde4be878b2c0f38599a137997576b13b9c8f16c0be2c70cbd0819e5d4a4c01f",
+      "doc_title": "(SMT) SURFACE MOUNT TEST POINTS ON TAPE & REEL",
+      "document_version": "Page 61; the page prints no revision, date or catalog designation",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:43:59Z",
+      "source_id": "keystone-m70-p61",
+      "state": "available",
+      "url": "https://www.keyelco.com/userAssets/file/M70p61.pdf",
+      "vendor": "keystone"
+    }
+  ],
+  "stability": "unstable"
+}

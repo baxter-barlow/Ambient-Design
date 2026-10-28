@@ -1,0 +1,2956 @@
+{
+  "absent": [
+    {
+      "note": "No switching mode is recorded. TI publishes the VIN operating current while switching only as Figure 11 (page 12), 'IQ-OPERATING (Switching) vs Input Voltage': typical curves at -40 C, 25 C and 125 C over VIN 6 V to 42 V, at VSW = 0 V with HO and LO open (page header VVIN = 24 V, RRT = 25 kohm, SYNCIN tied to VCC, EN/UVLO tied to VIN). Those conditions leave out the external MOSFETs' gate charge, so the curve is the controller's own switching overhead above IQ-RUN; read by eye it lies between about 3.3 mA and 3.5 mA above VIN = 8 V. No Section 7.5 row tabulates it and nothing guarantees it, and a number read off a plotted curve is an estimate, not a value the document states, so the mode is absent rather than carried as a typical. In operation VIN also supplies the gate charge through VCC (Table 2, page 30: gate-drive loss VCC x FSW x QG), which depends on the MOSFETs chosen.",
+      "pointer": "/modes/3",
+      "reason": "ambiguous-in-source",
+      "target": "operating_switching"
+    },
+    {
+      "note": "The LM25145 is a controller whose efficiency depends on the external MOSFETs, inductor and operating point. SNVSAT9 gives efficiency only as typical curves (Figures 1-5, page 11, and the application curves of Section 9.2) and guarantees none.",
+      "pointer": "/parameters/efficiency",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no AGND row, and no other section of SNVSAT9 states an absolute maximum for it. The table does not say which ground its voltages are referred to, so no ground window is inferred either.",
+      "pointer": "/pins/0/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "AGND"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no NC row, and no other section of SNVSAT9 states an absolute maximum for it.",
+      "pointer": "/pins/10/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "NC9"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no PGND row, and no other section of SNVSAT9 states an absolute maximum for it. The table does not say which ground its voltages are referred to, so no ground window is inferred either.",
+      "pointer": "/pins/11/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "PGND"
+    },
+    {
+      "note": "Section 7.3 Recommended Operating Conditions (page 7) has no SYNCIN row, and no other section states a recommended SYNCIN voltage window. The only SYNCIN voltage requirement is for an external clock (Section 8.3.6.2, page 20: 'Clock maximum voltage amplitude: 13 V'), kept as the characteristic external_clock_maximum_amplitude. For SYNCIN held at a DC level (tied to AGND or left floating for diode emulation, tied to VCC directly or through a pullup for forced PWM, Section 8.4.4, page 26) TI states no window. The absolute maximum, -0.3 V to 14 V (Section 7.1), is in abs_max.",
+      "pointer": "/pins/16/recommended",
+      "reason": "vendor-unpublished",
+      "target": "SYNCIN"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no SYNCOUT row, and no other section of SNVSAT9 states an absolute maximum for it. Section 7.3's SYNCOUT sink/source current (-1 mA to 1 mA) is a recommended window and is recorded as one.",
+      "pointer": "/pins/17/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "SYNCOUT"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no EP or exposed-pad row, and no other section of SNVSAT9 states an absolute maximum for it. TI describes pin 15 and the pad as electrically isolated and says to solder the pad to the ground plane (pages 4-5).",
+      "pointer": "/pins/4/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "EP"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no HO (absolute, or relative to SW or BST) row, and no other section of SNVSAT9 states an absolute maximum for it.",
+      "pointer": "/pins/6/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "HO"
+    },
+    {
+      "note": "Section 7.1 (page 6) rates LO only for a 20-ns transient: the 'LO (20-ns transient)' row, MIN -3 V with the MAX cell empty. No steady-state LO row appears there, in Section 7.3 or in the pin table, so the steady-state absolute-maximum window is unpublished in full. The transient minimum is the characteristic abs_max_voltage_transient, as SW's 20-ns row is, so no check reads a 20-ns floor as a steady-state limit.",
+      "pointer": "/pins/8/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "LO"
+    },
+    {
+      "note": "Section 7.1 Absolute Maximum Ratings (page 6, read on the rendered page) rates VIN, SW, SW (20-ns transient), ILIM, EN/UVLO, VCC, FB, COMP, SS/TRK, RT and SYNCIN as input voltages and BST, BST to VCC, BST to SW, VCC to BST (20-ns transient), LO (20-ns transient) and PGOOD as output voltages, plus TJ and Tstg. It has no NC row, and no other section of SNVSAT9 states an absolute maximum for it.",
+      "pointer": "/pins/9/abs_max",
+      "reason": "vendor-unpublished",
+      "target": "NC16"
+    },
+    {
+      "note": "Section 7.3 states the operating range as junction temperature, -40 C to 125 C (recorded as ratings.recommended.junction_temperature). TI also states an operating temperature range of -40 C to 125 C without naming the quantity: the Package Option Addendum's 'Op temp (C)' column (page 58, LM25145RGYR row) and the product page's parametric row 'Operating temperature range (C)' (source ti-lm25145-product-page-2026-10-24). Neither says whether it is ambient or junction, and its numbers equal Section 7.3's junction range, so it is not read as an ambient range.",
+      "pointer": "/ratings/recommended/ambient_temperature",
+      "reason": "ambiguous-in-source"
+    }
+  ],
+  "description": "6 V to 42 V synchronous buck DC-DC controller driving external N-channel MOSFETs, voltage mode, VQFN-20 (RGY)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.regulator.Lm25145",
+      "pins": {
+        "AGND": "AGND",
+        "BST": "BST",
+        "COMP": "COMP",
+        "EN_UVLO": "EN/UVLO",
+        "EP": "EP",
+        "FB": "FB",
+        "HO": "HO",
+        "ILIM": "ILIM",
+        "LO": "LO",
+        "NC16": "NC16",
+        "NC9": "NC9",
+        "PGND": "PGND",
+        "PGOOD": "PGOOD",
+        "RT": "RT",
+        "SS_TRK": "SS/TRK",
+        "SW": "SW",
+        "SYNCIN": "SYNCIN",
+        "SYNCOUT": "SYNCOUT",
+        "VCC": "VCC",
+        "VIN": "VIN"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "active",
+  "manufacturer": "Texas Instruments",
+  "modes": [
+    {
+      "conditions": {
+        "rrt": {
+          "typ": 25,
+          "unit": "kohm"
+        },
+        "tj": {
+          "max": 125,
+          "min": -40,
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ven_uvlo": {
+          "typ": 1.5,
+          "unit": "V"
+        },
+        "vin": {
+          "typ": 24,
+          "unit": "V"
+        },
+        "vss_trk": {
+          "typ": 0,
+          "unit": "V"
+        }
+      },
+      "description": "Enabled (EN/UVLO above the 1.2 V operating threshold) with SS/TRK held at 0 V, so the VCC regulator runs and nothing switches.",
+      "draw": [
+        {
+          "current": {
+            "max": 2.1,
+            "typ": 1.8,
+            "unit": "mA"
+          },
+          "pin": "VIN"
+        }
+      ],
+      "id": "operating_not_switching",
+      "kind": "idle"
+    },
+    {
+      "conditions": {
+        "rrt": {
+          "typ": 25,
+          "unit": "kohm"
+        },
+        "tj": {
+          "max": 125,
+          "min": -40,
+          "typ": 25,
+          "unit": "degC"
+        },
+        "vcc": "< 1 V",
+        "ven_uvlo": {
+          "typ": 0,
+          "unit": "V"
+        },
+        "vin": {
+          "typ": 24,
+          "unit": "V"
+        }
+      },
+      "description": "EN/UVLO at 0 V: the VCC LDO and the switching regulator are off.",
+      "draw": [
+        {
+          "current": {
+            "max": 16,
+            "typ": 13.5,
+            "unit": "uA"
+          },
+          "pin": "VIN"
+        }
+      ],
+      "id": "shutdown",
+      "kind": "shutdown"
+    },
+    {
+      "conditions": {
+        "rrt": {
+          "typ": 25,
+          "unit": "kohm"
+        },
+        "tj": {
+          "max": 125,
+          "min": -40,
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ven_uvlo": {
+          "typ": 1,
+          "unit": "V"
+        },
+        "vin": {
+          "typ": 24,
+          "unit": "V"
+        }
+      },
+      "description": "EN/UVLO between the shutdown and operating thresholds (1 V): the VCC LDO regulates, switching is disabled.",
+      "draw": [
+        {
+          "current": {
+            "max": 2,
+            "typ": 1.75,
+            "unit": "mA"
+          },
+          "pin": "VIN"
+        }
+      ],
+      "id": "standby",
+      "kind": "idle"
+    }
+  ],
+  "mpn": "LM25145RGYR",
+  "notes": "Benchmark (b) buck-3v3 uses this part as U1 (/u1), the synchronous buck controller, at VIN 9 V to 14 V and 500 kHz.\n\nSource. TI SNVSAT9, the LM25145 data sheet, initial release (revision '*', June 2017), fetched from ti.com on 2026-10-24; a second fetch the same day returned byte-identical bytes. Pages 4-9 were rendered and read on the page; the text layer was used only to find rows.\n\nPin roles. TI's TYPE letters (P, I, O, dash) are not T2 roles; the rule used is in the /pins provenance note. One role differs from the library's: BST, which TI types O (Output) and the library declares power_out. The record keeps output and the drift is listed for L3 (KNOWN_ROLE_DRIFT). HO, LO and SW are typed P by TI and recorded as the library has them (output, output, passive) from their rows' descriptions; EP (dash) is passive because TI says to solder it to ground.\n\nWindows TI states that the record cannot hold in its one-window pin slots: BST absolute (-0.3 V to 60 V abs, -0.3 V to 55 V recommended) and BST to VCC (45 V abs, 42 V recommended), the SW 20-ns transient (-5 V to 45 V), the VCC to BST 20-ns transient (7 V) and the LO 20-ns transient (-3 V minimum, LO's only row). Each is a named characteristic on its pin with its locator; no check reads them. BST's slots hold the BST-to-SW windows. VCC's external-bias window (8 V to 13 V) is a characteristic because L17 refuses a recommended voltage on a power_out pin. TI states no abs-max for AGND, PGND, EP, HO, NC or SYNCOUT, and only the transient one for LO; each is an absent entry. SYNCIN has no recommended window: TI's 13 V is an external-clock amplitude (Section 8.3.6.2), kept as a characteristic, and its recommended slot is absent. Two recommended currents (PGOOD 2 mA, SYNCOUT +/-1 mA) have no abs-max current to be held inside, so L12 cannot perform those two containment checks.\n\nCurrent sign. A current in a closed slot (recommended.current) or in an ioh, iol or if condition is positive into the pin, as TI's Section 7.5 conditions sign it (ISYNCOUT = -1 mA sourcing). A characteristic TI names as a source or charging current (ILIM's two source currents, SS/TRK's charging current, EN/UVLO's hysteresis current, HO's and LO's drive source current) is the positive magnitude TI prints, with the condition direction 'out of the pin'; read under the sign convention it is a current of the opposite sign.\n\nSupply current. Three modes on VIN, one per supply-current row TI tabulates: operating not switching (1.8 mA typ, 2.1 mA max), standby (1.75 mA typ, 2 mA max) and shutdown (13.5 uA typ, 16 uA max), all at VIN = 24 V. The current while switching is published only as a typical curve, Figure 11 (page 12), at VSW = 0 V with HO and LO open, so it excludes gate charge; no figure for it is tabulated or guaranteed, and it is an absent entry (ambiguous-in-source), not a mode. In operation VIN also supplies the external MOSFETs' gate charge through VCC (Table 2: VCC x FSW x QG), which depends on the MOSFETs chosen.\n\nVCC. output.voltage 7.3 V to 7.7 V is guaranteed only for VIN 9 V to 42 V and IVCC up to 20 mA, not switching. The 20 mA capability.source_current is derived from that row (datasheet-derived), not a separately stated rating, and excludes the gate-drive current the part itself draws from VCC while switching. Current limit 40 mA min / 50 mA typ / 70 mA max at VCC = 0 V; dropout 0.25 V typ / 0.63 V max at VIN 6 V and 20 mA.\n\nReference. VREF 792 mV / 800 mV / 808 mV over TJ -40 C to 125 C, which equals benchmark (b)'s `reference_voltage = 800mV +/- 1%` constraint at both ends.\n\nInconsistencies inside SNVSAT9, recorded rather than resolved: Section 8.3.1 calls VIN's absolute maximum 55 V where Section 7.1 says 45 V (the table is used); Section 8.3.10 gives the RDS(on)-mode ILIM current 'at 27 C' where its EC row says TJ = 25 C; the SS/TRK minimum capacitance is 2.2 nF in the pin table and 'greater than 2 nF' in Section 8.3.7; the two ILIM tempco rows' symbols read swapped against their test conditions; the VCC capacitor is to PGND in the pin table and to AGND in Section 8.3.3; Figure 8 plots the shutdown current at about 8.5 uA at VIN = 24 V where Section 7.5's IQ-SDN row and Section 8.4.1 give 13.5 uA typical (the 16 uA maximum is recorded); Section 8.4.3 calls the VCC rising UVLO threshold 5 V where Section 7.5's VVCC-UV row and Section 8.3.3 give 4.93 V typical (the 4.8 V to 5.2 V limits are recorded).\n\nNot transcribed (no check reads them, none is an R29a field): the Switching Characteristics of Section 7.6 (whose header is free-air temperature, not TJ), error-amplifier gain and bandwidth, maximum duty cycle, ramp valley and feedforward gain, the duty-cycle clamp relations, hiccup timing (unit 'cycles', outside the part-unit grammar), diode-emulation thresholds, the ILIM tempcos (ppm/degC is in the part-unit grammar; no check reads them), the SYNCIN/SYNCOUT delays, thermal shutdown (175 C typ, 20 C hysteresis), and every typical-characteristics curve.\n\nPackage. LM25145RGYR is the 3000-unit tape-and-reel orderable in the RGY (VQFN-20, outline RGY0020B) package; benchmark (b)'s package constraint spells it 'VQFN-20 RGY0020B', which is not how TI names it, and is L5b's to reconcile.",
+  "package": {
+    "name": "RGY (VQFN)",
+    "pin_count": 21,
+    "thermal_pad": true
+  },
+  "parameters": {
+    "reference_voltage": {
+      "conditions": {
+        "fb": "connected to COMP",
+        "rrt": {
+          "typ": 25,
+          "unit": "kohm"
+        },
+        "tj": {
+          "max": 125,
+          "min": -40,
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ven_uvlo": {
+          "typ": 1.5,
+          "unit": "V"
+        },
+        "vin": {
+          "typ": 24,
+          "unit": "V"
+        }
+      },
+      "max": 808,
+      "min": 792,
+      "typ": 800,
+      "unit": "mV"
+    }
+  },
+  "part_id": "ti/lm25145rgyr",
+  "pins": [
+    {
+      "description": "Analog ground: return of the internal 0.8 V reference and the analog circuits. Datasheet pin type: P.",
+      "name": "AGND",
+      "numbers": [
+        "6"
+      ],
+      "role": "power_in"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": {
+            "offset": 14,
+            "reference": "SW"
+          },
+          "min": {
+            "offset": -0.3,
+            "reference": "SW"
+          },
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "abs_max_voltage_to_ground": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 60,
+          "min": -0.3,
+          "unit": "V"
+        },
+        "abs_max_voltage_to_vcc": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": {
+            "offset": 45,
+            "reference": "VCC"
+          },
+          "unit": "V"
+        },
+        "bootstrap_diode_forward_voltage": {
+          "conditions": {
+            "direction": "VCC to BST, BST pin sourcing",
+            "if": {
+              "typ": 20,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.9,
+          "typ": 0.75,
+          "unit": "V"
+        },
+        "quiescent_current_bst_to_sw": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "switching": "not switching",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst": {
+              "typ": 30,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            },
+            "vsw": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 80,
+          "unit": "uA"
+        },
+        "recommended_voltage_to_ground": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 55,
+          "min": -0.3,
+          "unit": "V"
+        },
+        "recommended_voltage_to_vcc": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": {
+            "offset": 42,
+            "reference": "VCC"
+          },
+          "unit": "V"
+        },
+        "undervoltage_hysteresis": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst": "rising, VBST - VSW",
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.42,
+          "unit": "V"
+        },
+        "undervoltage_threshold_falling": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst": "falling",
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": {
+            "offset": 3.4,
+            "reference": "SW"
+          },
+          "unit": "V"
+        }
+      },
+      "description": "Bootstrap rail of the high-side gate driver: the bootstrap capacitor connects from BST to SW and is charged from VCC through the integrated diode. Datasheet pin type: O.",
+      "name": "BST",
+      "numbers": [
+        "17"
+      ],
+      "recommended": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": {
+            "offset": 13,
+            "reference": "SW"
+          },
+          "min": {
+            "offset": 5,
+            "reference": "SW"
+          },
+          "unit": "V"
+        }
+      },
+      "role": "output"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 6,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "voh": {
+          "conditions": {
+            "ioh": {
+              "typ": -1,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": {
+              "typ": 0,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 5,
+          "unit": "V"
+        },
+        "vol": {
+          "conditions": {
+            "iol": {
+              "typ": 1,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.3,
+          "unit": "V"
+        }
+      },
+      "description": "Error-amplifier output; the loop compensation network connects between COMP and FB. Datasheet pin type: O.",
+      "name": "COMP",
+      "numbers": [
+        "4"
+      ],
+      "role": "output"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 45,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "enable_threshold_rising": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": "rising",
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 1.236,
+          "min": 1.164,
+          "typ": 1.2,
+          "unit": "V"
+        },
+        "hysteresis_source_current": {
+          "conditions": {
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 11,
+          "min": 9,
+          "typ": 10,
+          "unit": "uA"
+        },
+        "shutdown_threshold_hysteresis": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": "rising threshold minus falling threshold",
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 50,
+          "unit": "mV"
+        },
+        "shutdown_threshold_rising": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": "rising",
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.42,
+          "unit": "V"
+        }
+      },
+      "description": "Enable and input-UVLO programming input: below about 0.4 V shutdown, between 0.4 V and 1.2 V standby with the VCC regulator on, above 1.2 V switching, when a 10 uA hysteresis current also turns on. Datasheet pin type: I.",
+      "name": "EN/UVLO",
+      "numbers": [
+        "1"
+      ],
+      "recommended": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 42,
+          "min": 0,
+          "unit": "V"
+        }
+      },
+      "role": "input"
+    },
+    {
+      "description": "Pin 15 and the exposed pad (pad 21 in TI's RGY0020B outline), internally connected to each other and electrically isolated; soldered to the ground plane for heat. Datasheet pin type: dash.",
+      "name": "EP",
+      "numbers": [
+        "15",
+        "21"
+      ],
+      "role": "passive"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 6,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "input_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": {
+              "typ": 0.8,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.1,
+          "min": -0.1,
+          "unit": "uA"
+        }
+      },
+      "description": "Inverting input of the error amplifier; the output divider sets VOUT against the 0.8 V reference. Datasheet pin type: I.",
+      "name": "FB",
+      "numbers": [
+        "5"
+      ],
+      "role": "input"
+    },
+    {
+      "characteristics": {
+        "drive_sink_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "test_connection": "HO = BST",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 3.5,
+          "unit": "A"
+        },
+        "drive_source_current": {
+          "conditions": {
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "test_connection": "HO = SW",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 2.3,
+          "unit": "A"
+        },
+        "high_state_resistance": {
+          "conditions": {
+            "ioh": {
+              "typ": -100,
+              "unit": "mA"
+            },
+            "path": "HO to BST",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 1.5,
+          "unit": "ohm"
+        },
+        "low_state_resistance": {
+          "conditions": {
+            "iol": {
+              "typ": 100,
+              "unit": "mA"
+            },
+            "path": "HO to SW",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.9,
+          "unit": "ohm"
+        },
+        "minimum_off_time": {
+          "conditions": {
+            "measured": "HO 50% to 50%",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 200,
+          "typ": 140,
+          "unit": "ns"
+        },
+        "minimum_on_time": {
+          "conditions": {
+            "measured": "HO 50% to 50%",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 60,
+          "typ": 40,
+          "unit": "ns"
+        }
+      },
+      "description": "High-side MOSFET gate-drive output, pulled up to BST and down to SW. Datasheet pin type: P.",
+      "name": "HO",
+      "numbers": [
+        "18"
+      ],
+      "role": "output"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 45,
+          "min": -1,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "comparator_threshold": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 3.5,
+          "min": -8,
+          "typ": -2,
+          "unit": "mV"
+        },
+        "source_current_rdson_mode": {
+          "conditions": {
+            "detection": "SW voltage detected at ILIM",
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 220,
+          "min": 180,
+          "typ": 200,
+          "unit": "uA"
+        },
+        "source_current_rsense_mode": {
+          "conditions": {
+            "detection": "low voltage detected at ILIM",
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 110,
+          "min": 90,
+          "typ": 100,
+          "unit": "uA"
+        }
+      },
+      "description": "Valley current-limit input: sources a programming current into a resistor to the low-side drain (RDS(on) sensing) or to a shunt at the low-side source (RSENSE). Datasheet pin type: I.",
+      "name": "ILIM",
+      "numbers": [
+        "11"
+      ],
+      "recommended": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 42,
+          "min": -1,
+          "unit": "V"
+        }
+      },
+      "role": "input"
+    },
+    {
+      "characteristics": {
+        "abs_max_voltage_transient": {
+          "conditions": {
+            "duration": {
+              "typ": 20,
+              "unit": "ns"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "min": -3,
+          "unit": "V"
+        },
+        "drive_sink_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "test_connection": "LO = VCC",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 3.5,
+          "unit": "A"
+        },
+        "drive_source_current": {
+          "conditions": {
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "test_connection": "LO = AGND",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 2.3,
+          "unit": "A"
+        },
+        "high_state_resistance": {
+          "conditions": {
+            "ioh": {
+              "typ": -100,
+              "unit": "mA"
+            },
+            "path": "LO to VCC",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 1.5,
+          "unit": "ohm"
+        },
+        "low_state_resistance": {
+          "conditions": {
+            "iol": {
+              "typ": 100,
+              "unit": "mA"
+            },
+            "path": "LO to PGND",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vbst_vsw": {
+              "typ": 7,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.9,
+          "unit": "ohm"
+        }
+      },
+      "description": "Low-side MOSFET gate-drive output, pulled up to VCC and down to PGND. Datasheet pin type: P.",
+      "name": "LO",
+      "numbers": [
+        "13"
+      ],
+      "role": "output"
+    },
+    {
+      "description": "No electrical connection. Datasheet pin name NC, type: dash.",
+      "name": "NC16",
+      "numbers": [
+        "16"
+      ],
+      "role": "nc"
+    },
+    {
+      "description": "No electrical connection. Datasheet pin name NC, type: dash.",
+      "name": "NC9",
+      "numbers": [
+        "9"
+      ],
+      "role": "nc"
+    },
+    {
+      "description": "Power ground return of the low-side gate driver; connects to the low-side MOSFET source or the ground end of a shunt. Datasheet pin type: P.",
+      "name": "PGND",
+      "numbers": [
+        "12"
+      ],
+      "role": "power_in"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 14,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "falling_filter": {
+          "conditions": {
+            "measured": "FB to PGOOD falling edge",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 25,
+          "unit": "us"
+        },
+        "fb_lower_threshold": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "scale": "fraction of VREF",
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": "falling",
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.94,
+          "min": 0.9,
+          "typ": 0.92,
+          "unit": "1"
+        },
+        "fb_lower_threshold_hysteresis": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "scale": "fraction of VREF",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.02,
+          "unit": "1"
+        },
+        "fb_upper_threshold": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "scale": "fraction of VREF",
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": "rising",
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 1.1,
+          "min": 1.06,
+          "typ": 1.08,
+          "unit": "1"
+        },
+        "fb_upper_threshold_hysteresis": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "scale": "fraction of VREF",
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.03,
+          "unit": "1"
+        },
+        "leakage_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": {
+              "typ": 0.8,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vpgood": {
+              "typ": 13,
+              "unit": "V"
+            }
+          },
+          "max": 100,
+          "unit": "nA"
+        },
+        "rising_filter": {
+          "conditions": {
+            "measured": "FB to PGOOD rising edge",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 25,
+          "unit": "us"
+        },
+        "vol": {
+          "conditions": {
+            "iol": {
+              "typ": 2,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": {
+              "typ": 0.9,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 150,
+          "unit": "mV"
+        }
+      },
+      "description": "Open-drain power-good flag, released while FB is inside a window around the 0.8 V reference. Datasheet pin type: O.",
+      "name": "PGOOD",
+      "numbers": [
+        "10"
+      ],
+      "recommended": {
+        "current": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 2,
+          "unit": "mA"
+        },
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 13,
+          "unit": "V"
+        }
+      },
+      "role": "open_drain"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 6,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "oscillator_frequency": [
+          {
+            "conditions": {
+              "rrt": {
+                "typ": 100,
+                "unit": "kohm"
+              },
+              "tj": {
+                "typ": 25,
+                "unit": "degC"
+              },
+              "ven_uvlo": {
+                "typ": 1.5,
+                "unit": "V"
+              },
+              "vin": {
+                "typ": 24,
+                "unit": "V"
+              }
+            },
+            "typ": 100,
+            "unit": "kHz"
+          },
+          {
+            "conditions": {
+              "rrt": {
+                "typ": 25,
+                "unit": "kohm"
+              },
+              "tj": {
+                "max": 125,
+                "min": -40,
+                "typ": 25,
+                "unit": "degC"
+              },
+              "ven_uvlo": {
+                "typ": 1.5,
+                "unit": "V"
+              },
+              "vin": {
+                "typ": 24,
+                "unit": "V"
+              }
+            },
+            "max": 420,
+            "min": 380,
+            "typ": 400,
+            "unit": "kHz"
+          },
+          {
+            "conditions": {
+              "rrt": {
+                "typ": 12.5,
+                "unit": "kohm"
+              },
+              "tj": {
+                "typ": 25,
+                "unit": "degC"
+              },
+              "ven_uvlo": {
+                "typ": 1.5,
+                "unit": "V"
+              },
+              "vin": {
+                "typ": 24,
+                "unit": "V"
+              }
+            },
+            "typ": 780,
+            "unit": "kHz"
+          }
+        ]
+      },
+      "description": "Oscillator frequency set: one resistor from RT to AGND, required even when synchronized to SYNCIN. Datasheet pin type: I.",
+      "name": "RT",
+      "numbers": [
+        "2"
+      ],
+      "role": "input"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 6,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "charging_current": {
+          "conditions": {
+            "direction": "out of the pin",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "max": 12,
+          "min": 8.5,
+          "typ": 10,
+          "unit": "uA"
+        },
+        "clamp_voltage_above_fb": {
+          "conditions": {
+            "measured": "VSS/TRK - VFB",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vfb": {
+              "typ": 0.8,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 115,
+          "unit": "mV"
+        },
+        "discharge_resistance": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0.1,
+              "unit": "V"
+            }
+          },
+          "typ": 11,
+          "unit": "ohm"
+        },
+        "minimum_capacitance_to_agnd": {
+          "min": 2.2,
+          "unit": "nF"
+        },
+        "offset_to_fb": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 15,
+          "min": -15,
+          "unit": "mV"
+        }
+      },
+      "description": "Soft-start capacitor or tracking input: an internal 10 uA source charges the capacitor, and after start-up the pin is clamped above FB. Datasheet pin type: I.",
+      "name": "SS/TRK",
+      "numbers": [
+        "3"
+      ],
+      "role": "input"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 45,
+          "min": -1,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "abs_max_voltage_transient": {
+          "conditions": {
+            "duration": {
+              "typ": 20,
+              "unit": "ns"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 45,
+          "min": -5,
+          "unit": "V"
+        }
+      },
+      "description": "Switch node: high-side MOSFET source, low-side MOSFET drain and the low end of the bootstrap capacitor. Datasheet pin type: P.",
+      "name": "SW",
+      "numbers": [
+        "19"
+      ],
+      "recommended": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 42,
+          "min": -1,
+          "unit": "V"
+        }
+      },
+      "role": "passive"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 14,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "characteristics": {
+        "external_clock_frequency_deviation": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "scale": "fraction of the nominal frequency set by RRT",
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.5,
+          "min": -0.2,
+          "unit": "1"
+        },
+        "external_clock_maximum_amplitude": {
+          "conditions": {
+            "signal": "external synchronization clock"
+          },
+          "max": 13,
+          "unit": "V"
+        },
+        "input_resistance": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vsyncin": {
+              "typ": 3,
+              "unit": "V"
+            }
+          },
+          "typ": 20,
+          "unit": "kohm"
+        },
+        "minimum_pulse_width": {
+          "conditions": {
+            "measured": "minimum high-state or low-state duration",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "min": 50,
+          "unit": "ns"
+        },
+        "vih": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "min": 2,
+          "unit": "V"
+        },
+        "vil": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.8,
+          "unit": "V"
+        }
+      },
+      "description": "External clock input; held low it enables diode emulation, held high it forces PWM. Datasheet pin type: I.",
+      "name": "SYNCIN",
+      "numbers": [
+        "8"
+      ],
+      "role": "input"
+    },
+    {
+      "characteristics": {
+        "voh": {
+          "conditions": {
+            "ioh": {
+              "typ": -1,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "min": 3,
+          "unit": "V"
+        },
+        "vol": {
+          "conditions": {
+            "iol": {
+              "typ": 1,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 0.4,
+          "unit": "V"
+        }
+      },
+      "description": "Logic clock output, 180 degrees out of phase with the high-side gate drive. Datasheet pin type: O.",
+      "name": "SYNCOUT",
+      "numbers": [
+        "7"
+      ],
+      "recommended": {
+        "current": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 1,
+          "min": -1,
+          "unit": "mA"
+        }
+      },
+      "role": "output"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 14,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "capability": {
+        "source_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "max": 42,
+              "min": 9,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "min": 20,
+          "unit": "mA"
+        }
+      },
+      "characteristics": {
+        "abs_max_voltage_to_bst_transient": {
+          "conditions": {
+            "duration": {
+              "typ": 20,
+              "unit": "ns"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": {
+            "offset": 7,
+            "reference": "BST"
+          },
+          "unit": "V"
+        },
+        "external_bias_disable_voltage": {
+          "conditions": {
+            "criterion": "voltage required to disable the VCC regulator",
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "min": 8,
+          "unit": "V"
+        },
+        "external_bias_input_current": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "switching": "not switching",
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            },
+            "vcc": {
+              "typ": 13,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "max": 2.1,
+          "unit": "mA"
+        },
+        "external_bias_voltage_recommended": {
+          "conditions": {
+            "bias": "external VCC bias rail",
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 13,
+          "min": 8,
+          "unit": "V"
+        },
+        "undervoltage_hysteresis": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": "rising threshold minus falling threshold",
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "typ": 0.26,
+          "unit": "V"
+        },
+        "undervoltage_threshold_rising": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": "rising",
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            }
+          },
+          "max": 5.2,
+          "min": 4.8,
+          "typ": 4.93,
+          "unit": "V"
+        }
+      },
+      "description": "Output of the internal 7.5 V bias LDO that supplies the controller and both gate drivers; may be overdriven from an external bias rail. Datasheet pin type: O.",
+      "name": "VCC",
+      "numbers": [
+        "14"
+      ],
+      "output": {
+        "current_limit": {
+          "conditions": {
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "vcc": {
+              "typ": 0,
+              "unit": "V"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 24,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "max": 70,
+          "min": 40,
+          "typ": 50,
+          "unit": "mA"
+        },
+        "dropout": {
+          "conditions": {
+            "iout": {
+              "typ": 20,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "typ": 6,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "max": 0.63,
+          "typ": 0.25,
+          "unit": "V"
+        },
+        "voltage": {
+          "conditions": {
+            "iout": {
+              "max": 20,
+              "min": 0,
+              "unit": "mA"
+            },
+            "rrt": {
+              "typ": 25,
+              "unit": "kohm"
+            },
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "typ": 25,
+              "unit": "degC"
+            },
+            "ven_uvlo": {
+              "typ": 1.5,
+              "unit": "V"
+            },
+            "vin": {
+              "max": 42,
+              "min": 9,
+              "unit": "V"
+            },
+            "vss_trk": {
+              "typ": 0,
+              "unit": "V"
+            }
+          },
+          "max": 7.7,
+          "min": 7.3,
+          "typ": 7.5,
+          "unit": "V"
+        }
+      },
+      "role": "power_out"
+    },
+    {
+      "abs_max": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 45,
+          "min": -0.3,
+          "unit": "V"
+        }
+      },
+      "description": "Supply input of the internal VCC LDO regulator. Datasheet pin type: P.",
+      "name": "VIN",
+      "numbers": [
+        "20"
+      ],
+      "recommended": {
+        "voltage": {
+          "conditions": {
+            "tj": {
+              "max": 125,
+              "min": -40,
+              "unit": "degC"
+            }
+          },
+          "max": 42,
+          "min": 6,
+          "unit": "V"
+        }
+      },
+      "role": "power_in"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. SNVSAT9 is the LM25145 family data sheet (initial release, June 2017, revision '*'); every value here applies to the RGY (VQFN-20) package, the only one it lists. The copy TI served on 2026-10-24 carries a Package Option Addendum dated 25-Sep-2026; the data-sheet body is unchanged from the June 2017 release as far as its own revision history shows.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/implements": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6, Pin Functions table (pages 4-5); RGY0020B package outline, page 55 (exposed thermal pad numbered 21)",
+      "method": "manual",
+      "note": "Each library pin maps to the TI pin of the same name, the library writing '/' as '_' (EN_UVLO is EN/UVLO, SS_TRK is SS/TRK). TI names pins 9 and 16 both NC, so each carries its designator (NC9, NC16). Pin 15 and the exposed pad are both named EP and are internally connected, so they are one record pin with both designators; the pad's designator 21 is the number TI's own outline drawing gives it.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/lifecycle": {
+      "confidence": "datasheet-stated",
+      "locator": "LM25145 product page, status badge and status meta tag",
+      "method": "manual",
+      "note": "The product page shows status ACTIVE for LM25145. The data sheet's Package Option Addendum (page 58, dated 25-Sep-2026) lists the LM25145RGYR orderable as Active.",
+      "source_id": "ti-lm25145-product-page-2026-10-24"
+    },
+    "/modes": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 Electrical Characteristics, INPUT SUPPLY rows (page 7)",
+      "method": "manual",
+      "note": "One mode per supply-current row TI tabulates: IQ-RUN, IQ-STBY and IQ-SDN, all drawn on VIN, each typical and maximum. TI tabulates no supply current while switching; Figure 11 (page 12) plots it as a typical curve only, at VSW = 0 V with HO and LO open (so without the external MOSFETs' gate charge, which Table 2, page 30, gives separately as the gate-drive loss VCC x FSW x QG), and guarantees nothing. A curve reading would be an estimate, so the switching mode is an absent entry (/modes/3, ambiguous-in-source), not a mode. The current into VCC from an external bias supply is VCC's external_bias_input_current, and BST's not-switching quiescent current is its quiescent_current_bst_to_sw; neither pin is power_in. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/modes/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5, INPUT SUPPLY, IQ-RUN 'Operating input current, not switching' row (page 7)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "operating_not_switching"
+    },
+    "/modes/1": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5, INPUT SUPPLY, IQ-SDN 'Shutdown input current' row (page 7)",
+      "method": "manual",
+      "note": "At VEN/UVLO = 0 V and VVCC < 1 V. Section 8.4.1 quotes the same 13.5 uA typical at VIN = 24 V. Figure 8 (page 12, IQ-SHD vs Input Voltage, VEN/UVLO = 0 V) plots about 8.5 uA at VIN = 24 V on all three temperature curves, a conflict within the data sheet over the typical only; the 16 uA maximum stands.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "shutdown"
+    },
+    "/modes/2": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5, INPUT SUPPLY, IQ-STBY 'Standby input current' row (page 7)",
+      "method": "manual",
+      "note": "At VEN/UVLO = 1 V.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "standby"
+    },
+    "/mpn": {
+      "confidence": "datasheet-stated",
+      "locator": "Package Option Addendum, Packaging Information, LM25145RGYR row (page 58)",
+      "method": "manual",
+      "note": "LM25145RGYR is the 3000-unit large tape-and-reel orderable, SN lead finish, MSL Level-2-260C-1 YEAR.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6, RGY Package 20-Pin VQFN With Wettable Flanks (page 4); Section 7.4 column header 'RGY (VQFN) 20 PINS' (page 7); RGY0020B package outline (page 55)",
+      "method": "manual",
+      "note": "The name is the package as Section 7.4 heads its column, the style the NE555 record uses. TI counts 20 pins; the exposed thermal pad, which TI says must be soldered to the board and numbers 21 in its outline, makes 21 physical terminals. No footprint is bound yet, so footprint_ref is left out.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/parameters/reference_voltage": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 Electrical Characteristics (continued), ERROR AMPLIFIER, VREF row (page 8)",
+      "method": "manual",
+      "note": "792 mV / 800 mV / 808 mV with FB connected to COMP, the limits over TJ -40 C to 125 C. Section 8.3.2 (page 17) states the same reference as 0.8 V with +/-1 % feedback accuracy over the full junction temperature range. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/pins": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table (pages 4-5); Section 7.1 Absolute Maximum Ratings (page 6); Section 7.3 Recommended Operating Conditions (page 7); Section 7.5 Electrical Characteristics (pages 7-9)",
+      "method": "manual",
+      "note": "ROLES. TI's TYPE column uses P = Power, G = Ground, I = Input, O = Output (the table footnote); none of those letters is a T2 role, so each role is the TYPE letter refined only by what the same row's description says. I is input. O is output, refined to power_out where the row names a regulator output (VCC) and to open_drain where it names an open-drain output (PGOOD); BST's row names neither, so it stays output. P names no direction: power_in for the supply input and grounds (VIN, AGND, PGND), output for the rows that say 'gate drive output' (HO, LO), passive for the switch node (SW). A dash is nc for 'No electrical connection' (pins 9 and 16) and passive for EP, which TI says to solder to ground. Each pin's description ends with the TYPE letter TI prints. WINDOWS. Section 7.1 and 7.3 are headed 'Over the recommended operating junction temperature range of -40 C to 125 C (unless otherwise noted)', so every pin window from them carries tj min -40 max 125. A pin's abs_max and recommended slots hold one window each; where TI states more than one for a pin (BST absolute, to VCC and to SW; SW steady and 20-ns transient; VCC to BST transient), the slot holds the one named in the pin's entry and the others are kept as named characteristics (abs_max_voltage_*, recommended_voltage_*), which no check reads. LO's only row is a 20-ns transient, so LO's abs_max slot is absent and the transient is a characteristic. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/pins/1/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1 Absolute Maximum Ratings, Output voltages, 'BST to SW' row (page 6)",
+      "method": "manual",
+      "note": "The bootstrap-capacitor stress limit, written as TI states it: BST between SW - 0.3 V and SW + 14 V. TI's absolute BST row (-0.3 V to 60 V) and its BST to VCC row (45 V max) are recorded as the characteristics abs_max_voltage_to_ground and abs_max_voltage_to_vcc, because the slot holds one window.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 Electrical Characteristics (continued), BOOTSTRAP DIODE AND UNDERVOLTAGE THRESHOLD rows VBST-FWD, IQ-BST, VBST-UV, VBST-HYS (page 9)",
+      "method": "manual",
+      "note": "VBST-FWD is the integrated diode from VCC to BST at 20 mA sourced from BST. VBST-UV is the BST-to-SW falling threshold, recorded relative to SW (3.4 V typical). Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/characteristics/abs_max_voltage_to_ground": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Output voltages, 'BST' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/characteristics/abs_max_voltage_to_vcc": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Output voltages, 'BST to VCC' row (page 6): MAX 45 V, MIN empty",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/characteristics/recommended_voltage_to_ground": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Output voltages, 'BST' row (page 7)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/characteristics/recommended_voltage_to_vcc": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Output voltages, 'BST to VCC' row (page 7): MAX 42 V, MIN empty",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3 Recommended Operating Conditions, Output voltages, 'BST to SW' row (page 7)",
+      "method": "manual",
+      "note": "BST between SW + 5 V and SW + 13 V, the same function of SW as the abs_max window, so L12 can compare the two. TI's absolute BST row (-0.3 V to 55 V) and BST to VCC row (42 V max) are the characteristics recommended_voltage_to_ground and recommended_voltage_to_vcc.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/1/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 17 (page 5)",
+      "method": "manual",
+      "note": "TI types BST 'O' (Output) and describes it as the bootstrap supply for the high-side gate driver, to be connected to the bootstrap capacitor. The library declares Lm25145.BST power_out. The record keeps TI's letter as output, because the row names no regulated supply output the way pin 14's row does for VCC. This is a known role drift for landing L3 (KNOWN_ROLE_DRIFT); the reading of 'O' for a bootstrap pin is L3's and AMB-52's call, not this record's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "BST"
+    },
+    "/pins/12/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Output voltages, 'PGOOD' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "PGOOD"
+    },
+    "/pins/12/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), POWER GOOD INDICATOR rows PGUTH, PGLTH, PGHYS_U, PGHYS_L, TPG-RISE, TPG-FALL, VPG-OL, IPG-OH (page 8)",
+      "method": "manual",
+      "note": "TI states the thresholds and hysteresis in percent of VREF; they are recorded as fractions (106 % as 1.06), unit 1. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "PGOOD"
+    },
+    "/pins/12/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Output voltages, 'PGOOD' row (page 7)",
+      "method": "manual",
+      "note": "13 V in the MAX column, MIN empty. Section 8.3.5 (page 19) also asks for a pull-up to a DC supply not greater than 13 V.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "PGOOD"
+    },
+    "/pins/12/recommended/current": {
+      "confidence": "datasheet-derived",
+      "locator": "Section 7.3, Sink/source currents, 'PGOOD' row (page 7)",
+      "method": "manual",
+      "note": "The row gives 2 mA in the MAX column with no sign and no MIN. PGOOD is an open-drain output, so the current is read as sunk into the pin (positive in the record's into-the-pin convention); that reading of the sign is the derivation. TI rates no PGOOD current in Section 7.1, so this window has no abs_max to be held inside.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "PGOOD"
+    },
+    "/pins/13/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'FB, COMP, SS/TRK, RT' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "RT"
+    },
+    "/pins/13/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), OSCILLATOR rows FSW1, FSW2, FSW3 (page 8)",
+      "method": "manual",
+      "note": "Each element's RRT replaces the header's 25 kohm; only FSW2 has limits. Equation 3 and Table 1 (page 20) give the resistor for other frequencies and are not values of the part. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "RT"
+    },
+    "/pins/14/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'FB, COMP, SS/TRK, RT' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SS/TRK"
+    },
+    "/pins/14/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), SOFT-START AND VOLTAGE TRACKING rows ISS, RSS, VSS-FB, VSS-CLAMP (page 8)",
+      "method": "manual",
+      "note": "ISS is the charging current the pin sources into the soft-start capacitor, recorded as the magnitude TI prints with the condition direction 'out of the pin'. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SS/TRK"
+    },
+    "/pins/14/characteristics/minimum_capacitance_to_agnd": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 3 (page 4)",
+      "method": "manual",
+      "note": "The pin table asks for at least 2.2 nF from SS/TRK to AGND; Section 8.3.7 (page 21) says the clamp needs more than 2 nF. The pin table's figure is recorded; the two statements differ within the data sheet.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SS/TRK"
+    },
+    "/pins/15/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'SW' row (page 6)",
+      "method": "manual",
+      "note": "The steady-state window. The 'SW (20-ns transient)' row, -5 V to 45 V, is the characteristic abs_max_voltage_transient.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SW"
+    },
+    "/pins/15/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'SW (20-ns transient)' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SW"
+    },
+    "/pins/15/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Input voltages, 'SW' row (page 7)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SW"
+    },
+    "/pins/15/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 19 (page 5)",
+      "method": "manual",
+      "note": "TI types SW 'P' (Power), naming no direction; the row describes the switch node joining the bootstrap capacitor and the two MOSFETs, driven by neither the part's supply nor its drivers, so the role is passive, which is also the library's. Section 11.1.1 item 5 (page 49) also calls SW the return path of the high-side gate driver, the job PGND (power_in) does for the low-side driver; the record does not re-type SW on a layout guideline, and the reading is open for L3 and AMB-52.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SW"
+    },
+    "/pins/16/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'SYNCIN' row (page 6)",
+      "method": "manual",
+      "note": "VCC's own absolute maximum is also 14 V, so a SYNCIN tied to VCC for forced PWM (Section 8.4.4) is inside this window wherever VCC is inside its own.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SYNCIN"
+    },
+    "/pins/16/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), SYNCHRONIZATION INPUT AND OUTPUT rows FSYNC, VSYNC-IH, VSYNC-IL, RSYNCIN, TSYNCI-PW (page 8)",
+      "method": "manual",
+      "note": "FSYNC is stated in percent of the nominal frequency set by RRT (-20 % to +50 %), recorded as a fraction. The delay rows TSYNCIN and TSYNCOUT are not transcribed (TSYNCOUT is the relation TS/2 - 140 ns). Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SYNCIN"
+    },
+    "/pins/16/characteristics/external_clock_maximum_amplitude": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 8.3.6.2 Clock Synchronization, requirements list, 'Clock maximum voltage amplitude: 13 V' (page 20)",
+      "method": "manual",
+      "note": "One of the four requirements TI lists for an external SYNC clock. It is a clock amplitude, not a DC window, and Section 7.3 has no SYNCIN row, so it is not in recommended (see absent). The 7.1/7.3 junction-temperature header does not apply to this section, so it carries no tj.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SYNCIN"
+    },
+    "/pins/17/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), SYNCHRONIZATION INPUT AND OUTPUT rows VSYNCO-OH, VSYNCO-OL (page 8)",
+      "method": "manual",
+      "note": "Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SYNCOUT"
+    },
+    "/pins/17/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Sink/source currents, 'SYNCOUT' row (page 7)",
+      "method": "manual",
+      "note": "-1 mA to 1 mA, sign as Section 7.5 uses it (ISYNCOUT = -1 mA is sourcing): positive into the pin, the sign the record uses in its closed current slots (see notes, 'Current sign'). TI rates no SYNCOUT limit in Section 7.1, so this window has no abs_max to be held inside.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "SYNCOUT"
+    },
+    "/pins/18/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'VCC' row (page 6)",
+      "method": "manual",
+      "note": "TI's 'VCC to BST (20-ns transient)' row, 7 V max, is the characteristic abs_max_voltage_to_bst_transient.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/capability/source_current": {
+      "confidence": "datasheet-derived",
+      "locator": "Section 7.5, VCC REGULATOR, VVCC row test conditions (page 7)",
+      "method": "manual",
+      "note": "TI publishes no separate VCC output-current row. The VVCC row guarantees regulation (7.3 V to 7.7 V) for every IVCC up to 20 mA over the full TJ range at 9 V <= VIN <= 42 V, so the pin is guaranteed to source 20 mA in regulation under those conditions. The row is at VSS/TRK = 0 V, not switching: in operation the gate drivers draw their gate charge (Table 2, page 30: VCC x FSW x QG) from this same regulator, which this floor does not include.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), VCC REGULATOR rows VVCC-UV, VVCC-UVH (page 7) and VVCC-EXT, IVCC (page 8)",
+      "method": "manual",
+      "note": "IVCC is the current an external bias supply delivers into VCC when not switching; it is a characteristic because the record's supply modes draw only on power_in pins. Section 8.3.3 gives the falling UVLO threshold as 4.67 V typical, consistent with 4.93 V rising less 0.26 V. Section 8.4.3 (page 26) calls the rising threshold 5 V, a conflict within the data sheet over the typical only; the 4.8 V to 5.2 V limits stand. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/characteristics/abs_max_voltage_to_bst_transient": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Output voltages, 'VCC to BST (20-ns transient)' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/characteristics/external_bias_voltage_recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Input voltages, 'External VCC bias rail' row (page 7)",
+      "method": "manual",
+      "note": "The recommended window for a supply applied to VCC from outside. It is kept here rather than in recommended.voltage because VCC is a power_out pin, on which L17 refuses a recommended voltage; this is a window the design must hold an external rail inside, not the output's accuracy. Section 8.3.3 and Figure 32 (page 18) show the same 8 V to 13 V range.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/output/current_limit": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5, VCC REGULATOR, ISC-LDO row (page 7)",
+      "method": "manual",
+      "note": "The short-circuit current at VVCC = 0 V. Section 8.3.3 (page 18) states the same limit as '40 mA (minimum)'. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/output/dropout": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5, VCC REGULATOR, VVCC-LDO row (page 7)",
+      "method": "manual",
+      "note": "At VVIN = 6 V and IVCC = 20 mA only. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/output/voltage": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 Electrical Characteristics, VCC REGULATOR, VVCC row (page 7)",
+      "method": "manual",
+      "note": "Guaranteed 7.3 V to 7.7 V only for 9 V <= VIN <= 42 V and 0 mA < IVCC <= 20 mA with VSS/TRK = 0 V (not switching); the row's VIN range replaces the header's 24 V. The row excludes IVCC = 0, which the iout condition's min 0 cannot express. Below about 9 V the LDO is in dropout: Section 8.3.3 says VCC tracks VIN with a small drop. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/18/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 14 (page 5)",
+      "method": "manual",
+      "note": "TI types VCC 'O' and describes it as the output of the 7.5-V bias regulator, so the role is power_out, which is also the library's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VCC"
+    },
+    "/pins/19/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'VIN' row (page 6)",
+      "method": "manual",
+      "note": "45 V. Section 8.3.1 (page 17) refers to 'the absolute maximum voltage rating of 55 V' for VIN; the table is taken as authoritative and the conflict is in notes.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VIN"
+    },
+    "/pins/19/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Input voltages, 'VIN' row (page 7)",
+      "method": "manual",
+      "note": "The Electrical Characteristics' operating input voltage range row (page 7) states the same 6 V to 42 V.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "VIN"
+    },
+    "/pins/2/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'FB, COMP, SS/TRK, RT' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "COMP"
+    },
+    "/pins/2/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), ERROR AMPLIFIER rows VCOMP-OH and VCOMP-OL (page 8)",
+      "method": "manual",
+      "note": "VCOMP-OH is at VFB = 0 V with COMP sourcing 1 mA (ioh -1 mA), typical only; VCOMP-OL at COMP sinking 1 mA, maximum only. The DC gain and unity-gain bandwidth rows are typical-only and not transcribed. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "COMP"
+    },
+    "/pins/3/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'EN/UVLO' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "EN/UVLO"
+    },
+    "/pins/3/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), ENABLE AND INPUT UVLO rows VSDN, VSDN-HYS, VEN, IEN-HYS (page 8)",
+      "method": "manual",
+      "note": "The thresholds are measured with EN/UVLO rising, so the header's VEN/UVLO = 1.5 V is replaced by that sweep. IEN-HYS is the current source the pin table and Section 8.3.4 (Figure 33) describe as turned on above 1.2 V and flowing out through the external UVLO divider; it is the magnitude TI prints, with the condition direction 'out of the pin'. Section 8.4.1 gives the shutdown falling threshold as 0.37 V typical, consistent with 0.42 V rising less 50 mV. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "EN/UVLO"
+    },
+    "/pins/3/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Input voltages, 'EN/UVLO' row (page 7)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "EN/UVLO"
+    },
+    "/pins/4/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6, Pin Functions table, pin 15 and the exposed-pad row (page 5), and the note under the pinout (page 4)",
+      "method": "manual",
+      "note": "TI's TYPE is a dash for both. Both are 'electrically isolated', and TI says to connect the exposed pad to AGND and PGND on the PCB and solder it to the ground plane, so EP is a passive contact, not nc, which is also the library's role.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "EP"
+    },
+    "/pins/5/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'FB, COMP, SS/TRK, RT' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "FB"
+    },
+    "/pins/5/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), ERROR AMPLIFIER, IFB-BIAS row (page 8)",
+      "method": "manual",
+      "note": "Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "FB"
+    },
+    "/pins/6/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), GATE DRIVERS rows RHO-UP, RHO-DOWN, IHOH/ILOH, IHOL/ILOL and PWM CONTROL rows TON(MIN), TOFF(MIN) (page 9)",
+      "method": "manual",
+      "note": "All typical except TON(MIN) and TOFF(MIN), which also have a maximum. Each row is at VBST - VSW = 7 V (condition vbst_vsw). The source current is the magnitude TI prints, with the condition direction 'out of the pin'. The drive currents are typical only, so they are characteristics and not capability, which records guarantees. Section 8.3.9 states the driver impedances measured at VVCC = 7.5 V. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "HO"
+    },
+    "/pins/6/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 18 (page 5)",
+      "method": "manual",
+      "note": "TI types HO 'P' (Power), a letter naming no direction; the row calls it the high-side MOSFET gate drive output, so the role is output, which is also the library's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "HO"
+    },
+    "/pins/7/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Input voltages, 'ILIM' row (page 6)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "ILIM"
+    },
+    "/pins/7/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), OVERCURRENT PROTECT (OCP) rows IRS, IRDSON, VILIM-TH (page 9)",
+      "method": "manual",
+      "note": "Both source currents flow out of ILIM into the programming resistor (Section 8.3.10: the pin 'sources a reference current'); each is the magnitude TI prints, with the condition direction 'out of the pin'. IRDSON's limits hold at TJ = 25 C only, as its row states (tj typ 25 replaces the header's range); Section 8.3.10 (page 23) quotes the same 200 uA 'at 27 C junction temperature', a discrepancy within the data sheet. The two tempco rows (IRSTC, 4500 ppm/C typical, RDS-ON mode; IRDSONTC, 0 ppm/C typical, RSENSE mode) are not transcribed because no check reads them; their symbols read swapped against their test conditions. Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "ILIM"
+    },
+    "/pins/7/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3, Input voltages, 'ILIM' row (page 7)",
+      "method": "manual",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "ILIM"
+    },
+    "/pins/8/characteristics": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.5 (continued), GATE DRIVERS rows RLO-UP, RLO-DOWN, IHOH/ILOH, IHOL/ILOL (page 9)",
+      "method": "manual",
+      "note": "Electrical Characteristics header (pages 7-9): typical values at TJ = 25 C, minimum and maximum limits over TJ -40 C to 125 C, and VIN = 24 V, VEN/UVLO = 1.5 V, RRT = 25 kohm unless the row states otherwise. Each Measure carries those header conditions (vin, ven_uvlo, rrt) and a tj condition: min -40 / typ 25 / max 125 where the row has limits and a typical, min/max only where it has no typical, typ 25 only where it is typical-only. A row's own test condition replaces the header's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "LO"
+    },
+    "/pins/8/characteristics/abs_max_voltage_transient": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1, Output voltages, 'LO (20-ns transient)' row (page 6): MIN -3 V, MAX empty",
+      "method": "manual",
+      "note": "The only LO limit TI states, for a 20-ns transient (condition duration 20 ns). It is not a steady-state window, so it is not in abs_max, which is absent.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "LO"
+    },
+    "/pins/8/role": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 6 Pin Functions table, pin 13 (page 5)",
+      "method": "manual",
+      "note": "TI types LO 'P' (Power), a letter naming no direction; the row calls it the low-side MOSFET gate drive output, so the role is output, which is also the library's.",
+      "source_id": "ti-lm25145-snvsat9",
+      "target": "LO"
+    },
+    "/ratings/abs_max": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.1 Absolute Maximum Ratings, 'Operating junction temperature, TJ' and 'Storage temperature, Tstg' rows (page 6)",
+      "method": "manual",
+      "note": "The table's junction-temperature header does not apply to these two rows, which are themselves temperature limits, so they carry no condition.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/ratings/abs_max/esd_cdm": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.2 ESD Ratings, Charged-device model row (page 6)",
+      "method": "manual",
+      "note": "Published as +/-1000 V, recorded as a symmetric interval.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/ratings/abs_max/esd_hbm": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.2 ESD Ratings, Human-body model row (page 6)",
+      "method": "manual",
+      "note": "Published as +/-2000 V, recorded as a symmetric interval.",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/ratings/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.3 Recommended Operating Conditions, 'Operating junction temperature' row (page 7)",
+      "method": "manual",
+      "note": "Recorded as junction_temperature, which is not a vocabulary key: TI states the range as TJ, and the vocabulary's ambient_temperature is a different quantity (see absent).",
+      "source_id": "ti-lm25145-snvsat9"
+    },
+    "/ratings/thermal": {
+      "confidence": "datasheet-stated",
+      "locator": "Section 7.4 Thermal Information, RGY (VQFN) 20 PINS column (page 7)",
+      "method": "manual",
+      "note": "The table prints one value per metric with no MIN/TYP/MAX heading, recorded as typ as the other store records do. It states no board construction (its note points to TI's Semiconductor and IC Package Thermal Metrics application report), so only the package is recorded as a condition.",
+      "source_id": "ti-lm25145-snvsat9"
+    }
+  },
+  "ratings": {
+    "abs_max": {
+      "esd_cdm": {
+        "conditions": {
+          "standard": "JEDEC JESD22-C101"
+        },
+        "max": 1000,
+        "min": -1000,
+        "unit": "V"
+      },
+      "esd_hbm": {
+        "conditions": {
+          "standard": "ANSI/ESDA/JEDEC JS-001"
+        },
+        "max": 2000,
+        "min": -2000,
+        "unit": "V"
+      },
+      "junction_temperature": {
+        "max": 150,
+        "unit": "degC"
+      },
+      "storage_temperature": {
+        "max": 150,
+        "min": -55,
+        "unit": "degC"
+      }
+    },
+    "recommended": {
+      "junction_temperature": {
+        "max": 125,
+        "min": -40,
+        "unit": "degC"
+      }
+    },
+    "thermal": {
+      "psi_jb": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 11.7,
+        "unit": "degC/W"
+      },
+      "psi_jt": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 0.4,
+        "unit": "degC/W"
+      },
+      "theta_ja": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 36.8,
+        "unit": "degC/W"
+      },
+      "theta_jb": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 11.8,
+        "unit": "degC/W"
+      },
+      "theta_jc_bottom": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 2.1,
+        "unit": "degC/W"
+      },
+      "theta_jc_top": {
+        "conditions": {
+          "package": "RGY (VQFN), 20 pins"
+        },
+        "typ": 28,
+        "unit": "degC/W"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:9c1bf98a28cbcbc8fab41d6796eb6541acf4116bfd7337f27b97c757fdda7fe4",
+      "doc_title": "LM25145 data sheet, product information and support | TI.com",
+      "document_version": "web page, no revision printed; as served 2026-10-24",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:34:25Z",
+      "source_id": "ti-lm25145-product-page-2026-10-24",
+      "state": "available",
+      "url": "https://www.ti.com/product/LM25145",
+      "vendor": "ti"
+    },
+    {
+      "byte_sha256": "sha256:e485439876b4dfc56ea30e3a0d8eb7ee84e6ffe64a17b98a0bd11e0c9a242975",
+      "doc_title": "LM25145 6-V to 42-V Synchronous Buck DC-DC Controller With Wide Duty Cycle Range",
+      "document_version": "SNVSAT9 - JUNE 2017, revision * (Initial release)",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:29:22Z",
+      "source_id": "ti-lm25145-snvsat9",
+      "state": "available",
+      "url": "https://www.ti.com/lit/ds/symlink/lm25145.pdf",
+      "vendor": "ti"
+    }
+  ],
+  "stability": "unstable"
+}

@@ -1,0 +1,210 @@
+{
+  "absent": [
+    {
+      "note": "Murata's specification tabulates no DC-bias capacitance change; its Rating cautions only warn that a class-II capacitor's capacitance falls with applied DC voltage. Murata's product data for this part offers no characteristic graphs at all.",
+      "pointer": "/parameters/capacitance_dc_bias_change",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Murata's specification has no absolute-maximum table. Its Rating cautions bound the voltage between the terminations, surges and pulses included, by the rated voltage, which the record carries as ratings.recommended.voltage_rating; the voltage-proof test level is a production test, not a rating, and the storage conditions are for unmounted parts' solderability, not a storage-temperature limit.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "1 uF +/-10% 16 V X5R MLCC, EIA 0402, -55 to 85 C, Murata GRM series (to be discontinued), 180 mm paper reel",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Capacitor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "nrnd",
+  "manufacturer": "Murata",
+  "mpn": "GRM155R61C105KE01D",
+  "notes": "Benchmark (c) uses this part at /c8 and /c10 (C10 forms the EN reset RC with R3). Its source spells the family, GRM155R61C105KE01, without Murata's packaging code; the pick helper maps it to this record by the murata-packaging-code rule, and D (180 mm paper reel) is a proposed choice for L5b to confirm.\n\nLifecycle: Murata lists the family as To be discontinued and names GRM155R61C105KA12# as its alternative; recorded as nrnd, and a BOM risk for L5b.\n\nThe cited specification is Murata's 2016 reference sheet, the one its product page still serves; its layout differs from the 2026 sheets the other Murata records cite. It marks this part for derated use (a voltage-versus-temperature derating graph, not transcribed; see /ratings/recommended/voltage_rating). Murata tabulates no DC-bias capacitance change and offers no characteristic data for the part. Murata publishes no absolute-maximum table: the rated voltage, which Murata says must also bound surges and pulses, is ratings.recommended.voltage_rating.",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "capacitance": {
+      "conditions": {
+        "frequency": {
+          "max": 1.1,
+          "min": 0.9,
+          "unit": "kHz"
+        },
+        "measurement_voltage": "1.0+/-0.2 Vrms",
+        "ta": "room temperature"
+      },
+      "max": 1.1,
+      "min": 0.9,
+      "typ": 1,
+      "unit": "uF"
+    },
+    "capacitance_tolerance": {
+      "max": 0.1,
+      "min": -0.1,
+      "unit": "1"
+    },
+    "temperature_characteristic": {
+      "conditions": {
+        "measurement_voltage": "0.5+/-0.1 Vrms",
+        "reference_temperature": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ta": {
+          "max": 85,
+          "min": -55,
+          "unit": "degC"
+        },
+        "vdc": {
+          "typ": 0,
+          "unit": "V"
+        }
+      },
+      "max": 0.15,
+      "min": -0.15,
+      "unit": "1"
+    }
+  },
+  "part_id": "murata/grm155r61c105ke01d",
+  "pins": [
+    {
+      "description": "End termination 1. No polarity is marked; the two terminations are interchangeable.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "End termination 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. The cited source is Murata's per-part specification (reference sheet) for this part-number family; it covers every packaging code, and the packaging letter in /mpn selects one reel. Every value here is read from it unless a deeper entry says otherwise. Pin naming and roles are the record's convention (see /pins).",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/lifecycle": {
+      "confidence": "datasheet-derived",
+      "locator": "productionStatus field of the part's product data, shown on the pim.murata.com product details page",
+      "method": "manual",
+      "note": "Murata lists the production status as To be discontinued and points to GRM155R61C105KA12# as the alternative product. The lifecycle vocabulary has no scheduled-discontinuation state, so the record uses nrnd, the closest state that is still orderable; Murata's own words are the BOM risk L5b weighs. The source is the JSON the product details page renders, fetched by POST to the cited URL with body {\"searchCondClass\":2,\"partNum\":\"GRM155R61C105KE01#\",\"page\":1,\"pageSize\":20,\"productCategoryId\":\"ceramicCapacitorSMD\",\"languageRegion\":\"en-us\",\"series\":\"\",\"sortKey\":\"\",\"valSearchCondList\":[],\"rangeValSearchCondList\":[],\"dateRangeSearchCondList\":[]}; the details page itself is a script shell whose bytes carry no product data.",
+      "source_id": "murata-pim-grm155r61c105ke01-2026-10-24"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, section 2 MURATA Part NO. System; page 1, section 5 Package (mark D)",
+      "method": "manual",
+      "note": "The specification is titled for the family GRM155R61C105KE01_, the trailing character standing for the packaging code. The record is the orderable member with code D (180 mm reel, paper W8P2, 10000 pcs), a code the Package table lists; Murata's product data for GRM155R61C105KE01# (source murata-pim-grm155r61c105ke01-2026-10-24) lists GRM155R61C105KE01D among its orderable part numbers.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, section 3 Type & Dimensions; title line (0402)",
+      "method": "manual",
+      "note": "Murata's title line gives the size as 0402 and section 3 the body as L 1.0 x W 0.5 mm; the record's package name is that EIA inch code, and the two terminations are the pin count.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/parameters/capacitance": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, section 4 Rated value, Capacitance and Capacitance Tolerance columns; page 2, Specifications and Test Methods item 6 (Capacitance) with the measurement table beside item 7 (row *1, C <= 10 uF, 10 V min.) and its Table 1",
+      "method": "manual",
+      "note": "The nominal 1 uF is the Capacitance column (and the part number's 105 code). min and max are that nominal at the +/-10 % tolerance, arithmetic on stated values, so datasheet-derived. The conditions are the measurement conditions of the Capacitance test item: room temperature, and from the measurement table beside item 7 the row for C <= 10 uF at 10 V or more (this part is 16 V and is not among the Table 1 exceptions, which list GRM155 B3/R6 only at 10 V): 1.0 +/-0.1 kHz (written as its range, 0.9 to 1.1 kHz), 1.0 +/-0.2 Vrms.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/parameters/capacitance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, section 4 Rated value, Capacitance Tolerance column",
+      "method": "manual",
+      "note": "+/-10% written as a fraction of nominal.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/parameters/temperature_characteristic": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, section 4 Rated value, Temp. coeff or Cap. Change and Temp. Range (Ref.Temp.) columns; page 2, Specifications and Test Methods item 8 (Temperature Characteristics of Capacitance), R6 row",
+      "method": "manual",
+      "note": "X5R: capacitance change within -15 to +15 % over -55 to 85 degC about the 25 degC reference, measured with no DC bias (written vdc 0 V) and at 0.5 +/-0.1 Vrms.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, section 3 Type & Dimensions; title line (0402)",
+      "method": "manual",
+      "note": "Murata publishes no pin table for a chip capacitor. Its Type & Dimension drawing shows two identical end terminations with no polarity mark, so the record names them 1 and 2 and gives both role passive, as the authoring convention does for every two-terminal passive. The numbering is the record's, not Murata's.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, section 4 Rated value, Operating Temp. Range column; page 13, Caution section 4 (Type of Applied Voltage and Self-heating Temperature)",
+      "method": "manual",
+      "note": "Murata's operating temperature range. Its Rating cautions hold the capacitor's own surface temperature, self-heating included, inside this range, so as a bound on ambient it is optimistic by whatever self-heating the circuit causes.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, section 4 Rated value, Rated Voltage column; page 2, Specifications and Test Methods item 1 (Rated Voltage); page 4, Recommended derating conditions on voltage and temperature; page 13, Caution section 3 (Applied Voltage)",
+      "method": "manual",
+      "note": "DC 16 V. Murata defines the rated voltage as the most that may be applied continuously; with AC superimposed the larger of the peak-to-peak and zero-to-peak voltages must stay within it, and the cautions extend the bound to surges, static and pulses. Recorded as max: it is the vendor's limit for the design. This part number is one Murata designs for derated use: page 4 recommends a voltage-versus-temperature derating, published only as a graph of operating-to-rated voltage ratio against product temperature (curves for 85, 105 and 125 degC products), and its durability test runs at 100 % of rated voltage. The graph is not transcribed: reading breakpoints off it would be an estimate. The restriction is carried in the data as a string derating condition on this rating, naming the curve for 85 degC products because this part's operating range ends at 85 degC.",
+      "source_id": "murata-grm155r61c105ke01-01"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 85,
+        "min": -55,
+        "unit": "degC"
+      },
+      "voltage_rating": {
+        "conditions": {
+          "derating": "Murata designs this part number for continuous voltage derated below the rated voltage and recommends the page 4 voltage-versus-temperature derating (curve for 85 degC products); that derating is published only as a graph and is not transcribed, so the rated voltage alone is not Murata's recommended operating voltage at every temperature."
+        },
+        "max": 16,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:266e3b36a84e637ea348913754eb27ef6f420196c0fbde2511d5d7cda1a5eb68",
+      "doc_title": "Chip Monolithic Ceramic Capacitor for General, GRM155R61C105KE01_ (0402, X5R:EIA, 1uF, DC16V), Reference Sheet",
+      "document_version": "GRM155R61C105KE01-01 (pages 2-4 footed JEMCGS-02810B); product specifications as of Mar.8,2016",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:33:02Z",
+      "source_id": "murata-grm155r61c105ke01-01",
+      "state": "available",
+      "url": "https://pim.murata.com/asset/pim4/ceramicCapacitorSMD/GRM155R61C105KE01-01-EN_PDF_CERAMICCAPACITORSMD?lastModifiedDatetime=20250707224214",
+      "vendor": "murata"
+    },
+    {
+      "byte_sha256": "sha256:4c6b7fd9f1654a1feef9d3526c30292dc4a63735a1be9dc32d25f5259a3071be",
+      "doc_title": "Murata PIM product data for GRM155R61C105KE01# (public product search API)",
+      "document_version": "Unversioned product data as served on 2026-10-24; no revision is printed",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:32:32Z",
+      "source_id": "murata-pim-grm155r61c105ke01-2026-10-24",
+      "state": "available",
+      "url": "https://pimapi.murata.com/public/api/pim/v1/products/search",
+      "vendor": "murata"
+    }
+  ],
+  "stability": "unstable"
+}

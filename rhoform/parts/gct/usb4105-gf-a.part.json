@@ -1,0 +1,285 @@
+{
+  "absent": [
+    {
+      "note": "The USB4105 drawing (Revision B4, sheet 1/2) has no absolute-maximum table. Its Electrical block gives a current rating per contact group, a 48 V DC voltage rating, a 240 W power rating, contact resistance, a 100 V AC dielectric withstanding voltage and insulation resistance; none is a damage limit. Sheet 2/2 is packaging only.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "USB Type-C receptacle for USB 2.0, 16 contacts, SMT top mount, gold flash contacts, tape and reel",
+  "implements": [
+    {
+      "definition": "rhoform.lib.connector.UsbCReceptacle16",
+      "pins": {
+        "cc1": "CC1",
+        "cc2": "CC2",
+        "dm": "Dn",
+        "dp": "Dp",
+        "gnd": "GND",
+        "shield": "SHELL",
+        "vbus": "VBUS"
+      },
+      "unbound": [
+        "SBU1",
+        "SBU2"
+      ]
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Global Connector Technology, Ltd (GCT)",
+  "mpn": "USB4105-GF-A",
+  "notes": "Orderable USB4105-GF-A decodes by the drawing's Ordering Grid as contact plating GF (gold flash, standard), packing A (tape and reel), shell stake length S blank (0.95 mm).\n\nPins. GCT's pin table names each contact's signal per plug orientation: Dp1 (A6) and Dp2 (B6), Dn1 (A7) and Dn2 (B7). The definition has one dp and one dm, so the record carries one pin per signal, Dp on A6 and B6 and Dn on A7 and B7, named by GCT's spelling without the orientation index. The grouping follows the USB-C convention in parts/README.md (Join: one pin per signal with every designator it occupies), because a USB 2.0 design ties both orientations' contacts of a signal together. The schema says more: several numbers on one pin means the terminals are internally common and the exporter may tie them. GCT states no internal commoning. Its recommended layout puts A6, B6, A7 and B7 on separate pads, and the GND and VBUS contacts share pads only in the pairs A1/B12, A4/B9, B4/A9 and B1/A12, so A1 and A12, for one, are separate pads. The grouping is therefore the README's convention, not a GCT statement that the contacts are joined inside the part; the disagreement between that convention and the schema's numbers text is for the integrator or L2b to reconcile. SBU1 (A8) and SBU2 (B8) are not in the USB 2.0 definition and are listed unbound.\n\nShell. The pin table's SHELL row gives the signal GND, which is GCT's assignment of the shell to ground, not a statement that the shell is joined to the GND contacts inside the part; the record keeps SHELL a separate pin because the definition has a separate shield and benchmark (c) returns its shield through an RC to ground (net SHIELD). The drawing numbers none of the four shell stakes, and neither the Recommended PCB Layout nor the bottom view labels them; the only name the shell has is the pin table's SHELL row, so the pin's one designator is that name, and package.pin_count is 20, the 16 contact tails of the bottom view plus the four shell stakes.\n\nNot transcribed because no check reads them: the 240 W power rating (a delivered-power rating for the connector, not a dissipation, so power_rating would misstate it), the 100 V AC dielectric withstanding voltage, the 100 Mohm minimum insulation resistance, the mating sequence column, mating and unmating forces and durability.\n\nLifecycle is unknown: GCT's product page (gct.co/connector/usb4105) answered this session with a Cloudflare browser challenge, which was not attempted, so no status was read. The drawing's revision B4 of 18/12/23 is a PCN revision and says nothing about lifecycle.\n\nThe drawing's title block says it is confidential and copyright of GCT and must not be copied or disclosed without consent, although GCT serves it publicly from gct.co. This record carries paraphrased facts and the document's locator and hash, never its content. Whether vendor-public is the right class for a document carrying that legend is for the AMB-143 counsel review.",
+  "package": {
+    "name": "USB4105",
+    "pin_count": 20
+  },
+  "part_id": "gct/usb4105-gf-a",
+  "pins": [
+    {
+      "description": "Configuration channel 1",
+      "name": "CC1",
+      "numbers": [
+        "A5"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Configuration channel 2",
+      "name": "CC2",
+      "numbers": [
+        "B5"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "USB 2.0 D-, GCT's Dn1 (A7) and Dn2 (B7)",
+      "name": "Dn",
+      "numbers": [
+        "A7",
+        "B7"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "USB 2.0 D+, GCT's Dp1 (A6) and Dp2 (B6)",
+      "name": "Dp",
+      "numbers": [
+        "A6",
+        "B6"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Ground contacts",
+      "name": "GND",
+      "numbers": [
+        "A1",
+        "B1",
+        "A12",
+        "B12"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Sideband use 1, not used by USB 2.0",
+      "name": "SBU1",
+      "numbers": [
+        "A8"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Sideband use 2, not used by USB 2.0",
+      "name": "SBU2",
+      "numbers": [
+        "B8"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Stainless steel shell, four through-hole stakes; GCT assigns it the signal GND",
+      "name": "SHELL",
+      "numbers": [
+        "SHELL"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Bus power contacts",
+      "name": "VBUS",
+      "numbers": [
+        "A4",
+        "A9",
+        "B4",
+        "B9"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override.",
+      "source_id": "gct-usb4105-rev-b4"
+    },
+    "/implements/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, pin table (Pin, Signal, Mating Sequence), read with the bottom view and Recommended PCB Layout designators",
+      "method": "manual",
+      "note": "Mapped signal by signal from GCT's pin table: cc1 to CC1 (A5), cc2 to CC2 (B5), dp to Dp (Dp1 A6, Dp2 B6), dm to Dn (Dn1 A7, Dn2 B7), gnd to GND, vbus to VBUS, shield to the SHELL row. SBU1 and SBU2 have no definition pin.",
+      "source_id": "gct-usb4105-rev-b4",
+      "target": "rhoform.lib.connector.UsbCReceptacle16"
+    },
+    "/pins": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, pin table (Pin, Signal; its last row, SHELL / GND, is the only place the drawing names the shell), bottom view (16 tail designators) and Recommended PCB Layout (pad designators; its four shell-stake slots are unlabeled)",
+      "method": "manual",
+      "note": "Roles are passive: the drawing is a contact list and states no electrical direction for any contact. The design gives each contact its function.",
+      "source_id": "gct-usb4105-rev-b4"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, Specifications, Mechanical & Environmental, Operating Temperature",
+      "method": "manual",
+      "source_id": "gct-usb4105-rev-b4"
+    },
+    "/ratings/recommended/current_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, Specifications, Electrical, Current Rating",
+      "method": "manual",
+      "note": "GCT's Current Rating reads 5.00 A collectively for VBUS pins, 6.25 A collectively for GND pins, 1.25 A for A5/B5 pin, and 0.25 A per pin for all other pins, which here are Dp, Dn, SBU1 and SBU2, applying to each of A6, B6, A7 and B7 separately. One element per record pin: `pin` names the RECORD pin (bind() copies conditions untranslated, so a checker maps it with Binding.port_of), and `scope` carries GCT's own wording with the designators it covers; GCT says pin, not contact. Per-pin figures in part-level ratings, under a `pin` condition no vocabulary defines, are a contract question for L4 and the integrator ($defs.Ratings is for limits not attributable to a single pin). GCT states no current rating for the SHELL, so it has no element. No temperature-rise or ambient condition is printed with the ratings.",
+      "source_id": "gct-usb4105-rev-b4"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, Specifications, Electrical, Voltage Rating",
+      "method": "manual",
+      "source_id": "gct-usb4105-rev-b4"
+    },
+    "/series/resistance": {
+      "confidence": "datasheet-stated",
+      "locator": "Sheet 1/2, Specifications, Electrical, Contact Resistance",
+      "method": "manual",
+      "note": "Contact resistance of one mated contact, as GCT states it: 40 mohm max initial and 50 mohm max after test. The drawing does not name the test the second figure follows, so its condition is GCT's words. It is a per-contact figure, not a resistance between two pins of this record.",
+      "source_id": "gct-usb4105-rev-b4"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 85,
+        "min": -40,
+        "unit": "degC"
+      },
+      "current_rating": [
+        {
+          "conditions": {
+            "pin": "CC1",
+            "scope": "for A5/B5 pin (A5)"
+          },
+          "max": 1.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "CC2",
+            "scope": "for A5/B5 pin (B5)"
+          },
+          "max": 1.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "Dn",
+            "scope": "per pin for all other pins (A7, B7)"
+          },
+          "max": 0.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "Dp",
+            "scope": "per pin for all other pins (A6, B6)"
+          },
+          "max": 0.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "GND",
+            "scope": "collectively for GND pins (A1, A12, B1, B12)"
+          },
+          "max": 6.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "SBU1",
+            "scope": "per pin for all other pins (A8)"
+          },
+          "max": 0.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "SBU2",
+            "scope": "per pin for all other pins (B8)"
+          },
+          "max": 0.25,
+          "unit": "A"
+        },
+        {
+          "conditions": {
+            "pin": "VBUS",
+            "scope": "collectively for VBUS pins (A4, A9, B4, B9)"
+          },
+          "max": 5.00,
+          "unit": "A"
+        }
+      ],
+      "voltage_rating": {
+        "conditions": {
+          "waveform": "DC"
+        },
+        "max": 48,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "series": {
+    "resistance": [
+      {
+        "conditions": {
+          "state": "initial"
+        },
+        "max": 40,
+        "unit": "mohm"
+      },
+      {
+        "conditions": {
+          "state": "after test"
+        },
+        "max": 50,
+        "unit": "mohm"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "byte_sha256": "sha256:fb331fbabee8392ed2937ed757c1610cb0f174b84625147c0b580a18eea8c0e5",
+      "doc_title": "USB4105, USB Type C Receptacle for USB 2.0, SMT Type, PCB Top Mount",
+      "document_version": "Revision B4, 18/12/23 (drawing date 4th October 2019)",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:29:21Z",
+      "source_id": "gct-usb4105-rev-b4",
+      "state": "available",
+      "url": "https://gct.co/files/drawings/usb4105.pdf",
+      "vendor": "gct"
+    }
+  ],
+  "stability": "unstable"
+}

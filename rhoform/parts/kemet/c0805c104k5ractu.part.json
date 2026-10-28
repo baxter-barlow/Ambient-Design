@@ -1,0 +1,239 @@
+{
+  "absent": [
+    {
+      "note": "The C1002 X7R series datasheet (all 28 pages read) tabulates no DC-bias capacitance change; its overview only says X7R capacitance changes predictably with voltage. KEMET's per-part specification sheet plots a Capacitance Change vs. DC Voltage Bias curve (page 2), but it is a K-SIM simulation that page 4 says shows the typical response and is not a specification. No figure is recorded.",
+      "pointer": "/parameters/capacitance_dc_bias_change",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "The C1002 X7R series datasheet has no absolute-maximum table. The 250 % dielectric withstanding voltage on page 16 is a 5 s production test, not a rating, and the storage and handling guidance on page 19 is not a storage-temperature limit. The per-part specification sheet has no absolute-maximum table either; its Dielectric Withstanding Voltage of 125 VDC is that 250 % test level.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "100 nF +/-10% 50 V X7R MLCC, EIA 0805, KEMET C0805C commercial grade, matte Sn, 7 in reel unmarked (TU)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Capacitor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "KEMET",
+  "mpn": "C0805C104K5RACTU",
+  "notes": "Benchmark (a) uses this part as the 555's VCC bypass (/c_byp, parts.yaml CBYP).\n\nThe sources are KEMET's X7R commercial-grade series datasheet and KEMET's per-part specification sheet, which search.kemet.com generates on request; the per-part sheet settles what the series sheet leaves to it, the capacitance test voltage (1.0 Vrms) and aging referee time (48 hours), and states the TCC test's 0 VDC bias. Lifecycle is unknown: KEMET product pages now redirect to yageogroup.com, outside the kemet host allowlist (L21), and neither datasheet states a status. No DC-bias capacitance change is tabulated (the per-part sheet's DC-bias curve is a simulation KEMET says is not a specification), and KEMET publishes no absolute-maximum table: the rated voltage is ratings.recommended.voltage_rating.",
+  "package": {
+    "name": "0805",
+    "pin_count": 2
+  },
+  "parameters": {
+    "capacitance": {
+      "conditions": {
+        "frequency": {
+          "max": 1050,
+          "min": 950,
+          "unit": "Hz"
+        },
+        "measurement_voltage": "1.0+/-0.2 Vrms",
+        "referee_time": "48 hours"
+      },
+      "max": 0.11,
+      "min": 0.09,
+      "typ": 0.1,
+      "unit": "uF"
+    },
+    "capacitance_tolerance": {
+      "max": 0.1,
+      "min": -0.1,
+      "unit": "1"
+    },
+    "temperature_characteristic": {
+      "conditions": {
+        "frequency": {
+          "max": 1050,
+          "min": 950,
+          "unit": "Hz"
+        },
+        "measurement_voltage": "1.0+/-0.2 Vrms",
+        "reference_temperature": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ta": {
+          "max": 125,
+          "min": -55,
+          "unit": "degC"
+        },
+        "vdc": {
+          "typ": 0,
+          "unit": "V"
+        }
+      },
+      "max": 0.15,
+      "min": -0.15,
+      "unit": "1"
+    }
+  },
+  "part_id": "kemet/c0805c104k5ractu",
+  "pins": [
+    {
+      "description": "End termination 1. KEMET describes the part as non-polar.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "End termination 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. KEMET specifies this part in its X7R commercial-grade SERIES datasheet; every value is the series specification at the case size, voltage and tolerance the part number codes, except where a deeper entry cites KEMET's per-part specification sheet (source kemet-specsheet-c0805c104k5ractu-2026-10-24) for a condition the series sheet leaves to it. Pin naming and roles are the record's convention (see /pins).",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/lifecycle": {
+      "confidence": "unverified",
+      "method": "manual",
+      "note": "KEMET's product page for this part now redirects to yageogroup.com (the YAGEO Group, KEMET's parent), which is outside the kemet host allowlist, so no lifecycle status can be cited; neither the series datasheet nor the per-part specification sheet states one. Recorded as unknown.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Ordering Information and Packaging C-Spec Ordering Options Table",
+      "method": "manual",
+      "note": "Composed from KEMET's own ordering-code legend rather than copied from a listing: C (ceramic) + 0805 (case size) + C (standard) + 104 (100000 pF) + K (+/-10 %) + 5 (50 VDC) + R (X7R) + A (failure rate N/A) + C (100 % matte Sn) + TU (7 inch reel, unmarked). The waterfall offers 104 at 0805 and 50 V in K tolerance.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Ordering Information (Case Size); page 3, Dimensions table, EIA 0805 / metric 2012 row",
+      "method": "manual",
+      "note": "EIA case size 0805 (metric 2012), two end terminations.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/parameters/capacitance": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Ordering Information and Packaging C-Spec Ordering Options Table (Capacitance Code, Capacitance Tolerance); page 5, Table 1A Capacitance Range/Selection Waterfall (0402 - 1206 Case Sizes) cont., 0.1 uF (104) row, C0805C 50 V column; page 14, X7R Performance and Reliability: SMD Test Methods and Conditions, Capacitance row",
+      "method": "manual",
+      "note": "The nominal 0.1 uF is the part number's 104 capacitance code (two significant digits and a count of zeros, in pF), which the selection waterfall offers in the C0805C 50 V column. min and max are that nominal at the K (+/-10 %) tolerance, arithmetic on stated values. The conditions are the Capacitance row's for C <= 10 uF: 1 kHz +/-50 Hz, and a test voltage and aging referee time the series sheet defers to the part number specification sheet; the deeper entries cite that sheet for both.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/parameters/capacitance/conditions/measurement_voltage": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, Specifications, Measurement Condition row (1 kHz 1.0Vrms)",
+      "method": "manual",
+      "note": "The per-part sheet's 1.0 Vrms picks the 1.0 +/-0.2 Vrms alternative of the series sheet's Capacitance row for C <= 10 uF (C1002_X7R page 14); the +/-0.2 Vrms is the series sheet's tolerance on it, so the condition joins two stated values.",
+      "source_id": "kemet-specsheet-c0805c104k5ractu-2026-10-24"
+    },
+    "/parameters/capacitance/conditions/referee_time": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, Specifications, Aging Rate row (3% Loss/Decade Hour: Referee Time is 48 Hours)",
+      "method": "manual",
+      "note": "The referee time the series sheet's Capacitance row (C1002_X7R page 14) leaves to the part number specification sheet: 48 hours.",
+      "source_id": "kemet-specsheet-c0805c104k5ractu-2026-10-24"
+    },
+    "/parameters/capacitance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Ordering Information and Packaging C-Spec Ordering Options Table",
+      "method": "manual",
+      "note": "Tolerance letter K is +/-10 %, written as a fraction of nominal.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/parameters/temperature_characteristic": {
+      "confidence": "datasheet-stated",
+      "locator": "page 16, X7R Performance and Reliability: SMD Test Methods and Conditions (cont.), Temperature Coefficient of Capacitance (TCC) row; page 1, Overview",
+      "method": "manual",
+      "note": "Capacitance within +/-15 % over -55 to +125 degC, the +25 degC step being the reference. The per-part specification sheet's TCC row gives the same 15 %; its measurement voltage and DC bias, which the series row leaves to that sheet or does not state, are cited from it in the deeper entries.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/parameters/temperature_characteristic/conditions/measurement_voltage": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, Specifications, Capacitance Change with Reference to +25 degC and 0 VDC Applied (TCC) row (15%, 1kHz 1.0Vrms)",
+      "method": "manual",
+      "note": "The TCC row's 1.0 Vrms picks the 1.0 +/-0.2 Vrms alternative of the series sheet's TCC row for C <= 10 uF (C1002_X7R page 16); the +/-0.2 Vrms is the series sheet's tolerance on it.",
+      "source_id": "kemet-specsheet-c0805c104k5ractu-2026-10-24"
+    },
+    "/parameters/temperature_characteristic/conditions/vdc": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, Specifications, Capacitance Change with Reference to +25 degC and 0 VDC Applied (TCC) row",
+      "method": "manual",
+      "note": "The row's title states the change is taken with 0 VDC applied, recorded as vdc 0 V.",
+      "source_id": "kemet-specsheet-c0805c104k5ractu-2026-10-24"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "page 1, Benefits (non-polar device); page 3, Dimensions drawing",
+      "method": "manual",
+      "note": "KEMET publishes no pin table for a chip capacitor; it calls the part non-polar and draws two end terminations, so the record names them 1 and 2 with role passive, the convention for two-terminal passives.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "page 1, Overview and Benefits (operating temperature range)",
+      "method": "manual",
+      "note": "KEMET's stated operating temperature range for the X7R series, -55 to +125 degC.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Ordering Information and Packaging C-Spec Ordering Options Table (Rated Voltage code 5 = 50 VDC); page 1, Benefits (DC voltage ratings); page 5, Table 1A Capacitance Range/Selection Waterfall (0402 - 1206 Case Sizes) cont., 0.1 uF (104) row, C0805C 50 V column",
+      "method": "manual",
+      "note": "Rated voltage 50 VDC, the part number's voltage code 5.",
+      "source_id": "kemet-c1002-x7r-2026-09-01"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 125,
+        "min": -55,
+        "unit": "degC"
+      },
+      "voltage_rating": {
+        "max": 50,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:d8e6ca6631862e31a19b90b6cfe13f1b20153c2efd6c8e30f1a5d5ba147aa908",
+      "doc_title": "Surface Mount Multilayer Ceramic Chip Capacitors (SMD MLCCs), X7R Dielectric, 6.3 – 250 VDC (Commercial Grade)",
+      "document_version": "C1002_X7R (2026-09-01)",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:39:54Z",
+      "source_id": "kemet-c1002-x7r-2026-09-01",
+      "state": "available",
+      "url": "https://content.kemet.com/datasheets/KEM_C1002_X7R_SMD.pdf",
+      "vendor": "kemet"
+    },
+    {
+      "byte_sha256": "sha256:dfafcced3a85c99ce7b1e300dfb4be8af9475da166254263afcadb246b0b84b5",
+      "doc_title": "C0805C104K5RACTU, Aliases (C0805C104K5RAC7800), SMD Comm X7R, Ceramic, 0.1 uF, 10%, 50 VDC, X7R, SMD, MLCC, Temperature Stable, Class II, 0805 / 2012",
+      "document_version": "Per-part specification sheet with no printed revision, generated on request; footer reads Generated 10/24/2026",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T11:08:05Z",
+      "source_id": "kemet-specsheet-c0805c104k5ractu-2026-10-24",
+      "state": "available",
+      "url": "https://search.kemet.com/component-documentation/download/specsheet/C0805C104K5RACTU",
+      "vendor": "kemet"
+    }
+  ],
+  "stability": "unstable"
+}

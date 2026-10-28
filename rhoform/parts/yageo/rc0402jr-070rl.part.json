@@ -1,0 +1,182 @@
+{
+  "absent": [
+    {
+      "note": "The data sheet states no tolerance for the jumper: Table 2 (RC0402 1/16 W row, RESISTANCE RANGE, page 5) gives its resistance only as Jumper<50mOhm, with no nominal, and ORDERING INFORMATION (2) TOLERANCE (page 2) reads 'J = +/- 5.0% (for jumper ordering, use code of J)', which names the code a jumper is ordered with. The vendor's generated spec sheet for this MPN (see the record notes) lists Resistance 0 mOhms and Resistance Tolerance 5%; 5 % of a 0 ohm nominal is a zero-width window that contradicts the data sheet's under-50 mohm bound, so the two vendor documents cannot be read as one jumper tolerance.",
+      "pointer": "/parameters/resistance_tolerance",
+      "reason": "ambiguous-in-source"
+    },
+    {
+      "note": "The data sheet states no TCR for the jumper: Table 2's RC0402 1/16 W row (TEMPERATURE COEFFICIENT column, page 5) gives +/-200 ppm/degC for 1 ohm <= R <= 10 ohm, +/-100 ppm/degC for 10 ohm < R <= 10 Mohm and +/-200 ppm/degC for 10 Mohm < R <= 100 Mohm, and nothing for the Jumper<50mOhm the same row lists. The vendor's generated spec sheet for this MPN (see the record notes) lists -/+200 ppm/C. The data sheet gives no basis for that figure on a part below every band, so the two vendor documents cannot be read as one jumper TCR.",
+      "pointer": "/parameters/temperature_coefficient",
+      "reason": "ambiguous-in-source"
+    },
+    {
+      "note": "Table 2's RC0402 1/16 W row (page 5), which lists the jumper (Jumper<50mOhm), gives a 100 V MAXIMUM OVERLOAD VOLTAGE. The Short Time Overload test (Table 5, IEC 60115-1 8.1, page 9) applies 2.5 x RCWV or that maximum, whichever is less, for 5 s, and states a jumper requirement (<50mR after the test), so it covers the jumper. RCWV is sqrt(P x R) or the maximum working voltage, whichever is less (RATED VOLTAGE, page 7), and the jumper's R is stated only as under 50 mohm, so 2.5 x RCWV is under 2.5 x sqrt(0.0625 W x 0.05 ohm), 0.14 V to two figures, almost three orders of magnitude below the column's 100 V. The same row rates the jumper by current instead (JUMPER CRITERIA). The data sheet does not say which of the two is the jumper's overload limit. The vendor's generated spec sheet for this MPN (see the record notes) lists '100 Max Over Voltage', the column value, which does not settle it.",
+      "pointer": "/ratings/abs_max/overload_voltage",
+      "reason": "ambiguous-in-source"
+    },
+    {
+      "note": "Table 2's RC0402 1/16 W row (page 5), which lists the jumper (Jumper<50mOhm), gives a 50 V MAXIMUM WORKING VOLTAGE, and RATED VOLTAGE (page 7) sets the continuous working voltage to sqrt(P x R) or that maximum, whichever is less. The jumper's R is stated only as under 50 mohm, so the rule gives under sqrt(0.0625 W x 0.05 ohm), 56 mV to two figures, about three orders of magnitude below the column's 50 V, and the same row rates the jumper by current instead (JUMPER CRITERIA, Rated Current 1.0 A). The data sheet does not say which of the two is the jumper's working-voltage limit. The vendor's generated spec sheet for this MPN (see the record notes) lists 'Voltage DC 50 V (Max Continuous Voltage at Full Rated Power)'; 50 V at the full rated 0.0625 W would take R = V^2 / P = 40 kohm, so it is the series column value and does not settle it.",
+      "pointer": "/ratings/recommended/voltage_rating",
+      "reason": "ambiguous-in-source"
+    }
+  ],
+  "description": "0 ohm thick-film chip jumper, 0402, under 50 mohm, 1 A rated and 2 A maximum current (Yageo RC_L)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "YAGEO",
+  "mpn": "RC0402JR-070RL",
+  "notes": "Benchmark use: esp32s3-devboard /r11, /r12 (R11, R12, USB D+/D- 0 ohm links). The data sheet gives the jumper no nominal, tolerance or TCR: it bounds the resistance from above (Jumper<50mOhm), rates the jumper by current, and the J in the MPN is the code a jumper is ordered with (ORDERING INFORMATION (2)); tolerance and TCR are absent entries that say so. The benchmark source states r11/r12 as resistance = 0ohm +/- 5%, which this data cannot satisfy honestly (a source edit for L5b, not a record defect). The jumper is listed in Table 2's RC0402 1/16 W row, and the row's type-level figures that need no resistance value are recorded for it: the 1/16 W rated power at 70 degC (POWER RATING, page 7, rates each type; the MPN's 07 field is standard power, so the 1/8 W row, which lists no jumper, does not apply) and the -55 to 155 degC operating range. The row's working and overload voltages are defined through the resistance (RATED VOLTAGE, page 7; Short Time Overload, page 9), and their absent entries say why they are not read for a jumper. Vendor spec sheet: Yageo's generated per-part spec sheet for this MPN (https://yageogroup.com/component-documentation/download/specsheet/RC0402JR-070RL?lang=en, fetched 2026-10-24T11:05:10Z, sha256 2ea5ed6085874cb319e69582d40ba1a97ba302af86d78fd65d0dcabe8b1ad45f; it prints no revision, only 'Generated 10/24/2026', and is not cited as a source) lists Resistance 0 mOhms, Resistance Tolerance 5%, Power 0.063 W (70C), Temp. Coefficient -/+200 ppm/C, Temperature Range -55/+155 degC, and Voltage DC 50 V (Max Continuous Voltage at Full Rated Power), 100 Max Over Voltage, 100 Dielectric Withstanding Voltage, and no current rating. Its power (1/16 W rounded) and temperature range agree with the data sheet and are recorded from it; its tolerance, TCR and two voltages are discussed in the absent entries. Not recorded because no check reads them: the dielectric withstanding voltage, the endurance and environmental test limits, packing and marking. Lifecycle: the data sheet states none, and the vendor's product page for this MPN (yageogroup.com/products/Resistors/part/RC0402JR-070RL, read 2026-10-24) lists the part with stock and sample ordering but no lifecycle field, so the record says unknown rather than inferring active. Source URL: www.yageo.com answers this path with a 301 redirect to the same path on yageogroup.com, a domain Yageo also operates, which served the hashed bytes. The record cites the yageo.com URL because VENDOR_DOMAINS lists only yageo.com for this vendor; curl -L on it reproduces the hash.",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 50,
+      "unit": "mohm"
+    }
+  },
+  "part_id": "yageo/rc0402jr-070rl",
+  "pins": [
+    {
+      "description": "Terminal 1. The part is symmetric; which terminal is 1 carries no meaning.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Terminal 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. Yageo RC_L series data sheet, RC0402 row, JUMPER CRITERIA.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/implements": {
+      "confidence": "datasheet-derived",
+      "locator": "CONSTRUCTION and Fig. 9 Chip resistor outlines, page 4",
+      "method": "manual",
+      "note": "A jumper chip is the same two-termination body with a conductor for its resistive layer (Fig. 9); Resistor's a and b map to terminals 1 and 2.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "ORDERING INFORMATION - GLOBAL PART NUMBER, page 2",
+      "method": "manual",
+      "note": "Read against the vendor's global part number grammar: RC, size 0402, J (the code to use for jumper ordering), packaging R (paper taping reel), TCR '-', 07 (7-inch reel, standard power), value 0R (zero ohm), default code L. The vendor's site lists this exact MPN (product page and per-part spec sheet on yageogroup.com, 2026-10-24).",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "ORDERING INFORMATION (1) SIZE, page 2; CONSTRUCTION, Fig. 9 and Table 1 DIMENSION (RC0402 row), page 4",
+      "method": "manual",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/parameters/resistance": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, RESISTANCE RANGE column, Jumper<50mOhm, page 5",
+      "method": "manual",
+      "note": "The data sheet states the jumper's resistance as under 50 mohm, a maximum and nothing else; recorded as max 50 mohm (the bound written as at most). No typ and no tolerance exist for a jumper.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "CONSTRUCTION and Fig. 9 Chip resistor outlines, page 4",
+      "method": "manual",
+      "note": "Two end terminations, unnamed in the data sheet; named 1 and 2, role passive.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/abs_max/maximum_current": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, JUMPER CRITERIA column, Maximum Current, page 5",
+      "method": "manual",
+      "note": "The data sheet gives the jumper a Maximum Current beside its Rated Current and does not define it further. Recorded as the jumper's stated upper current limit, under a key no check reads, so a checker relies on the rated current instead.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, OPERATING TEMPERATURE RANGE column, page 5; FUNCTIONAL DESCRIPTION, OPERATING TEMPERATURE RANGE, page 7",
+      "method": "manual",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/current_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, JUMPER CRITERIA column, Rated Current, page 5",
+      "method": "manual",
+      "note": "The table states no ambient or other condition for the jumper's rated current.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    },
+    "/ratings/recommended/power_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Table 2, RC0402 1/16 W row, POWER column, page 5; FUNCTIONAL DESCRIPTION, POWER RATING (rated power at 70 degC) and Fig. 10-1, page 7",
+      "method": "manual",
+      "note": "1/16 W, written exactly as 0.0625 W, at the 70 degC ambient the rating is stated at. The jumper is listed in this row (RESISTANCE RANGE, Jumper<50mOhm), and POWER RATING rates each type (RC0402 = 1/16 W, 1/8 W) with no exception for jumpers; the MPN's 07 field is standard power, the 1/16 W row. Fig. 10-1 holds 100 % of rated power up to 70 degC and derates linearly to zero at 155 degC; only the 70 degC rating is recorded.",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14"
+    }
+  },
+  "ratings": {
+    "abs_max": {
+      "maximum_current": {
+        "max": 2.0,
+        "unit": "A"
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "max": 155,
+        "min": -55,
+        "unit": "degC"
+      },
+      "current_rating": {
+        "max": 1.0,
+        "unit": "A"
+      },
+      "power_rating": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.0625,
+        "unit": "W"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:7b6f0ae72708ca4b38126f84b5407a3e970a94cb60bc1a0afdaeb25a23d839bb",
+      "doc_title": "GENERAL PURPOSE CHIP RESISTORS - RC_L series",
+      "document_version": "Product specification - November 14, 2025 V.14",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:31:19Z",
+      "source_id": "yageo-pyu-rc-group-51-rohs-l-v14",
+      "state": "available",
+      "url": "https://www.yageo.com/content/datasheet/asset/file/PYU-RC_GROUP_51_ROHS_L",
+      "vendor": "yageo"
+    }
+  ],
+  "stability": "unstable"
+}

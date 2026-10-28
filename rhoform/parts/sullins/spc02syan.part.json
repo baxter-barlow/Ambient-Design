@@ -1,0 +1,116 @@
+{
+  "absent": [
+    {
+      "note": "The 2019 catalog's .100 in [2.54 mm] Jumpers spread (pages 128-129, PDF pages 130-131) has no absolute-maximum table; it states materials, plating, a current rating, flammability ratings and dimensions.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Published, but only in the per-part drawing (DWG 11134 REV D; see notes, Drawing), which this record cannot cite. The cited catalog states an operating temperature only for the high-temperature material codes (A, J, M, F, W) on page 129, not for S = PBT/phosphor bronze. The drawing's NOTES item 4 reads OPERATING TEMPERATURE: -55 C TO +105 C, the range Sullins' product search also lists for this part. Not transcribed while the drawing's host is outside VENDOR_DOMAINS['sullins']; admitted, it is min -55, max 105 degC.",
+      "pointer": "/ratings/recommended/ambient_temperature",
+      "reason": "not-transcribed"
+    },
+    {
+      "note": "Pages 128-129 state no voltage rating for the jumpers, and Sullins' product search leaves Operating Voltage blank. The per-part drawing it links (DWG 11134 REV D; see notes, Drawing) states none either: its revision D (ECO 4786, 6/26/2024) removed the DWV and operating voltage notes.",
+      "pointer": "/ratings/recommended/voltage_rating",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Contact resistance is published, but only in the per-part drawing (DWG 11134 REV D; see notes, Drawing), which this record cannot cite; pages 128-129 of the cited catalog state none for the .100 in jumpers. The drawing's NOTES item 7 reads CONTACT RESISTANCE: 20 MILLI OHMS MAX., with no test condition. It does not say what the figure spans, one mating interface or the path from one header post through the shunt to the other, and the shunt's 1-to-2 path crosses two mating interfaces, so it is not by itself the terminal-to-terminal resistance series.resistance means. Benchmark (c)'s P3V3_LOAD drop through J5 and JP1 has no transcribed shunt figure until the host is admitted and that span is settled.",
+      "pointer": "/series",
+      "reason": "not-transcribed"
+    }
+  ],
+  "description": "Jumper shunt, 2 positions, 2.54 mm centers, closed top, PBT/phosphor bronze, gold flash overall",
+  "implements": [
+    {
+      "definition": "rhoform.lib.connector.Shunt2",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Sullins Connector Solutions",
+  "mpn": "SPC02SYAN",
+  "notes": "Orderable SPC02SYAN decodes by the catalog's part number options (page 129, S P C 02 S VD N - RC) as S = PBT insulator with phosphor bronze contacts, P = gold flash overall, C = .100 in [2.54 mm] centers, 02 positions, S = 1 circuit, YA = the standard closed-top profile, N = no mounting; the -RC modification code is omitted for the YA profile, which is why this MPN has none. The YA closed-top drawing on page 129 lists STC02SYAN, SPC02SYAN and SSC02SYAN together.\n\nContacts. The catalog numbers neither contact; the record names them 1 and 2 and the definition's a and b land on them in that order. The two contacts are joined by the shunt itself, which is its function, and that connection is the design's (Shunt2 between J5 p1 and p2 in benchmark (c)), not a record pin.\n\nDrawing. Sullins' product search on sullinscorp.com links this part to its per-part drawing, https://drawings-pdf.s3.amazonaws.com/11134.pdf: MINI SHUNT, CLOSED TOP, P/N S_C02SYAN, DWG NO 11134, REV D (ECO 4786, 6/26/2024), CAGE 54453, sha256:22309a5d3ba53712be762f06fa30179cc7c43f61894c281c24351f1d9e0ef17f as served on 2026-10-24. The host is outside VENDOR_DOMAINS['sullins'], so the record cannot cite the drawing (L21) and transcribes nothing from it. It was read in review, and what it states is given where it bears: the ambient_temperature, voltage_rating and /series absences, and Current below. Its revision B (ECO 1821) removed -RC from the part-number coding, which agrees with this MPN having none. Its title block carries a proprietary-information legend (not to be reproduced, used or disclosed except as Sullins authorizes in writing), which a decision to admit the host would also weigh; that decision is the integrator's.\n\nCurrent. The catalog's jumper specification (page 128) gives a 3 A current rating with no scope and no condition, and it is recorded as a 3 A maximum with no conditions. The drawing scopes it: NOTES item 6 reads CURRENT RATING: 3 AMP PER CONTACT (revision B raised it from 1 A). That scope is not recorded as a condition because the drawing cannot be cited; if its host is admitted, per contact belongs in the Measure's conditions.\n\nLifecycle is unknown: Sullins' product search lists the part with no status field, and the catalog states none.",
+  "package": {
+    "name": "Jumper, Closed Top, Single Circuit",
+    "pin_count": 2
+  },
+  "part_id": "sullins/spc02syan",
+  "pins": [
+    {
+      "description": "Contact 1",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Contact 2",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override.",
+      "source_id": "sullins-2019-catalog"
+    },
+    "/implements/0": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 129 (PDF page 131), PART NUMBER OPTIONS (Number of Positions: 02; Number of Rows: S = 1 Circuit) and the CLOSED TOP - SINGLE CIRCUIT, STANDARD drawing",
+      "method": "manual",
+      "note": "The shunt's two contacts: a to '1', b to '2'.",
+      "source_id": "sullins-2019-catalog",
+      "target": "rhoform.lib.connector.Shunt2"
+    },
+    "/pins": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 129 (PDF page 131), PART NUMBER OPTIONS and CLOSED TOP - SINGLE CIRCUIT, STANDARD drawing (SPC02SYAN)",
+      "method": "manual",
+      "note": "Roles are passive: shunt contacts have no electrical direction.",
+      "source_id": "sullins-2019-catalog"
+    },
+    "/ratings/recommended/current_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "Catalog page 128 (PDF page 130), .100 in [2.54 mm] Contact Centers, Jumpers, Open / Closed Top, SPECIFICATIONS, current rating bullet",
+      "method": "manual",
+      "note": "The bullet states 3 A for the jumper family with no scope and no condition; the per-part drawing's per-contact scope is in notes.",
+      "source_id": "sullins-2019-catalog"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "current_rating": {
+        "max": 3,
+        "unit": "A"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:44e4b4485b961a87cc23a190224b282764adff2a05daffd38d4bab94a84ebf77",
+      "doc_title": "2019 CATALOG",
+      "document_version": "2019 CATALOG, as printed on the cover; no revision or issue date is printed",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:34:38Z",
+      "source_id": "sullins-2019-catalog",
+      "state": "available",
+      "url": "https://www.sullinscorp.com/wp-content/uploads/2018/10/2019-CATALOG.pdf",
+      "vendor": "sullins"
+    }
+  ],
+  "stability": "unstable"
+}

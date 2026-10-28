@@ -1,0 +1,200 @@
+{
+  "description": "680 kohm +/-1% axial metal-film resistor, MFR-25 body, 1/4 W at 70 degC, +/-50 ppm/K (Yageo MFR)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "YAGEO",
+  "mpn": "MFR-25FTE52-680K",
+  "notes": "Benchmark use: blinker-555 /r_b (RB, through parts.yaml). Series data sheet record: every rating is the MFR-25 column of the ELECTRICAL CHARACTERISTICS table. package.name is the body type the data sheet's DIMENSIONS table names (MFR-25, L 6.3 mm, diameter 2.4 mm, axial leads); the data sheet does not use the 0207 designation, so the benchmark's package = \"axial_0207\" constraint is a design label this record does not echo (for L2b/L5b to reconcile). Value-specific limits the vendor defines by formula are not separate figures here. RCWV is sqrt(P x R) or the maximum working voltage, whichever is less (Note under TEST AND REQUIRMENTS, page 4); for this part that is the 250 V maximum working voltage itself, since sqrt(P x R) = sqrt(170000) V exceeds it. A check that holds the terminal voltage to voltage_rating and the dissipation to power_rating applies exactly that rule. The Short Time Overload test applies 2.5 x RCWV for 5 s, not more than the maximum overload voltage; for this part that is 500 V, the maximum overload voltage. Not recorded because no check reads them: the 500 V voltage proof on insulation, the insulation resistance, the pulse diagrams, the test limits, forming and packing. Lifecycle: the data sheet states none, and the vendor's product page for this MPN (yageogroup.com/products/Resistors/part/MFR-25FTE52-680K, read 2026-10-24) lists the part with stock and sample ordering but no lifecycle field, so the record says unknown rather than inferring active. Source URL: www.yageo.com answers this path with a 301 redirect to the same path on yageogroup.com, a domain Yageo also operates, which served the hashed bytes. The record cites the yageo.com URL because VENDOR_DOMAINS lists only yageo.com for this vendor; curl -L on it reproduces the hash.",
+  "package": {
+    "name": "MFR-25",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 686.8,
+      "min": 673.2,
+      "typ": 680,
+      "unit": "kohm"
+    },
+    "resistance_tolerance": {
+      "max": 0.01,
+      "min": -0.01,
+      "unit": "1"
+    },
+    "temperature_coefficient": {
+      "conditions": {
+        "ta": {
+          "max": 155,
+          "min": -55,
+          "unit": "degC"
+        }
+      },
+      "max": 50,
+      "min": -50,
+      "unit": "ppm/K"
+    }
+  },
+  "part_id": "yageo/mfr-25fte52-680k",
+  "pins": [
+    {
+      "description": "Lead 1. The part is symmetric; which terminal is 1 carries no meaning.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Lead 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. Yageo MFR series data sheet, MFR-25 column.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/implements": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing, page 3",
+      "method": "manual",
+      "note": "An axial resistor with one lead at each end; Resistor's a and b map to leads 1 and 2, and either orientation is electrically identical.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "ORDERING INFORMATION, PART NUMBER, page 2",
+      "method": "manual",
+      "note": "Read against the vendor's part number grammar: MFR series, power rating -25 (1/4 W), tolerance F (+/-1 %), packaging T (box pack), temperature coefficient E (+/-50 ppm/degC), forming 52- (52.4 mm), value 680K. The vendor's site lists this exact MPN (product page on yageogroup.com, 2026-10-24).",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "DIMENSIONS table, Normal MFR-25 row, page 3",
+      "method": "manual",
+      "note": "The data sheet names the body by type (MFR-25, the Normal size for the -25 power code): L 6.3 mm, diameter 2.4 mm, two axial leads.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/parameters/resistance": {
+      "confidence": "datasheet-derived",
+      "locator": "ORDERING INFORMATION (7) RESISTANCE VALUE and (3) TOLERANCE, page 2; ELECTRICAL CHARACTERISTICS, Resistance Range row, page 3",
+      "method": "manual",
+      "note": "Nominal 680 kohm from the MPN's value field 680K, inside the 1 ohm to 4.7 Mohm range for E24 and E96 values. min and max are the F tolerance (+/-1 %) evaluated at that nominal (x 0.99 and x 1.01): arithmetic on stated values, so datasheet-derived.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/parameters/resistance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "ORDERING INFORMATION (3) TOLERANCE, F = +/-1%, page 2",
+      "method": "manual",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/parameters/temperature_coefficient": {
+      "confidence": "datasheet-stated",
+      "locator": "ORDERING INFORMATION (5) TEMPERATURE COEFFICIENT OF RESISTANCE, E = +/-50ppm/degC, page 2; ELECTRICAL CHARACTERISTICS, Temperature Coefficient row, page 3; TEST AND REQUIRMENTS, Temperature Coefficient (IEC 60115-1 4.8), page 4",
+      "method": "manual",
+      "note": "The MPN's TCR field selects this coefficient; ppm per degree Celsius is the same coefficient per kelvin. The ta range is the test's span, -55 degC to +155 degC.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing, page 3",
+      "method": "manual",
+      "note": "Two axial leads, unnamed in the data sheet; named 1 and 2, role passive.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/ratings/abs_max/overload_voltage": {
+      "confidence": "datasheet-stated",
+      "locator": "ELECTRICAL CHARACTERISTICS, Maximum Overload Voltage row, MFR-25 column, page 3; TEST AND REQUIRMENTS, Short Time Overload (IEC 60115-1 4.13), page 4",
+      "method": "manual",
+      "note": "The test applies 2.5 x RCWV for 5 seconds, not more than this maximum; the duration condition is that test's. The per-value figure is in the record notes.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "ELECTRICAL CHARACTERISTICS, Operating Temp. Range row, page 3",
+      "method": "manual",
+      "note": "The DERATING CURVE on the same page is plotted against ambient temperature.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/ratings/recommended/power_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "ELECTRICAL CHARACTERISTICS, Power Rating at 70 degC row, MFR-25 column, and DERATING CURVE, page 3",
+      "method": "manual",
+      "note": "1/4 W, written exactly as 0.25 W, at 70 degC ambient. The derating curve holds 100 % to 70 degC and falls linearly to zero at 155 degC; only the 70 degC rating is recorded.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "ELECTRICAL CHARACTERISTICS, Maximum Working Voltage row, MFR-25 column, page 3; Note on RCWV under TEST AND REQUIRMENTS, page 4",
+      "method": "manual",
+      "note": "The series maximum working voltage. RCWV caps the continuous voltage at sqrt(P x R) where that is less; the per-value figure is in the record notes.",
+      "source_id": "yageo-mfr-datasheet-v4"
+    }
+  },
+  "ratings": {
+    "abs_max": {
+      "overload_voltage": {
+        "conditions": {
+          "duration": {
+            "typ": 5,
+            "unit": "s"
+          }
+        },
+        "max": 500,
+        "unit": "V"
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "max": 155,
+        "min": -55,
+        "unit": "degC"
+      },
+      "power_rating": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.25,
+        "unit": "W"
+      },
+      "voltage_rating": {
+        "max": 250,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:b460acdb476469774e0785a8ef85aec79e2d95fe41beaa79c5a414e4e95e3fe0",
+      "doc_title": "METAL FILM RESISTORS - General Purpose, MFR Series",
+      "document_version": "Product specification - April 3, 2024 V.4",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:31:19Z",
+      "source_id": "yageo-mfr-datasheet-v4",
+      "state": "available",
+      "url": "https://www.yageo.com/content/Resource%20Library/Datasheet/YAGEO-MFR_DATASHEET.pdf",
+      "vendor": "yageo"
+    }
+  ],
+  "stability": "unstable"
+}

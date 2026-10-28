@@ -1,0 +1,229 @@
+{
+  "absent": [
+    {
+      "note": "The data sheet publishes no ESD rating and has no absolute-maximum table. Its only ESD figure is a qualification test level: TEST PROCEDURES AND REQUIREMENTS, EN 60115-1 clause 8.5, Electro static discharge (human body model), page 14, IEC 61340-3-1, 3 positive and 3 negative discharges, TNPW0402 e3: 500 V, with a permissible change of +/-(0.5 % R + 0.05 ohm), five times this part's +/-0.1 % tolerance. A test level that allows that drift is not a damage-free component ESD rating, so none is recorded; overload_voltage is read the same way.",
+      "pointer": "/ratings/abs_max/esd_hbm",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "The data sheet rates no maximum overload voltage: TECHNICAL SPECIFICATIONS (page 1) gives the TNPW0402 e3 only an operating voltage Umax of 75 V and an insulation voltage Uins of 75 V, and no other table states an overload limit. Overload appears only as a qualification test condition, TEST PROCEDURES AND REQUIREMENTS, EN 60115-1 clause 8.1, Short time overload (page 13), in one row for general operation mode and one for power operation mode (there is no advanced-mode row): U = 2.5 x sqrt(P70 x R) or U = 2 x Umax, whichever is the less severe, for 5 s, with a permissible change of +/-(0.05 % R + 0.01 ohm) and +/-(0.1 % R + 0.01 ohm) respectively. A test stress with a permissible change is not a rating, so none is recorded.",
+      "pointer": "/ratings/abs_max/overload_voltage",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "31.2 kohm +/-0.1% thin-film chip resistor, 0402, +/-25 ppm/K, 75 V max operating (Vishay TNPW e3)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Vishay",
+  "mpn": "TNPW040231K2BEED",
+  "notes": "Benchmark use: buck-3v3 /r1 (R1, feedback divider top). Series data sheet record: every value is the TNPW0402 e3 column of the TECHNICAL SPECIFICATIONS table and the TNPW0402 e3 rows of the tables after it. Operation modes. The data sheet rates this size at three P70 levels, which Vishay calls operation modes and describes as example loads, not different parts: GENERAL 0.070 W (film at most 125 degC, operating -55 to 125 degC, |dR/R| at most 0.05 % after 1000 h), POWER 0.105 W (155 degC, -55 to 155 degC, 0.10 %) and ADVANCED 0.130 W (175 degC, -55 to 175 degC, 0.20 % after 1000 h and no longer-term figure). The headline P70 of 0.130 W on page 1 is the ADVANCED mode. Following the store's precedent for Vishay's operation classes, the checker-read power_rating and ambient_temperature carry the GENERAL mode, the one with the tightest drift; the POWER and ADVANCED figures are recorded under their own *_power_mode and *_advanced_mode keys, which no check reads. The benchmark's parts.yaml quotes 0.13 W, the ADVANCED figure. Also not recorded as checked figures: the 0.33 W rating at a 105 degC terminal temperature (a terminal-temperature rating, not an ambient one), the 75 V insulation voltage against ambient, the pulse-load diagrams and the test limits. The rated voltage in the endurance tests is sqrt(P70 x R) or Umax, whichever is less severe; for this part in GENERAL mode sqrt(0.070 W x 31200 ohm) is 46.7 V to three figures, below the 75 V recorded as voltage_rating, so a check that also holds dissipation to power_rating applies the same limit. Lifecycle: neither the data sheet nor the vendor's TNPW e3 product page (vishay.com/en/product/28758, read 2026-10-24) states a lifecycle status for this part number, so the record says unknown. The MPN is checked against the data sheet's part number grammar and the TNPW0402 e3, +/-25 ppm/K, +/-0.1 % range (47 ohm to 100 kohm, E24 and E192; 31.2 kohm is an E192 value); no vendor page for the exact MPN was read.",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 31.2312,
+      "min": 31.1688,
+      "typ": 31.2,
+      "unit": "kohm"
+    },
+    "resistance_tolerance": {
+      "max": 0.001,
+      "min": -0.001,
+      "unit": "1"
+    },
+    "temperature_coefficient": {
+      "conditions": {
+        "ta": {
+          "max": 125,
+          "min": -55,
+          "unit": "degC"
+        }
+      },
+      "max": 25,
+      "min": -25,
+      "unit": "ppm/K"
+    }
+  },
+  "part_id": "vishay/tnpw040231k2beed",
+  "pins": [
+    {
+      "description": "Terminal 1. The part is symmetric; which terminal is 1 carries no meaning.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Terminal 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. Vishay TNPW e3 data sheet, TNPW0402 e3 figures.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/implements": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing, page 15",
+      "method": "manual",
+      "note": "A flat chip with one termination at each end; Resistor's a and b map to terminals 1 and 2, and either orientation is electrically identical.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "PART NUMBER AND PRODUCT DESCRIPTION, page 4; PACKAGING table, page 4",
+      "method": "manual",
+      "note": "Read against the vendor's part number grammar: TNPW0402 (type and size), 31K2 (31.2 kohm, K as thousand), B (+/-0.1 %), E (+/-25 ppm/K), ED (packaging, ET7 = ED, 10 000 pieces on a 7-inch paper tape reel for TNPW0402 e3), special field blank (standard).",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "TECHNICAL SPECIFICATIONS, Imperial size row, page 1; DIMENSIONS AND MASS, TNPW0402 e3 row, page 15",
+      "method": "manual",
+      "note": "Imperial size 0402 (metric RR1005M), two terminations.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/parameters/resistance": {
+      "confidence": "datasheet-derived",
+      "locator": "PART NUMBER AND PRODUCT DESCRIPTION, RESISTANCE and TOLERANCE fields, page 4; TEMPERATURE COEFFICIENT AND RESISTANCE RANGE, TNPW0402 e3, +/-25 ppm/K, +/-0.1 % row, page 3",
+      "method": "manual",
+      "note": "Nominal 31.2 kohm from the MPN's value field 31K2, inside that row's 47 ohm to 100 kohm range. min and max are the B tolerance (+/-0.1 %) evaluated at the nominal (x 0.999 and x 1.001): arithmetic on stated values, so datasheet-derived.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/parameters/resistance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "PART NUMBER AND PRODUCT DESCRIPTION, TOLERANCE, B = +/-0.1 %, page 4",
+      "method": "manual",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/parameters/temperature_coefficient": {
+      "confidence": "datasheet-stated",
+      "locator": "PART NUMBER AND PRODUCT DESCRIPTION, TCR, E = +/-25 ppm/K, page 4; TEST PROCEDURES AND REQUIREMENTS, EN 60115-1 clause 6.2 Temperature coefficient, page 12",
+      "method": "manual",
+      "note": "The ta range is the test's span: (20 / -55 / 20) degC and (20 / 125 / 20) degC.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing, page 15",
+      "method": "manual",
+      "note": "Two terminations, unnamed in the data sheet; named 1 and 2, role passive.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/ratings/abs_max/film_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "TECHNICAL SPECIFICATIONS, Permissible film temperature row, page 1; MAXIMUM RESISTANCE CHANGE AT RATED DISSIPATION, page 2",
+      "method": "manual",
+      "note": "175 degC is the permissible film temperature over all operation modes (the ADVANCED mode's limit; GENERAL 125 degC, POWER 155 degC). No check reads this key.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/ratings/recommended": {
+      "confidence": "datasheet-stated",
+      "locator": "MAXIMUM RESISTANCE CHANGE AT RATED DISSIPATION, TNPW0402 e3 row and Operating temperature range row, page 2; Derating - General Operation and Derating - Power Operation, page 6, and Derating - Advanced Operation, page 7",
+      "method": "manual",
+      "note": "Per operation mode: power_rating and ambient_temperature are GENERAL (0.070 W, -55 to 125 degC), the *_power_mode keys POWER (0.105 W, -55 to 155 degC) and the *_advanced_mode keys ADVANCED (0.130 W, -55 to 175 degC). Each P70 is at 70 degC ambient and the derating curves fall linearly from 70 degC to zero at the mode's upper temperature; only the 70 degC ratings are recorded.",
+      "source_id": "vishay-28758-2026-04-10"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "TECHNICAL SPECIFICATIONS, Operating voltage, Umax. AC RMS or DC row, TNPW0402 e3 column, page 1",
+      "method": "manual",
+      "note": "The series maximum operating voltage, AC rms or DC. The endurance tests apply sqrt(P70 x R) or Umax, whichever is less severe; see the record notes.",
+      "source_id": "vishay-28758-2026-04-10"
+    }
+  },
+  "ratings": {
+    "abs_max": {
+      "film_temperature": {
+        "max": 175,
+        "unit": "degC"
+      }
+    },
+    "recommended": {
+      "ambient_temperature": {
+        "max": 125,
+        "min": -55,
+        "unit": "degC"
+      },
+      "ambient_temperature_advanced_mode": {
+        "max": 175,
+        "min": -55,
+        "unit": "degC"
+      },
+      "ambient_temperature_power_mode": {
+        "max": 155,
+        "min": -55,
+        "unit": "degC"
+      },
+      "power_rating": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.070,
+        "unit": "W"
+      },
+      "power_rating_advanced_mode": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.130,
+        "unit": "W"
+      },
+      "power_rating_power_mode": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 0.105,
+        "unit": "W"
+      },
+      "voltage_rating": {
+        "max": 75,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:6f0508c568cb355aaf2accdd33fe3a780d3ea5ef207c4c9a71839a8acadc33a5",
+      "doc_title": "TNPW e3 - High Stability Thin Film Flat Chip Resistors",
+      "document_version": "Document Number: 28758, Revision: 10-Apr-2026",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:31:07Z",
+      "source_id": "vishay-28758-2026-04-10",
+      "state": "available",
+      "url": "https://www.vishay.com/docs/28758/tnpw_e3.pdf",
+      "vendor": "vishay"
+    }
+  ],
+  "stability": "unstable"
+}

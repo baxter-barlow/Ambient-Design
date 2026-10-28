@@ -1,0 +1,187 @@
+{
+  "absent": [
+    {
+      "note": "The data sheet has no absolute-maximum table. Its PERFORMANCE table's Short time overload row (page 3) refers to an external web tool (JoulWizard) for overload performance instead of stating a figure, and note (4) of TECHNICAL SPECIFICATIONS (page 2) says the part is limited by power and energy dissipation rather than voltage and is not ESD sensitive; no stress limit is given as a number.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "20 mohm +/-1% metal-strip current-sense resistor, 1206, 1 W at 70 degC, +/-75 ppm/K (Vishay Dale WSLP)",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Resistor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "unknown",
+  "manufacturer": "Vishay Dale",
+  "mpn": "WSLP1206R0200FEA",
+  "notes": "Benchmark use: buck-3v3 /r_sns (R10, current-sense shunt). Series data sheet record: every value is the WSLP1206 entry of the data sheet's tables. Two terminals. The dimension drawing's 'typical sensing traces' are a PCB layout recommendation for a Kelvin connection to the two pads, not separate sense terminals, so the part has two pins and the benchmark's Kelvin routing is a layout matter. voltage_rating is the vendor's Maximum working voltage, which for this series is the formula (P x R)^1/2 with no fixed cap. For this part sqrt(1.0 W x 0.020 ohm) = sqrt(0.02) V is irrational; it is written 0.1414 V, truncated (never rounded up) so the recorded maximum is never above the vendor's. It is the same limit as the power rating, restated as a voltage. Not recorded because no check reads them: the element TCR (< 20 ppm/degC, the alloy alone; the component TCR including the copper terminals is the one recorded), the inductance and thermal EMF feature claims, the PERFORMANCE test limits and the pulse capability tool. The data sheet carries an 'Upgrade for Wider Resistance Range to WFM' banner on every page; it is not a lifecycle statement and no lifecycle status for this part number appears in the data sheet or on the vendor's WSLP product page (vishay.com/en/product/30122, read 2026-10-24), so the record says unknown. The MPN is checked against the data sheet's part number grammar and the WSLP1206 +/-1.0 % range (0.0005 to 0.05 ohm); no vendor page for the exact MPN was read.",
+  "package": {
+    "name": "1206",
+    "pin_count": 2
+  },
+  "parameters": {
+    "resistance": {
+      "max": 20.2,
+      "min": 19.8,
+      "typ": 20,
+      "unit": "mohm"
+    },
+    "resistance_tolerance": {
+      "max": 0.01,
+      "min": -0.01,
+      "unit": "1"
+    },
+    "temperature_coefficient": {
+      "conditions": {
+        "ta": {
+          "max": 155,
+          "min": -55,
+          "unit": "degC"
+        }
+      },
+      "max": 75,
+      "min": -75,
+      "unit": "ppm/K"
+    }
+  },
+  "part_id": "vishay/wslp1206r0200fea",
+  "pins": [
+    {
+      "description": "Terminal 1. The part is symmetric; which terminal is 1 carries no meaning.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "Terminal 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default; more specific entries override. Vishay Dale WSLP data sheet, WSLP1206 figures.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/implements": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing and table, WSLP1206 rows, page 2",
+      "method": "manual",
+      "note": "Two terminations; Resistor's a and b map to terminals 1 and 2, and either orientation is electrically identical.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "GLOBAL PART NUMBER INFORMATION, page 1",
+      "method": "manual",
+      "note": "Read against the vendor's global part numbering: WSLP1206 (global model), R0200 (0.020 ohm, R as the decimal point), F (+/-1.0 %), EA (lead (Pb)-free, tape and reel), special field blank.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "STANDARD ELECTRICAL SPECIFICATIONS, SIZE column, page 1; DIMENSIONS table, WSLP1206 0.006 to 0.050 ohm row, page 2",
+      "method": "manual",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/parameters/resistance": {
+      "confidence": "datasheet-derived",
+      "locator": "GLOBAL PART NUMBER INFORMATION, page 1; STANDARD ELECTRICAL SPECIFICATIONS, WSLP1206 row, RESISTANCE VALUE RANGE TOL. +/-1.0 % column, page 1",
+      "method": "manual",
+      "note": "Nominal 20 mohm from the MPN's value field R0200, inside the +/-1.0 % range of 0.0005 to 0.05 ohm. min and max are the F tolerance (+/-1.0 %) evaluated at the nominal: arithmetic on stated values, so datasheet-derived.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/parameters/resistance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "GLOBAL PART NUMBER INFORMATION, TOLERANCE CODE, F = +/-1.0 %, page 1",
+      "method": "manual",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/parameters/temperature_coefficient": {
+      "confidence": "datasheet-stated",
+      "locator": "TECHNICAL SPECIFICATIONS, Component temperature coefficient (including terminal) row, WSLP0805 to WSLP2512 columns, +/-75 for 7 mOhm to 500 mOhm, page 2",
+      "method": "manual",
+      "note": "The component TCR, which includes the copper terminals; ppm per degree Celsius is the same coefficient per kelvin. The ta range is the row's 'TCR measured from -55 degC to +155 degC'.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "DIMENSIONS drawing, page 2",
+      "method": "manual",
+      "note": "Two terminations, unnamed in the data sheet; named 1 and 2, role passive.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "TECHNICAL SPECIFICATIONS, Operating temperature range row, page 2; DERATING, page 3",
+      "method": "manual",
+      "note": "The DERATING curve is plotted against ambient temperature over the same -65 to 170 degC span.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/ratings/recommended/power_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "STANDARD ELECTRICAL SPECIFICATIONS, WSLP1206 row, POWER RATING P70 degC column, page 1; DERATING, page 3",
+      "method": "manual",
+      "note": "1.0 W at 70 degC ambient. The DERATING curve holds 100 % of rated power to 70 degC and falls linearly to zero at 170 degC; only the 70 degC rating is recorded.",
+      "source_id": "vishay-30122-2024-09-09"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-derived",
+      "locator": "TECHNICAL SPECIFICATIONS, Maximum working voltage row, (P x R)^1/2, and note (4), page 2; STANDARD ELECTRICAL SPECIFICATIONS, WSLP1206 P70, page 1",
+      "method": "manual",
+      "note": "(P x R)^1/2 evaluated at P = 1.0 W and the nominal R = 0.020 ohm: sqrt(0.02) V = 0.141421... V, truncated to 0.1414 V so the bound is never above the formula's value. Note (4): not voltage sensitive, limited by power and energy dissipation.",
+      "source_id": "vishay-30122-2024-09-09"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 170,
+        "min": -65,
+        "unit": "degC"
+      },
+      "power_rating": {
+        "conditions": {
+          "ta": {
+            "typ": 70,
+            "unit": "degC"
+          }
+        },
+        "max": 1.0,
+        "unit": "W"
+      },
+      "voltage_rating": {
+        "max": 0.1414,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:d3dd7b4f590e713c84303e32530e8c8c6fd025617896e11d25599521771e4c13",
+      "doc_title": "WSLP - Power Metal Strip® Resistors, Very High Power (to 3 W), Low Value (Down to 0.0005 Ω), Surface-Mount",
+      "document_version": "Document Number: 30122, Revision: 09-Sep-2024",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:31:07Z",
+      "source_id": "vishay-30122-2024-09-09",
+      "state": "available",
+      "url": "https://www.vishay.com/docs/30122/wslp.pdf",
+      "vendor": "vishay"
+    }
+  ],
+  "stability": "unstable"
+}

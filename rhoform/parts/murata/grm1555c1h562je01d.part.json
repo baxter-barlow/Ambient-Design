@@ -1,0 +1,276 @@
+{
+  "absent": [
+    {
+      "note": "Murata's specification states no DC-bias capacitance change for this C0G part, in a table or otherwise. Murata's product data flags separately downloadable characteristic data files (isECD, isSparameter and isNetList true; isBasicCharacteristicGraph and isFrequencyCharacteristicGraph false); those files are not the specification and are not cited here, so no figure is recorded.",
+      "pointer": "/parameters/capacitance_dc_bias_change",
+      "reason": "vendor-unpublished"
+    },
+    {
+      "note": "Murata's specification has no absolute-maximum table. Its Rating cautions bound the voltage between the terminations, surges and pulses included, by the rated voltage, which the record carries as ratings.recommended.voltage_rating; the voltage-proof test level is a production test, not a rating, and the storage conditions are for unmounted parts' solderability, not a storage-temperature limit.",
+      "pointer": "/ratings/abs_max",
+      "reason": "vendor-unpublished"
+    }
+  ],
+  "description": "5.6 nF +/-5% 50 V C0G MLCC, EIA 0402 (1005M), 0 +/-30 ppm/K, Murata GRM series, 180 mm paper reel",
+  "implements": [
+    {
+      "definition": "rhoform.lib.passive.Capacitor",
+      "pins": {
+        "a": "1",
+        "b": "2"
+      }
+    }
+  ],
+  "license_class": "vendor-public",
+  "lifecycle": "active",
+  "manufacturer": "Murata",
+  "mpn": "GRM1555C1H562JE01D",
+  "notes": "Benchmark (b) uses this part as compensation capacitor /c_c1 (C6).\n\nC0G is a class-I dielectric, so the record carries temperature_coefficient (0 +/-30 ppm/K over 25 to 125 degC) rather than a class-II temperature_characteristic, plus Table A's capacitance-change limits at -55, -30 and -10 degC under a non-vocabulary key. Murata publishes no absolute-maximum table: the rated voltage, which Murata says must also bound surges and pulses, is ratings.recommended.voltage_rating.",
+  "package": {
+    "name": "0402",
+    "pin_count": 2
+  },
+  "parameters": {
+    "capacitance": {
+      "conditions": {
+        "frequency": {
+          "max": 1.1,
+          "min": 0.9,
+          "unit": "kHz"
+        },
+        "measurement_voltage": "1.0+/-0.2 Vrms",
+        "ta": "room temperature"
+      },
+      "max": 5880,
+      "min": 5320,
+      "typ": 5600,
+      "unit": "pF"
+    },
+    "capacitance_change_vs_temperature": [
+      {
+        "conditions": {
+          "measurement_voltage": "less than 1.0 Vrms",
+          "reference_temperature": {
+            "typ": 25,
+            "unit": "degC"
+          },
+          "ta": {
+            "typ": -55,
+            "unit": "degC"
+          },
+          "vdc": {
+            "typ": 0,
+            "unit": "V"
+          }
+        },
+        "max": 0.0058,
+        "min": -0.0024,
+        "unit": "1"
+      },
+      {
+        "conditions": {
+          "measurement_voltage": "less than 1.0 Vrms",
+          "reference_temperature": {
+            "typ": 25,
+            "unit": "degC"
+          },
+          "ta": {
+            "typ": -30,
+            "unit": "degC"
+          },
+          "vdc": {
+            "typ": 0,
+            "unit": "V"
+          }
+        },
+        "max": 0.004,
+        "min": -0.0017,
+        "unit": "1"
+      },
+      {
+        "conditions": {
+          "measurement_voltage": "less than 1.0 Vrms",
+          "reference_temperature": {
+            "typ": 25,
+            "unit": "degC"
+          },
+          "ta": {
+            "typ": -10,
+            "unit": "degC"
+          },
+          "vdc": {
+            "typ": 0,
+            "unit": "V"
+          }
+        },
+        "max": 0.0025,
+        "min": -0.0011,
+        "unit": "1"
+      }
+    ],
+    "capacitance_tolerance": {
+      "max": 0.05,
+      "min": -0.05,
+      "unit": "1"
+    },
+    "temperature_coefficient": {
+      "conditions": {
+        "measurement_voltage": "less than 1.0 Vrms",
+        "reference_temperature": {
+          "typ": 25,
+          "unit": "degC"
+        },
+        "ta": {
+          "max": 125,
+          "min": 25,
+          "unit": "degC"
+        },
+        "vdc": {
+          "typ": 0,
+          "unit": "V"
+        }
+      },
+      "max": 30,
+      "min": -30,
+      "unit": "ppm/K"
+    }
+  },
+  "part_id": "murata/grm1555c1h562je01d",
+  "pins": [
+    {
+      "description": "End termination 1. No polarity is marked; the two terminations are interchangeable.",
+      "name": "1",
+      "numbers": [
+        "1"
+      ],
+      "role": "passive"
+    },
+    {
+      "description": "End termination 2.",
+      "name": "2",
+      "numbers": [
+        "2"
+      ],
+      "role": "passive"
+    }
+  ],
+  "provenance": {
+    "": {
+      "confidence": "datasheet-stated",
+      "method": "manual",
+      "note": "Record default. The cited source is Murata's per-part specification (reference sheet) for this part-number family; it covers every packaging code, and the packaging letter in /mpn selects one reel. Every value here is read from it unless a deeper entry says otherwise. Pin naming and roles are the record's convention (see /pins).",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/lifecycle": {
+      "confidence": "datasheet-derived",
+      "locator": "productionStatus field of the part's product data, shown on the pim.murata.com product details page",
+      "method": "manual",
+      "note": "Murata lists the production status as In Production (the productionStatus value available); active is the lifecycle vocabulary's word for it, a mapping rather than Murata's own word. The source is the JSON the product details page renders, fetched by POST to the cited URL with body {\"searchCondClass\":2,\"partNum\":\"GRM1555C1H562JE01#\",\"page\":1,\"pageSize\":20,\"productCategoryId\":\"ceramicCapacitorSMD\",\"languageRegion\":\"en-us\",\"series\":\"\",\"sortKey\":\"\",\"valSearchCondList\":[],\"rangeValSearchCondList\":[],\"dateRangeSearchCondList\":[]}; the details page itself is a script shell whose bytes carry no product data.",
+      "source_id": "murata-pim-grm1555c1h562je01-2026-10-24"
+    },
+    "/mpn": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, MURATA Part No. System; page 2, Package table (packaging code D)",
+      "method": "manual",
+      "note": "The specification is titled for the family GRM1555C1H562JE01_, the trailing character standing for the packaging code. The record is the orderable member with code D (180 mm reel, paper tape W8P2, 10000 pcs), a code the Package table lists; Murata's product data for GRM1555C1H562JE01# (source murata-pim-grm1555c1h562je01-2026-10-24) lists GRM1555C1H562JE01D among its orderable part numbers.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/package": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Type & Dimension (Size Code)",
+      "method": "manual",
+      "note": "Murata prints the size code as 1005M(0402); the record's package name is the EIA inch code, 0402, and the two terminations are the pin count.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/parameters/capacitance": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Rated Value table, Capacitance and Capacitance Tolerance columns; page 3, Specifications and Test Methods item 6 (Capacitance)",
+      "method": "manual",
+      "note": "The nominal 5600 pF is the Capacitance column (and the part number's 562 code). min and max are that nominal at the +/-5 % tolerance, arithmetic on stated values, so datasheet-derived. The conditions are the measurement conditions of the Capacitance test item: room temperature, 1.0 +/-0.1 kHz (written as its range, 0.9 to 1.1 kHz), 1.0 +/-0.2 Vrms.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/parameters/capacitance_change_vs_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "page 6, Table A (Capacitance Change between at Reference Temp. and at each Temp.), row 5C; page 3, Specifications and Test Methods item 8 (Temperature Characteristics of Capacitance)",
+      "method": "manual",
+      "note": "Table A's Max. and Min. columns for characteristic 5C at -55, -30 and -10 degC, relative to the 25 degC reference, with no DC bias and under 1.0 Vrms (item 8), written as fractions: 0.58 % is 0.0058. Not a checker-reliable key; recorded so the part's behaviour below 25 degC is not left implicit.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/parameters/capacitance_tolerance": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Capacitance Tolerance column",
+      "method": "manual",
+      "note": "+/-5% written as a fraction of nominal.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/parameters/temperature_coefficient": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Temp. coeff. or Cap. Change, Temp. Range and Ref.Temp. columns; page 3, Specifications and Test Methods item 8 (Temperature Characteristics of Capacitance)",
+      "method": "manual",
+      "note": "Murata states 0 +/-30 ppm/degC over 25 to 125 degC about a 25 degC reference, measured with no DC bias and under 1.0 Vrms; a degC difference is a K, so the unit is ppm/K. The 0 is the class's nominal, not a typical, so no typ is recorded. Below the reference temperature Murata gives capacitance-change limits instead (Table A), recorded under capacitance_change_vs_temperature.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/pins": {
+      "confidence": "datasheet-derived",
+      "locator": "page 2, Type & Dimension (Size Code)",
+      "method": "manual",
+      "note": "Murata publishes no pin table for a chip capacitor. Its Type & Dimension drawing shows two identical end terminations with no polarity mark, so the record names them 1 and 2 and gives both role passive, as the authoring convention does for every two-terminal passive. The numbering is the record's, not Murata's.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/ratings/recommended/ambient_temperature": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Operating Temp. Range column; page 12, Rating section 4 (Type of Applied Voltage and Self-heating Temperature)",
+      "method": "manual",
+      "note": "Murata's operating temperature range. Its Rating cautions hold the capacitor's own surface temperature, self-heating included, inside this range, so as a bound on ambient it is optimistic by whatever self-heating the circuit causes.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    },
+    "/ratings/recommended/voltage_rating": {
+      "confidence": "datasheet-stated",
+      "locator": "page 2, Rated Value table, Rated Voltage column; page 3, Specifications and Test Methods item 1 (Rated Voltage); page 11, Rating section 3 (Applied Voltage)",
+      "method": "manual",
+      "note": "DC 50 V. Murata defines the rated voltage as the most that may be applied continuously; with AC superimposed the larger of the peak-to-peak and zero-to-peak voltages must stay within it, and the Rating cautions extend the bound to surges, static and pulses. Recorded as max: it is the vendor's limit for the design.",
+      "source_id": "murata-grm1555c1h562je01-01a-en"
+    }
+  },
+  "ratings": {
+    "recommended": {
+      "ambient_temperature": {
+        "max": 125,
+        "min": -55,
+        "unit": "degC"
+      },
+      "voltage_rating": {
+        "max": 50,
+        "unit": "V"
+      }
+    }
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "byte_sha256": "sha256:517c5740316c2f3841e244f6cfa2caa5d0fbcd1d43a99d421c47299746c4aff1",
+      "doc_title": "Chip Multilayer Ceramic Capacitors for Consumer Electronics & Industrial Equipment, GRM1555C1H562JE01_(1005M(0402), C0G(EIA), 5600pF, DC 50V), Reference Sheet",
+      "document_version": "GRM1555C1H562JE01-01A; product specifications as of Jun.16,2026",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:32:57Z",
+      "source_id": "murata-grm1555c1h562je01-01a-en",
+      "state": "available",
+      "url": "https://pim.murata.com/asset/pim4/ceramicCapacitorSMD/GRM1555C1H562JE01-01A-EN_PDF_CERAMICCAPACITORSMD?lastModifiedDatetime=20260730153504",
+      "vendor": "murata"
+    },
+    {
+      "byte_sha256": "sha256:39f07fd8632cd8a16e83836ff1c0f604ccdf5ae9fa638f0685f048debf777b63",
+      "doc_title": "Murata PIM product data for GRM1555C1H562JE01# (public product search API)",
+      "document_version": "Unversioned product data as served on 2026-10-24; no revision is printed",
+      "license_class": "vendor-public",
+      "origin": "vendor-direct",
+      "retrieved_at": "2026-10-24T10:32:30Z",
+      "source_id": "murata-pim-grm1555c1h562je01-2026-10-24",
+      "state": "available",
+      "url": "https://pimapi.murata.com/public/api/pim/v1/products/search",
+      "vendor": "murata"
+    }
+  ],
+  "stability": "unstable"
+}
